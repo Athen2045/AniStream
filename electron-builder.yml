@@ -1,0 +1,21 @@
+appId: dev.anistream.desktop
+productName: AniStream
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - node_modules/better-sqlite3/**
+mac:
+  category: public.app-category.entertainment
+  icon: assets/app-icon/AniStream-1024.png
+  protocols:
+    - name: AniStream OAuth callback
+      schemes:
+        - anistream
+  target:
+    - target: dmg
+      arch:
+        - arm64

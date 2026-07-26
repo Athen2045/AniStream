@@ -1,0 +1,42 @@
+{
+  "name": "anistream",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal anime and manga discovery, playback, reading, and tracker sync for macOS",
+  "main": "./out/main/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "check:packaged-preload": "node scripts/verify-packaged-preload.mjs",
+    "check:anilist-oauth": "node scripts/verify-anilist-oauth.mjs",
+    "check:product-slice": "node scripts/verify-product-slice.mjs",
+    "configure:anilist": "zsh scripts/configure-anilist-secret.zsh",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "postinstall": "node node_modules/electron/install.js && electron-builder install-app-deps",
+    "package:mac": "npm run build && electron-builder --mac --arm64"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.1",
+    "lucide-react": "^1.27.0",
+    "motion": "^12.42.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "typescript": "7.0.2",
+    "vite": "^7.3.6"
+  }
+}
