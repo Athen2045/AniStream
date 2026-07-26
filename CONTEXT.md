@@ -1,6 +1,6 @@
 # AniStream — Context
 
-Last updated: 2026-07-27 by Codex macOS application-icon session
+Last updated: 2026-07-27 by Claude Code CI/CD session
 
 ## Current phase
 
@@ -60,6 +60,13 @@ provider contract chain. Actual HLS/torrent extraction and MangaDex chapter read
 - `README.md`, `AGENTS.md`, `API.md`, and this context file now follow the required documentation roles.
 - Phase 0 research is recorded in `docs/research/phase-0.md`.
 - Current Consumet and Aniyomi evaluations are recorded in `docs/research/consumet-evaluation.md` and `docs/research/aniyomi-evaluation.md`.
+- The project now has a Git history (`git init` plus initial commits); prior sessions worked with no version control at all.
+- Four GitHub Actions workflows exist under `.github/workflows/`, each with an implementation-agnostic spec under `spec/`:
+  `ci.yml` (typecheck, build, `check:product-slice`, `check:anilist-oauth` on every push/PR to `main`),
+  `package-mac.yml` (unsigned arm64 DMG build plus `check:packaged-preload` against the real packaged ASAR, on version tags or manual dispatch, publishing to GitHub Releases),
+  `security-audit.yml` (blocking `npm audit --omit=dev`, non-blocking full audit report, on manifest changes and weekly),
+  and `codeql.yml` (CodeQL `javascript-typescript` security-extended analysis, on push/PR and weekly).
+- These workflows run the project's *existing* checks in CI; they do not add new test coverage. Unit/integration tests and ESLint/Prettier are still not configured (see Known issues below) and remain the next priority.
 
 ## What's in progress
 
@@ -74,8 +81,11 @@ provider contract chain. Actual HLS/torrent extraction and MangaDex chapter read
 ## Known issues / tech debt
 
 - MangaDex, offline sync/reconciliation, and concrete video-source adapters are documented but not implemented.
-- Regression scripts exist, but there is no unit/integration test runner or provider-fixture suite yet.
-- The DMG is unsigned because no valid Developer ID Application certificate is installed.
+- Regression scripts exist and now run automatically in CI (`ci.yml`), but there is still no unit/integration
+  test runner or provider-fixture suite, and no ESLint/Prettier configuration, despite AGENTS.md prescribing both.
+- The DMG is unsigned because no valid Developer ID Application certificate is installed. `package-mac.yml`
+  sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so CI packaging stays deterministic rather than searching for a
+  signing identity that doesn't exist; this must be revisited if a certificate is ever provisioned.
 - Full `npm audit` reports 16 high-severity advisories in electron-builder's development/packaging dependency tree (`brace-expansion`/`minimatch` lineage). Runtime-only audit is clean. npm's offered forced fix downgrades electron-builder across a breaking change and was not applied.
 - The renderer now has the first production-direction Anime/Manga/Profile shell, but continue
   watching/reading, full reader/player controls, activity/social functions, favorites, notifications,
@@ -140,3 +150,10 @@ provider contract chain. Actual HLS/torrent extraction and MangaDex chapter read
   macOS icon master because it has twice the dimensions of the 512×512 web/Android alternatives.
   The source is kept in the dedicated `assets/app-icon` directory; Electron Builder generates the
   packaged `.icns` resource from that master.
+- 2026-07-27: Initialized Git version control for the project (previously no repository existed at all)
+  and added four GitHub Actions workflows: `ci.yml`, `package-mac.yml`, `security-audit.yml`, and
+  `codeql.yml`. All four run on GitHub-hosted `macos-14` (arm64) runners except CodeQL, which runs on
+  `ubuntu-latest` since static analysis needs no Electron build. Each workflow has a matching
+  implementation-agnostic specification under `spec/spec-process-cicd-*.md`. This wires the project's
+  existing typecheck/build/regression scripts and `npm audit` split into automated checks; it does not
+  add new test coverage, linting, or code signing, which remain open tech debt.

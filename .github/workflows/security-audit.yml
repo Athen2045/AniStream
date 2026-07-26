@@ -1,0 +1,36 @@
+name: Dependency audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  audit:
+    name: npm audit (runtime blocking, full advisory report)
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies without native rebuild
+        run: npm ci --ignore-scripts
+
+      - name: Fail on runtime dependency vulnerabilities
+        run: npm audit --omit=dev
+
+      - name: Report full advisory tree (dev + runtime, non-blocking)
+        if: always()
+        run: npm audit || true

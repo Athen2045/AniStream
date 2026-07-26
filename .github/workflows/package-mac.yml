@@ -1,0 +1,70 @@
+name: Package macOS build
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: package-mac-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Build and verify unsigned arm64 DMG
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Cache Electron and electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build unsigned Apple Silicon package
+        run: npm run package:mac
+        env:
+          # No Developer ID Application certificate is installed for this personal
+          # build; disable electron-builder's local keychain identity search so the
+          # packaging step stays deterministic and explicitly unsigned.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify packaged preload is sandbox-safe CommonJS
+        run: >
+          npm run check:packaged-preload --
+          dist/mac-arm64/AniStream.app/Contents/Resources/app.asar
+
+      - name: Upload unsigned DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AniStream-mac-arm64-dmg
+          path: dist/*.dmg
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Attach DMG to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          generate_release_notes: true
