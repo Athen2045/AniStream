@@ -39,7 +39,8 @@ jobs:
             ${{ runner.os }}-electron-cache-
 
       - name: Install dependencies
-        run: npm ci
+        # --legacy-peer-deps: see ci.yml -- eslint-plugin-react/eslint peer-range lag, harmless.
+        run: npm ci --legacy-peer-deps
 
       - name: Build unsigned Apple Silicon package
         run: npm run package:mac

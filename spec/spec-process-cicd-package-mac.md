@@ -1,6 +1,6 @@
 ---
 title: CI/CD Workflow Specification - Package macOS build
-version: 1.0
+version: 1.1
 date_created: 2026-07-27
 last_updated: 2026-07-27
 owner: AniStream maintainer
@@ -18,7 +18,7 @@ tags: [process, cicd, github-actions, automation, electron-builder, packaging, m
 ```mermaid
 graph TD
     A[Tag push v*.*.* or manual dispatch] --> B[Checkout + Node 22 + caches]
-    B --> C[npm ci]
+    B --> C["npm ci --legacy-peer-deps"]
     C --> D[npm run package:mac]
     D --> E[Verify packaged preload path + CommonJS format in app.asar]
     E --> F[Upload DMG artifact]
@@ -195,9 +195,10 @@ github_release_asset: file # Description: same .dmg attached to the tag's GitHub
 
 ### Version History
 
-| Version | Date       | Changes               | Author                                  |
-| ------- | ---------- | --------------------- | --------------------------------------- |
-| 1.0     | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
+| Version | Date       | Changes                                                                                                                  | Author                                  |
+| ------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| 1.0     | 2026-07-27 | Initial specification                                                                                                    | AniStream maintainer (with Claude Code) |
+| 1.1     | 2026-07-27 | Switched install to `npm ci --legacy-peer-deps` (eslint-plugin-react/ESLint 10 peer-range lag; `npm ci` alone now fails) | AniStream maintainer (with Claude Code) |
 
 ## Related Specifications
 

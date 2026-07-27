@@ -1,6 +1,6 @@
 ---
 title: CI/CD Workflow Specification - CI
-version: 1.0
+version: 1.1
 date_created: 2026-07-27
 last_updated: 2026-07-27
 owner: AniStream maintainer
@@ -9,7 +9,7 @@ tags: [process, cicd, github-actions, automation, typescript, electron, correctn
 
 ## Workflow Overview
 
-**Purpose**: Prove that every push and pull request against `main` still type-checks, builds, and preserves the product-slice and AniList OAuth contracts that prior regressions have broken.
+**Purpose**: Prove that every push and pull request against `main` still type-checks, lints cleanly, matches the repo's formatting, passes its unit tests, builds, and preserves the product-slice and AniList OAuth contracts that prior regressions have broken.
 **Trigger Events**: Push to `main`; pull request targeting `main`.
 **Target Environments**: Apple Silicon macOS build agent (matches the single supported runtime platform).
 
@@ -18,22 +18,25 @@ tags: [process, cicd, github-actions, automation, typescript, electron, correctn
 ```mermaid
 graph TD
     A[Push or PR to main] --> B[Checkout + Node 22 + caches]
-    B --> C[npm ci]
+    B --> C["npm ci --legacy-peer-deps"]
     C --> D[Typecheck: main/preload/shared/renderer]
-    D --> E[Build production bundles]
-    E --> F[Verify product-slice contracts]
-    F --> G[Verify AniList auth-code OAuth flow]
-    G --> H[Success]
+    D --> E[Lint]
+    E --> F[Check formatting]
+    F --> G[Run unit tests]
+    G --> H[Build production bundles]
+    H --> I[Verify product-slice contracts]
+    I --> J[Verify AniList auth-code OAuth flow]
+    J --> K[Success]
 
     style A fill:#e1f5fe
-    style H fill:#e8f5e8
+    style K fill:#e8f5e8
 ```
 
 ## Jobs & Dependencies
 
-| Job Name | Purpose                                                          | Dependencies      | Execution Context         |
-| -------- | ---------------------------------------------------------------- | ----------------- | ------------------------- |
-| verify   | Install, typecheck, build, and run source/bundle contract checks | None (single job) | macOS arm64 hosted runner |
+| Job Name | Purpose                                                                                    | Dependencies      | Execution Context         |
+| -------- | ------------------------------------------------------------------------------------------ | ----------------- | ------------------------- |
+| verify   | Install, typecheck, lint, format-check, test, build, and run source/bundle contract checks | None (single job) | macOS arm64 hosted runner |
 
 ## Requirements Matrix
 
@@ -41,11 +44,14 @@ graph TD
 
 | ID      | Requirement                                                                                                   | Priority | Acceptance Criteria                   |
 | ------- | ------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------- |
-| REQ-001 | Dependencies install cleanly, including native module rebuild for Electron's ABI                              | High     | `npm ci` exits 0                      |
+| REQ-001 | Dependencies install cleanly, including native module rebuild for Electron's ABI                              | High     | `npm ci --legacy-peer-deps` exits 0   |
 | REQ-002 | TypeScript strict-mode compiles with no errors across all three project seams                                 | High     | `npm run typecheck` exits 0           |
 | REQ-003 | electron-vite produces main/preload/renderer production bundles                                               | High     | `npm run build` exits 0               |
 | REQ-004 | Session-before-window ordering, browse/detail IPC, navbar UI, and provider contracts remain present in source | High     | `npm run check:product-slice` exits 0 |
 | REQ-005 | Built main bundle uses authorization-code OAuth (not implicit) and retains Keychain lookup/storage code paths | High     | `npm run check:anilist-oauth` exits 0 |
+| REQ-006 | Source has no ESLint errors (warnings are informational and do not fail the build)                            | High     | `npm run lint` exits 0                |
+| REQ-007 | Source matches the repo's Prettier style                                                                      | Medium   | `npm run format:check` exits 0        |
+| REQ-008 | AniList normalizer, request-dedup/throttle-gate, and cache unit tests pass                                    | High     | `npm test` exits 0                    |
 
 ### Security Requirements
 
@@ -58,7 +64,7 @@ graph TD
 
 | ID       | Metric                                   | Target                                     | Measurement Method                  |
 | -------- | ---------------------------------------- | ------------------------------------------ | ----------------------------------- |
-| PERF-001 | End-to-end run time                      | Under 10 minutes on a warm cache           | GitHub Actions run duration         |
+| PERF-001 | End-to-end run time                      | Under 12 minutes on a warm cache           | GitHub Actions run duration         |
 | PERF-002 | Electron/electron-builder download reuse | Cache hit on unchanged `package-lock.json` | `actions/cache` hit/miss in job log |
 
 ## Input/Output Contracts
@@ -100,22 +106,28 @@ verify_status: pass|fail # Description: single required status check consumed by
 
 ## Error Handling Strategy
 
-| Error Type                 | Response                                   | Recovery Action                                                                                                                   |
-| -------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| Dependency install failure | Job fails at `npm ci` step                 | Reproduce locally with `npm ci`; check Electron download/network or native rebuild toolchain                                      |
-| Type error                 | Job fails at typecheck step                | Fix reported TypeScript diagnostics; re-push                                                                                      |
-| Build failure              | Job fails at build step                    | Inspect electron-vite error output; re-push                                                                                       |
-| Contract regression        | Job fails at the relevant `check:*` script | Restore the missing fragment/ordering the script asserts, or update the script deliberately if the contract intentionally changed |
+| Error Type                 | Response                                      | Recovery Action                                                                                                                   |
+| -------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Dependency install failure | Job fails at `npm ci --legacy-peer-deps` step | Reproduce locally with `npm ci --legacy-peer-deps`; check Electron download/network or native rebuild toolchain                   |
+| Type error                 | Job fails at typecheck step                   | Fix reported TypeScript diagnostics; re-push                                                                                      |
+| Lint error                 | Job fails at lint step                        | Fix reported ESLint errors (warnings do not fail the job); re-push                                                                |
+| Formatting mismatch        | Job fails at format-check step                | Run `npm run format` locally and commit the result                                                                                |
+| Test failure               | Job fails at the unit-test step               | Reproduce locally with `npm test`; fix the regressed normalizer/gate/cache behavior or update the fixture deliberately            |
+| Build failure              | Job fails at build step                       | Inspect electron-vite error output; re-push                                                                                       |
+| Contract regression        | Job fails at the relevant `check:*` script    | Restore the missing fragment/ordering the script asserts, or update the script deliberately if the contract intentionally changed |
 
 ## Quality Gates
 
 ### Gate Definitions
 
-| Gate            | Criteria                      | Bypass Conditions                                                           |
-| --------------- | ----------------------------- | --------------------------------------------------------------------------- |
-| Typecheck       | Zero TypeScript diagnostics   | None                                                                        |
-| Build           | electron-vite build completes | None                                                                        |
-| Contract checks | Both `check:*` scripts exit 0 | None — these encode previously shipped regressions and must not be bypassed |
+| Gate            | Criteria                            | Bypass Conditions                                                           |
+| --------------- | ----------------------------------- | --------------------------------------------------------------------------- |
+| Typecheck       | Zero TypeScript diagnostics         | None                                                                        |
+| Lint            | Zero ESLint errors                  | None (warnings are tracked but non-blocking, see CONTEXT.md)                |
+| Format          | `prettier --check` reports no diffs | None                                                                        |
+| Unit tests      | `vitest run` exits 0                | None                                                                        |
+| Build           | electron-vite build completes       | None                                                                        |
+| Contract checks | Both `check:*` scripts exit 0       | None — these encode previously shipped regressions and must not be bypassed |
 
 ## Monitoring & Observability
 
@@ -164,11 +176,12 @@ verify_status: pass|fail # Description: single required status check consumed by
 
 ### Scenario Matrix
 
-| Scenario                                               | Expected Behavior                                                     | Validation Method                                    |
-| ------------------------------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------- |
-| `package-lock.json` unchanged between runs             | Electron/electron-builder cache restores, install is fast             | Compare run duration to prior run                    |
-| A regression script is edited to assert a new contract | CI enforces the new contract on the next push                         | Review diff of `scripts/verify-*.mjs` in the PR      |
-| PR from a fork                                         | Workflow still runs read-only checks; no secrets available regardless | No secrets are referenced, so behavior is unaffected |
+| Scenario                                                     | Expected Behavior                                                                      | Validation Method                                              |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `package-lock.json` unchanged between runs                   | Electron/electron-builder cache restores, install is fast                              | Compare run duration to prior run                              |
+| A regression script is edited to assert a new contract       | CI enforces the new contract on the next push                                          | Review diff of `scripts/verify-*.mjs` in the PR                |
+| PR from a fork                                               | Workflow still runs read-only checks; no secrets available regardless                  | No secrets are referenced, so behavior is unaffected           |
+| `eslint-plugin-react`'s peer range still lags current ESLint | Install still succeeds via `--legacy-peer-deps`, a real but harmless peer-metadata gap | Compare against CONTEXT.md's ESLint/TypeScript-7 tooling entry |
 
 ## Validation Criteria
 
@@ -176,11 +189,14 @@ verify_status: pass|fail # Description: single required status check consumed by
 
 - **VLD-001**: A push that introduces a TypeScript error fails the `verify` job at the typecheck step.
 - **VLD-002**: A push that reintroduces implicit OAuth (`response_type=token`) fails `check:anilist-oauth`.
+- **VLD-003**: A push that introduces an ESLint error fails the lint step; a lint warning alone does not fail the job.
+- **VLD-004**: A push with unformatted source fails the format-check step.
+- **VLD-005**: A push that breaks an AniList normalizer, the request-dedup/throttle gate, or the cache fails the unit-test step.
 
 ### Performance Benchmarks
 
-- **PERF-001**: Cold-cache run completes in under 15 minutes.
-- **PERF-002**: Warm-cache run completes in under 8 minutes.
+- **PERF-001**: Cold-cache run completes in under 18 minutes.
+- **PERF-002**: Warm-cache run completes in under 10 minutes.
 
 ## Change Management
 
@@ -194,9 +210,10 @@ verify_status: pass|fail # Description: single required status check consumed by
 
 ### Version History
 
-| Version | Date       | Changes               | Author                                  |
-| ------- | ---------- | --------------------- | --------------------------------------- |
-| 1.0     | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
+| Version | Date       | Changes                                                                                                                                       | Author                                  |
+| ------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1.0     | 2026-07-27 | Initial specification                                                                                                                         | AniStream maintainer (with Claude Code) |
+| 1.1     | 2026-07-27 | Added lint, format-check, and unit-test steps; switched install to `npm ci --legacy-peer-deps` (eslint-plugin-react/ESLint 10 peer-range lag) | AniStream maintainer (with Claude Code) |
 
 ## Related Specifications
 

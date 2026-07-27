@@ -26,7 +26,8 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies without native rebuild
-        run: npm ci --ignore-scripts
+        # --legacy-peer-deps: see ci.yml -- eslint-plugin-react/eslint peer-range lag, harmless.
+        run: npm ci --ignore-scripts --legacy-peer-deps
 
       - name: Fail on runtime dependency vulnerabilities
         run: npm audit --omit=dev

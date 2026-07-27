@@ -36,10 +36,23 @@ jobs:
             ${{ runner.os }}-electron-cache-
 
       - name: Install dependencies
-        run: npm ci
+        # --legacy-peer-deps: eslint-plugin-react@7.37.5 (latest available) declares a
+        # peer range that predates eslint 10, and @babel/eslint-parser vs. eslint-plugin-react
+        # disagree on the exact eslint peer range. Both are real-but-harmless peer-metadata
+        # lag, not a runtime incompatibility -- see CONTEXT.md's ESLint/TypeScript-7 entry.
+        run: npm ci --legacy-peer-deps
 
       - name: Type-check main, preload, shared, and renderer
         run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Run unit tests
+        run: npm test
 
       - name: Build production bundles
         run: npm run build

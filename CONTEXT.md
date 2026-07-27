@@ -70,11 +70,21 @@ provider contract chain. Actual HLS/torrent extraction and MangaDex chapter read
   `security-audit.yml` (blocking `npm audit --omit=dev`, non-blocking full audit report, on manifest changes and weekly),
   and `codeql.yml` (CodeQL `javascript-typescript` security-extended analysis, on push/PR and weekly).
 - These workflows run the project's _existing_ checks in CI; they do not add new test coverage. Unit/integration tests and ESLint/Prettier are still not configured (see Known issues below) and remain the next priority.
-- Vitest is now configured (`vitest.config.ts`, `npm test` / `npm run test:watch`). 35 fixture-based
+- Vitest is now configured (`vitest.config.ts`, `npm test` / `npm run test:watch`). 43 fixture-based
   unit tests in `test/main/` cover every AniList GraphQL normalizer (`src/main/anilist/normalize.ts`),
-  the client-side request-dedup/throttle gate, and the bounded cache — the code most exposed to
-  upstream schema drift, which previously had zero coverage. `ci.yml` should be extended to run
-  `npm test` alongside typecheck/build (not yet wired in this pass).
+  the client-side request-dedup/throttle/rate-limit gate, the bounded cache, and Retry-After parsing —
+  the code most exposed to upstream schema drift and provider throttling, which previously had zero
+  coverage.
+- `ci.yml` now runs `npm run typecheck`, `npm run lint`, `npm run format:check`, and `npm test` in
+  addition to build and the two contract-check scripts, on every push/PR to `main`. Doing this surfaced
+  a real gap: `npm ci` alone fails on this repo (`eslint-plugin-react@7.37.5`, the latest release,
+  declares a peer range that predates ESLint 10; `@babel/eslint-parser` and `eslint-plugin-react` also
+  disagree on the exact eslint peer range). All three workflows that install dependencies (`ci.yml`,
+  `package-mac.yml`, `security-audit.yml`) now use `npm ci --legacy-peer-deps` (the audit workflow keeps
+  its existing `--ignore-scripts`). This is a real-but-harmless peer-metadata gap, not a runtime
+  incompatibility — confirmed by running the exact CI command sequence locally. The four spec docs under
+  `spec/` were updated to match (bumped to version 1.1) and a pre-existing broken markdown table in
+  `spec-process-cicd-security-audit.md` (an unescaped `||` had split a table cell) was fixed in passing.
 - `src/main/anilist.ts` (1,159 lines) is split into `src/main/anilist/{client,queries,normalize,
 keychain,session-store,request-queue,cache}.ts`. `AniListClient`'s public interface is unchanged;
   `src/main/index.ts` still imports it from `./anilist` unmodified. `scripts/verify-product-slice.mjs`
@@ -199,10 +209,9 @@ Many Requests` (AniList's real 429 body surfacing verbatim) — most likely beca
 6. Add AniList favorites, activity feed, reviews/recommendations actions, notifications, and richer
    statistics incrementally; do not interpret “all API fields” as a reason to expose unsafe moderator
    or irrelevant platform operations.
-7. Provider fixtures/tests exist now for AniList (35 Vitest cases); still need equivalents once
+7. Provider fixtures/tests exist now for AniList (43 Vitest cases); still need equivalents once
    MangaDex/HLS adapters land, plus valid Developer ID signing/notarization.
-8. Wire `npm test` and `npm run lint` into `ci.yml` (currently only run locally in this session).
-9. Manually launch the app and resize the window to visually verify the responsive/performance pass
+8. Manually launch the app and resize the window to visually verify the responsive/performance pass
    (content-visibility grids, code-split MediaDetailModal) — not yet done in this environment.
 
 ## Key architectural decisions log
@@ -286,3 +295,11 @@ Many Requests` (AniList's real 429 body surfacing verbatim) — most likely beca
   add new breakpoints. This pass was verified only via typecheck/build/lint/test and build-output
   chunk sizes, not by visually running the app, since this environment has no tool that can drive an
   actual Electron window.
+- 2026-07-27: Extended `ci.yml` to run `npm run lint`, `npm run format:check`, and `npm test` alongside
+  the existing typecheck/build/contract checks. Discovered `npm ci` (no flags) fails on this repo —
+  `eslint-plugin-react@7.37.5` (latest) has a peer range that predates ESLint 10 — so switched every
+  workflow that installs dependencies to `npm ci --legacy-peer-deps` (audit keeps `--ignore-scripts`
+  too) after confirming locally that the flag is the only change needed; the actual installed tree
+  works correctly. Updated all four `spec/spec-process-cicd-*.md` docs to match and bumped them to
+  version 1.1, and fixed an unrelated pre-existing broken markdown table in the security-audit spec
+  (an unescaped `||` had split a cell) noticed while editing it.

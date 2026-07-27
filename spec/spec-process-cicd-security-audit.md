@@ -1,6 +1,6 @@
 ---
 title: CI/CD Workflow Specification - Dependency audit
-version: 1.0
+version: 1.1
 date_created: 2026-07-27
 last_updated: 2026-07-27
 owner: AniStream maintainer
@@ -18,7 +18,7 @@ tags: [process, cicd, github-actions, automation, security, dependencies, npm-au
 ```mermaid
 graph TD
     A[Manifest push, weekly schedule, or dispatch] --> B[Checkout + Node 22]
-    B --> C[npm ci --ignore-scripts]
+    B --> C["npm ci --ignore-scripts --legacy-peer-deps"]
     C --> D{npm audit --omit=dev}
     D -->|0 vulnerabilities| E[Continue]
     D -->|vulnerabilities found| F[Job fails]
@@ -40,18 +40,18 @@ graph TD
 
 ### Functional Requirements
 
-| ID      | Requirement                                                                                                       | Priority | Acceptance Criteria                                                        |
-| ------- | ----------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------- |
-| REQ-001 | Runtime (production) dependency tree has zero known vulnerabilities                                               | High     | `npm audit --omit=dev` exits 0                                             |
-| REQ-002 | Full advisory tree (including dev/tooling dependencies) is visible in every run regardless of the blocking result | Medium   | `npm audit` output is always printed (`if: always()`), never fails the job |
-| REQ-003 | Install does not trigger Electron download/native rebuild for an audit-only run                                   | Medium   | `npm ci --ignore-scripts` is used instead of plain `npm ci`                |
+| ID      | Requirement                                                                                                       | Priority | Acceptance Criteria                                                            |
+| ------- | ----------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| REQ-001 | Runtime (production) dependency tree has zero known vulnerabilities                                               | High     | `npm audit --omit=dev` exits 0                                                 |
+| REQ-002 | Full advisory tree (including dev/tooling dependencies) is visible in every run regardless of the blocking result | Medium   | `npm audit` output is always printed (`if: always()`), never fails the job     |
+| REQ-003 | Install does not trigger Electron download/native rebuild for an audit-only run                                   | Medium   | `npm ci --ignore-scripts --legacy-peer-deps` is used instead of plain `npm ci` |
 
 ### Security Requirements
 
-| ID      | Requirement                                                                                                                  | Implementation Constraint                              |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| SEC-001 | A newly introduced runtime vulnerability blocks merges to `main`                                                             | `npm audit --omit=dev` step has no `continue-on-error` |
-| SEC-002 | Known dev-only advisories (electron-builder's `glob`/`rimraf`/`temp` chain) do not create alert fatigue by failing every run | Full-tree audit step is explicitly non-blocking (`     |     | true`) |
+| ID      | Requirement                                                                                                                  | Implementation Constraint                                               |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| SEC-001 | A newly introduced runtime vulnerability blocks merges to `main`                                                             | `npm audit --omit=dev` step has no `continue-on-error`                  |
+| SEC-002 | Known dev-only advisories (electron-builder's `glob`/`rimraf`/`temp` chain) do not create alert fatigue by failing every run | Full-tree audit step is explicitly non-blocking (`npm audit \|\| true`) |
 
 ### Performance Requirements
 
@@ -190,9 +190,10 @@ full_audit_report: log # Description: informational advisory listing in job log
 
 ### Version History
 
-| Version | Date       | Changes               | Author                                  |
-| ------- | ---------- | --------------------- | --------------------------------------- |
-| 1.0     | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
+| Version | Date       | Changes                                                                                                                                   | Author                                  |
+| ------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1.0     | 2026-07-27 | Initial specification                                                                                                                     | AniStream maintainer (with Claude Code) |
+| 1.1     | 2026-07-27 | Switched install to `npm ci --ignore-scripts --legacy-peer-deps` (eslint-plugin-react/ESLint 10 peer-range lag; `npm ci` alone now fails) | AniStream maintainer (with Claude Code) |
 
 ## Related Specifications
 
