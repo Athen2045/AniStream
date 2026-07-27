@@ -34,6 +34,12 @@ export interface AniListMedia {
   status?: string;
   totalProgress?: number;
   totalVolumes?: number;
+  genres?: string[];
+  averageScore?: number;
+  nextAiringEpisode?: {
+    episode: number;
+    airingAt: number;
+  };
   siteUrl: string;
 }
 
@@ -45,10 +51,6 @@ export interface AniListCatalogMedia extends AniListMedia {
   popularity?: number;
   season?: string;
   seasonYear?: number;
-  nextAiringEpisode?: {
-    episode: number;
-    airingAt: number;
-  };
 }
 
 export interface AniListPageInfo {
@@ -68,7 +70,40 @@ export interface BrowseAniListInput {
   page: number;
   perPage?: number;
   query?: string;
+  genre?: string;
   sort?: "TRENDING_DESC" | "POPULARITY_DESC" | "SCORE_DESC" | "START_DATE_DESC";
+}
+
+export interface AnimeEpisodeGuideEpisode {
+  id: string;
+  number: number;
+  season?: number;
+  title?: string;
+  thumbnailUrl?: string;
+  airDate?: string;
+}
+
+export interface AnimeEpisodeGuide {
+  status: "configured" | "unconfigured" | "unavailable";
+  slug: string;
+  episodes: AnimeEpisodeGuideEpisode[];
+  message?: string;
+  fetchedAt: string;
+}
+
+export interface MangaDexAvailabilityInput {
+  aniListId: number;
+  title: string;
+}
+
+export interface MangaDexChapterAvailability {
+  aniListId: number;
+  mangaDexId?: string;
+  status: "available" | "unmapped" | "unavailable";
+  translatedLanguage: string;
+  latestChapter?: number;
+  checkedAt: string;
+  message?: string;
 }
 
 export interface AniListNamedPerson {
@@ -168,5 +203,9 @@ export interface AniStreamBridge {
   addAniListEntry(mediaId: number): Promise<void>;
   updateAniListEntry(input: UpdateAniListEntryInput): Promise<void>;
   deleteAniListEntry(id: number): Promise<void>;
+  getAnimeEpisodeGuide(slug: string): Promise<AnimeEpisodeGuide>;
+  getMangaDexAvailability(
+    media: MangaDexAvailabilityInput[],
+  ): Promise<MangaDexChapterAvailability[]>;
   onAniListAuthChanged(callback: (state: AniListAuthState) => void): () => void;
 }

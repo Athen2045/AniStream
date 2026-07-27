@@ -249,7 +249,12 @@ export class AniListClient {
       ? (input.sort ?? "TRENDING_DESC")
       : "TRENDING_DESC";
 
-    const cacheKey = `browse:${input.type}:${input.page}:${perPage}:${sort}:${query ?? ""}`;
+    const genre = input.genre?.trim();
+    if (genre && (genre.length < 2 || genre.length > 80)) {
+      throw new Error("Invalid AniList genre filter.");
+    }
+
+    const cacheKey = `browse:${input.type}:${input.page}:${perPage}:${sort}:${genre ?? ""}:${query ?? ""}`;
     const cached = this.browseCache.get(cacheKey);
     if (cached) return cached;
 
@@ -260,6 +265,7 @@ export class AniListClient {
         perPage,
         type: input.type,
         search: query || undefined,
+        genre: genre || undefined,
         sort: [sort],
       },
       cacheKey,

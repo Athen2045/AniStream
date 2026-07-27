@@ -1,6 +1,11 @@
-import { BookOpen, Check, ExternalLink, Play, Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { AniListCatalogMedia, AniListMediaDetail } from "../../shared/contracts";
+import { BookOpen, Check, ExternalLink, Play, Plus, Star, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type {
+  AniListCatalogMedia,
+  AniListMediaDetail,
+  AnimeEpisodeGuide,
+  AnimeEpisodeGuideEpisode,
+} from "../../shared/contracts";
 import { safeBackgroundUrl } from "./safe-css-url";
 
 export function MediaDetailModal({
@@ -16,6 +21,12 @@ export function MediaDetailModal({
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [showPlayback, setShowPlayback] = useState(false);
+  const [episodeGuide, setEpisodeGuide] = useState<AnimeEpisodeGuide>();
+  const [loadingGuide, setLoadingGuide] = useState(false);
+  const [activeEpisode, setActiveEpisode] = useState<AnimeEpisodeGuideEpisode>();
+  const [rating, setRating] = useState(0);
+  const [savingTracker, setSavingTracker] = useState(false);
+  const lastMarkedEpisode = useRef<number | undefined>(undefined);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -23,7 +34,10 @@ export function MediaDetailModal({
     void window.anistream
       .getAniListMediaDetail(media.id, media.type)
       .then((result) => {
-        if (active) setDetail(result);
+        if (active) {
+          setDetail(result);
+          setRating(result.listEntry?.score ?? 0);
+        }
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : "Unable to load details.");
@@ -36,6 +50,95 @@ export function MediaDetailModal({
     };
   }, [media.id, media.type]);
 
+  const resolved = detail ?? media;
+
+  const ensureListEntry = useCallback(async (): Promise<AniListMediaDetail> => {
+    const current = detail ?? (await window.anistream.getAniListMediaDetail(media.id, media.type));
+    if (current.listEntry) return current;
+    await window.anistream.addAniListEntry(current.id);
+    const added = await window.anistream.getAniListMediaDetail(current.id, current.type);
+    setDetail(added);
+    await onAdded();
+    return added;
+  }, [detail, media.id, media.type, onAdded]);
+
+  const markEpisodeWatched = useCallback(
+    async (episodeNumber: number): Promise<void> => {
+      if (lastMarkedEpisode.current === episodeNumber) return;
+      lastMarkedEpisode.current = episodeNumber;
+      setSavingTracker(true);
+      setError(undefined);
+      try {
+        const current = await ensureListEntry();
+        if (!current.listEntry) throw new Error("AniList did not return the new list entry.");
+        const nextProgress = Math.max(current.listEntry.progress, episodeNumber);
+        const completed = Boolean(current.totalProgress && nextProgress >= current.totalProgress);
+        await window.anistream.updateAniListEntry({
+          id: current.listEntry.id,
+          progress: nextProgress,
+          status: completed ? "COMPLETED" : "CURRENT",
+        });
+        const updated = await window.anistream.getAniListMediaDetail(current.id, current.type);
+        setDetail(updated);
+        setRating(updated.listEntry?.score ?? 0);
+        await onAdded();
+      } catch (reason) {
+        lastMarkedEpisode.current = undefined;
+        setError(reason instanceof Error ? reason.message : "Unable to update AniList progress.");
+      } finally {
+        setSavingTracker(false);
+      }
+    },
+    [ensureListEntry, onAdded],
+  );
+
+  const markMediaCompleted = useCallback(async (): Promise<void> => {
+    setSavingTracker(true);
+    setError(undefined);
+    try {
+      const current = await ensureListEntry();
+      if (!current.listEntry) throw new Error("AniList entry was not created.");
+      await window.anistream.updateAniListEntry({
+        id: current.listEntry.id,
+        status: "COMPLETED",
+        progress: current.totalProgress ?? current.listEntry.progress,
+      });
+      const updated = await window.anistream.getAniListMediaDetail(current.id, current.type);
+      setDetail(updated);
+      setRating(updated.listEntry?.score ?? 0);
+      await onAdded();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to mark complete.");
+    } finally {
+      setSavingTracker(false);
+    }
+  }, [ensureListEntry, onAdded]);
+
+  useEffect(() => {
+    if (!showPlayback) return;
+    const handlePlayerMessage = (event: MessageEvent<unknown>): void => {
+      if (event.origin !== "https://www.vidking.net" || !isRecord(event.data)) return;
+      if (event.data.type !== "PLAYER_EVENT" || !isRecord(event.data.data)) return;
+      const playerData = event.data.data;
+      const progress = typeof playerData.progress === "number" ? playerData.progress : 0;
+      if (playerData.event === "ended" || progress >= 90) {
+        if (activeEpisode && !savingTracker) void markEpisodeWatched(activeEpisode.number);
+        else if (resolved.type === "ANIME" && resolved.format === "MOVIE" && !savingTracker) {
+          void markMediaCompleted();
+        }
+      }
+    };
+    window.addEventListener("message", handlePlayerMessage);
+    return () => window.removeEventListener("message", handlePlayerMessage);
+  }, [
+    activeEpisode,
+    markEpisodeWatched,
+    markMediaCompleted,
+    resolved,
+    savingTracker,
+    showPlayback,
+  ]);
+
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent): void => {
       if (event.key === "Escape") onClose();
@@ -43,8 +146,6 @@ export function MediaDetailModal({
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
-
-  const resolved = detail ?? media;
 
   return (
     <div className="detail-backdrop" role="presentation" onMouseDown={onClose}>
@@ -68,7 +169,14 @@ export function MediaDetailModal({
             <p className="catalog-kicker">{resolved.type === "ANIME" ? "Anime" : "Manga"}</p>
             <h2>{resolved.title}</h2>
             <div className="detail-actions">
-              <button className="play-action" type="button" onClick={() => setShowPlayback(true)}>
+              <button
+                className="play-action"
+                type="button"
+                onClick={() => {
+                  setActiveEpisode(episodeGuide?.episodes[0]);
+                  setShowPlayback(true);
+                }}
+              >
                 {resolved.type === "ANIME" ? (
                   <Play size={18} fill="currentColor" />
                 ) : (
@@ -106,20 +214,152 @@ export function MediaDetailModal({
 
           {showPlayback ? (
             <section className="playback-stage">
-              <button type="button" onClick={() => setShowPlayback(false)}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPlayback(false);
+                  setActiveEpisode(undefined);
+                }}
+              >
                 Close player
               </button>
-              <div>
-                {resolved.type === "ANIME" ? <Play size={42} /> : <BookOpen size={42} />}
-                <h3>
-                  {resolved.type === "ANIME"
-                    ? "Video sources are not connected yet"
-                    : "MangaDex reader is the next adapter"}
-                </h3>
-                <p>
-                  The native title → season/episode → hoster → variant contracts are installed. No
-                  scraped host or MangaDex chapter endpoint is silently hardcoded into this build.
-                </p>
+              {buildVidKingUrl(resolved, activeEpisode) ? (
+                <iframe
+                  className="vidking-player"
+                  title={`${resolved.title} player`}
+                  src={buildVidKingUrl(resolved, activeEpisode)}
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <div>
+                  {resolved.type === "ANIME" ? <Play size={42} /> : <BookOpen size={42} />}
+                  <h3>
+                    {resolved.type === "ANIME"
+                      ? "VidKing mapping is unavailable for this title"
+                      : "MangaDex reader is the next adapter"}
+                  </h3>
+                  <p>
+                    VidKing requires a TMDB movie or TV ID. AniStream keeps AniList as the source of
+                    truth and will use VidKing only when a verified TMDB mapping is available.
+                  </p>
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {resolved.type === "ANIME" ? (
+            <section className="episode-guide">
+              <div className="tracker-heading">
+                <div>
+                  <p className="catalog-kicker">Optional episode source</p>
+                  <h3>Episodes</h3>
+                </div>
+                <button
+                  className="quiet-button"
+                  type="button"
+                  disabled={loadingGuide}
+                  onClick={() => {
+                    setLoadingGuide(true);
+                    void window.anistream
+                      .getAnimeEpisodeGuide(slugify(resolved.title))
+                      .then(setEpisodeGuide)
+                      .catch((reason: unknown) =>
+                        setError(
+                          reason instanceof Error ? reason.message : "Episode guide failed.",
+                        ),
+                      )
+                      .finally(() => setLoadingGuide(false));
+                  }}
+                >
+                  {loadingGuide
+                    ? "Loading…"
+                    : episodeGuide
+                      ? "Refresh guide"
+                      : "Load episode guide"}
+                </button>
+              </div>
+              {episodeGuide?.message ? (
+                <p className="provider-note">{episodeGuide.message}</p>
+              ) : null}
+              {episodeGuide?.episodes.length ? (
+                <div className="episode-list">
+                  {episodeGuide.episodes.map((episode) => (
+                    <button
+                      type="button"
+                      key={episode.id}
+                      className={activeEpisode?.id === episode.id ? "active" : ""}
+                      onClick={() => {
+                        setActiveEpisode(episode);
+                        setShowPlayback(true);
+                      }}
+                    >
+                      <span>{episode.number}</span>
+                      <strong>{episode.title ?? `Episode ${episode.number}`}</strong>
+                      <Play size={15} fill="currentColor" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {detail ? (
+            <section className="detail-tracker">
+              <div className="tracker-heading">
+                <div>
+                  <p className="catalog-kicker">AniList sync</p>
+                  <h3>Keep your progress current</h3>
+                </div>
+                {detail.listEntry ? <span>{detail.listEntry.progress} completed</span> : null}
+              </div>
+              <div className="tracker-controls">
+                <label>
+                  <Star size={15} />
+                  Rating
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    value={rating}
+                    onChange={(event) => setRating(Number(event.target.value))}
+                  />
+                  <span>/ 10</span>
+                </label>
+                <button
+                  className="quiet-button"
+                  type="button"
+                  disabled={savingTracker}
+                  onClick={() => {
+                    setSavingTracker(true);
+                    void ensureListEntry()
+                      .then((current) => {
+                        if (!current.listEntry) throw new Error("AniList entry was not created.");
+                        return window.anistream.updateAniListEntry({
+                          id: current.listEntry.id,
+                          score: Math.min(10, Math.max(0, rating)),
+                        });
+                      })
+                      .then(() => onAdded())
+                      .catch((reason: unknown) =>
+                        setError(
+                          reason instanceof Error ? reason.message : "Unable to save rating.",
+                        ),
+                      )
+                      .finally(() => setSavingTracker(false));
+                  }}
+                >
+                  Save rating
+                </button>
+                <button
+                  className="quiet-button"
+                  type="button"
+                  disabled={savingTracker}
+                  onClick={() => void markMediaCompleted()}
+                >
+                  Mark completed
+                </button>
               </div>
             </section>
           ) : null}
@@ -142,10 +382,12 @@ export function MediaDetailModal({
             </div>
             {detail ? (
               <dl>
-                <div>
-                  <dt>Studios</dt>
-                  <dd>{detail.studios.join(", ") || "—"}</dd>
-                </div>
+                {detail.type === "ANIME" ? (
+                  <div>
+                    <dt>Studios</dt>
+                    <dd>{detail.studios.join(", ") || "—"}</dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt>Genres</dt>
                   <dd>{detail.genres.join(", ") || "—"}</dd>
@@ -246,4 +488,43 @@ function cleanDescription(value?: string): string {
     .replace(/~!|!~/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function slugify(title: string): string {
+  return title
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildVidKingUrl(
+  media: AniListMediaDetail | AniListCatalogMedia,
+  episode?: AnimeEpisodeGuideEpisode,
+): string | undefined {
+  const tmdbLink =
+    "externalLinks" in media
+      ? media.externalLinks.find((link) => /tmdb|movie database/i.test(link.site))
+      : undefined;
+  if (!tmdbLink) return undefined;
+
+  let tmdbId: string | undefined;
+  try {
+    const url = new URL(tmdbLink.url);
+    tmdbId = [...url.pathname.split("/")].reverse().find((part) => /^\d+$/.test(part));
+  } catch {
+    return undefined;
+  }
+  if (!tmdbId) return undefined;
+
+  const format = media.format?.toLocaleUpperCase();
+  if (format === "MOVIE") {
+    return `https://www.vidking.net/embed/movie/${tmdbId}?color=e50914&autoPlay=true`;
+  }
+  if (!episode) return undefined;
+  const season = episode.season ?? 1;
+  return `https://www.vidking.net/embed/tv/${tmdbId}/${season}/${episode.number}?color=e50914&autoPlay=true&nextEpisode=true&episodeSelector=true`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

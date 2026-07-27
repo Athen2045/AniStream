@@ -45,6 +45,12 @@ export const DASHBOARD_QUERY = `
       episodes
       chapters
       volumes
+      genres
+      averageScore
+      nextAiringEpisode {
+        episode
+        airingAt
+      }
       siteUrl
     }
   }
@@ -128,6 +134,8 @@ export const SEARCH_MEDIA_QUERY = `
         episodes
         chapters
         volumes
+        genres
+        averageScore
         siteUrl
       }
     }
@@ -181,6 +189,7 @@ export const BROWSE_MEDIA_QUERY = `
     $perPage: Int!
     $type: MediaType!
     $search: String
+    $genre: String
     $sort: [MediaSort!]!
   ) {
     Page(page: $page, perPage: $perPage) {
@@ -190,7 +199,7 @@ export const BROWSE_MEDIA_QUERY = `
         lastPage
         hasNextPage
       }
-      media(type: $type, search: $search, sort: $sort, isAdult: false) {
+      media(type: $type, search: $search, genre: $genre, sort: $sort, isAdult: false) {
         ...AniStreamCatalogMedia
       }
     }

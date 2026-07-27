@@ -10,7 +10,16 @@
 - Consumet is research material only. Do not add `@consumet/extensions`, depend on `api.consumet.org`, or copy its provider implementations without a new user-approved review of source availability, licensing, maintenance, and legal/ToS risk.
 - Aniyomi is an architecture/UX reference. Do not load Android APK extensions; implement native TypeScript source contracts in the Electron main process.
 - Do not scrape Netflix or MangaFire. They are visual references only.
+- VidKing is an optional remote iframe experiment, not a native HLS source. Keep its origin and
+  postMessage handling strictly validated, and never infer TMDB IDs from title text.
+- Parse is an optional hosted episode-guide adapter. Keep its bearer key in the main process, do not
+  assume the supplied endpoint schema is verified, and do not make it load-bearing without explicit
+  target-site authorization and cost/ToS review.
 - AniList is the primary metadata and tracker source. MangaDex owns manga/chapter delivery and its account state.
+- AniList-to-MangaDex mappings may be accepted automatically only from an exact, unique
+  `attributes.links.al` match. Never establish identity from title similarity alone.
+- Keep MangaDex public reading independent from account sync. Its personal-client password flow is
+  opt-in and must use macOS Keychain before implementation is considered usable.
 - AniDB is deferred optional enrichment, not a load-bearing dependency.
 
 ## Before you start any session

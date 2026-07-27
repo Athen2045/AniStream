@@ -84,6 +84,9 @@ export function normalizeMedia(value: unknown, expectedType: AniListMediaType): 
     optionalString(title.english) ??
     optionalString(title.romaji);
   if (!preferredTitle) throw new Error("AniList returned media without a title.");
+  const nextAiring = media.nextAiringEpisode
+    ? asRecord(media.nextAiringEpisode, "AniList returned an invalid airing schedule.")
+    : undefined;
 
   return {
     id: requiredNumber(media.id, "media ID"),
@@ -95,6 +98,14 @@ export function normalizeMedia(value: unknown, expectedType: AniListMediaType): 
     totalProgress:
       expectedType === "ANIME" ? optionalNumber(media.episodes) : optionalNumber(media.chapters),
     totalVolumes: optionalNumber(media.volumes),
+    genres: optionalStringArray(media.genres),
+    averageScore: optionalNumber(media.averageScore),
+    nextAiringEpisode: nextAiring
+      ? {
+          episode: requiredNumber(nextAiring.episode, "next episode"),
+          airingAt: requiredNumber(nextAiring.airingAt, "airing time"),
+        }
+      : undefined,
     siteUrl: requiredString(media.siteUrl, "media URL"),
   };
 }
@@ -349,6 +360,14 @@ function requiredString(value: unknown, field: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : undefined;
+}
+
+function optionalStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value.filter(
+    (item): item is string => typeof item === "string" && item.length > 0,
+  );
+  return values.length ? values : undefined;
 }
 
 function requiredNumber(value: unknown, field: string): number {

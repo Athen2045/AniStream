@@ -8,7 +8,10 @@ import type {
   AniListMediaType,
   AniStreamBridge,
   AppInfo,
+  AnimeEpisodeGuide,
   BrowseAniListInput,
+  MangaDexAvailabilityInput,
+  MangaDexChapterAvailability,
   UpdateAniListEntryInput,
 } from "../shared/contracts";
 
@@ -30,6 +33,10 @@ const bridge: AniStreamBridge = {
     ipcRenderer.invoke("anilist:update-entry", input) as Promise<void>,
   deleteAniListEntry: (id: number) =>
     ipcRenderer.invoke("anilist:delete-entry", id) as Promise<void>,
+  getAnimeEpisodeGuide: (slug: string) =>
+    ipcRenderer.invoke("anime:episode-guide", slug) as Promise<AnimeEpisodeGuide>,
+  getMangaDexAvailability: (media: MangaDexAvailabilityInput[]) =>
+    ipcRenderer.invoke("mangadex:availability", media) as Promise<MangaDexChapterAvailability[]>,
   onAniListAuthChanged: (callback: (state: AniListAuthState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AniListAuthState): void => {
       callback(state);

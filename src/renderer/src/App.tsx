@@ -29,6 +29,8 @@ const ENTRY_STATUSES: Array<{ value: AniListEntryStatus; label: string }> = [
   { value: "REPEATING", label: "Repeating" },
 ];
 
+type LibrarySort = "UPDATED_DESC" | "TITLE_ASC" | "SCORE_DESC" | "PROGRESS_DESC";
+
 export function App(): React.JSX.Element {
   const [auth, setAuth] = useState<AniListAuthState>({ status: "signed-out" });
   const [dashboard, setDashboard] = useState<AniListDashboard>();
@@ -38,6 +40,7 @@ export function App(): React.JSX.Element {
   const [mediaType, setMediaType] = useState<AniListMediaType>("ANIME");
   const [selectedGroup, setSelectedGroup] = useState("");
   const [listQuery, setListQuery] = useState("");
+  const [librarySort, setLibrarySort] = useState<LibrarySort>("UPDATED_DESC");
   const [adding, setAdding] = useState(false);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogResults, setCatalogResults] = useState<AniListMedia[]>([]);
@@ -116,12 +119,20 @@ export function App(): React.JSX.Element {
   );
   const visibleEntries = useMemo(() => {
     const query = listQuery.trim().toLocaleLowerCase();
-    return query
+    const filtered = query
       ? (activeGroup?.entries ?? []).filter((entry) =>
           entry.media.title.toLocaleLowerCase().includes(query),
         )
       : (activeGroup?.entries ?? []);
-  }, [activeGroup, listQuery]);
+    return [...filtered].sort((left, right) => {
+      if (librarySort === "TITLE_ASC") {
+        return left.media.title.localeCompare(right.media.title);
+      }
+      if (librarySort === "SCORE_DESC") return right.score - left.score;
+      if (librarySort === "PROGRESS_DESC") return right.progress - left.progress;
+      return right.updatedAt - left.updatedAt;
+    });
+  }, [activeGroup, librarySort, listQuery]);
   const libraryMediaIds = useMemo(() => {
     const ids = new Set<number>();
     for (const list of [...(dashboard?.animeLists ?? []), ...(dashboard?.mangaLists ?? [])]) {
@@ -236,13 +247,6 @@ export function App(): React.JSX.Element {
           >
             Manga
           </button>
-          <button
-            className={view === "PROFILE" ? "active" : ""}
-            type="button"
-            onClick={() => setView("PROFILE")}
-          >
-            My lists
-          </button>
         </div>
         <GlobalSearch
           onSelect={setSelectedMedia}
@@ -271,7 +275,12 @@ export function App(): React.JSX.Element {
       </nav>
 
       {view === "ANIME" || view === "MANGA" ? (
-        <CatalogView type={view} searchQuery={browseQuery} onSelect={setSelectedMedia} />
+        <CatalogView
+          type={view}
+          searchQuery={browseQuery}
+          dashboard={dashboard}
+          onSelect={setSelectedMedia}
+        />
       ) : (
         <ProfileView
           dashboard={dashboard}
@@ -280,6 +289,7 @@ export function App(): React.JSX.Element {
           activeGroupName={activeGroup?.name}
           visibleEntries={visibleEntries}
           listQuery={listQuery}
+          librarySort={librarySort}
           adding={adding}
           catalogQuery={catalogQuery}
           catalogResults={catalogResults}
@@ -291,6 +301,7 @@ export function App(): React.JSX.Element {
           onSwitchType={switchMediaType}
           onSelectGroup={setSelectedGroup}
           onListQuery={setListQuery}
+          onLibrarySort={setLibrarySort}
           onToggleAdding={() => setAdding((value) => !value)}
           onCatalogQuery={setCatalogQuery}
           onCatalogSearch={searchCatalog}
@@ -327,6 +338,7 @@ function ProfileView({
   activeGroupName,
   visibleEntries,
   listQuery,
+  librarySort,
   adding,
   catalogQuery,
   catalogResults,
@@ -338,6 +350,7 @@ function ProfileView({
   onSwitchType,
   onSelectGroup,
   onListQuery,
+  onLibrarySort,
   onToggleAdding,
   onCatalogQuery,
   onCatalogSearch,
@@ -353,6 +366,7 @@ function ProfileView({
   activeGroupName?: string;
   visibleEntries: AniListEntry[];
   listQuery: string;
+  librarySort: LibrarySort;
   adding: boolean;
   catalogQuery: string;
   catalogResults: AniListMedia[];
@@ -364,6 +378,7 @@ function ProfileView({
   onSwitchType: (type: AniListMediaType) => void;
   onSelectGroup: (name: string) => void;
   onListQuery: (value: string) => void;
+  onLibrarySort: (value: LibrarySort) => void;
   onToggleAdding: () => void;
   onCatalogQuery: (value: string) => void;
   onCatalogSearch: () => Promise<void>;
@@ -437,6 +452,17 @@ function ProfileView({
               Manga list
             </button>
           </div>
+          <select
+            className="library-sort"
+            value={librarySort}
+            onChange={(event) => onLibrarySort(event.target.value as LibrarySort)}
+            aria-label={`Sort ${mediaType === "ANIME" ? "anime" : "manga"} list`}
+          >
+            <option value="UPDATED_DESC">Latest updated</option>
+            <option value="TITLE_ASC">Title A–Z</option>
+            <option value="SCORE_DESC">Highest score</option>
+            <option value="PROGRESS_DESC">Most progress</option>
+          </select>
           <input
             className="library-search"
             value={listQuery}

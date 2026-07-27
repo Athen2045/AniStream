@@ -1,15 +1,26 @@
 import { readFile } from "node:fs/promises";
 
-const [main, aniListClient, aniListQueries, preload, contracts, providers, renderer] =
-  await Promise.all([
-    readFile("src/main/index.ts", "utf8"),
-    readFile("src/main/anilist/client.ts", "utf8"),
-    readFile("src/main/anilist/queries.ts", "utf8"),
-    readFile("src/preload/index.ts", "utf8"),
-    readFile("src/shared/contracts.ts", "utf8"),
-    readFile("src/shared/providers.ts", "utf8"),
-    readFile("src/renderer/src/App.tsx", "utf8"),
-  ]);
+const [
+  main,
+  aniListClient,
+  aniListQueries,
+  mangaDex,
+  preload,
+  contracts,
+  providers,
+  renderer,
+  catalog,
+] = await Promise.all([
+  readFile("src/main/index.ts", "utf8"),
+  readFile("src/main/anilist/client.ts", "utf8"),
+  readFile("src/main/anilist/queries.ts", "utf8"),
+  readFile("src/main/mangadex.ts", "utf8"),
+  readFile("src/preload/index.ts", "utf8"),
+  readFile("src/shared/contracts.ts", "utf8"),
+  readFile("src/shared/providers.ts", "utf8"),
+  readFile("src/renderer/src/App.tsx", "utf8"),
+  readFile("src/renderer/src/CatalogView.tsx", "utf8"),
+]);
 const aniList = aniListClient + aniListQueries;
 
 for (const [name, source, fragments] of [
@@ -22,7 +33,11 @@ for (const [name, source, fragments] of [
   [
     "preload bridge",
     preload,
-    ['ipcRenderer.invoke("anilist:browse"', 'ipcRenderer.invoke("anilist:media-detail"'],
+    [
+      'ipcRenderer.invoke("anilist:browse"',
+      'ipcRenderer.invoke("anilist:media-detail"',
+      '"mangadex:availability"',
+    ],
   ],
   [
     "shared contracts",
@@ -35,6 +50,16 @@ for (const [name, source, fragments] of [
     ["AnimeTitleMapping", "AnimeSeason", "AnimeEpisode", "AnimeHoster", "AnimeVideoVariant"],
   ],
   ["renderer", renderer, ["CatalogView", "GlobalSearch", "MediaDetailModal"]],
+  [
+    "MangaDex adapter",
+    mangaDex,
+    ["findExactAniListMapping", "findLatestNumericChapter", "translatedLanguage[]"],
+  ],
+  [
+    "catalog rails",
+    catalog,
+    ["ContentCarousel", "Based on Your Interest", "getMangaDexAvailability"],
+  ],
 ]) {
   for (const fragment of fragments) {
     if (!source.includes(fragment)) throw new Error(`${name} is missing ${fragment}`);
@@ -46,5 +71,5 @@ if (main.indexOf("await aniList.restore()") > main.indexOf("\n  createWindow();"
 }
 
 console.log(
-  "Verified durable session, catalog/detail IPC, product navigation, and provider contracts.",
+  "Verified durable session, catalog/detail IPC, MangaDex availability, carousels, and provider contracts.",
 );

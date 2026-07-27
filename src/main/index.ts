@@ -1,18 +1,23 @@
 import { join } from "node:path";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { AniListClient } from "./anilist";
+import { getAnimeEpisodeGuide } from "./parse-anime";
+import { MangaDexClient } from "./mangadex";
+import { loadEnvironmentFile } from "./config";
 import { openAppDatabase, type AppDatabase } from "./database";
 import type {
   AniListAuthState,
   AniListMediaType,
   AppInfo,
   BrowseAniListInput,
+  MangaDexAvailabilityInput,
   UpdateAniListEntryInput,
 } from "../shared/contracts";
 
 let database: AppDatabase | undefined;
 let mainWindow: BrowserWindow | undefined;
 let aniList: AniListClient | undefined;
+let mangaDex: MangaDexClient | undefined;
 let pendingProtocolUrl: string | undefined;
 
 function createWindow(): void {
@@ -72,11 +77,14 @@ app.on("open-url", (event, url) => {
 });
 
 app.whenReady().then(async () => {
+  loadEnvironmentFile(join(process.cwd(), ".env"));
+  loadEnvironmentFile(join(app.getPath("userData"), ".env"));
   database = openAppDatabase(join(app.getPath("userData"), "anistream.sqlite"));
   aniList = new AniListClient(
     join(app.getPath("userData"), "anilist-session.bin"),
     emitAniListState,
   );
+  mangaDex = new MangaDexClient();
   app.setAsDefaultProtocolClient("anistream");
   await aniList.restore();
 
@@ -126,6 +134,13 @@ app.whenReady().then(async () => {
   ipcMain.handle("anilist:delete-entry", async (_event, id: number) => {
     if (!aniList) throw new Error("AniList is not ready.");
     await aniList.deleteEntry(id);
+  });
+  ipcMain.handle("anime:episode-guide", async (_event, slug: string) => {
+    return getAnimeEpisodeGuide(slug);
+  });
+  ipcMain.handle("mangadex:availability", async (_event, media: MangaDexAvailabilityInput[]) => {
+    if (!mangaDex) throw new Error("MangaDex is not ready.");
+    return mangaDex.getAvailability(media);
   });
 
   createWindow();

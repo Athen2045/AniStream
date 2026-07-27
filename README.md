@@ -8,7 +8,8 @@ AniStream is a personal macOS desktop application that combines anime and manga 
 
 - Unified anime and manga search backed by AniList.
 - Netflix-inspired anime and editorial manga browse pages with featured titles, catalog sorting,
-  keyboard-accessible unified search, detailed title modals, and pagination.
+  keyboard-accessible unified search, detailed title modals, fluid discovery rails, and pagination.
+- AniList-driven Continue Watching/Reading, Top Rated, and interest-based discovery rails.
 - Local SQLite library and progress state for one user on one Mac.
 - AniList browser OAuth, profile, complete anime/manga lists, and progress/score/status/notes synchronization.
 - MangaDex search, chapter feeds, MangaDex@Home page delivery, reader preferences, and account synchronization.
@@ -17,9 +18,11 @@ AniStream is a personal macOS desktop application that combines anime and manga 
 - Internal playback with resume progress and external-player handoff where needed.
 
 Currently implemented from this scope: durable AniList login, profile/list management, unified
-search, Anime/Manga navigation, paginated catalog browse, and rich AniList title details including
-summaries, episode/chapter counts, studios, cast, staff, relations, recommendations, and official
-links. Video extraction and MangaDex chapter reading remain the next provider slices.
+search, Anime/Manga navigation, paginated catalog browse, expanding content carousels,
+AniList-driven discovery rails that exclude owned titles, MangaDex-backed chapter-availability
+checks, rich AniList title details, optional Parse episode-guide loading, optional VidKing iframe
+playback for titles with verified TMDB links, and AniList progress/rating/completion updates from
+playback events. Direct HLS extraction and MangaDex page reading remain the next provider slices.
 
 ### Later
 
@@ -99,16 +102,20 @@ AniStream/
 
 ## Environment variables
 
-| Variable                    | Service                     | Where to get it                                         | Required                                                                    |
-| --------------------------- | --------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `MANGADEX_CLIENT_ID`        | MangaDex personal client    | MangaDex Settings → API clients                         | Required for MangaDex account sync                                          |
-| `MANGADEX_CLIENT_SECRET`    | MangaDex personal client    | MangaDex API client settings                            | Required for MangaDex account sync                                          |
-| `MANGADEX_USERNAME`         | MangaDex personal client    | Your MangaDex account                                   | Required for current personal-client flow                                   |
-| `MANGADEX_PASSWORD`         | MangaDex personal client    | Your MangaDex account                                   | Required for current personal-client flow; move to Keychain before real use |
-| `VIDEO_HLS_SOURCE_ID`       | Primary anime video adapter | Set to `animepahe` after the adapter is implemented     | Required for HLS playback                                                   |
-| `VIDEO_TORRENT_INDEXER_IDS` | Torrent fallback adapters   | Set to `animetosho,nyaa` after adapters are implemented | Required for torrent fallback                                               |
+| Variable                        | Service                     | Where to get it                                         | Required                                                        |
+| ------------------------------- | --------------------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
+| `MANGADEX_CLIENT_ID`            | MangaDex personal client    | MangaDex Settings → API clients                         | Planned for opt-in account sync; not used by the public adapter |
+| `MANGADEX_CLIENT_SECRET`        | MangaDex personal client    | MangaDex API client settings                            | Planned for opt-in account sync; must move to Keychain          |
+| `MANGADEX_USERNAME`             | MangaDex personal client    | Your MangaDex account                                   | Planned for opt-in account sync; must move to Keychain          |
+| `MANGADEX_PASSWORD`             | MangaDex personal client    | Your MangaDex account                                   | Planned for opt-in account sync; must move to Keychain          |
+| `MANGADEX_LANGUAGE`             | MangaDex public API         | ISO 639-1 language code                                 | Optional; defaults to `en` for chapter availability             |
+| `VIDEO_HLS_SOURCE_ID`           | Primary anime video adapter | Set to `animepahe` after the adapter is implemented     | Required for HLS playback                                       |
+| `VIDEO_TORRENT_INDEXER_IDS`     | Torrent fallback adapters   | Set to `animetosho,nyaa` after adapters are implemented | Required for torrent fallback                                   |
+| `PARSE_API_KEY`                 | Parse episode-guide adapter | Parse dashboard → Settings → API Key                    | Optional; required for episode-guide loading                    |
+| `PARSE_ANIME_SCRAPER_ID`        | Parse episode-guide adapter | Supplied/generated Parse scraper ID                     | Optional; defaults to the configured anime scraper              |
+| `PARSE_ANIME_EPISODES_ENDPOINT` | Parse episode-guide adapter | Supplied/generated Parse endpoint name                  | Optional; defaults to `get_show_episodes`                       |
 
-Provider base URLs are application constants unless a development proxy is explicitly required. Secrets must never be exposed to renderer code or committed.
+Provider base URLs are application constants unless a development proxy is explicitly required. Secrets must never be exposed to renderer code or committed. The main process loads `.env` during development and `~/Library/Application Support/AniStream/.env` for a packaged personal install; shell variables take precedence. Parse keys remain main-process-only and should move to Keychain before treating the adapter as production-ready.
 
 AniList OAuth is configured for this personal build with the public client ID and
 `anistream://auth/anilist` callback. The authorization-code flow reads its client secret from macOS
@@ -117,8 +124,9 @@ The resulting access token is encrypted with Electron `safeStorage`, also backed
 
 ## Status
 
-Durable AniList login, profile/list management, unified Anime/Manga browse and search, rich title
-details, pagination, the typed Electron bridge, SQLite initialization, production build, and
-unsigned Apple Silicon package have been verified on macOS. Playback source extraction and
-MangaDex reading are not yet connected. For current build status and next steps, see
+Durable AniList login, profile/list management, unified Anime/Manga browse and search, expanding
+content carousels, MangaDex chapter-availability enrichment, rich title details, pagination, the
+typed Electron bridge, SQLite initialization, production build, and unsigned Apple Silicon package
+have been verified on macOS. Playback source extraction and MangaDex page reading are not yet
+connected. For current build status and next steps, see
 [CONTEXT.md](CONTEXT.md).

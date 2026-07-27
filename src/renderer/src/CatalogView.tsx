@@ -1,26 +1,39 @@
 import { Info, Play, Plus, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListCatalogPage,
+  AniListDashboard,
+  AniListEntry,
   AniListMediaType,
   BrowseAniListInput,
+  MangaDexChapterAvailability,
 } from "../../shared/contracts";
+import { ContentCarousel } from "./ContentCarousel";
 import { Pagination } from "./Pagination";
 import { safeBackgroundUrl } from "./safe-css-url";
 
 export function CatalogView({
   type,
   searchQuery,
+  dashboard,
   onSelect,
 }: {
   type: AniListMediaType;
   searchQuery: string;
+  dashboard?: AniListDashboard;
   onSelect: (media: AniListCatalogMedia) => void;
 }): React.JSX.Element {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<BrowseAniListInput["sort"]>("TRENDING_DESC");
   const [catalog, setCatalog] = useState<AniListCatalogPage>();
+  const [topRated, setTopRated] = useState<AniListCatalogMedia[]>([]);
+  const [interest, setInterest] = useState<AniListCatalogMedia[]>([]);
+  const [interestGenre, setInterestGenre] = useState<string>();
+  const [mangaAvailability, setMangaAvailability] = useState<
+    Map<number, MangaDexChapterAvailability>
+  >(new Map());
+  const [availabilityNow, setAvailabilityNow] = useState<number>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
@@ -59,10 +72,106 @@ export function CatalogView({
     };
   }, [page, searchQuery, sort, type]);
 
+  const continueCandidates = useMemo(() => {
+    const groups = type === "ANIME" ? dashboard?.animeLists : dashboard?.mangaLists;
+    return (groups ?? [])
+      .flatMap((group) => group.entries)
+      .filter((entry) => entry.status === "CURRENT" && entry.progress > 0)
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, 24);
+  }, [dashboard, type]);
+  const continueEntries = useMemo(
+    () =>
+      continueCandidates.filter((entry) =>
+        shouldShowInContinue(
+          entry,
+          mangaAvailability.get(entry.media.id)?.latestChapter,
+          availabilityNow,
+        ),
+      ),
+    [availabilityNow, continueCandidates, mangaAvailability],
+  );
+  const libraryMediaIds = useMemo(() => {
+    const groups = type === "ANIME" ? dashboard?.animeLists : dashboard?.mangaLists;
+    return new Set((groups ?? []).flatMap((group) => group.entries.map((entry) => entry.media.id)));
+  }, [dashboard, type]);
+
+  useEffect(() => {
+    if (!dashboard || searchQuery) return;
+    const timer = window.setInterval(() => setAvailabilityNow(Date.now()), 5 * 60_000);
+    return () => window.clearInterval(timer);
+  }, [dashboard, searchQuery]);
+
+  useEffect(() => {
+    if (type !== "MANGA" || continueCandidates.length === 0) return;
+    let active = true;
+    const refreshAvailability = (): void => {
+      void window.anistream
+        .getMangaDexAvailability(
+          continueCandidates.map((entry) => ({
+            aniListId: entry.media.id,
+            title: entry.media.title,
+          })),
+        )
+        .then((availability) => {
+          if (active) {
+            setMangaAvailability(new Map(availability.map((item) => [item.aniListId, item])));
+          }
+        })
+        .catch(() => {
+          // Availability enrichment is optional; AniList progress remains visible on provider failure.
+        });
+    };
+    refreshAvailability();
+    const timer = window.setInterval(refreshAvailability, 5 * 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [continueCandidates, type]);
+
+  const preferredGenre = useMemo(() => {
+    const groups = type === "ANIME" ? dashboard?.animeLists : dashboard?.mangaLists;
+    const counts = new Map<string, number>();
+    for (const entry of (groups ?? []).flatMap((group) => group.entries)) {
+      if (entry.status !== "CURRENT" && entry.status !== "COMPLETED" && entry.score < 7) continue;
+      for (const genre of entry.media.genres ?? []) counts.set(genre, (counts.get(genre) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+  }, [dashboard, type]);
+
+  useEffect(() => {
+    if (searchQuery || !dashboard) return;
+
+    let active = true;
+    void Promise.allSettled([
+      window.anistream.browseAniList({ type, page: 1, perPage: 24, sort: "SCORE_DESC" }),
+      preferredGenre
+        ? window.anistream.browseAniList({
+            type,
+            page: 1,
+            perPage: 24,
+            genre: preferredGenre,
+            sort: "POPULARITY_DESC",
+          })
+        : Promise.resolve(undefined),
+    ]).then(([ratedResult, interestResult]) => {
+      if (!active) return;
+      if (ratedResult.status === "fulfilled") setTopRated(ratedResult.value?.items ?? []);
+      if (interestResult.status === "fulfilled" && interestResult.value) {
+        setInterest(interestResult.value.items.filter((media) => !libraryMediaIds.has(media.id)));
+        setInterestGenre(preferredGenre);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [dashboard, libraryMediaIds, preferredGenre, searchQuery, type]);
+
   const items = catalog?.items ?? [];
   const hero = items[0];
-  const shelf = items.slice(1, 7);
-  const grid = items.slice(7);
+  const shelf = items.slice(1, 13);
+  const grid = items.slice(13);
   const mediaName = type === "ANIME" ? "anime" : "manga";
 
   return (
@@ -112,6 +221,30 @@ export function CatalogView({
       ) : null}
 
       <div className="catalog-content">
+        {!searchQuery && continueEntries.length ? (
+          <MediaRail
+            title={type === "ANIME" ? "Continue Watching" : "Continue Reading"}
+            eyebrow="From your AniList"
+            entries={continueEntries}
+            onSelect={onSelect}
+          />
+        ) : null}
+        {!searchQuery && topRated.length ? (
+          <MediaRail
+            title="Top Rated"
+            eyebrow="Loved by the AniList community"
+            items={topRated}
+            onSelect={onSelect}
+          />
+        ) : null}
+        {!searchQuery && interest.length ? (
+          <MediaRail
+            title="Based on Your Interest"
+            eyebrow={interestGenre ? `Because you like ${interestGenre}` : "Picked for you"}
+            items={interest}
+            onSelect={onSelect}
+          />
+        ) : null}
         <div className="catalog-toolbar">
           <div>
             <p className="catalog-kicker">{searchQuery ? "Search" : "Discover"}</p>
@@ -136,16 +269,31 @@ export function CatalogView({
 
         {shelf.length ? (
           <section className="media-shelf" aria-label={`Trending ${mediaName}`}>
-            {shelf.map((media, index) => (
-              <button type="button" key={media.id} onClick={() => onSelect(media)}>
-                <span className="rank">{index + 1}</span>
-                <img src={media.coverUrl} alt="" loading="lazy" />
-                <span className="shelf-copy">
-                  <strong>{media.title}</strong>
-                  <small>{formatLabel(media.format)}</small>
-                </span>
-              </button>
-            ))}
+            <div className="rail-heading">
+              <div>
+                <p className="catalog-kicker">Moving up now</p>
+                <h2>Trending {mediaName}</h2>
+              </div>
+            </div>
+            <ContentCarousel label={`Trending ${mediaName}`}>
+              {shelf.map((media, index) => (
+                <button
+                  className="rail-card"
+                  type="button"
+                  key={media.id}
+                  onClick={() => onSelect(media)}
+                >
+                  <span className="rail-art">
+                    <span className="rank">{index + 1}</span>
+                    <img src={media.coverUrl} alt="" loading="lazy" />
+                  </span>
+                  <span className="shelf-copy">
+                    <strong>{media.title}</strong>
+                    <small>{formatLabel(media.format)}</small>
+                  </span>
+                </button>
+              ))}
+            </ContentCarousel>
           </section>
         ) : null}
 
@@ -192,6 +340,110 @@ export function CatalogView({
       </div>
     </section>
   );
+}
+
+function MediaRail({
+  title,
+  eyebrow,
+  items,
+  entries,
+  onSelect,
+}: {
+  title: string;
+  eyebrow: string;
+  items?: AniListCatalogMedia[];
+  entries?: AniListEntry[];
+  onSelect: (media: AniListCatalogMedia) => void;
+}): React.JSX.Element {
+  const cards = items ?? entries?.map(toCatalogMedia) ?? [];
+  return (
+    <section className="media-rail" aria-label={title}>
+      <div className="rail-heading">
+        <div>
+          <p className="catalog-kicker">{eyebrow}</p>
+          <h2>{title}</h2>
+        </div>
+        <span className="rail-count">{cards.length} titles</span>
+      </div>
+      <ContentCarousel label={title}>
+        {cards.map((media, index) => {
+          const entry = entries?.[index];
+          return (
+            <button
+              type="button"
+              className="rail-card"
+              key={media.id}
+              onClick={() => onSelect(media)}
+            >
+              <span className="rail-art">
+                <img src={media.coverUrl} alt="" loading="lazy" />
+                <span className="rail-overlay">
+                  <span className="round-action">
+                    <Play size={16} fill="currentColor" />
+                  </span>
+                </span>
+                {entry ? (
+                  <span className="rail-progress" aria-label={`${entry.progress} completed`}>
+                    <span style={{ width: `${progressPercent(entry)}%` }} />
+                  </span>
+                ) : null}
+              </span>
+              <strong>{media.title}</strong>
+              <span>
+                {entry
+                  ? `${entry.progress}${media.totalProgress ? ` / ${media.totalProgress}` : ""} ${
+                      media.type === "ANIME" ? "episodes" : "chapters"
+                    }`
+                  : media.averageScore
+                    ? `${media.averageScore}% match`
+                    : formatLabel(media.format)}
+              </span>
+            </button>
+          );
+        })}
+      </ContentCarousel>
+    </section>
+  );
+}
+
+function toCatalogMedia(entry: AniListEntry): AniListCatalogMedia {
+  return {
+    ...entry.media,
+    genres: entry.media.genres ?? [],
+    averageScore: entry.media.averageScore,
+  };
+}
+
+function progressPercent(entry: AniListEntry): number {
+  if (!entry.media.totalProgress) return 18;
+  return Math.min(100, Math.round((entry.progress / entry.media.totalProgress) * 100));
+}
+
+export function shouldShowInContinue(
+  entry: AniListEntry,
+  latestMangaChapter?: number,
+  now = Date.now(),
+): boolean {
+  if (entry.status !== "CURRENT" || entry.progress <= 0) return false;
+
+  const total = entry.media.totalProgress;
+  if (entry.media.status === "FINISHED" && total && entry.progress >= total) return false;
+
+  const nextAiringEpisode = entry.media.nextAiringEpisode;
+  if (
+    entry.media.type === "ANIME" &&
+    nextAiringEpisode &&
+    nextAiringEpisode.airingAt * 1_000 > now &&
+    entry.progress >= Math.max(0, nextAiringEpisode.episode - 1)
+  ) {
+    return false;
+  }
+
+  if (entry.media.type === "MANGA") {
+    if (latestMangaChapter !== undefined && entry.progress >= latestMangaChapter) return false;
+    if (total && entry.progress >= total) return false;
+  }
+  return true;
 }
 
 function formatLabel(value?: string): string {

@@ -85,6 +85,10 @@ AniList documents 90 requests/minute normally, with a current degraded-state war
 ### Client strategy
 
 - Shared 4 requests/second token bucket for `api.mangadex.org`.
+- Public availability mapping searches by AniList title but accepts a result only when MangaDex
+  exposes the exact AniList ID in `attributes.links.al`; title similarity is never enough.
+- `GET /manga/{id}/aggregate?translatedLanguage[]=<language>` supplies the latest numeric chapter
+  currently available in the configured language. Results are cached for 30 minutes.
 - Separate 35 requests/minute budget for AtHome allocation.
 - A truthful AniStream `User-Agent` on requests.
 - Stop immediately on 429/403 and honor headers/cooldown.
@@ -102,7 +106,20 @@ AniList documents 90 requests/minute normally, with a current degraded-state war
 
 ### Account synchronization
 
-Full MangaDex account sync is in v1. The local database remains the UI’s immediate state, while follows and read markers synchronize with MangaDex. Conflicts must be surfaced rather than blindly overwriting newer remote state.
+Full MangaDex account sync remains planned for v1, but it is not part of the public adapter.
+MangaDex still documents public OAuth clients as unavailable; a one-user personal client requires
+an approved client plus username/password authentication and bypasses MFA. Implement it only as an
+explicit opt-in after moving every credential and refresh token to macOS Keychain. The local
+database remains the UI’s immediate state, while follows and read markers synchronize with
+MangaDex. Conflicts must be surfaced rather than blindly overwriting newer remote state.
+
+### Current implementation status
+
+Public title mapping and translated chapter-availability lookup are integrated in the Electron main
+process. Continue Reading compares AniList `CURRENT` progress with the latest numeric MangaDex
+chapter when an exact mapping exists, so caught-up titles disappear and can return after the
+30-minute cache refresh finds a new chapter. Full chapter feeds, MangaDex@Home page delivery, and
+authenticated account synchronization remain pending.
 
 ### Degraded mode
 
@@ -151,6 +168,46 @@ the Watch surface reports a truthful unavailable state.
 ### Degraded mode
 
 The title and library remain fully usable. Playback reports that the selected source is unavailable and may offer another approved adapter when one exists. Progress changes are not fabricated when playback never started.
+
+## VidKing remote player (optional, explicitly labeled)
+
+| Item          | Value                                                                                                                             |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Base URL      | `https://www.vidking.net`                                                                                                         |
+| Auth          | No API key or OAuth parameter is documented on the reviewed player page; this is not proof that operational controls do not exist |
+| Features used | Remote movie/TV iframe, autoplay, next episode, episode selector, parent-window progress events                                   |
+| Credentials   | None currently; the renderer must never receive a VidKing credential because none is required by the documented embed examples    |
+| Official docs | [VidKing documentation](https://www.vidking.net/#documentation)                                                                   |
+
+### Verified routes and limits
+
+VidKing documents `GET`-style embed URLs for `movie/{tmdbId}` and `tv/{tmdbId}/{season}/{episode}`. The documented query parameters include `color`, `autoPlay`, `nextEpisode`, and `episodeSelector`. The reviewed documentation does not publish a numeric request quota, native anime endpoint, direct HLS API, or AniList-ID mapping.
+
+AniStream therefore treats VidKing as a removable remote-player option, not as the primary anime source. It is used only when AniList details contain a TMDB external link; AniList title text is never used to guess a TMDB ID. A title without a verified mapping stays in the truthful unavailable state.
+
+The parent window accepts only `PLAYER_EVENT` messages from `https://www.vidking.net`, validates the documented progress/ended signal, and advances the authenticated AniList entry through `SaveMediaListEntry`. The iframe itself remains an external service and its availability, source rights, and behavior are not controlled by AniStream.
+
+### Degraded mode
+
+If the iframe fails, has no verified TMDB mapping, or changes its message shape, AniList discovery, lists, ratings, and local progress remain available. AniStream does not fabricate watched progress when no valid playback event was received.
+
+## Parse episode-guide adapter (optional)
+
+| Item             | Value                                                                                                                                                                                                                |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Base URL         | `https://api.parse.bot`                                                                                                                                                                                              |
+| Auth             | `X-API-Key` bearer header                                                                                                                                                                                            |
+| Credentials      | `PARSE_API_KEY`, loaded only by the Electron main process                                                                                                                                                            |
+| Default scraper  | `57fd33bc-2965-4c61-9741-68e60a184d8b`                                                                                                                                                                               |
+| Default endpoint | `get_show_episodes`                                                                                                                                                                                                  |
+| Features used    | Episode-guide lookup by normalized show slug                                                                                                                                                                         |
+| Official docs    | [Parse introduction](https://docs.parse.bot/introduction), [execution reference](https://docs.parse.bot/api-reference/execute/execute-an-api-endpoint-post), [authentication](https://docs.parse.bot/authentication) |
+
+The user-supplied request uses a `GET` endpoint with `slug` in the query string. Parse's generic current execution reference documents `POST` with endpoint parameters in JSON, so the supplied endpoint method and response fields remain unverified until its generated scraper specification is retrieved with a valid Parse account. AniStream accepts only validated episode-number/title fields from the response and never assumes it contains HLS URLs, subtitles, or stable AniList mappings.
+
+No numeric Parse service-wide rate limit was found in the reviewed official docs. AniStream uses a 20-second timeout and bounds normalized episode results to 500; this is local safety policy, not a provider limit. Parse failures return an unavailable episode-guide state and do not affect AniList or other app surfaces.
+
+Parse is a hosted scraping service. Its use requires separate review of the target site's authorization/terms, account cost, generated-schema drift, and any media redistribution implications. Do not add target-site login credentials, bypass anti-bot controls, or make Parse a load-bearing playback dependency without explicit approval. See [`docs/research/vidking-parse-cineby.md`](docs/research/vidking-parse-cineby.md).
 
 ## AniDB
 

@@ -1,218 +1,109 @@
 # AniStream — Context
 
-Last updated: 2026-07-27 by Codex macOS DMG rebuild session
+Last updated: 2026-07-28 by Codex carousel-and-MangaDex session
 
 ## Current phase
 
-Phase 2 product shell: AniList login now restores durably, and the packaged app has Anime, Manga,
-and My Lists navigation, unified search, paginated browse, rich title details, and the native anime
-provider contract chain. Actual HLS/torrent extraction and MangaDex chapter reading remain.
+Phase 2 product shell and provider foundations. AniList discovery, durable login, list management,
+profile editing, catalog rails, title details, and tracker mutations work. A public MangaDex
+availability adapter now informs Continue Reading. MangaDex page reading/account sync and native
+anime HLS/torrent playback remain the next substantial slices.
 
 ## What's working right now
 
-- `npm install` completes and rebuilds `better-sqlite3` for Electron 43 on Apple Silicon.
-- `npm run typecheck` passes for main, preload, shared contracts, and renderer.
-- `npm run build` produces main, preload, and renderer production bundles.
-- `npm run typecheck` and `npm run build` pass with the AniList authentication/profile/list implementation.
-- The updated HLS-primary/torrent-fallback status contract passes typecheck and production build.
-- `npm run dev` launches the Electron application successfully.
-- The signed-out AniList application UI launches successfully in development and in the corrected packaged macOS application.
-- The packaged preload is emitted as sandbox-compatible CommonJS at `out/preload/index.cjs`, and BrowserWindow requests that exact path.
-- `npm run check:packaged-preload` inspects the real packaged ASAR and fails if main requests a missing preload or if the preload is emitted as ESM. The test failed on both historical defects and passes on the corrected package.
-- The corrected packaged executable was launched with Electron logging enabled for more than eight seconds with no preload, bridge, or renderer console errors.
-- The macOS bundle registers `anistream://` in `Info.plist`; `plutil -lint` passes.
-- AniList's public GraphQL endpoint returned the expected `Athen101` profile statistics and complete anime-list shape for every field consumed by the new UI.
-- The trusted main process opens AniList authorization-code OAuth using public client ID `47053`, receives `anistream://auth/anilist?code=…`, exchanges the code at the official token endpoint, verifies the token using `Viewer`, and encrypts it using asynchronous Electron `safeStorage`.
-- If the Keychain item is absent, the trusted main process opens a native macOS hidden-input dialog, stores the submitted client secret under service `dev.anistream.desktop.anilist-client`, and continues authorization. `npm run configure:anilist` remains a fallback.
-- `npm run check:anilist-oauth` verifies the built main process uses `response_type=code`, `grant_type=authorization_code`, Keychain lookup/storage, and the native secure prompt, and rejects a return to implicit OAuth.
-- When AniList returns HTTP 401, `invalid_client`, or “Client authentication failed” during token exchange, AniStream removes only its rejected Keychain credential and tells the user to retry with the current secret instead of repeatedly reusing a bad value.
-- The encrypted AniList session now stores the token plus a normalized profile snapshot and restores
-  before the renderer is created. A complete stop/fresh launch of both the development and packaged
-  apps reopened directly to Anime without showing the connection screen.
-- The packaged app restored the user's real AniList profile and full anime/manga lists; explicit
-  logout remains the only UI action that removes the valid saved session.
-- Anime, Manga, and My Lists are first-class navbar destinations with a shared AniStream shell.
-- Unified debounced search returns mixed anime/manga suggestions from AniList, supports keyboard
-  navigation and Cmd+K focus, and was live-tested with `Naruto` (8 rendered suggestions).
-- AniList `Page` browse supports trending/popularity/score/newest sorting and bottom pagination.
-  The packaged app rendered a hero, 6 shelf cards, 17 browse cards, and moved to page 2 without
-  renderer errors.
-- Rich `Media` details include summary, format/status, episode/chapter counts, scores, dates,
-  studios/producers, genres, source, cast, staff, relations, recommendations, external links,
-  trailer URL, and the authenticated user's list-entry context.
-- The inspected Netflix Figma system informed the black/neutral/red palette and translucent control
-  hierarchy. AniStream adds cyan tracker/status accents; Manga uses taller editorial cards and serif
-  hero typography inspired by reader/catalog products.
-- Native TypeScript provider contracts exist in `src/shared/providers.ts`:
-  `AnimeTitleMapping → AnimeSeason → AnimeEpisode → AnimeHoster → AnimeVideoVariant`, with an
-  `AnimeSourceAdapter` boundary and HLS/torrent kinds.
-- `npm run check:product-slice` guards session-before-window ordering, browse/detail IPC, navbar UI,
-  and provider contracts.
-- The profile UI supports anime/manga tabs, status/custom list groups, local title filtering, AniList catalog search/add-to-planning, refresh, logout, status/score/progress/notes edits, one-click progress increments, and list-entry removal.
-- Access tokens remain in the main process; typed preload IPC exposes only normalized account/list values and bounded mutation inputs.
-- The main process creates `anistream.sqlite` under the macOS application-support directory with `app_meta`, `library_entries`, and `sync_queue` tables.
-- `npm run package:mac` produces the current 134 MB
-  `dist/AniStream-0.1.0-arm64.dmg`. The package was rebuilt from the latest source on
-  2026-07-27 at 08:54 IST; packaged-preload, AniList OAuth, product-slice, all 43 Vitest tests,
-  formatting, and lint (zero errors, two documented warnings) passed.
-- The macOS package uses the custom 1024×1024 artwork at
-  `assets/app-icon/AniStream-1024.png`; Electron Builder embeds it as
-  `AniStream.app/Contents/Resources/icon.icns`, and the bundle's `CFBundleIconFile` points to it.
-- The postinstall step explicitly verifies/downloads Electron and rebuilds the native SQLite module, addressing the missing-binary failure observed during the first launch attempt.
-- `npm audit --omit=dev` reports zero runtime dependency vulnerabilities.
-- `README.md`, `AGENTS.md`, `API.md`, and this context file now follow the required documentation roles.
-- Phase 0 research is recorded in `docs/research/phase-0.md`.
-- Current Consumet and Aniyomi evaluations are recorded in `docs/research/consumet-evaluation.md` and `docs/research/aniyomi-evaluation.md`.
-- The project now has a Git history (`git init` plus initial commits); prior sessions worked with no version control at all.
-- Four GitHub Actions workflows exist under `.github/workflows/`, each with an implementation-agnostic spec under `spec/`:
-  `ci.yml` (typecheck, build, `check:product-slice`, `check:anilist-oauth` on every push/PR to `main`),
-  `package-mac.yml` (unsigned arm64 DMG build plus `check:packaged-preload` against the real packaged ASAR, on version tags or manual dispatch, publishing to GitHub Releases),
-  `security-audit.yml` (blocking `npm audit --omit=dev`, non-blocking full audit report, on manifest changes and weekly),
-  and `codeql.yml` (CodeQL `javascript-typescript` security-extended analysis, on push/PR and weekly).
-- These workflows run the project's _existing_ checks in CI; they do not add new test coverage. Unit/integration tests and ESLint/Prettier are still not configured (see Known issues below) and remain the next priority.
-- Vitest is now configured (`vitest.config.ts`, `npm test` / `npm run test:watch`). 43 fixture-based
-  unit tests in `test/main/` cover every AniList GraphQL normalizer (`src/main/anilist/normalize.ts`),
-  the client-side request-dedup/throttle/rate-limit gate, the bounded cache, and Retry-After parsing —
-  the code most exposed to upstream schema drift and provider throttling, which previously had zero
-  coverage.
-- `ci.yml` now runs `npm run typecheck`, `npm run lint`, `npm run format:check`, and `npm test` in
-  addition to build and the two contract-check scripts, on every push/PR to `main`. Doing this surfaced
-  a real gap: `npm ci` alone fails on this repo (`eslint-plugin-react@7.37.5`, the latest release,
-  declares a peer range that predates ESLint 10; `@babel/eslint-parser` and `eslint-plugin-react` also
-  disagree on the exact eslint peer range). All three workflows that install dependencies (`ci.yml`,
-  `package-mac.yml`, `security-audit.yml`) now use `npm ci --legacy-peer-deps` (the audit workflow keeps
-  its existing `--ignore-scripts`). This is a real-but-harmless peer-metadata gap, not a runtime
-  incompatibility — confirmed by running the exact CI command sequence locally. The four spec docs under
-  `spec/` were updated to match (bumped to version 1.1) and a pre-existing broken markdown table in
-  `spec-process-cicd-security-audit.md` (an unescaped `||` had split a table cell) was fixed in passing.
-- `src/main/anilist.ts` (1,159 lines) is split into `src/main/anilist/{client,queries,normalize,
-keychain,session-store,request-queue,cache}.ts`. `AniListClient`'s public interface is unchanged;
-  `src/main/index.ts` still imports it from `./anilist` unmodified. `scripts/verify-product-slice.mjs`
-  was updated to read the new file locations.
-- `AniListClient` now deduplicates identical in-flight read requests (browse/detail/search/viewer) and
-  throttles all GraphQL calls to 25 requests/minute (`src/main/anilist/request-queue.ts`), plus a small
-  bounded/TTL cache for public browse and media-detail lookups (`src/main/anilist/cache.ts`). Mutations
-  are never deduplicated or cached. This fulfills the "request cache/throttle/dedup" roadmap item for
-  AniList; MangaDex and the HLS adapter still need their own equivalents once implemented.
-- Fixed a real gap in the above: the 25/min throttle only prevented bursts pre-emptively, it didn't
-  react to an actual AniList 429. A user hit `Error invoking remote method 'anilist:browse': Error: Too
-Many Requests` (AniList's real 429 body surfacing verbatim) — most likely because the running dev
-  process predated this session's throttle (main-process changes need a full relaunch, not hot-reload).
-  `RequestGate.reportRateLimited(retryAfterMs)` now pauses every future request until a 429's
-  `Retry-After` header elapses (parsed as delta-seconds or HTTP-date, falling back to a conservative 60s
-  when the header is absent), matching API.md: "On 429, stop the queue until Retry-After/reset." The
-  user also gets a clearer message than the raw provider string. Covered by new tests in
-  `test/main/request-queue.test.ts` and `test/main/parse-retry-after.test.ts`.
-- ESLint (flat config, `eslint.config.js`) and Prettier (`.prettierrc.json`) are configured with
-  `npm run lint` / `lint:fix` / `format` / `format:check`. `typescript-eslint` (parser and eslint-plugin
-  alike) hard-refuses to run against TypeScript >= 7 (throws at require-time, not just a peer warning) —
-  this project deliberately runs TS 7. ESLint therefore parses `.ts`/`.tsx` with `@babel/eslint-parser` +
-  `@babel/preset-typescript` instead, which understands TS syntax without invoking the TS compiler.
-  Consequence: no TS-aware semantic lint rules (no-explicit-any, no-floating-promises, etc.); `tsc --noEmit`
-  now has `noUnusedLocals`/`noUnusedParameters` enabled in both tsconfigs instead, since it correctly
-  understands type-only imports and constructor parameter properties that babel's parser cannot see.
-  Revisit the ESLint setup once typescript-eslint ships TS 7 support:
-  https://github.com/typescript-eslint/typescript-eslint/issues/10940
-- `npm run lint` is clean (0 errors). Two `react-hooks/set-state-in-effect` warnings remain, deliberately
-  left as warnings (not fixed) in `CatalogView.tsx`/`GlobalSearch.tsx`: both call `setLoading(true)` at
-  the start of a data-fetching effect, the standard vanilla-React pattern used throughout this codebase.
-  The real fix is adopting TanStack Query (already an approved-but-unimplemented dependency per the
-  README tech-stack table) for request lifecycle management.
-- Added a top-level React error boundary (`src/renderer/src/ErrorBoundary.tsx`, wrapping `<App />` in
-  `main.tsx`) so an uncaught render error shows a truthful degraded state and a reload button instead of
-  a blank window.
-- Hardened the three spots where an AniList-supplied banner/cover URL was interpolated directly into a
-  CSS `background-image` template literal (App.tsx, CatalogView.tsx, MediaDetailModal.tsx) — a stray `"`
-  in a URL could break out of the CSS string. `src/renderer/src/safe-css-url.ts` now builds a properly
-  quoted, https-only `url(...)` value shared by all three call sites.
-- Performance/responsiveness pass on the renderer: `.media-card`/`.browse-card` use
-  `content-visibility: auto` with `contain-intrinsic-size` so long AniList libraries (which can run into
-  the hundreds of entries) skip layout/paint work for off-screen cards; `MediaDetailModal` is now
-  code-split via `React.lazy`/`Suspense` (its own ~12 KB chunk, only fetched once a title is opened,
-  confirmed via the `electron-vite build` chunk output). The existing responsive grid/breakpoint CSS
-  (`repeat(auto-fill, minmax(...))` grids plus the `max-width: 1100px` breakpoint) was reviewed and
-  already covers the app's 960x640 minimum window size correctly; no changes were needed there.
-  **Not verified visually** — this environment has no tool that can launch and drive the actual Electron
-  window (the available browser/simulator tools are for web pages and iOS simulators respectively), so
-  this pass was verified via typecheck/build/lint/test and build-output inspection only, not by running
-  the app and resizing the window. Do that manually before considering this fully done.
-- `npm audit --omit=dev` remains 0 vulnerabilities. Full `npm audit` is now 13 high-severity advisories
-  (down from 16): the pre-existing electron-builder `brace-expansion`/`minimatch` chain, plus a new,
-  same-shape `minimatch`/`brace-expansion` chain via `eslint-plugin-react@7.37.5` (latest available
-  release). Neither has a fix that isn't a breaking downgrade (npm's suggested fixes are older, not
-  newer, versions of electron-builder/eslint-plugin-react) — both are dev/build-tooling-only and never
-  ship in the packaged app, so this remains accepted risk, not applied.
+- AniList authorization-code login restores its encrypted token/profile before the Electron window
+  opens and persists until explicit logout.
+- Anime and Manga are the only primary navbar destinations; the avatar opens Profile, which contains
+  both AniList libraries.
+- Profile anime/manga lists can be filtered and sorted by Latest updated (default), Title A–Z,
+  Highest score, or Most progress.
+- AniList browse/search, pagination, detailed title data, list add/edit/remove, progress, score, and
+  completion mutations are implemented.
+- Netflix-style horizontal rails use native scroll snapping, visible-width paging, edge-hover
+  chevrons, keyboard arrows, reduced-motion handling, and real card-width expansion that pushes
+  neighboring cards.
+- “Based on Your Interest” uses AniList genre preferences and excludes every title already present
+  in the corresponding AniList library.
+- Continue Watching is sourced only from AniList `CURRENT` anime. Finished titles at total progress
+  and airing titles caught up to the episode before `nextAiringEpisode` are hidden until more content
+  is available.
+- Continue Reading is sourced only from AniList `CURRENT` manga. The main-process MangaDex adapter
+  searches publicly, accepts only one exact `attributes.links.al` match, loads the configured-language
+  chapter aggregate, and hides titles when AniList progress has reached the latest numeric chapter.
+  Unmapped/unavailable titles remain visible rather than being falsely marked caught up. Availability
+  is reevaluated every five minutes; the MangaDex cache permits a fresh network check every 30 minutes.
+- Manga detail pages no longer show the anime-only Studios field.
+- MangaDex requests use a truthful User-Agent, a shared 4 requests/second queue, a 30-minute bounded
+  cache, 20-second timeouts, exact mapping, and 429/403 cooldown behavior. Public reading remains
+  independent from credentials.
+- Optional Parse episode-guide and VidKing iframe seams exist but are not load-bearing.
+- `npm run typecheck`, all 50 Vitest tests, `npm run format:check`,
+  `npm run check:product-slice`, `npm run check:anilist-oauth`, and
+  `npm run check:packaged-preload` pass. ESLint has zero errors and two documented React effect
+  warnings.
+- The packaged app launched for ten seconds with Electron logging and emitted no preload, bridge, or
+  renderer error.
+- The rebuilt unsigned Apple Silicon package is
+  `dist/AniStream-0.1.0-arm64.dmg` (134 MB, built 2026-07-28). SHA-256:
+  `90ac0fad7163c4d5b0814ccff113e7298fdabae541ac089118e57afa0b281e00`.
+- Current MangaDex research and implementation boundaries are recorded in
+  `docs/research/mangadex-runtime-evaluation.md`.
 
 ## What's in progress
 
-- No source provider is connected to the new Watch surface. It intentionally shows a truthful
-  unavailable state until the approved AnimePahe-style HLS adapter is re-verified and implemented.
-- Manga browse/details use AniList; MangaDex chapter feeds, account sync, and reader are not connected.
+- MangaDex chapter feeds, scanlation/language selection, MangaDex@Home page proxying, and the native
+  reader are not yet connected.
+- Full MangaDex account follows/read-marker synchronization remains planned as a separate opt-in
+  personal-client module.
+- No native HLS or torrent source is connected to the Watch surface. AnimePahe-style HLS remains the
+  approved primary direction, with AnimeTosho/Nyaa torrent fallback.
+- Local in-episode/in-chapter resume timestamps are not yet persisted; AniList integer progress is
+  currently the source for continue rails.
 
 ## Open decisions (need user input)
 
-- None currently blocking the next vertical slice.
+- Before MangaDex account sync is enabled, confirm that the personal API client is approved and that
+  storing its username, password, client secret, access token, and refresh token in macOS Keychain is
+  acceptable. MangaDex documents that this personal-client flow bypasses account MFA.
+- Decide whether the optional Parse hosted scraper remains enabled after its target authorization,
+  cost, and live response schema are verified.
+- Decide whether VidKing should remain a clearly labeled fallback iframe after native HLS playback
+  lands.
+- Choose the local playback/read threshold for writing progress to AniList without excessive
+  mutations.
 
 ## Known issues / tech debt
 
-- MangaDex, offline sync/reconciliation, and concrete video-source adapters are documented but not implemented.
-- Regression scripts exist and run automatically in CI (`ci.yml`). Vitest now covers the AniList
-  normalizers, request-dedup/throttle gate, and cache, but there is still no provider-fixture suite for
-  a real HLS/MangaDex adapter (neither is implemented yet), and `ci.yml` doesn't yet run `npm test` or
-  `npm run lint` (only wired locally so far).
-- ESLint/Prettier are now configured, but ESLint runs on `@babel/eslint-parser` rather than
-  `typescript-eslint`, which hard-refuses TypeScript >= 7 — see the dated entry above and the decision
-  log for the tradeoff (no TS-aware semantic lint rules; `tsc --noEmit` covers unused-code detection
-  instead). Revisit once typescript-eslint ships TS 7 support.
-- The DMG is unsigned because no valid Developer ID Application certificate is installed. `package-mac.yml`
-  sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so CI packaging stays deterministic rather than searching for a
-  signing identity that doesn't exist; this must be revisited if a certificate is ever provisioned.
-- Full `npm audit` reports 13 high-severity advisories (down from 16): electron-builder's development/
-  packaging dependency tree (`brace-expansion`/`minimatch` lineage) plus the same-shape chain via
-  `eslint-plugin-react@7.37.5` (latest available). Runtime-only audit (`--omit=dev`) is clean. npm's
-  offered forced fixes for both are breaking downgrades and were not applied — accepted risk, dev/build
-  tooling only, never shipped in the packaged app.
-- The renderer's data-fetching effects (`CatalogView`, `GlobalSearch`, `App`'s dashboard load) all call
-  `setLoading(true)` synchronously at effect start, which a newer `eslint-plugin-react-hooks` rule flags.
-  Left as a warning rather than fixed, since the real fix is adopting TanStack Query (already an
-  approved-but-unimplemented dependency) for request lifecycle management instead of patching each effect.
-- The responsive/performance pass on the renderer (content-visibility on card grids, code-splitting
-  `MediaDetailModal`) was verified via typecheck/build/lint/test and build-output inspection only — this
-  environment has no tool that can launch and drive the actual Electron window, so it has not been
-  visually verified by running the app and resizing it. Do that manually before relying on it.
-- The renderer now has the first production-direction Anime/Manga/Profile shell, but continue
-  watching/reading, full reader/player controls, activity/social functions, favorites, notifications,
-  and advanced AniList statistics are not implemented.
-- MangaDex password-based personal-client credentials are still represented as development environment variables; real use must move credentials/tokens to macOS Keychain.
-- Native anime playback contracts are implemented; source health, migrations, concrete HLS/torrent
-  adapters, and playback resolution are not.
-- No persisted AniList dashboard cache, request deduplication/throttle queue, pending offline mutations, activity feed, or social features exist yet.
-- Authenticated `Viewer` and full list loading were exercised with the saved user token. A reversible
-  live mutation/delete was not performed in this session.
-- The AniList client secret was shared in chat. It is not present in source, output, documentation, or the packaged app; the user should rotate it in AniList developer settings if regeneration is available, then store the replacement with `npm run configure:anilist`.
-- AniList rejected the client secret entered by the user with “Client authentication failed.” The request body and endpoint match AniList's current official authorization-code example, so the current evidence points to a stale/miscopied secret or a secret from a different AniList client; the actual credential cannot be independently verified without a fresh one-time authorization code.
-- AniList's current official documentation still describes implicit OAuth, but the live authenticated authorization server returned `unsupported_grant_type` for `response_type=token` on 2026-07-27. Authorization code is the verified compatibility path for this client.
+- MangaDex availability currently uses the English aggregate by default (`MANGADEX_LANGUAGE=en`).
+  Licensed titles can have no MangaDex chapters in that language; those are treated as unknown and
+  stay in Continue Reading.
+- Exact AniList mapping can fail when the right MangaDex result is outside the first ten search
+  results or lacks `links.al`. A future manual mapping UI should resolve those cases safely.
+- MangaDex aggregate data is only an availability hint; concrete reading must use chapter feeds and
+  MangaDex@Home.
+- The carousel/UI changes were structurally tested and the desktop app launched without console
+  errors, but automated visual screenshot inspection was not permitted. Perform a manual hover,
+  paging, focus, and narrow-window pass before treating pixel behavior as final.
+- The two existing `react-hooks/set-state-in-effect` warnings in `CatalogView.tsx` and
+  `GlobalSearch.tsx` remain. TanStack Query is the planned request-lifecycle fix.
+- Parse has not been live-tested with a real API key; VidKing remains an external iframe with
+  availability and provenance outside AniStream's control.
+- The DMG is unsigned because no valid Developer ID Application certificate is installed.
+- Runtime dependency audit is clean; full audit still contains accepted development/build-only
+  advisories in Electron Builder/ESLint dependency trees.
+- The AniList client secret was previously shared in chat and should be rotated if AniList permits.
 
 ## Next steps (in priority order)
 
-1. Re-verify the approved AnimePahe-style source and implement the first removable HLS adapter,
-   episode resolver, variant selection, and internal player; then add AnimeTosho/Nyaa torrent fallback.
-   Not started this session — needs live research against the current AnimePahe site before any code
-   is written (Cloudflare handling, embed extraction), which is out of scope for an in-editor pass.
-2. Implement MangaDex chapter browsing, MangaDex@Home proxy/reporting, and the first reader modes.
-3. Implement full MangaDex personal-client authentication, follows, and read-marker sync using Keychain.
-4. AniList's in-memory request dedup/throttle/cache is done (see decision log). Remaining: the same
-   dedup/throttle/cache pattern for MangaDex once implemented, and making the AniList
-   catalog/dashboard cache **persisted** (SQLite-backed, survives restart) rather than in-memory-only.
-5. Add local playback/reading progress, continue-watching/reading rails, pending mutation queue, and
-   conflict-safe reconciliation.
-6. Add AniList favorites, activity feed, reviews/recommendations actions, notifications, and richer
-   statistics incrementally; do not interpret “all API fields” as a reason to expose unsafe moderator
-   or irrelevant platform operations.
-7. Provider fixtures/tests exist now for AniList (43 Vitest cases); still need equivalents once
-   MangaDex/HLS adapters land, plus valid Developer ID signing/notarization.
-8. Manually launch the app and resize the window to visually verify the responsive/performance pass
-   (content-visibility grids, code-split MediaDetailModal) — not yet done in this environment.
+1. Implement MangaDex chapter-feed normalization, translation/group choice, MangaDex@Home allocation,
+   trusted image proxying, and the first native reader mode with fixture and live checks.
+2. Move planned MangaDex personal-client credentials to macOS Keychain, then implement opt-in token
+   refresh, follows/read markers, reconciliation, and explicit logout.
+3. Re-verify and implement the approved removable AnimePahe-style HLS adapter, then add
+   AnimeTosho/Nyaa torrent fallback.
+4. Persist local playback/reading resume state and define bounded AniList progress-write thresholds.
+5. Manually verify carousel edge reveal, card push expansion, keyboard navigation, profile sorting,
+   and Continue rail behavior in the packaged app.
 
 ## Key architectural decisions log
 
@@ -235,34 +126,15 @@ Many Requests` (AniList's real 429 body surfacing verbatim) — most likely beca
 - 2026-07-27: Superseded the implicit OAuth decision after AniList's live server rejected `response_type=token` with `unsupported_grant_type`. AniStream now uses authorization code exchange; the required client secret is stored and retrieved only through macOS Keychain and is not packaged, committed, placed in `.env`, or sent to the renderer.
 - 2026-07-27: Removed manual Keychain setup as a login prerequisite. When the AniList secret is absent, the trusted main process now obtains it through a native macOS hidden-input dialog and saves it directly to Keychain before opening authorization; the terminal setup command is fallback-only.
 - 2026-07-27: Added rejected AniList client-credential recovery. A token-exchange 401/`invalid_client`/“Client authentication failed” response invalidates only AniStream's Keychain secret, allowing the next login attempt to securely collect a replacement.
-- 2026-07-27: Changed persisted AniList state from token-only to an encrypted versioned
-  token-plus-profile session restored before window creation. This removes startup auth flicker and
-  keeps the user recognized during transient startup network failures.
-- 2026-07-27: Implemented AniList as the sole metadata source for the first Anime/Manga product
-  surfaces. MyAnimeList credentials are not needed because no verified data gap currently requires it.
-- 2026-07-27: Adopted the inspected Netflix design-system palette and interaction hierarchy as a
-  reference, not copied components: black/neutral surfaces, white action hierarchy, red primary
-  actions, plus AniStream cyan tracker accents and a distinct editorial Manga treatment.
-- 2026-07-27: Implemented the Aniyomi-inspired anime provider boundary natively in TypeScript as
-  title mapping → seasons/episodes → hosters → video variants. Provider-specific scraping remains
-  outside shared contracts and no source domain is silently hardcoded.
-- 2026-07-27: Selected the 1024×1024 iOS marketing export from the supplied IconKitchen set as the
-  macOS icon master because it has twice the dimensions of the 512×512 web/Android alternatives.
-  The source is kept in the dedicated `assets/app-icon` directory; Electron Builder generates the
-  packaged `.icns` resource from that master.
-- 2026-07-27: Initialized Git version control for the project (previously no repository existed at all)
-  and added four GitHub Actions workflows: `ci.yml`, `package-mac.yml`, `security-audit.yml`, and
-  `codeql.yml`. All four run on GitHub-hosted `macos-14` (arm64) runners except CodeQL, which runs on
-  `ubuntu-latest` since static analysis needs no Electron build. Each workflow has a matching
-  implementation-agnostic specification under `spec/spec-process-cicd-*.md`. This wires the project's
-  existing typecheck/build/regression scripts and `npm audit` split into automated checks; it does not
-  add new test coverage, linting, or code signing, which remain open tech debt.
-- 2026-07-27: Added Vitest with 35 fixture-based unit tests for the AniList GraphQL normalizers,
-  request-dedup/throttle gate, and bounded cache. Split `src/main/anilist.ts` (1,159 lines) into
-  `src/main/anilist/{client,queries,normalize,keychain,session-store,request-queue,cache}.ts` first, so
-  the normalizers became directly importable/testable pure functions instead of module-private code
-  reachable only by mocking fetch/Electron. `AniListClient`'s public interface and import path are
-  unchanged.
+- 2026-07-27: Changed persisted AniList state from token-only to an encrypted versioned token-plus-profile session restored before window creation. This removes startup auth flicker and keeps the user recognized during transient startup network failures.
+- 2026-07-27: Implemented AniList as the sole metadata source for the first Anime/Manga product surfaces. MyAnimeList credentials are not needed because no verified data gap currently requires it.
+- 2026-07-27: Adopted the inspected Netflix design-system palette and interaction hierarchy as a reference, not copied components: black/neutral surfaces, white action hierarchy, red primary actions, plus AniStream cyan tracker accents and a distinct editorial Manga treatment.
+- 2026-07-27: Implemented the Aniyomi-inspired anime provider boundary natively in TypeScript as title mapping → seasons/episodes → hosters → video variants. Provider-specific scraping remains outside shared contracts and no source domain is silently hardcoded.
+- 2026-07-27: Selected the 1024×1024 iOS marketing export from the supplied IconKitchen set as the macOS icon master because it has twice the dimensions of the 512×512 web/Android alternatives.
+- 2026-07-27: Researched VidKing, Parse, and Cineby. VidKing remains an unapproved remote iframe option rather than a native source; Parse remains an unapproved hosted scraper pending cost, target authorization, and endpoint-schema verification; Cineby remains a visual reference only. AniList `SaveMediaListEntry`/`UpdateMediaListEntries` plus local timestamp state are the recommended basis for progress, score, completion, Continue Watching, and interest-based rails. The source is kept in the dedicated `assets/app-icon` directory; Electron Builder generates the packaged `.icns` resource from that master.
+- 2026-07-27: Implemented AniList-driven discovery rails and progress controls. Continue rails are derived from current AniList entries, top-rated/interest rows use AniList browse filters, and playback completion/rating/explicit completion call the existing authenticated list mutations. Parse episode loading and VidKing playback are optional, main-process-controlled seams; neither is treated as a native or load-bearing source.
+- 2026-07-27: Initialized Git version control for the project (previously no repository existed at all) and added four GitHub Actions workflows: `ci.yml`, `package-mac.yml`, `security-audit.yml`, and `codeql.yml`. All four run on GitHub-hosted `macos-14` (arm64) runners except CodeQL, which runs on `ubuntu-latest` since static analysis needs no Electron build. Each workflow has a matching implementation-agnostic specification under `spec/spec-process-cicd-*.md`. This wires the project's existing typecheck/build/regression scripts and `npm audit` split into automated checks; it does not add new test coverage, linting, or code signing, which remain open tech debt.
+- 2026-07-27: Added Vitest with 35 fixture-based unit tests for the AniList GraphQL normalizers, request-dedup/throttle gate, and bounded cache. Split `src/main/anilist.ts` (1,159 lines) into `src/main/anilist/{client,queries,normalize,keychain,session-store,request-queue,cache}.ts` first, so the normalizers became directly importable/testable pure functions instead of module-private code reachable only by mocking fetch/Electron. `AniListClient`'s public interface and import path are unchanged.
 - 2026-07-27: Implemented client-side request deduplication and a 25-req/min throttle for all AniList
   GraphQL calls, plus a bounded/TTL cache for public browse and media-detail lookups, fulfilling the
   "request cache/throttle/dedup" roadmap item for AniList specifically. Mutations are deliberately never
@@ -309,3 +181,6 @@ integration` against the workflow-runs API. `github/codeql-action/analyze` needs
   (`contents: read`, `security-events: write`) didn't grant. Added `actions: read`. Bumped
   `spec-process-cicd-codeql.md` to version 1.1 with this as an explicit error-handling scenario, so a
   future permissions edit doesn't silently regress it.
+- 2026-07-28: User approved carousel direction A: native scroll snapping, edge-hover chevrons that page by the visible viewport, and actual flex-width expansion so hovered/focused cards push adjacent cards.
+- 2026-07-28: Continue rails now use only AniList `CURRENT` entries. Anime availability uses totals plus `nextAiringEpisode`; Manga uses exact AniList-to-MangaDex mapping and translated aggregate availability. Recommendation rails exclude all corresponding AniList library IDs.
+- 2026-07-28: Approved a public read-only MangaDex adapter after first-party research and live API checks. It is isolated in the main process, throttled to 4 requests/second, cached for 30 minutes, accepts only a unique exact `attributes.links.al` mapping, and treats unavailable data as unknown. Full personal-client account sync remains planned as a separate Keychain-backed opt-in because public OAuth clients are unavailable and the documented personal flow bypasses MFA.
