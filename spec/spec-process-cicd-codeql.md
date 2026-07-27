@@ -1,6 +1,6 @@
 ---
 title: CI/CD Workflow Specification - CodeQL
-version: 1.0
+version: 1.1
 date_created: 2026-07-27
 last_updated: 2026-07-27
 owner: AniStream maintainer
@@ -37,18 +37,18 @@ graph TD
 
 ### Functional Requirements
 
-| ID      | Requirement                                                                                   | Priority | Acceptance Criteria                                                              |
-| ------- | --------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
-| REQ-001 | Every push/PR to `main` is scanned with CodeQL's extended security query pack                 | High     | `analyze` job completes and uploads a SARIF result                               |
-| REQ-002 | Findings surface in the repository's Security > Code scanning view                            | High     | `github/codeql-action/analyze` succeeds with `security-events: write` permission |
-| REQ-003 | A weekly scan runs even with no code changes, to pick up newly published CodeQL query updates | Medium   | Scheduled trigger fires and completes independent of push/PR activity            |
+| ID      | Requirement                                                                                   | Priority | Acceptance Criteria                                                                                   |
+| ------- | --------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| REQ-001 | Every push/PR to `main` is scanned with CodeQL's extended security query pack                 | High     | `analyze` job completes and uploads a SARIF result                                                    |
+| REQ-002 | Findings surface in the repository's Security > Code scanning view                            | High     | `github/codeql-action/analyze` succeeds with `security-events: write` and `actions: read` permissions |
+| REQ-003 | A weekly scan runs even with no code changes, to pick up newly published CodeQL query updates | Medium   | Scheduled trigger fires and completes independent of push/PR activity                                 |
 
 ### Security Requirements
 
-| ID      | Requirement                                                  | Implementation Constraint                                                             |
-| ------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| SEC-001 | Workflow requests only the permissions it needs              | `contents: read`, `security-events: write` — no write access to code or releases      |
-| SEC-002 | Analysis runs against untrusted PR code without executing it | CodeQL analyzes source statically; no app build/run step is included in this workflow |
+| ID      | Requirement                                                  | Implementation Constraint                                                                                                                                                       |
+| ------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SEC-001 | Workflow requests only the permissions it needs              | `contents: read`, `security-events: write`, `actions: read` (required by codeql-action to read workflow-run metadata during SARIF upload) — no write access to code or releases |
+| SEC-002 | Analysis runs against untrusted PR code without executing it | CodeQL analyzes source statically; no app build/run step is included in this workflow                                                                                           |
 
 ### Performance Requirements
 
@@ -77,9 +77,9 @@ sarif_report: file # Description: CodeQL findings, uploaded to GitHub code scann
 
 ### Secrets & Variables
 
-| Type  | Name                      | Purpose                               | Scope                               |
-| ----- | ------------------------- | ------------------------------------- | ----------------------------------- |
-| Token | `GITHUB_TOKEN` (implicit) | Upload SARIF results to code scanning | Workflow (`security-events: write`) |
+| Type  | Name                      | Purpose                                                           | Scope                                                |
+| ----- | ------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
+| Token | `GITHUB_TOKEN` (implicit) | Upload SARIF results to code scanning; read workflow-run metadata | Workflow (`security-events: write`, `actions: read`) |
 
 ## Execution Constraints
 
@@ -93,15 +93,16 @@ sarif_report: file # Description: CodeQL findings, uploaded to GitHub code scann
 
 - **Runner Requirements**: Any Linux runner; CodeQL for JS/TS does not require building or running Electron
 - **Network Access**: Outbound to fetch CodeQL query packs and CLI
-- **Permissions**: `contents: read`, `security-events: write`
+- **Permissions**: `contents: read`, `security-events: write`, `actions: read`
 
 ## Error Handling Strategy
 
-| Error Type                    | Response                                                        | Recovery Action                                                    |
-| ----------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------ |
-| CodeQL initialization failure | Job fails at `init` step                                        | Check CodeQL action version compatibility; re-run                  |
-| Analysis timeout              | Job fails at `analyze` step                                     | Increase `timeout-minutes` if the codebase has grown significantly |
-| SARIF upload failure          | Job fails at `analyze` step (upload is part of the same action) | Confirm `security-events: write` permission is still granted       |
+| Error Type                                                             | Response                                                        | Recovery Action                                                                                                                                      |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CodeQL initialization failure                                          | Job fails at `init` step                                        | Check CodeQL action version compatibility; re-run                                                                                                    |
+| Analysis timeout                                                       | Job fails at `analyze` step                                     | Increase `timeout-minutes` if the codebase has grown significantly                                                                                   |
+| SARIF upload failure                                                   | Job fails at `analyze` step (upload is part of the same action) | Confirm `security-events: write` and `actions: read` permissions are still granted                                                                   |
+| `Resource not accessible by integration` against the workflow-runs API | Job fails at `analyze` step                                     | Add `actions: read` to the workflow's `permissions:` block — required by codeql-action to read workflow-run metadata during upload (see version 1.1) |
 
 ## Quality Gates
 
@@ -151,7 +152,7 @@ sarif_report: file # Description: CodeQL findings, uploaded to GitHub code scann
 
 ### Security Controls
 
-- **Access Control**: `contents: read`, `security-events: write` only
+- **Access Control**: `contents: read`, `security-events: write`, `actions: read` only
 - **Secret Management**: None used beyond the implicit `GITHUB_TOKEN`
 - **Vulnerability Scanning**: This workflow covers source-level static analysis; the Dependency audit workflow covers third-party package vulnerabilities
 
@@ -187,9 +188,10 @@ sarif_report: file # Description: CodeQL findings, uploaded to GitHub code scann
 
 ### Version History
 
-| Version | Date       | Changes               | Author                                  |
-| ------- | ---------- | --------------------- | --------------------------------------- |
-| 1.0     | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
+| Version | Date       | Changes                                                                                                                                                                                                    | Author                                  |
+| ------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1.0     | 2026-07-27 | Initial specification                                                                                                                                                                                      | AniStream maintainer (with Claude Code) |
+| 1.1     | 2026-07-27 | Added `actions: read` to workflow permissions — first live run on GitHub failed with `Resource not accessible by integration` against the workflow-runs API, which codeql-action needs during SARIF upload | AniStream maintainer (with Claude Code) |
 
 ## Related Specifications
 

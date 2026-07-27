@@ -303,3 +303,9 @@ Many Requests` (AniList's real 429 body surfacing verbatim) — most likely beca
   works correctly. Updated all four `spec/spec-process-cicd-*.md` docs to match and bumped them to
   version 1.1, and fixed an unrelated pre-existing broken markdown table in the security-audit spec
   (an unescaped `||` had split a cell) noticed while editing it.
+- 2026-07-27: The first live run of `codeql.yml` on GitHub failed with `Resource not accessible by
+integration` against the workflow-runs API. `github/codeql-action/analyze` needs `actions: read` to
+  read workflow-run metadata during the SARIF upload step, which the original `permissions:` block
+  (`contents: read`, `security-events: write`) didn't grant. Added `actions: read`. Bumped
+  `spec-process-cicd-codeql.md` to version 1.1 with this as an explicit error-handling scenario, so a
+  future permissions edit doesn't silently regress it.

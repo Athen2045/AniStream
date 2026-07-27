@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
   security-events: write
+  # Required by github/codeql-action/analyze to read workflow-run metadata during the
+  # SARIF upload step; without it the run fails with "Resource not accessible by
+  # integration" against the workflow-runs API.
+  actions: read
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
