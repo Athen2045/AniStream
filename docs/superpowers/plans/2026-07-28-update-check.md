@@ -54,7 +54,7 @@ call to GitHub's REST API.
   `AppDatabase.setMeta(key: string, value: string): void`,
   `AppDatabase.deleteMeta(key: string): void` — used by Task 4 (`store.ts`). Uses the `app_meta`
   table that already exists in the schema (`CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY
-  KEY, value TEXT NOT NULL)`); no schema change needed.
+KEY, value TEXT NOT NULL)`); no schema change needed.
 - `openAppDatabase(":memory:")` is a valid in-memory database for tests — verified working under
   plain Node (not just inside Electron) before writing this plan.
 
@@ -396,8 +396,7 @@ git commit -m "feat: add crash-loop launch-state state machine"
 - Produces (used by Task 7's `main/index.ts`):
   ```ts
   export type ReleaseCheckResult =
-    | { status: "up-to-date" }
-    | { status: "update-available"; version: string; releaseUrl: string };
+    { status: "up-to-date" } | { status: "update-available"; version: string; releaseUrl: string };
   export function checkLatestRelease(
     currentVersion: string,
     fetcher?: typeof fetch,
@@ -453,7 +452,10 @@ function fakeFetch(response: Partial<Response> & { jsonBody?: unknown }): typeof
 describe("checkLatestRelease", () => {
   it("reports update-available when the release tag is newer", async () => {
     const fetcher = fakeFetch({
-      jsonBody: { tag_name: "v0.2.0", html_url: "https://github.com/Athen2045/AniStream/releases/tag/v0.2.0" },
+      jsonBody: {
+        tag_name: "v0.2.0",
+        html_url: "https://github.com/Athen2045/AniStream/releases/tag/v0.2.0",
+      },
     });
     const result = await checkLatestRelease("0.1.0", fetcher);
     expect(result).toEqual({
@@ -465,7 +467,10 @@ describe("checkLatestRelease", () => {
 
   it("reports up-to-date when the release tag matches the current version", async () => {
     const fetcher = fakeFetch({
-      jsonBody: { tag_name: "v0.1.0", html_url: "https://github.com/Athen2045/AniStream/releases/tag/v0.1.0" },
+      jsonBody: {
+        tag_name: "v0.1.0",
+        html_url: "https://github.com/Athen2045/AniStream/releases/tag/v0.1.0",
+      },
     });
     const result = await checkLatestRelease("0.1.0", fetcher);
     expect(result).toEqual({ status: "up-to-date" });
@@ -514,8 +519,7 @@ const RELEASES_LATEST_URL = `https://api.github.com/repos/${GITHUB_REPO}/release
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export type ReleaseCheckResult =
-  | { status: "up-to-date" }
-  | { status: "update-available"; version: string; releaseUrl: string };
+  { status: "up-to-date" } | { status: "update-available"; version: string; releaseUrl: string };
 
 /**
  * Checks GitHub's public releases API for a newer tagged version than `currentVersion`.
@@ -604,6 +608,7 @@ git commit -m "feat: add GitHub release version check"
 - Consumes: `AppDatabase.getMeta/setMeta/deleteMeta` (Task 1), `LaunchState`/`PendingAttempts`
   (Task 2).
 - Produces (used by Task 7's `main/index.ts`):
+
   ```ts
   export function readLaunchState(db: AppDatabase): LaunchState;
   export function writeLaunchState(db: AppDatabase, state: LaunchState): void;
@@ -868,7 +873,13 @@ entry point that composes everything else); verified by typecheck, `npm run buil
 In `src/main/index.ts`, add to the existing import block (after the `openAppDatabase` import):
 
 ```ts
-import { checkLatestRelease, markStable, nextLaunchState, readLaunchState, writeLaunchState } from "./update-check";
+import {
+  checkLatestRelease,
+  markStable,
+  nextLaunchState,
+  readLaunchState,
+  writeLaunchState,
+} from "./update-check";
 ```
 
 Add `UpdateStatus` to the existing `import type { ... } from "../shared/contracts";` block.
@@ -885,32 +896,31 @@ Inside the `app.whenReady().then(async () => { ... })` block, immediately after 
 `await aniList.restore();` line and before the first `ipcMain.handle(...)` call, insert:
 
 ```ts
-  const currentVersion = app.getVersion();
-  const priorLaunchState = readLaunchState(database);
-  const { report, nextState } = nextLaunchState(priorLaunchState, currentVersion);
-  writeLaunchState(database, nextState);
+const currentVersion = app.getVersion();
+const priorLaunchState = readLaunchState(database);
+const { report, nextState } = nextLaunchState(priorLaunchState, currentVersion);
+writeLaunchState(database, nextState);
 
-  const updateStatusPromise: Promise<UpdateStatus> =
-    report === "crash-detected" && nextState.lastCleanVersion
-      ? Promise.resolve({
-          kind: "crash-detected",
-          currentVersion,
-          lastGoodVersion: nextState.lastCleanVersion,
-          lastGoodReleaseUrl: `https://github.com/Athen2045/AniStream/releases/tag/v${nextState.lastCleanVersion}`,
-        } as const)
-      : checkLatestRelease(currentVersion).then(
-          (result): UpdateStatus =>
-            result.status === "update-available"
-              ? { kind: "update-available", version: result.version, releaseUrl: result.releaseUrl }
-              : { kind: "up-to-date" },
-        );
+const updateStatusPromise: Promise<UpdateStatus> =
+  report === "crash-detected" && nextState.lastCleanVersion
+    ? Promise.resolve({
+        kind: "crash-detected",
+        currentVersion,
+        lastGoodVersion: nextState.lastCleanVersion,
+        lastGoodReleaseUrl: `https://github.com/Athen2045/AniStream/releases/tag/v${nextState.lastCleanVersion}`,
+      } as const)
+    : checkLatestRelease(currentVersion).then((result): UpdateStatus =>
+        result.status === "update-available"
+          ? { kind: "update-available", version: result.version, releaseUrl: result.releaseUrl }
+          : { kind: "up-to-date" },
+      );
 ```
 
 Add the IPC handler in the existing `ipcMain.handle(...)` block, immediately after the existing
 `ipcMain.handle("app:get-info", ...)` registration:
 
 ```ts
-  ipcMain.handle("app:update-status", () => updateStatusPromise);
+ipcMain.handle("app:update-status", () => updateStatusPromise);
 ```
 
 - [ ] **Step 3: Schedule the stable-mark timer after `createWindow()`**
@@ -919,9 +929,9 @@ Immediately after the existing `createWindow();` call (before the `if (pendingPr
 insert:
 
 ```ts
-  setTimeout(() => {
-    if (database) writeLaunchState(database, markStable(currentVersion));
-  }, STABLE_MARK_DELAY_MS);
+setTimeout(() => {
+  if (database) writeLaunchState(database, markStable(currentVersion));
+}, STABLE_MARK_DELAY_MS);
 ```
 
 - [ ] **Step 4: Typecheck**

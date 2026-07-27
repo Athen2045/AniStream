@@ -74,7 +74,7 @@ rule for that file) and to the `AniStreamBridge` interface / preload bridge as
 4. If `report === "crash-detected"`: cache
    `{ kind: "crash-detected", lastGoodVersion, lastGoodReleaseUrl }` as the session's update status
    and **skip the GitHub update check entirely** for this launch — crash guidance takes priority over
-   "a new version exists," since in this scenario the new version is the *broken* one.
+   "a new version exists," since in this scenario the new version is the _broken_ one.
 5. Otherwise: call `checkLatestRelease(app.getVersion())` in the background (does not block
    `createWindow()`) and cache whichever result comes back as the session's update status.
 6. ~8 seconds after `createWindow()`, if the process is still running, call
@@ -83,16 +83,16 @@ rule for that file) and to the `AniStreamBridge` interface / preload bridge as
 
 **`nextLaunchState` transition table:**
 
-| Persisted state | Current version | Transition |
-|---|---|---|
-| No `last_clean_version` (fresh install) | any | Treat as first launch of this version: `pending = {version, attempts: 1}`, report `"normal"` |
-| `last_clean_version == current` | same | Normal continued use of an already-stable version: report `"normal"`, no attempt bookkeeping needed |
-| `last_clean_version != current`, `pending.version != current` | new | First launch of a new version: `pending = {version: current, attempts: 1}`, report `"normal"` |
-| `last_clean_version != current`, `pending.version == current`, `pending.attempts < 2` | new, seen once before | `pending.attempts += 1`, report `"normal"` (give it one retry before flagging) |
-| `last_clean_version != current`, `pending.version == current`, `pending.attempts >= 2` | new, seen 2+ times, never stabilized | Report `"crash-detected"` using the existing `last_clean_version` as the rollback target |
+| Persisted state                                                                        | Current version                      | Transition                                                                                          |
+| -------------------------------------------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| No `last_clean_version` (fresh install)                                                | any                                  | Treat as first launch of this version: `pending = {version, attempts: 1}`, report `"normal"`        |
+| `last_clean_version == current`                                                        | same                                 | Normal continued use of an already-stable version: report `"normal"`, no attempt bookkeeping needed |
+| `last_clean_version != current`, `pending.version != current`                          | new                                  | First launch of a new version: `pending = {version: current, attempts: 1}`, report `"normal"`       |
+| `last_clean_version != current`, `pending.version == current`, `pending.attempts < 2`  | new, seen once before                | `pending.attempts += 1`, report `"normal"` (give it one retry before flagging)                      |
+| `last_clean_version != current`, `pending.version == current`, `pending.attempts >= 2` | new, seen 2+ times, never stabilized | Report `"crash-detected"` using the existing `last_clean_version` as the rollback target            |
 
 Worked example: launch 1 of a new version sets `attempts: 1` (report `"normal"`). If it never
-stabilizes, launch 2 bumps to `attempts: 2` (still `"normal"` — one free retry). If it *still* never
+stabilizes, launch 2 bumps to `attempts: 2` (still `"normal"` — one free retry). If it _still_ never
 stabilizes, launch 3 reports `"crash-detected"`. So a version needs to fail to stabilize on three
 consecutive launches before the banner appears.
 
@@ -110,6 +110,7 @@ consecutive launches before the banner appears.
   per the earlier decision.
 
 **Banner copy:**
+
 - `update-available`: "AniStream v{version} is available." → link labeled "View release"
   → `https://github.com/Athen2045/AniStream/releases/tag/v{version}`
 - `crash-detected`: "AniStream crashed after updating to v{current} — v{lastGoodVersion} is
