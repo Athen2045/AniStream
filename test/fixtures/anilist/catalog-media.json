@@ -1,0 +1,23 @@
+{
+  "id": 21,
+  "type": "ANIME",
+  "title": { "userPreferred": "ONE PIECE", "english": "One Piece", "romaji": "One Piece" },
+  "coverImage": {
+    "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/b21-extralarge.jpg",
+    "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/b21-large.jpg"
+  },
+  "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/21.jpg",
+  "description": "Gol D. Roger was known as the Pirate King ~!spoiler!~ and the greatest treasure.",
+  "format": "TV",
+  "status": "RELEASING",
+  "episodes": null,
+  "chapters": null,
+  "volumes": null,
+  "siteUrl": "https://anilist.co/anime/21",
+  "genres": ["Action", "Adventure", "Comedy"],
+  "averageScore": 87,
+  "popularity": 542318,
+  "season": "FALL",
+  "seasonYear": 1999,
+  "nextAiringEpisode": { "episode": 1123, "airingAt": 1893456000 }
+}

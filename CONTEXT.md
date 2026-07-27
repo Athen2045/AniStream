@@ -1,6 +1,6 @@
 # AniStream — Context
 
-Last updated: 2026-07-27 by Claude Code CI/CD session
+Last updated: 2026-07-27 by Codex macOS DMG rebuild session
 
 ## Current phase
 
@@ -51,7 +51,10 @@ provider contract chain. Actual HLS/torrent extraction and MangaDex chapter read
 - The profile UI supports anime/manga tabs, status/custom list groups, local title filtering, AniList catalog search/add-to-planning, refresh, logout, status/score/progress/notes edits, one-click progress increments, and list-entry removal.
 - Access tokens remain in the main process; typed preload IPC exposes only normalized account/list values and bounded mutation inputs.
 - The main process creates `anistream.sqlite` under the macOS application-support directory with `app_meta`, `library_entries`, and `sync_queue` tables.
-- `npm run package:mac` produces the 130 MB `dist/AniStream-0.1.0-arm64.dmg`.
+- `npm run package:mac` produces the current 134 MB
+  `dist/AniStream-0.1.0-arm64.dmg`. The package was rebuilt from the latest source on
+  2026-07-27 at 08:54 IST; packaged-preload, AniList OAuth, product-slice, all 43 Vitest tests,
+  formatting, and lint (zero errors, two documented warnings) passed.
 - The macOS package uses the custom 1024×1024 artwork at
   `assets/app-icon/AniStream-1024.png`; Electron Builder embeds it as
   `AniStream.app/Contents/Resources/icon.icns`, and the bundle's `CFBundleIconFile` points to it.
@@ -66,7 +69,69 @@ provider contract chain. Actual HLS/torrent extraction and MangaDex chapter read
   `package-mac.yml` (unsigned arm64 DMG build plus `check:packaged-preload` against the real packaged ASAR, on version tags or manual dispatch, publishing to GitHub Releases),
   `security-audit.yml` (blocking `npm audit --omit=dev`, non-blocking full audit report, on manifest changes and weekly),
   and `codeql.yml` (CodeQL `javascript-typescript` security-extended analysis, on push/PR and weekly).
-- These workflows run the project's *existing* checks in CI; they do not add new test coverage. Unit/integration tests and ESLint/Prettier are still not configured (see Known issues below) and remain the next priority.
+- These workflows run the project's _existing_ checks in CI; they do not add new test coverage. Unit/integration tests and ESLint/Prettier are still not configured (see Known issues below) and remain the next priority.
+- Vitest is now configured (`vitest.config.ts`, `npm test` / `npm run test:watch`). 35 fixture-based
+  unit tests in `test/main/` cover every AniList GraphQL normalizer (`src/main/anilist/normalize.ts`),
+  the client-side request-dedup/throttle gate, and the bounded cache — the code most exposed to
+  upstream schema drift, which previously had zero coverage. `ci.yml` should be extended to run
+  `npm test` alongside typecheck/build (not yet wired in this pass).
+- `src/main/anilist.ts` (1,159 lines) is split into `src/main/anilist/{client,queries,normalize,
+keychain,session-store,request-queue,cache}.ts`. `AniListClient`'s public interface is unchanged;
+  `src/main/index.ts` still imports it from `./anilist` unmodified. `scripts/verify-product-slice.mjs`
+  was updated to read the new file locations.
+- `AniListClient` now deduplicates identical in-flight read requests (browse/detail/search/viewer) and
+  throttles all GraphQL calls to 25 requests/minute (`src/main/anilist/request-queue.ts`), plus a small
+  bounded/TTL cache for public browse and media-detail lookups (`src/main/anilist/cache.ts`). Mutations
+  are never deduplicated or cached. This fulfills the "request cache/throttle/dedup" roadmap item for
+  AniList; MangaDex and the HLS adapter still need their own equivalents once implemented.
+- Fixed a real gap in the above: the 25/min throttle only prevented bursts pre-emptively, it didn't
+  react to an actual AniList 429. A user hit `Error invoking remote method 'anilist:browse': Error: Too
+Many Requests` (AniList's real 429 body surfacing verbatim) — most likely because the running dev
+  process predated this session's throttle (main-process changes need a full relaunch, not hot-reload).
+  `RequestGate.reportRateLimited(retryAfterMs)` now pauses every future request until a 429's
+  `Retry-After` header elapses (parsed as delta-seconds or HTTP-date, falling back to a conservative 60s
+  when the header is absent), matching API.md: "On 429, stop the queue until Retry-After/reset." The
+  user also gets a clearer message than the raw provider string. Covered by new tests in
+  `test/main/request-queue.test.ts` and `test/main/parse-retry-after.test.ts`.
+- ESLint (flat config, `eslint.config.js`) and Prettier (`.prettierrc.json`) are configured with
+  `npm run lint` / `lint:fix` / `format` / `format:check`. `typescript-eslint` (parser and eslint-plugin
+  alike) hard-refuses to run against TypeScript >= 7 (throws at require-time, not just a peer warning) —
+  this project deliberately runs TS 7. ESLint therefore parses `.ts`/`.tsx` with `@babel/eslint-parser` +
+  `@babel/preset-typescript` instead, which understands TS syntax without invoking the TS compiler.
+  Consequence: no TS-aware semantic lint rules (no-explicit-any, no-floating-promises, etc.); `tsc --noEmit`
+  now has `noUnusedLocals`/`noUnusedParameters` enabled in both tsconfigs instead, since it correctly
+  understands type-only imports and constructor parameter properties that babel's parser cannot see.
+  Revisit the ESLint setup once typescript-eslint ships TS 7 support:
+  https://github.com/typescript-eslint/typescript-eslint/issues/10940
+- `npm run lint` is clean (0 errors). Two `react-hooks/set-state-in-effect` warnings remain, deliberately
+  left as warnings (not fixed) in `CatalogView.tsx`/`GlobalSearch.tsx`: both call `setLoading(true)` at
+  the start of a data-fetching effect, the standard vanilla-React pattern used throughout this codebase.
+  The real fix is adopting TanStack Query (already an approved-but-unimplemented dependency per the
+  README tech-stack table) for request lifecycle management.
+- Added a top-level React error boundary (`src/renderer/src/ErrorBoundary.tsx`, wrapping `<App />` in
+  `main.tsx`) so an uncaught render error shows a truthful degraded state and a reload button instead of
+  a blank window.
+- Hardened the three spots where an AniList-supplied banner/cover URL was interpolated directly into a
+  CSS `background-image` template literal (App.tsx, CatalogView.tsx, MediaDetailModal.tsx) — a stray `"`
+  in a URL could break out of the CSS string. `src/renderer/src/safe-css-url.ts` now builds a properly
+  quoted, https-only `url(...)` value shared by all three call sites.
+- Performance/responsiveness pass on the renderer: `.media-card`/`.browse-card` use
+  `content-visibility: auto` with `contain-intrinsic-size` so long AniList libraries (which can run into
+  the hundreds of entries) skip layout/paint work for off-screen cards; `MediaDetailModal` is now
+  code-split via `React.lazy`/`Suspense` (its own ~12 KB chunk, only fetched once a title is opened,
+  confirmed via the `electron-vite build` chunk output). The existing responsive grid/breakpoint CSS
+  (`repeat(auto-fill, minmax(...))` grids plus the `max-width: 1100px` breakpoint) was reviewed and
+  already covers the app's 960x640 minimum window size correctly; no changes were needed there.
+  **Not verified visually** — this environment has no tool that can launch and drive the actual Electron
+  window (the available browser/simulator tools are for web pages and iOS simulators respectively), so
+  this pass was verified via typecheck/build/lint/test and build-output inspection only, not by running
+  the app and resizing the window. Do that manually before considering this fully done.
+- `npm audit --omit=dev` remains 0 vulnerabilities. Full `npm audit` is now 13 high-severity advisories
+  (down from 16): the pre-existing electron-builder `brace-expansion`/`minimatch` chain, plus a new,
+  same-shape `minimatch`/`brace-expansion` chain via `eslint-plugin-react@7.37.5` (latest available
+  release). Neither has a fix that isn't a breaking downgrade (npm's suggested fixes are older, not
+  newer, versions of electron-builder/eslint-plugin-react) — both are dev/build-tooling-only and never
+  ship in the packaged app, so this remains accepted risk, not applied.
 
 ## What's in progress
 
@@ -81,12 +146,30 @@ provider contract chain. Actual HLS/torrent extraction and MangaDex chapter read
 ## Known issues / tech debt
 
 - MangaDex, offline sync/reconciliation, and concrete video-source adapters are documented but not implemented.
-- Regression scripts exist and now run automatically in CI (`ci.yml`), but there is still no unit/integration
-  test runner or provider-fixture suite, and no ESLint/Prettier configuration, despite AGENTS.md prescribing both.
+- Regression scripts exist and run automatically in CI (`ci.yml`). Vitest now covers the AniList
+  normalizers, request-dedup/throttle gate, and cache, but there is still no provider-fixture suite for
+  a real HLS/MangaDex adapter (neither is implemented yet), and `ci.yml` doesn't yet run `npm test` or
+  `npm run lint` (only wired locally so far).
+- ESLint/Prettier are now configured, but ESLint runs on `@babel/eslint-parser` rather than
+  `typescript-eslint`, which hard-refuses TypeScript >= 7 — see the dated entry above and the decision
+  log for the tradeoff (no TS-aware semantic lint rules; `tsc --noEmit` covers unused-code detection
+  instead). Revisit once typescript-eslint ships TS 7 support.
 - The DMG is unsigned because no valid Developer ID Application certificate is installed. `package-mac.yml`
   sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so CI packaging stays deterministic rather than searching for a
   signing identity that doesn't exist; this must be revisited if a certificate is ever provisioned.
-- Full `npm audit` reports 16 high-severity advisories in electron-builder's development/packaging dependency tree (`brace-expansion`/`minimatch` lineage). Runtime-only audit is clean. npm's offered forced fix downgrades electron-builder across a breaking change and was not applied.
+- Full `npm audit` reports 13 high-severity advisories (down from 16): electron-builder's development/
+  packaging dependency tree (`brace-expansion`/`minimatch` lineage) plus the same-shape chain via
+  `eslint-plugin-react@7.37.5` (latest available). Runtime-only audit (`--omit=dev`) is clean. npm's
+  offered forced fixes for both are breaking downgrades and were not applied — accepted risk, dev/build
+  tooling only, never shipped in the packaged app.
+- The renderer's data-fetching effects (`CatalogView`, `GlobalSearch`, `App`'s dashboard load) all call
+  `setLoading(true)` synchronously at effect start, which a newer `eslint-plugin-react-hooks` rule flags.
+  Left as a warning rather than fixed, since the real fix is adopting TanStack Query (already an
+  approved-but-unimplemented dependency) for request lifecycle management instead of patching each effect.
+- The responsive/performance pass on the renderer (content-visibility on card grids, code-splitting
+  `MediaDetailModal`) was verified via typecheck/build/lint/test and build-output inspection only — this
+  environment has no tool that can launch and drive the actual Electron window, so it has not been
+  visually verified by running the app and resizing it. Do that manually before relying on it.
 - The renderer now has the first production-direction Anime/Manga/Profile shell, but continue
   watching/reading, full reader/player controls, activity/social functions, favorites, notifications,
   and advanced AniList statistics are not implemented.
@@ -104,15 +187,23 @@ provider contract chain. Actual HLS/torrent extraction and MangaDex chapter read
 
 1. Re-verify the approved AnimePahe-style source and implement the first removable HLS adapter,
    episode resolver, variant selection, and internal player; then add AnimeTosho/Nyaa torrent fallback.
+   Not started this session — needs live research against the current AnimePahe site before any code
+   is written (Cloudflare handling, embed extraction), which is out of scope for an in-editor pass.
 2. Implement MangaDex chapter browsing, MangaDex@Home proxy/reporting, and the first reader modes.
 3. Implement full MangaDex personal-client authentication, follows, and read-marker sync using Keychain.
-4. Add request deduplication, conservative throttling, and persisted AniList catalog/dashboard caches.
+4. AniList's in-memory request dedup/throttle/cache is done (see decision log). Remaining: the same
+   dedup/throttle/cache pattern for MangaDex once implemented, and making the AniList
+   catalog/dashboard cache **persisted** (SQLite-backed, survives restart) rather than in-memory-only.
 5. Add local playback/reading progress, continue-watching/reading rails, pending mutation queue, and
    conflict-safe reconciliation.
 6. Add AniList favorites, activity feed, reviews/recommendations actions, notifications, and richer
    statistics incrementally; do not interpret “all API fields” as a reason to expose unsafe moderator
    or irrelevant platform operations.
-7. Add provider fixtures/tests and valid Developer ID signing/notarization.
+7. Provider fixtures/tests exist now for AniList (35 Vitest cases); still need equivalents once
+   MangaDex/HLS adapters land, plus valid Developer ID signing/notarization.
+8. Wire `npm test` and `npm run lint` into `ci.yml` (currently only run locally in this session).
+9. Manually launch the app and resize the window to visually verify the responsive/performance pass
+   (content-visibility grids, code-split MediaDetailModal) — not yet done in this environment.
 
 ## Key architectural decisions log
 
@@ -157,3 +248,41 @@ provider contract chain. Actual HLS/torrent extraction and MangaDex chapter read
   implementation-agnostic specification under `spec/spec-process-cicd-*.md`. This wires the project's
   existing typecheck/build/regression scripts and `npm audit` split into automated checks; it does not
   add new test coverage, linting, or code signing, which remain open tech debt.
+- 2026-07-27: Added Vitest with 35 fixture-based unit tests for the AniList GraphQL normalizers,
+  request-dedup/throttle gate, and bounded cache. Split `src/main/anilist.ts` (1,159 lines) into
+  `src/main/anilist/{client,queries,normalize,keychain,session-store,request-queue,cache}.ts` first, so
+  the normalizers became directly importable/testable pure functions instead of module-private code
+  reachable only by mocking fetch/Electron. `AniListClient`'s public interface and import path are
+  unchanged.
+- 2026-07-27: Implemented client-side request deduplication and a 25-req/min throttle for all AniList
+  GraphQL calls, plus a bounded/TTL cache for public browse and media-detail lookups, fulfilling the
+  "request cache/throttle/dedup" roadmap item for AniList specifically. Mutations are deliberately never
+  deduplicated or cached, matching API.md's "keep list mutations serialized" client strategy. MangaDex
+  and the HLS adapter need their own equivalents when implemented — this decision does not extend to
+  them.
+- 2026-07-27: Added ESLint (flat config) and Prettier. Discovered `typescript-eslint` (both the parser
+  and the eslint-plugin) throws at require-time against TypeScript >= 7, which this project deliberately
+  runs — not merely a peer-dependency warning but a hard-coded version guard with no current escape
+  hatch (confirmed by testing `overrides`, which npm accepted but silently failed to apply for this
+  peer-dependency case). Chose `@babel/eslint-parser` + `@babel/preset-typescript` instead, which parses
+  TS syntax without invoking the TS compiler, and moved unused-code detection to `tsc --noEmit`
+  (`noUnusedLocals`/`noUnusedParameters`) since babel's parser cannot see type-only imports or
+  constructor parameter properties and would otherwise misreport them as unused. Revisit when
+  typescript-eslint ships TS 7 support.
+- 2026-07-27: Deliberately left two `react-hooks/set-state-in-effect` warnings unfixed in
+  `CatalogView.tsx`/`GlobalSearch.tsx` (both call `setLoading(true)` at the start of a data-fetching
+  effect) rather than restructuring around them, since the real fix is adopting the already-planned
+  TanStack Query dependency for request lifecycle management, not a narrow per-effect rewrite.
+- 2026-07-27: Declined to apply npm's suggested audit fixes for the electron-builder and (newly
+  introduced by this session's ESLint addition) eslint-plugin-react `minimatch`/`brace-expansion`
+  advisory chains, since both suggested fixes are breaking _downgrades_, not newer safe releases,
+  matching the electron-builder decision already on record. Both chains are dev/build-tooling-only.
+- 2026-07-27: Added a top-level React error boundary and hardened three CSS `background-image`
+  template-literal interpolations of AniList-supplied URLs (via a shared `safe-css-url.ts` helper),
+  closing two findings from the earlier codebase audit.
+- 2026-07-27: Applied `content-visibility: auto` to the library/catalog card grids and code-split
+  `MediaDetailModal` via `React.lazy` for renderer performance. Reviewed the existing responsive
+  grid/breakpoint CSS and found it already adequate for the app's 960×640 minimum window size; did not
+  add new breakpoints. This pass was verified only via typecheck/build/lint/test and build-output
+  chunk sizes, not by visually running the app, since this environment has no tool that can drive an
+  actual Electron window.

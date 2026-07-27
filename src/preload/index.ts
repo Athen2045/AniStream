@@ -14,12 +14,10 @@ import type {
 
 const bridge: AniStreamBridge = {
   getAppInfo: () => ipcRenderer.invoke("app:get-info") as Promise<AppInfo>,
-  getAniListAuthState: () =>
-    ipcRenderer.invoke("anilist:auth-state") as Promise<AniListAuthState>,
+  getAniListAuthState: () => ipcRenderer.invoke("anilist:auth-state") as Promise<AniListAuthState>,
   startAniListLogin: () => ipcRenderer.invoke("anilist:login") as Promise<void>,
   logoutAniList: () => ipcRenderer.invoke("anilist:logout") as Promise<void>,
-  getAniListDashboard: () =>
-    ipcRenderer.invoke("anilist:dashboard") as Promise<AniListDashboard>,
+  getAniListDashboard: () => ipcRenderer.invoke("anilist:dashboard") as Promise<AniListDashboard>,
   searchAniList: (query: string, type: AniListMediaType) =>
     ipcRenderer.invoke("anilist:search", query, type) as Promise<AniListMedia[]>,
   browseAniList: (input: BrowseAniListInput) =>

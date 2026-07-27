@@ -40,4 +40,3 @@ export function openAppDatabase(path: string): AppDatabase {
     close: () => database.close(),
   };
 }
-

@@ -1,9 +1,7 @@
 import { BookOpen, Check, ExternalLink, Play, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type {
-  AniListCatalogMedia,
-  AniListMediaDetail,
-} from "../../shared/contracts";
+import type { AniListCatalogMedia, AniListMediaDetail } from "../../shared/contracts";
+import { safeBackgroundUrl } from "./safe-css-url";
 
 export function MediaDetailModal({
   media,
@@ -63,7 +61,7 @@ export function MediaDetailModal({
         <div
           className="detail-hero"
           style={{
-            backgroundImage: `linear-gradient(0deg, #181818 0%, transparent 55%), linear-gradient(90deg, rgba(0,0,0,.76), transparent 65%), url("${resolved.bannerUrl ?? resolved.coverUrl}")`,
+            backgroundImage: `linear-gradient(0deg, #181818 0%, transparent 55%), linear-gradient(90deg, rgba(0,0,0,.76), transparent 65%), ${safeBackgroundUrl(resolved.bannerUrl ?? resolved.coverUrl)}`,
           }}
         >
           <div>
@@ -71,7 +69,11 @@ export function MediaDetailModal({
             <h2>{resolved.title}</h2>
             <div className="detail-actions">
               <button className="play-action" type="button" onClick={() => setShowPlayback(true)}>
-                {resolved.type === "ANIME" ? <Play size={18} fill="currentColor" /> : <BookOpen size={18} />}
+                {resolved.type === "ANIME" ? (
+                  <Play size={18} fill="currentColor" />
+                ) : (
+                  <BookOpen size={18} />
+                )}
                 {resolved.type === "ANIME" ? "Watch" : "Read"}
               </button>
               <button
@@ -104,13 +106,19 @@ export function MediaDetailModal({
 
           {showPlayback ? (
             <section className="playback-stage">
-              <button type="button" onClick={() => setShowPlayback(false)}>Close player</button>
+              <button type="button" onClick={() => setShowPlayback(false)}>
+                Close player
+              </button>
               <div>
                 {resolved.type === "ANIME" ? <Play size={42} /> : <BookOpen size={42} />}
-                <h3>{resolved.type === "ANIME" ? "Video sources are not connected yet" : "MangaDex reader is the next adapter"}</h3>
+                <h3>
+                  {resolved.type === "ANIME"
+                    ? "Video sources are not connected yet"
+                    : "MangaDex reader is the next adapter"}
+                </h3>
                 <p>
-                  The native title → season/episode → hoster → variant contracts are installed.
-                  No scraped host or MangaDex chapter endpoint is silently hardcoded into this build.
+                  The native title → season/episode → hoster → variant contracts are installed. No
+                  scraped host or MangaDex chapter endpoint is silently hardcoded into this build.
                 </p>
               </div>
             </section>
@@ -119,22 +127,43 @@ export function MediaDetailModal({
           <div className="detail-overview">
             <div>
               <div className="detail-facts">
-                {resolved.averageScore ? <span className="match">{resolved.averageScore}% score</span> : null}
+                {resolved.averageScore ? (
+                  <span className="match">{resolved.averageScore}% score</span>
+                ) : null}
                 {resolved.seasonYear ? <span>{resolved.seasonYear}</span> : null}
                 <span>{formatLabel(resolved.format)}</span>
                 {resolved.totalProgress ? (
-                  <span>{resolved.totalProgress} {resolved.type === "ANIME" ? "episodes" : "chapters"}</span>
+                  <span>
+                    {resolved.totalProgress} {resolved.type === "ANIME" ? "episodes" : "chapters"}
+                  </span>
                 ) : null}
               </div>
               <p className="detail-description">{cleanDescription(resolved.description)}</p>
             </div>
             {detail ? (
               <dl>
-                <div><dt>Studios</dt><dd>{detail.studios.join(", ") || "—"}</dd></div>
-                <div><dt>Genres</dt><dd>{detail.genres.join(", ") || "—"}</dd></div>
-                <div><dt>Source</dt><dd>{formatLabel(detail.source)}</dd></div>
-                <div><dt>Status</dt><dd>{formatLabel(detail.status)}</dd></div>
-                {detail.duration ? <div><dt>Runtime</dt><dd>{detail.duration} min</dd></div> : null}
+                <div>
+                  <dt>Studios</dt>
+                  <dd>{detail.studios.join(", ") || "—"}</dd>
+                </div>
+                <div>
+                  <dt>Genres</dt>
+                  <dd>{detail.genres.join(", ") || "—"}</dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd>{formatLabel(detail.source)}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{formatLabel(detail.status)}</dd>
+                </div>
+                {detail.duration ? (
+                  <div>
+                    <dt>Runtime</dt>
+                    <dd>{detail.duration} min</dd>
+                  </div>
+                ) : null}
               </dl>
             ) : null}
           </div>
@@ -142,9 +171,7 @@ export function MediaDetailModal({
           {detail?.characters.length ? (
             <DetailPeople title="Cast" people={detail.characters} />
           ) : null}
-          {detail?.staff.length ? (
-            <DetailPeople title="Staff" people={detail.staff} />
-          ) : null}
+          {detail?.staff.length ? <DetailPeople title="Staff" people={detail.staff} /> : null}
 
           {detail?.relations.length ? (
             <section className="detail-section">
@@ -166,8 +193,14 @@ export function MediaDetailModal({
               <h3>Official links</h3>
               <div className="external-links">
                 {detail.externalLinks.slice(0, 8).map((link) => (
-                  <a key={`${link.site}-${link.url}`} href={link.url} target="_blank" rel="noreferrer">
-                    {link.site}<ExternalLink size={13} />
+                  <a
+                    key={`${link.site}-${link.url}`}
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {link.site}
+                    <ExternalLink size={13} />
                   </a>
                 ))}
               </div>
@@ -208,5 +241,9 @@ function formatLabel(value?: string): string {
 
 function cleanDescription(value?: string): string {
   if (!value) return "AniList does not currently provide a summary for this title.";
-  return value.replace(/<[^>]+>/g, " ").replace(/~!|!~/g, "").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/~!|!~/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }

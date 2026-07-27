@@ -8,12 +8,7 @@ export interface AppInfo {
 export type AniListMediaType = "ANIME" | "MANGA";
 
 export type AniListEntryStatus =
-  | "CURRENT"
-  | "PLANNING"
-  | "COMPLETED"
-  | "DROPPED"
-  | "PAUSED"
-  | "REPEATING";
+  "CURRENT" | "PLANNING" | "COMPLETED" | "DROPPED" | "PAUSED" | "REPEATING";
 
 export interface AniListProfile {
   id: number;

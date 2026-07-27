@@ -32,14 +32,14 @@ links. Video extraction and MangaDex chapter reading remain the next provider sl
 
 ## Tech stack
 
-| Choice | Why |
-| --- | --- |
-| Electron | Mature macOS desktop shell with file, media, IPC, custom-protocol OAuth, and native-module support. |
-| React + TypeScript | One typed language across the renderer, preload, and main process, with a productive solo-developer workflow. |
-| electron-vite | Fast development and a conventional main/preload/renderer build. |
-| SQLite via `better-sqlite3` | Simple local persistence for one user without a database server. |
-| TanStack Query | Planned request deduplication, caching, retries, and remote-state lifecycle management. |
-| Motion + Lucide | Accessible iconography and reduced-motion-aware search/pagination transitions. |
+| Choice                       | Why                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Electron                     | Mature macOS desktop shell with file, media, IPC, custom-protocol OAuth, and native-module support.                       |
+| React + TypeScript           | One typed language across the renderer, preload, and main process, with a productive solo-developer workflow.             |
+| electron-vite                | Fast development and a conventional main/preload/renderer build.                                                          |
+| SQLite via `better-sqlite3`  | Simple local persistence for one user without a database server.                                                          |
+| TanStack Query               | Planned request deduplication, caching, retries, and remote-state lifecycle management.                                   |
+| Motion + Lucide              | Accessible iconography and reduced-motion-aware search/pagination transitions.                                            |
 | Plain CSS with design tokens | Keeps the desktop UI direct while sharing the inspected Netflix reference palette and AniStream-specific tracker accents. |
 
 ## Local setup
@@ -99,14 +99,14 @@ AniStream/
 
 ## Environment variables
 
-| Variable | Service | Where to get it | Required |
-| --- | --- | --- | --- |
-| `MANGADEX_CLIENT_ID` | MangaDex personal client | MangaDex Settings → API clients | Required for MangaDex account sync |
-| `MANGADEX_CLIENT_SECRET` | MangaDex personal client | MangaDex API client settings | Required for MangaDex account sync |
-| `MANGADEX_USERNAME` | MangaDex personal client | Your MangaDex account | Required for current personal-client flow |
-| `MANGADEX_PASSWORD` | MangaDex personal client | Your MangaDex account | Required for current personal-client flow; move to Keychain before real use |
-| `VIDEO_HLS_SOURCE_ID` | Primary anime video adapter | Set to `animepahe` after the adapter is implemented | Required for HLS playback |
-| `VIDEO_TORRENT_INDEXER_IDS` | Torrent fallback adapters | Set to `animetosho,nyaa` after adapters are implemented | Required for torrent fallback |
+| Variable                    | Service                     | Where to get it                                         | Required                                                                    |
+| --------------------------- | --------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `MANGADEX_CLIENT_ID`        | MangaDex personal client    | MangaDex Settings → API clients                         | Required for MangaDex account sync                                          |
+| `MANGADEX_CLIENT_SECRET`    | MangaDex personal client    | MangaDex API client settings                            | Required for MangaDex account sync                                          |
+| `MANGADEX_USERNAME`         | MangaDex personal client    | Your MangaDex account                                   | Required for current personal-client flow                                   |
+| `MANGADEX_PASSWORD`         | MangaDex personal client    | Your MangaDex account                                   | Required for current personal-client flow; move to Keychain before real use |
+| `VIDEO_HLS_SOURCE_ID`       | Primary anime video adapter | Set to `animepahe` after the adapter is implemented     | Required for HLS playback                                                   |
+| `VIDEO_TORRENT_INDEXER_IDS` | Torrent fallback adapters   | Set to `animetosho,nyaa` after adapters are implemented | Required for torrent fallback                                               |
 
 Provider base URLs are application constants unless a development proxy is explicitly required. Secrets must never be exposed to renderer code or committed.
 

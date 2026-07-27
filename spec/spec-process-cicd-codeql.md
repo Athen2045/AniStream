@@ -29,28 +29,31 @@ graph TD
 
 ## Jobs & Dependencies
 
-| Job Name | Purpose | Dependencies | Execution Context |
-|----------|---------|--------------|-------------------|
-| analyze | Initialize and run CodeQL against the JS/TS source, publish results to code scanning | None (single job) | Linux hosted runner |
+| Job Name | Purpose                                                                              | Dependencies      | Execution Context   |
+| -------- | ------------------------------------------------------------------------------------ | ----------------- | ------------------- |
+| analyze  | Initialize and run CodeQL against the JS/TS source, publish results to code scanning | None (single job) | Linux hosted runner |
 
 ## Requirements Matrix
 
 ### Functional Requirements
-| ID | Requirement | Priority | Acceptance Criteria |
-|----|-------------|----------|-------------------|
-| REQ-001 | Every push/PR to `main` is scanned with CodeQL's extended security query pack | High | `analyze` job completes and uploads a SARIF result |
-| REQ-002 | Findings surface in the repository's Security > Code scanning view | High | `github/codeql-action/analyze` succeeds with `security-events: write` permission |
-| REQ-003 | A weekly scan runs even with no code changes, to pick up newly published CodeQL query updates | Medium | Scheduled trigger fires and completes independent of push/PR activity |
+
+| ID      | Requirement                                                                                   | Priority | Acceptance Criteria                                                              |
+| ------- | --------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
+| REQ-001 | Every push/PR to `main` is scanned with CodeQL's extended security query pack                 | High     | `analyze` job completes and uploads a SARIF result                               |
+| REQ-002 | Findings surface in the repository's Security > Code scanning view                            | High     | `github/codeql-action/analyze` succeeds with `security-events: write` permission |
+| REQ-003 | A weekly scan runs even with no code changes, to pick up newly published CodeQL query updates | Medium   | Scheduled trigger fires and completes independent of push/PR activity            |
 
 ### Security Requirements
-| ID | Requirement | Implementation Constraint |
-|----|-------------|---------------------------|
-| SEC-001 | Workflow requests only the permissions it needs | `contents: read`, `security-events: write` — no write access to code or releases |
+
+| ID      | Requirement                                                  | Implementation Constraint                                                             |
+| ------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| SEC-001 | Workflow requests only the permissions it needs              | `contents: read`, `security-events: write` — no write access to code or releases      |
 | SEC-002 | Analysis runs against untrusted PR code without executing it | CodeQL analyzes source statically; no app build/run step is included in this workflow |
 
 ### Performance Requirements
-| ID | Metric | Target | Measurement Method |
-|----|-------|--------|-------------------|
+
+| ID       | Metric   | Target           | Measurement Method          |
+| -------- | -------- | ---------------- | --------------------------- |
 | PERF-001 | Run time | Under 15 minutes | GitHub Actions run duration |
 
 ## Input/Output Contracts
@@ -60,7 +63,7 @@ graph TD
 ```yaml
 # Repository Triggers
 branches: [main]
-schedule: "30 4 * * 3"   # weekly, Wednesday 04:30 UTC
+schedule: "30 4 * * 3" # weekly, Wednesday 04:30 UTC
 languages: [javascript-typescript]
 queries: [security-extended]
 ```
@@ -69,13 +72,13 @@ queries: [security-extended]
 
 ```yaml
 # Job Outputs
-sarif_report: file   # Description: CodeQL findings, uploaded to GitHub code scanning
+sarif_report: file # Description: CodeQL findings, uploaded to GitHub code scanning
 ```
 
 ### Secrets & Variables
 
-| Type | Name | Purpose | Scope |
-|------|------|---------|-------|
+| Type  | Name                      | Purpose                               | Scope                               |
+| ----- | ------------------------- | ------------------------------------- | ----------------------------------- |
 | Token | `GITHUB_TOKEN` (implicit) | Upload SARIF results to code scanning | Workflow (`security-events: write`) |
 
 ## Execution Constraints
@@ -94,19 +97,19 @@ sarif_report: file   # Description: CodeQL findings, uploaded to GitHub code sca
 
 ## Error Handling Strategy
 
-| Error Type | Response | Recovery Action |
-|------------|----------|-----------------|
-| CodeQL initialization failure | Job fails at `init` step | Check CodeQL action version compatibility; re-run |
-| Analysis timeout | Job fails at `analyze` step | Increase `timeout-minutes` if the codebase has grown significantly |
-| SARIF upload failure | Job fails at `analyze` step (upload is part of the same action) | Confirm `security-events: write` permission is still granted |
+| Error Type                    | Response                                                        | Recovery Action                                                    |
+| ----------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| CodeQL initialization failure | Job fails at `init` step                                        | Check CodeQL action version compatibility; re-run                  |
+| Analysis timeout              | Job fails at `analyze` step                                     | Increase `timeout-minutes` if the codebase has grown significantly |
+| SARIF upload failure          | Job fails at `analyze` step (upload is part of the same action) | Confirm `security-events: write` permission is still granted       |
 
 ## Quality Gates
 
 ### Gate Definitions
 
-| Gate | Criteria | Bypass Conditions |
-|------|----------|-------------------|
-| Scan completion | `analyze` step exits 0 | None |
+| Gate             | Criteria                                                                                       | Bypass Conditions                                           |
+| ---------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Scan completion  | `analyze` step exits 0                                                                         | None                                                        |
 | Finding severity | Not currently configured to block merges — findings are advisory, reviewed in the Security tab | Revisit once findings history establishes a stable baseline |
 
 ## Monitoring & Observability
@@ -119,24 +122,24 @@ sarif_report: file   # Description: CodeQL findings, uploaded to GitHub code sca
 
 ### Alerting
 
-| Condition | Severity | Notification Target |
-|-----------|----------|-------------------|
-| New high/critical finding | High | GitHub code scanning alert, visible in the Security tab and PR checks |
-| Workflow failure | Medium | GitHub default notification to the maintainer |
+| Condition                 | Severity | Notification Target                                                   |
+| ------------------------- | -------- | --------------------------------------------------------------------- |
+| New high/critical finding | High     | GitHub code scanning alert, visible in the Security tab and PR checks |
+| Workflow failure          | Medium   | GitHub default notification to the maintainer                         |
 
 ## Integration Points
 
 ### External Systems
 
-| System | Integration Type | Data Exchange | SLA Requirements |
-|--------|------------------|---------------|------------------|
-| GitHub code scanning | SARIF ingestion | Static analysis findings | Best-effort; no internal SLA |
+| System               | Integration Type | Data Exchange            | SLA Requirements             |
+| -------------------- | ---------------- | ------------------------ | ---------------------------- |
+| GitHub code scanning | SARIF ingestion  | Static analysis findings | Best-effort; no internal SLA |
 
 ### Dependent Workflows
 
-| Workflow | Relationship | Trigger Mechanism |
-|----------|--------------|-------------------|
-| CI | Independent | Not chained — separate trigger |
+| Workflow | Relationship | Trigger Mechanism              |
+| -------- | ------------ | ------------------------------ |
+| CI       | Independent  | Not chained — separate trigger |
 
 ## Compliance & Governance
 
@@ -156,9 +159,9 @@ sarif_report: file   # Description: CodeQL findings, uploaded to GitHub code sca
 
 ### Scenario Matrix
 
-| Scenario | Expected Behavior | Validation Method |
-|----------|-------------------|-------------------|
-| PR from a fork | Analysis still runs read-only; findings post to the PR's checks | Confirm SARIF upload succeeds without write access to fork content |
+| Scenario                        | Expected Behavior                                                   | Validation Method                                                          |
+| ------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| PR from a fork                  | Analysis still runs read-only; findings post to the PR's checks     | Confirm SARIF upload succeeds without write access to fork content         |
 | No code changes in a given week | Scheduled run still executes, picking up updated CodeQL query packs | Compare scheduled run's finding count against the prior push-triggered run |
 
 ## Validation Criteria
@@ -184,9 +187,9 @@ sarif_report: file   # Description: CodeQL findings, uploaded to GitHub code sca
 
 ### Version History
 
-| Version | Date | Changes | Author |
-|---------|------|---------|--------|
-| 1.0 | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
+| Version | Date       | Changes               | Author                                  |
+| ------- | ---------- | --------------------- | --------------------------------------- |
+| 1.0     | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
 
 ## Related Specifications
 

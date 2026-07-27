@@ -31,31 +31,34 @@ graph TD
 
 ## Jobs & Dependencies
 
-| Job Name | Purpose | Dependencies | Execution Context |
-|----------|---------|--------------|-------------------|
-| verify | Install, typecheck, build, and run source/bundle contract checks | None (single job) | macOS arm64 hosted runner |
+| Job Name | Purpose                                                          | Dependencies      | Execution Context         |
+| -------- | ---------------------------------------------------------------- | ----------------- | ------------------------- |
+| verify   | Install, typecheck, build, and run source/bundle contract checks | None (single job) | macOS arm64 hosted runner |
 
 ## Requirements Matrix
 
 ### Functional Requirements
-| ID | Requirement | Priority | Acceptance Criteria |
-|----|-------------|----------|-------------------|
-| REQ-001 | Dependencies install cleanly, including native module rebuild for Electron's ABI | High | `npm ci` exits 0 |
-| REQ-002 | TypeScript strict-mode compiles with no errors across all three project seams | High | `npm run typecheck` exits 0 |
-| REQ-003 | electron-vite produces main/preload/renderer production bundles | High | `npm run build` exits 0 |
-| REQ-004 | Session-before-window ordering, browse/detail IPC, navbar UI, and provider contracts remain present in source | High | `npm run check:product-slice` exits 0 |
-| REQ-005 | Built main bundle uses authorization-code OAuth (not implicit) and retains Keychain lookup/storage code paths | High | `npm run check:anilist-oauth` exits 0 |
+
+| ID      | Requirement                                                                                                   | Priority | Acceptance Criteria                   |
+| ------- | ------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------- |
+| REQ-001 | Dependencies install cleanly, including native module rebuild for Electron's ABI                              | High     | `npm ci` exits 0                      |
+| REQ-002 | TypeScript strict-mode compiles with no errors across all three project seams                                 | High     | `npm run typecheck` exits 0           |
+| REQ-003 | electron-vite produces main/preload/renderer production bundles                                               | High     | `npm run build` exits 0               |
+| REQ-004 | Session-before-window ordering, browse/detail IPC, navbar UI, and provider contracts remain present in source | High     | `npm run check:product-slice` exits 0 |
+| REQ-005 | Built main bundle uses authorization-code OAuth (not implicit) and retains Keychain lookup/storage code paths | High     | `npm run check:anilist-oauth` exits 0 |
 
 ### Security Requirements
-| ID | Requirement | Implementation Constraint |
-|----|-------------|---------------------------|
-| SEC-001 | No workflow step interpolates untrusted event payload text (issue/PR body, commit message) into a shell command | All `run:` steps use fixed, repo-controlled commands only |
-| SEC-002 | Workflow requests no elevated permissions | Default read-only `GITHUB_TOKEN` permissions (no explicit `permissions:` block needed) |
+
+| ID      | Requirement                                                                                                     | Implementation Constraint                                                              |
+| ------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| SEC-001 | No workflow step interpolates untrusted event payload text (issue/PR body, commit message) into a shell command | All `run:` steps use fixed, repo-controlled commands only                              |
+| SEC-002 | Workflow requests no elevated permissions                                                                       | Default read-only `GITHUB_TOKEN` permissions (no explicit `permissions:` block needed) |
 
 ### Performance Requirements
-| ID | Metric | Target | Measurement Method |
-|----|-------|--------|-------------------|
-| PERF-001 | End-to-end run time | Under 10 minutes on a warm cache | GitHub Actions run duration |
+
+| ID       | Metric                                   | Target                                     | Measurement Method                  |
+| -------- | ---------------------------------------- | ------------------------------------------ | ----------------------------------- |
+| PERF-001 | End-to-end run time                      | Under 10 minutes on a warm cache           | GitHub Actions run duration         |
 | PERF-002 | Electron/electron-builder download reuse | Cache hit on unchanged `package-lock.json` | `actions/cache` hit/miss in job log |
 
 ## Input/Output Contracts
@@ -64,7 +67,7 @@ graph TD
 
 ```yaml
 # Repository Triggers
-paths: []            # not path-filtered; any change to main or a PR against it runs the full check
+paths: [] # not path-filtered; any change to main or a PR against it runs the full check
 branches: [main]
 ```
 
@@ -72,14 +75,14 @@ branches: [main]
 
 ```yaml
 # Job Outputs
-verify_status: pass|fail   # Description: single required status check consumed by branch protection
+verify_status: pass|fail # Description: single required status check consumed by branch protection
 ```
 
 ### Secrets & Variables
 
-| Type | Name | Purpose | Scope |
-|------|------|---------|-------|
-| — | — | This workflow reads no secrets and no repository variables | — |
+| Type | Name | Purpose                                                    | Scope |
+| ---- | ---- | ---------------------------------------------------------- | ----- |
+| —    | —    | This workflow reads no secrets and no repository variables | —     |
 
 ## Execution Constraints
 
@@ -97,21 +100,21 @@ verify_status: pass|fail   # Description: single required status check consumed 
 
 ## Error Handling Strategy
 
-| Error Type | Response | Recovery Action |
-|------------|----------|-----------------|
-| Dependency install failure | Job fails at `npm ci` step | Reproduce locally with `npm ci`; check Electron download/network or native rebuild toolchain |
-| Type error | Job fails at typecheck step | Fix reported TypeScript diagnostics; re-push |
-| Build failure | Job fails at build step | Inspect electron-vite error output; re-push |
-| Contract regression | Job fails at the relevant `check:*` script | Restore the missing fragment/ordering the script asserts, or update the script deliberately if the contract intentionally changed |
+| Error Type                 | Response                                   | Recovery Action                                                                                                                   |
+| -------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Dependency install failure | Job fails at `npm ci` step                 | Reproduce locally with `npm ci`; check Electron download/network or native rebuild toolchain                                      |
+| Type error                 | Job fails at typecheck step                | Fix reported TypeScript diagnostics; re-push                                                                                      |
+| Build failure              | Job fails at build step                    | Inspect electron-vite error output; re-push                                                                                       |
+| Contract regression        | Job fails at the relevant `check:*` script | Restore the missing fragment/ordering the script asserts, or update the script deliberately if the contract intentionally changed |
 
 ## Quality Gates
 
 ### Gate Definitions
 
-| Gate | Criteria | Bypass Conditions |
-|------|----------|-------------------|
-| Typecheck | Zero TypeScript diagnostics | None |
-| Build | electron-vite build completes | None |
+| Gate            | Criteria                      | Bypass Conditions                                                           |
+| --------------- | ----------------------------- | --------------------------------------------------------------------------- |
+| Typecheck       | Zero TypeScript diagnostics   | None                                                                        |
+| Build           | electron-vite build completes | None                                                                        |
 | Contract checks | Both `check:*` scripts exit 0 | None — these encode previously shipped regressions and must not be bypassed |
 
 ## Monitoring & Observability
@@ -124,23 +127,23 @@ verify_status: pass|fail   # Description: single required status check consumed 
 
 ### Alerting
 
-| Condition | Severity | Notification Target |
-|-----------|----------|-------------------|
-| Job failure on `main` | High | GitHub default commit-status/email notification to the maintainer |
+| Condition             | Severity | Notification Target                                               |
+| --------------------- | -------- | ----------------------------------------------------------------- |
+| Job failure on `main` | High     | GitHub default commit-status/email notification to the maintainer |
 
 ## Integration Points
 
 ### External Systems
 
-| System | Integration Type | Data Exchange | SLA Requirements |
-|--------|------------------|---------------|------------------|
-| npm registry | Package fetch | Dependency tarballs | Best-effort; no internal SLA |
+| System                 | Integration Type                        | Data Exchange         | SLA Requirements                        |
+| ---------------------- | --------------------------------------- | --------------------- | --------------------------------------- |
+| npm registry           | Package fetch                           | Dependency tarballs   | Best-effort; no internal SLA            |
 | Electron binary mirror | Native binary fetch (via `postinstall`) | Prebuilt Electron zip | Best-effort; cached via `actions/cache` |
 
 ### Dependent Workflows
 
-| Workflow | Relationship | Trigger Mechanism |
-|----------|--------------|-------------------|
+| Workflow            | Relationship                                                                  | Trigger Mechanism              |
+| ------------------- | ----------------------------------------------------------------------------- | ------------------------------ |
 | Package macOS build | Downstream; only runs on tag/dispatch, independent of this workflow's outcome | Not chained — separate trigger |
 
 ## Compliance & Governance
@@ -161,11 +164,11 @@ verify_status: pass|fail   # Description: single required status check consumed 
 
 ### Scenario Matrix
 
-| Scenario | Expected Behavior | Validation Method |
-|----------|-------------------|-------------------|
-| `package-lock.json` unchanged between runs | Electron/electron-builder cache restores, install is fast | Compare run duration to prior run |
-| A regression script is edited to assert a new contract | CI enforces the new contract on the next push | Review diff of `scripts/verify-*.mjs` in the PR |
-| PR from a fork | Workflow still runs read-only checks; no secrets available regardless | No secrets are referenced, so behavior is unaffected |
+| Scenario                                               | Expected Behavior                                                     | Validation Method                                    |
+| ------------------------------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------- |
+| `package-lock.json` unchanged between runs             | Electron/electron-builder cache restores, install is fast             | Compare run duration to prior run                    |
+| A regression script is edited to assert a new contract | CI enforces the new contract on the next push                         | Review diff of `scripts/verify-*.mjs` in the PR      |
+| PR from a fork                                         | Workflow still runs read-only checks; no secrets available regardless | No secrets are referenced, so behavior is unaffected |
 
 ## Validation Criteria
 
@@ -191,9 +194,9 @@ verify_status: pass|fail   # Description: single required status check consumed 
 
 ### Version History
 
-| Version | Date | Changes | Author |
-|---------|------|---------|--------|
-| 1.0 | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
+| Version | Date       | Changes               | Author                                  |
+| ------- | ---------- | --------------------- | --------------------------------------- |
+| 1.0     | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
 
 ## Related Specifications
 

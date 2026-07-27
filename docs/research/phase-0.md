@@ -103,4 +103,3 @@ Copy the separation pattern—catalog metadata, ID/episode mapping, and media so
 - No numeric Kitsu rate limit was found in the official docs reviewed.
 - The legal/ToS acceptability and maintenance cost of any specific anime streaming source remain product decisions.
 - No video source is selected for AniStream.
-

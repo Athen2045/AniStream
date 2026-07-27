@@ -33,31 +33,34 @@ graph TD
 
 ## Jobs & Dependencies
 
-| Job Name | Purpose | Dependencies | Execution Context |
-|----------|---------|--------------|-------------------|
-| package | Build the unsigned arm64 DMG, verify the packaged ASAR, publish the artifact | None (single job) | macOS arm64 hosted runner |
+| Job Name | Purpose                                                                      | Dependencies      | Execution Context         |
+| -------- | ---------------------------------------------------------------------------- | ----------------- | ------------------------- |
+| package  | Build the unsigned arm64 DMG, verify the packaged ASAR, publish the artifact | None (single job) | macOS arm64 hosted runner |
 
 ## Requirements Matrix
 
 ### Functional Requirements
-| ID | Requirement | Priority | Acceptance Criteria |
-|----|-------------|----------|-------------------|
-| REQ-001 | electron-builder produces an arm64-only `.dmg` under `dist/` | High | `npm run package:mac` exits 0 and `dist/*.dmg` exists |
-| REQ-002 | The packaged main process requests a preload path that actually exists inside `app.asar` | High | `check:packaged-preload` locates the requested path in the ASAR listing |
-| REQ-003 | The packaged preload is emitted as CommonJS (`.cjs`), never ESM `import` syntax | High | `check:packaged-preload` rejects any `import` statement in the extracted preload bundle |
-| REQ-004 | The DMG is retrievable after the run without needing local rebuild | Medium | Workflow artifact `AniStream-mac-arm64-dmg` is attached to the run |
-| REQ-005 | Tagged releases publish the DMG to the corresponding GitHub Release | Medium | `softprops/action-gh-release` attaches `dist/*.dmg` when the ref is a `v*` tag |
+
+| ID      | Requirement                                                                              | Priority | Acceptance Criteria                                                                     |
+| ------- | ---------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------- |
+| REQ-001 | electron-builder produces an arm64-only `.dmg` under `dist/`                             | High     | `npm run package:mac` exits 0 and `dist/*.dmg` exists                                   |
+| REQ-002 | The packaged main process requests a preload path that actually exists inside `app.asar` | High     | `check:packaged-preload` locates the requested path in the ASAR listing                 |
+| REQ-003 | The packaged preload is emitted as CommonJS (`.cjs`), never ESM `import` syntax          | High     | `check:packaged-preload` rejects any `import` statement in the extracted preload bundle |
+| REQ-004 | The DMG is retrievable after the run without needing local rebuild                       | Medium   | Workflow artifact `AniStream-mac-arm64-dmg` is attached to the run                      |
+| REQ-005 | Tagged releases publish the DMG to the corresponding GitHub Release                      | Medium   | `softprops/action-gh-release` attaches `dist/*.dmg` when the ref is a `v*` tag          |
 
 ### Security Requirements
-| ID | Requirement | Implementation Constraint |
-|----|-------------|---------------------------|
-| SEC-001 | Packaging never attempts local code-signing on the runner | `CSC_IDENTITY_AUTO_DISCOVERY=false` is set so electron-builder does not search the runner's keychain |
-| SEC-002 | The produced DMG is explicitly unsigned and this is not silently hidden | README/CONTEXT.md continue to state the package is unsigned; no signing secret is introduced by this workflow |
-| SEC-003 | Release publishing uses the default `GITHUB_TOKEN`, not a personal access token | `permissions: contents: write` at workflow level; no additional secret configured |
+
+| ID      | Requirement                                                                     | Implementation Constraint                                                                                     |
+| ------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| SEC-001 | Packaging never attempts local code-signing on the runner                       | `CSC_IDENTITY_AUTO_DISCOVERY=false` is set so electron-builder does not search the runner's keychain          |
+| SEC-002 | The produced DMG is explicitly unsigned and this is not silently hidden         | README/CONTEXT.md continue to state the package is unsigned; no signing secret is introduced by this workflow |
+| SEC-003 | Release publishing uses the default `GITHUB_TOKEN`, not a personal access token | `permissions: contents: write` at workflow level; no additional secret configured                             |
 
 ### Performance Requirements
-| ID | Metric | Target | Measurement Method |
-|----|-------|--------|-------------------|
+
+| ID       | Metric              | Target                           | Measurement Method          |
+| -------- | ------------------- | -------------------------------- | --------------------------- |
 | PERF-001 | End-to-end run time | Under 25 minutes on a warm cache | GitHub Actions run duration |
 
 ## Input/Output Contracts
@@ -67,23 +70,23 @@ graph TD
 ```yaml
 # Repository Triggers
 tags: ["v*.*.*"]
-workflow_dispatch: {}   # no inputs required
+workflow_dispatch: {} # no inputs required
 ```
 
 ### Outputs
 
 ```yaml
 # Job Outputs
-dmg_artifact: file        # Description: unsigned arm64 .dmg, retained 14 days
-github_release_asset: file  # Description: same .dmg attached to the tag's GitHub Release, tag-triggered runs only
+dmg_artifact: file # Description: unsigned arm64 .dmg, retained 14 days
+github_release_asset: file # Description: same .dmg attached to the tag's GitHub Release, tag-triggered runs only
 ```
 
 ### Secrets & Variables
 
-| Type | Name | Purpose | Scope |
-|------|------|---------|-------|
-| Token | `GITHUB_TOKEN` (implicit) | Publish the DMG to a GitHub Release | Workflow (`contents: write`) |
-| Variable | `CSC_IDENTITY_AUTO_DISCOVERY` | Disable local code-signing identity discovery | Step-level env |
+| Type     | Name                          | Purpose                                       | Scope                        |
+| -------- | ----------------------------- | --------------------------------------------- | ---------------------------- |
+| Token    | `GITHUB_TOKEN` (implicit)     | Publish the DMG to a GitHub Release           | Workflow (`contents: write`) |
+| Variable | `CSC_IDENTITY_AUTO_DISCOVERY` | Disable local code-signing identity discovery | Step-level env               |
 
 ## Execution Constraints
 
@@ -101,19 +104,19 @@ github_release_asset: file  # Description: same .dmg attached to the tag's GitHu
 
 ## Error Handling Strategy
 
-| Error Type | Response | Recovery Action |
-|------------|----------|-----------------|
-| Packaging failure | Job fails at `package:mac` step | Inspect electron-builder log; reproduce locally with `npm run package:mac` |
+| Error Type                        | Response                                                                              | Recovery Action                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Packaging failure                 | Job fails at `package:mac` step                                                       | Inspect electron-builder log; reproduce locally with `npm run package:mac`                                     |
 | Missing/incorrect preload in ASAR | Job fails at the verification step with the specific missing path or format violation | Fix `electron.vite.config.ts` preload output format or the `BrowserWindow` preload path in `src/main/index.ts` |
-| No DMG produced | Upload step fails fast (`if-no-files-found: error`) | Treat as a packaging failure; do not allow a silent empty release |
+| No DMG produced                   | Upload step fails fast (`if-no-files-found: error`)                                   | Treat as a packaging failure; do not allow a silent empty release                                              |
 
 ## Quality Gates
 
 ### Gate Definitions
 
-| Gate | Criteria | Bypass Conditions |
-|------|----------|-------------------|
-| Packaging | `electron-builder --mac --arm64` exits 0 | None |
+| Gate                          | Criteria                                                     | Bypass Conditions                                                   |
+| ----------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Packaging                     | `electron-builder --mac --arm64` exits 0                     | None                                                                |
 | Packaged-preload verification | `check:packaged-preload` exits 0 against the real `app.asar` | None — this is the exact regression this workflow exists to prevent |
 
 ## Monitoring & Observability
@@ -126,24 +129,24 @@ github_release_asset: file  # Description: same .dmg attached to the tag's GitHu
 
 ### Alerting
 
-| Condition | Severity | Notification Target |
-|-----------|----------|-------------------|
-| Tag-triggered run failure | High | GitHub default notification to the maintainer; a tagged release with no attached DMG is a visible gap |
+| Condition                 | Severity | Notification Target                                                                                   |
+| ------------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| Tag-triggered run failure | High     | GitHub default notification to the maintainer; a tagged release with no attached DMG is a visible gap |
 
 ## Integration Points
 
 ### External Systems
 
-| System | Integration Type | Data Exchange | SLA Requirements |
-|--------|------------------|---------------|------------------|
-| GitHub Releases | Asset attachment | Binary `.dmg` file | Best-effort; no internal SLA |
-| npm registry / Electron mirror | Package and binary fetch | Dependency tarballs, Electron zip | Best-effort |
+| System                         | Integration Type         | Data Exchange                     | SLA Requirements             |
+| ------------------------------ | ------------------------ | --------------------------------- | ---------------------------- |
+| GitHub Releases                | Asset attachment         | Binary `.dmg` file                | Best-effort; no internal SLA |
+| npm registry / Electron mirror | Package and binary fetch | Dependency tarballs, Electron zip | Best-effort                  |
 
 ### Dependent Workflows
 
-| Workflow | Relationship | Trigger Mechanism |
-|----------|--------------|-------------------|
-| CI | Independent; not a prerequisite gate today | Not chained — separate trigger |
+| Workflow | Relationship                               | Trigger Mechanism              |
+| -------- | ------------------------------------------ | ------------------------------ |
+| CI       | Independent; not a prerequisite gate today | Not chained — separate trigger |
 
 ## Compliance & Governance
 
@@ -163,11 +166,11 @@ github_release_asset: file  # Description: same .dmg attached to the tag's GitHu
 
 ### Scenario Matrix
 
-| Scenario | Expected Behavior | Validation Method |
-|----------|-------------------|-------------------|
-| Manual dispatch on a non-tag ref | DMG is built and uploaded as a workflow artifact only; no release step runs | `if: startsWith(github.ref, 'refs/tags/v')` guards the release step |
-| Tag pushed without a corresponding GitHub Release pre-created | `softprops/action-gh-release` creates the release if absent | Confirm release appears with the DMG attached and generated notes |
-| A future Developer ID certificate is added | This workflow must be revisited to import the certificate/keychain and remove the `CSC_IDENTITY_AUTO_DISCOVERY=false` override | Update this spec's Security Requirements before changing the workflow |
+| Scenario                                                      | Expected Behavior                                                                                                              | Validation Method                                                     |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| Manual dispatch on a non-tag ref                              | DMG is built and uploaded as a workflow artifact only; no release step runs                                                    | `if: startsWith(github.ref, 'refs/tags/v')` guards the release step   |
+| Tag pushed without a corresponding GitHub Release pre-created | `softprops/action-gh-release` creates the release if absent                                                                    | Confirm release appears with the DMG attached and generated notes     |
+| A future Developer ID certificate is added                    | This workflow must be revisited to import the certificate/keychain and remove the `CSC_IDENTITY_AUTO_DISCOVERY=false` override | Update this spec's Security Requirements before changing the workflow |
 
 ## Validation Criteria
 
@@ -192,9 +195,9 @@ github_release_asset: file  # Description: same .dmg attached to the tag's GitHu
 
 ### Version History
 
-| Version | Date | Changes | Author |
-|---------|------|---------|--------|
-| 1.0 | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
+| Version | Date       | Changes               | Author                                  |
+| ------- | ---------- | --------------------- | --------------------------------------- |
+| 1.0     | 2026-07-27 | Initial specification | AniStream maintainer (with Claude Code) |
 
 ## Related Specifications
 

@@ -7,6 +7,7 @@ import type {
   BrowseAniListInput,
 } from "../../shared/contracts";
 import { Pagination } from "./Pagination";
+import { safeBackgroundUrl } from "./safe-css-url";
 
 export function CatalogView({
   type,
@@ -23,7 +24,14 @@ export function CatalogView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
-  useEffect(() => setPage(1), [type, searchQuery, sort]);
+  // Reset to page 1 whenever the browse identity changes. Adjusting state directly
+  // during render (rather than in an effect) avoids an extra committed render pass --
+  // see https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
+  const [resetKey, setResetKey] = useState({ type, searchQuery, sort });
+  if (resetKey.type !== type || resetKey.searchQuery !== searchQuery || resetKey.sort !== sort) {
+    setResetKey({ type, searchQuery, sort });
+    setPage(1);
+  }
 
   useEffect(() => {
     let active = true;
@@ -63,12 +71,16 @@ export function CatalogView({
         <header
           className="catalog-hero"
           style={{
-            backgroundImage: `linear-gradient(90deg, #141414 5%, rgba(20,20,20,.88) 42%, rgba(20,20,20,.18) 76%), linear-gradient(0deg, #141414 0%, transparent 45%), url("${hero.bannerUrl ?? hero.coverUrl}")`,
+            backgroundImage: `linear-gradient(90deg, #141414 5%, rgba(20,20,20,.88) 42%, rgba(20,20,20,.18) 76%), linear-gradient(0deg, #141414 0%, transparent 45%), ${safeBackgroundUrl(hero.bannerUrl ?? hero.coverUrl)}`,
           }}
         >
           <div className="catalog-hero-copy">
             <p className="catalog-kicker">
-              {searchQuery ? `Results for “${searchQuery}”` : type === "ANIME" ? "Now trending" : "Featured reading"}
+              {searchQuery
+                ? `Results for “${searchQuery}”`
+                : type === "ANIME"
+                  ? "Now trending"
+                  : "Featured reading"}
             </p>
             <h1>{hero.title}</h1>
             <div className="catalog-facts">
@@ -76,10 +88,15 @@ export function CatalogView({
               {hero.seasonYear ? <span>{hero.seasonYear}</span> : null}
               <span>{formatLabel(hero.format)}</span>
               {hero.totalProgress ? (
-                <span>{hero.totalProgress} {type === "ANIME" ? "episodes" : "chapters"}</span>
+                <span>
+                  {hero.totalProgress} {type === "ANIME" ? "episodes" : "chapters"}
+                </span>
               ) : null}
             </div>
-            <p>{cleanDescription(hero.description) || `Discover ${hero.title} and keep your progress synced with AniList.`}</p>
+            <p>
+              {cleanDescription(hero.description) ||
+                `Discover ${hero.title} and keep your progress synced with AniList.`}
+            </p>
             <div className="hero-actions">
               <button className="play-action" type="button" onClick={() => onSelect(hero)}>
                 {type === "ANIME" ? <Play size={20} fill="currentColor" /> : <Search size={20} />}
@@ -113,7 +130,9 @@ export function CatalogView({
         </div>
 
         {error ? <p className="error-banner">{error}</p> : null}
-        {loading && !catalog ? <div className="catalog-loading">Loading AniList catalog…</div> : null}
+        {loading && !catalog ? (
+          <div className="catalog-loading">Loading AniList catalog…</div>
+        ) : null}
 
         {shelf.length ? (
           <section className="media-shelf" aria-label={`Trending ${mediaName}`}>
@@ -132,12 +151,21 @@ export function CatalogView({
 
         <div className="browse-grid">
           {(grid.length ? grid : items).map((media) => (
-            <button type="button" className="browse-card" key={media.id} onClick={() => onSelect(media)}>
+            <button
+              type="button"
+              className="browse-card"
+              key={media.id}
+              onClick={() => onSelect(media)}
+            >
               <span className="browse-art">
                 <img src={media.coverUrl} alt="" loading="lazy" />
                 <span className="browse-hover">
-                  <span className="round-action"><Play size={16} fill="currentColor" /></span>
-                  <span className="round-action"><Plus size={16} /></span>
+                  <span className="round-action">
+                    <Play size={16} fill="currentColor" />
+                  </span>
+                  <span className="round-action">
+                    <Plus size={16} />
+                  </span>
                 </span>
               </span>
               <strong>{media.title}</strong>

@@ -20,11 +20,10 @@ export function GlobalSearch({
 
   useEffect(() => {
     const normalized = query.trim();
-    if (normalized.length < 2) {
-      setResults([]);
-      setLoading(false);
-      return;
-    }
+    // A too-short query never renders the results popover (see the JSX below), so
+    // there is nothing to reset here -- avoid calling setState synchronously in the
+    // effect body for a branch with no observable effect.
+    if (normalized.length < 2) return;
 
     const currentRequest = ++requestId.current;
     setLoading(true);
@@ -120,7 +119,9 @@ export function GlobalSearch({
                 <img src={media.coverUrl} alt="" />
                 <span>
                   <strong>{media.title}</strong>
-                  <small>{media.type === "ANIME" ? "Anime" : "Manga"} · {formatLabel(media.format)}</small>
+                  <small>
+                    {media.type === "ANIME" ? "Anime" : "Manga"} · {formatLabel(media.format)}
+                  </small>
                 </span>
               </button>
             ))}

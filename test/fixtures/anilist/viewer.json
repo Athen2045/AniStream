@@ -1,0 +1,12 @@
+{
+  "id": 123456,
+  "name": "Athen101",
+  "about": "<p>Anime fan.</p>",
+  "avatar": { "large": "https://s4.anilist.co/file/anilistcdn/user/avatar/large/123456.png" },
+  "bannerImage": "https://s4.anilist.co/file/anilistcdn/user/banner/123456.jpg",
+  "siteUrl": "https://anilist.co/user/123456",
+  "statistics": {
+    "anime": { "count": 210, "episodesWatched": 5312, "minutesWatched": 127488 },
+    "manga": { "count": 48, "chaptersRead": 3021, "volumesRead": 214 }
+  }
+}

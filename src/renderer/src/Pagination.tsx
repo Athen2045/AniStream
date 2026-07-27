@@ -40,10 +40,7 @@ export function Pagination({
 }): React.JSX.Element {
   const reducedMotion = useReducedMotion();
   const id = useId();
-  const items = useMemo(
-    () => buildPageRange(page, Math.max(page, totalPages)),
-    [page, totalPages],
-  );
+  const items = useMemo(() => buildPageRange(page, Math.max(page, totalPages)), [page, totalPages]);
 
   return (
     <nav className="pagination" aria-label="Catalog pages">

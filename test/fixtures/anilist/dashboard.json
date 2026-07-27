@@ -1,0 +1,49 @@
+{
+  "anime": {
+    "lists": [
+      {
+        "name": "Watching",
+        "isCustomList": false,
+        "entries": [
+          {
+            "id": 1001,
+            "status": "CURRENT",
+            "score": 8.5,
+            "progress": 1122,
+            "progressVolumes": null,
+            "repeat": 0,
+            "notes": null,
+            "updatedAt": 1893456000,
+            "media": {
+              "id": 21,
+              "type": "ANIME",
+              "title": {
+                "userPreferred": "ONE PIECE",
+                "english": "One Piece",
+                "romaji": "One Piece"
+              },
+              "coverImage": {
+                "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/b21-large.jpg"
+              },
+              "format": "TV",
+              "status": "RELEASING",
+              "episodes": null,
+              "chapters": null,
+              "volumes": null,
+              "siteUrl": "https://anilist.co/anime/21"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "manga": {
+    "lists": [
+      {
+        "name": "Reading",
+        "isCustomList": false,
+        "entries": []
+      }
+    ]
+  }
+}

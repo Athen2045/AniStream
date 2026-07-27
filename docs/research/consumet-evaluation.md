@@ -19,14 +19,14 @@ AniStream should retain AniList as its primary metadata/tracker source and Manga
 
 ## Source availability
 
-| Source checked on 2026-07-27 | Result |
-| --- | --- |
-| [Consumet documentation](https://docs.consumet.org/) | Reachable with a normal HTTP client. The site says its documentation is undergoing reconstruction. The research browser received HTTP 403, so individual pages were checked with read-only HTTP requests instead. |
-| [Consumet API repository](https://github.com/consumet/api.consumet.org) | GitHub's cached web view was readable, but a fresh clone returned HTTP 403 with “Repository unavailable due to DMCA takedown.” |
-| [Consumet TypeScript library](https://github.com/consumet/consumet.ts) / historical alias [`consumet/extensions`](https://github.com/consumet/extensions) | A fresh clone returned the same DMCA response. Some cached GitHub page content remained visible. |
-| [`@consumet/extensions` on npm](https://www.npmjs.com/package/@consumet/extensions) | Registry metadata and version `1.8.8` remained available. The package tarball installed successfully in an isolated temporary directory. |
-| [GitHub DMCA notice dated 2026-03-12](https://github.com/github/dmca/blob/master/2026/03/2026-03-12-dramacool.md) | Reachable. It names `consumet/consumet.ts` and `consumet/api.consumet.org`; GitHub's clone response links directly to this notice. |
-| [Consumet provider-status repository](https://github.com/consumet/providers-status) | Cached repository page was reachable, but it did not provide sufficiently current evidence to treat individual provider status flags as verified. |
+| Source checked on 2026-07-27                                                                                                                              | Result                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Consumet documentation](https://docs.consumet.org/)                                                                                                      | Reachable with a normal HTTP client. The site says its documentation is undergoing reconstruction. The research browser received HTTP 403, so individual pages were checked with read-only HTTP requests instead. |
+| [Consumet API repository](https://github.com/consumet/api.consumet.org)                                                                                   | GitHub's cached web view was readable, but a fresh clone returned HTTP 403 with “Repository unavailable due to DMCA takedown.”                                                                                    |
+| [Consumet TypeScript library](https://github.com/consumet/consumet.ts) / historical alias [`consumet/extensions`](https://github.com/consumet/extensions) | A fresh clone returned the same DMCA response. Some cached GitHub page content remained visible.                                                                                                                  |
+| [`@consumet/extensions` on npm](https://www.npmjs.com/package/@consumet/extensions)                                                                       | Registry metadata and version `1.8.8` remained available. The package tarball installed successfully in an isolated temporary directory.                                                                          |
+| [GitHub DMCA notice dated 2026-03-12](https://github.com/github/dmca/blob/master/2026/03/2026-03-12-dramacool.md)                                         | Reachable. It names `consumet/consumet.ts` and `consumet/api.consumet.org`; GitHub's clone response links directly to this notice.                                                                                |
+| [Consumet provider-status repository](https://github.com/consumet/providers-status)                                                                       | Cached repository page was reachable, but it did not provide sufficiently current evidence to treat individual provider status flags as verified.                                                                 |
 
 ## Verified facts
 
@@ -106,14 +106,14 @@ Technically, the Node library's JavaScript-only runtime can execute in Electron'
 
 ## Adopt / adapt / reject matrix
 
-| Candidate use | Decision | Reason |
-| --- | --- | --- |
-| Primary anime/manga database | **Reject** | It is a scraper/extractor collection, not a reliable source of record; AniList and MangaDex already own these roles. |
-| Public REST API | **Reject** | Officially withdrawn; live URL is unusable. |
-| Self-hosted REST API | **Reject** | Core repository unavailable, dependency chain broken, unnecessary local-service complexity. |
-| `@consumet/extensions` package in production | **Reject for now** | Source unavailable, maintenance uncertain, license conflict unresolved, provider functionality unverified. |
-| Consumet provider architecture | **Adapt** | Its replaceable parser/provider concept aligns with AniStream's approved modular-source design. Reimplement the small interface independently. |
-| Consumet provider list | **Adapt as research leads only** | Useful discovery index, but every target requires current independent verification and user approval. |
+| Candidate use                                | Decision                         | Reason                                                                                                                                         |
+| -------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Primary anime/manga database                 | **Reject**                       | It is a scraper/extractor collection, not a reliable source of record; AniList and MangaDex already own these roles.                           |
+| Public REST API                              | **Reject**                       | Officially withdrawn; live URL is unusable.                                                                                                    |
+| Self-hosted REST API                         | **Reject**                       | Core repository unavailable, dependency chain broken, unnecessary local-service complexity.                                                    |
+| `@consumet/extensions` package in production | **Reject for now**               | Source unavailable, maintenance uncertain, license conflict unresolved, provider functionality unverified.                                     |
+| Consumet provider architecture               | **Adapt**                        | Its replaceable parser/provider concept aligns with AniStream's approved modular-source design. Reimplement the small interface independently. |
+| Consumet provider list                       | **Adapt as research leads only** | Useful discovery index, but every target requires current independent verification and user approval.                                          |
 
 ## Final recommendation
 

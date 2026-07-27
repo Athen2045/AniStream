@@ -111,24 +111,18 @@ app.whenReady().then(async () => {
     if (!aniList) throw new Error("AniList is not ready.");
     return aniList.browseMedia(input);
   });
-  ipcMain.handle(
-    "anilist:media-detail",
-    async (_event, id: number, type: AniListMediaType) => {
-      if (!aniList) throw new Error("AniList is not ready.");
-      return aniList.getMediaDetail(id, type);
-    },
-  );
+  ipcMain.handle("anilist:media-detail", async (_event, id: number, type: AniListMediaType) => {
+    if (!aniList) throw new Error("AniList is not ready.");
+    return aniList.getMediaDetail(id, type);
+  });
   ipcMain.handle("anilist:add-entry", async (_event, mediaId: number) => {
     if (!aniList) throw new Error("AniList is not ready.");
     await aniList.addEntry(mediaId);
   });
-  ipcMain.handle(
-    "anilist:update-entry",
-    async (_event, input: UpdateAniListEntryInput) => {
-      if (!aniList) throw new Error("AniList is not ready.");
-      await aniList.updateEntry(input);
-    },
-  );
+  ipcMain.handle("anilist:update-entry", async (_event, input: UpdateAniListEntryInput) => {
+    if (!aniList) throw new Error("AniList is not ready.");
+    await aniList.updateEntry(input);
+  });
   ipcMain.handle("anilist:delete-entry", async (_event, id: number) => {
     if (!aniList) throw new Error("AniList is not ready.");
     await aniList.deleteEntry(id);

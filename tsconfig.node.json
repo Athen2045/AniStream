@@ -7,6 +7,8 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "types": ["node", "electron"]
   },
   "include": [
@@ -16,4 +18,3 @@
     "src/shared/**/*.ts"
   ]
 }
-

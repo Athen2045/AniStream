@@ -1,5 +1,5 @@
 import { RefreshCw, UserRound } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AniListAuthState,
   AniListCatalogMedia,
@@ -12,7 +12,13 @@ import type {
 } from "../../shared/contracts";
 import { CatalogView } from "./CatalogView";
 import { GlobalSearch } from "./GlobalSearch";
-import { MediaDetailModal } from "./MediaDetailModal";
+import { safeBackgroundUrl } from "./safe-css-url";
+
+// Only needed once a title is opened, never on initial launch -- load it as its own
+// chunk instead of paying its parse/compile cost during startup.
+const MediaDetailModal = lazy(() =>
+  import("./MediaDetailModal").then((module) => ({ default: module.MediaDetailModal })),
+);
 
 const ENTRY_STATUSES: Array<{ value: AniListEntryStatus; label: string }> = [
   { value: "CURRENT", label: "Current" },
@@ -49,7 +55,12 @@ export function App(): React.JSX.Element {
       setDashboard(next);
       setSelectedGroup((current) => current || next.animeLists[0]?.name || "");
     } catch (reason) {
-      setError(messageFrom(reason, "Unable to refresh your AniList lists. Your saved login remains active."));
+      setError(
+        messageFrom(
+          reason,
+          "Unable to refresh your AniList lists. Your saved login remains active.",
+        ),
+      );
     } finally {
       setSyncing(false);
       setLoading(false);
@@ -73,10 +84,13 @@ export function App(): React.JSX.Element {
       }
     };
 
-    void window.anistream.getAniListAuthState().then(applyAuthState).catch((reason: unknown) => {
-      setError(messageFrom(reason, "Unable to read the saved AniList session."));
-      setLoading(false);
-    });
+    void window.anistream
+      .getAniListAuthState()
+      .then(applyAuthState)
+      .catch((reason: unknown) => {
+        setError(messageFrom(reason, "Unable to read the saved AniList session."));
+        setLoading(false);
+      });
     const unsubscribe = window.anistream.onAniListAuthChanged(applyAuthState);
     return () => {
       mounted = false;
@@ -208,9 +222,27 @@ export function App(): React.JSX.Element {
           <span>A</span>AniStream
         </button>
         <div className="nav-links" aria-label="Main navigation">
-          <button className={view === "ANIME" ? "active" : ""} type="button" onClick={() => openCatalog("ANIME")}>Anime</button>
-          <button className={view === "MANGA" ? "active" : ""} type="button" onClick={() => openCatalog("MANGA")}>Manga</button>
-          <button className={view === "PROFILE" ? "active" : ""} type="button" onClick={() => setView("PROFILE")}>My lists</button>
+          <button
+            className={view === "ANIME" ? "active" : ""}
+            type="button"
+            onClick={() => openCatalog("ANIME")}
+          >
+            Anime
+          </button>
+          <button
+            className={view === "MANGA" ? "active" : ""}
+            type="button"
+            onClick={() => openCatalog("MANGA")}
+          >
+            Manga
+          </button>
+          <button
+            className={view === "PROFILE" ? "active" : ""}
+            type="button"
+            onClick={() => setView("PROFILE")}
+          >
+            My lists
+          </button>
         </div>
         <GlobalSearch
           onSelect={setSelectedMedia}
@@ -223,8 +255,17 @@ export function App(): React.JSX.Element {
           <button type="button" aria-label="Refresh AniList" onClick={() => void loadDashboard()}>
             <RefreshCw size={17} className={syncing ? "spinning" : ""} />
           </button>
-          <button className={`avatar-button ${view === "PROFILE" ? "active" : ""}`} type="button" onClick={() => setView("PROFILE")} aria-label="Open profile">
-            {dashboard.profile.avatarUrl ? <img src={dashboard.profile.avatarUrl} alt="" /> : <UserRound size={17} />}
+          <button
+            className={`avatar-button ${view === "PROFILE" ? "active" : ""}`}
+            type="button"
+            onClick={() => setView("PROFILE")}
+            aria-label="Open profile"
+          >
+            {dashboard.profile.avatarUrl ? (
+              <img src={dashboard.profile.avatarUrl} alt="" />
+            ) : (
+              <UserRound size={17} />
+            )}
           </button>
         </div>
       </nav>
@@ -262,7 +303,13 @@ export function App(): React.JSX.Element {
       )}
 
       {selectedMedia ? (
-        <MediaDetailModal media={selectedMedia} onClose={() => setSelectedMedia(undefined)} onAdded={loadDashboard} />
+        <Suspense fallback={null}>
+          <MediaDetailModal
+            media={selectedMedia}
+            onClose={() => setSelectedMedia(undefined)}
+            onAdded={loadDashboard}
+          />
+        </Suspense>
       ) : null}
     </main>
   );
@@ -332,14 +379,26 @@ function ProfileView({
     <>
       <header
         className="profile-hero"
-        style={dashboard.profile.bannerUrl ? { backgroundImage: `linear-gradient(90deg, #0b0d13 8%, rgba(11,13,19,.82) 50%, rgba(11,13,19,.35)), url("${dashboard.profile.bannerUrl}")` } : undefined}
+        style={
+          dashboard.profile.bannerUrl
+            ? {
+                backgroundImage: `linear-gradient(90deg, #0b0d13 8%, rgba(11,13,19,.82) 50%, rgba(11,13,19,.35)), ${safeBackgroundUrl(dashboard.profile.bannerUrl)}`,
+              }
+            : undefined
+        }
       >
         <div className="profile-summary">
-          <img className="profile-avatar" src={dashboard.profile.avatarUrl} alt={`${dashboard.profile.name}'s avatar`} />
+          <img
+            className="profile-avatar"
+            src={dashboard.profile.avatarUrl}
+            alt={`${dashboard.profile.name}'s avatar`}
+          />
           <div>
             <p className="eyebrow">AniList profile</p>
             <h1>{dashboard.profile.name}</h1>
-            {dashboard.profile.about ? <p className="profile-about">{stripMarkup(dashboard.profile.about)}</p> : null}
+            {dashboard.profile.about ? (
+              <p className="profile-about">{stripMarkup(dashboard.profile.about)}</p>
+            ) : null}
           </div>
         </div>
         <div className="profile-stats" aria-label="AniList statistics">
@@ -354,23 +413,58 @@ function ProfileView({
 
       <section className="library-shell">
         <div className="profile-session-actions">
-          <button className="quiet-button" type="button" onClick={() => void onRefresh()}>{syncing ? "Syncing…" : "Refresh AniList"}</button>
-          <button className="quiet-button danger" type="button" onClick={() => void onLogout()}>Log out</button>
+          <button className="quiet-button" type="button" onClick={() => void onRefresh()}>
+            {syncing ? "Syncing…" : "Refresh AniList"}
+          </button>
+          <button className="quiet-button danger" type="button" onClick={() => void onLogout()}>
+            Log out
+          </button>
         </div>
         <div className="library-toolbar">
           <div className="media-tabs" role="tablist" aria-label="Library type">
-            <button className={mediaType === "ANIME" ? "active" : ""} type="button" onClick={() => onSwitchType("ANIME")}>Anime list</button>
-            <button className={mediaType === "MANGA" ? "active" : ""} type="button" onClick={() => onSwitchType("MANGA")}>Manga list</button>
+            <button
+              className={mediaType === "ANIME" ? "active" : ""}
+              type="button"
+              onClick={() => onSwitchType("ANIME")}
+            >
+              Anime list
+            </button>
+            <button
+              className={mediaType === "MANGA" ? "active" : ""}
+              type="button"
+              onClick={() => onSwitchType("MANGA")}
+            >
+              Manga list
+            </button>
           </div>
-          <input className="library-search" value={listQuery} onChange={(event) => onListQuery(event.target.value)} placeholder={`Filter ${mediaType === "ANIME" ? "anime" : "manga"}…`} />
-          <button className="add-title-button" type="button" onClick={onToggleAdding}>{adding ? "Close search" : "Add title"}</button>
+          <input
+            className="library-search"
+            value={listQuery}
+            onChange={(event) => onListQuery(event.target.value)}
+            placeholder={`Filter ${mediaType === "ANIME" ? "anime" : "manga"}…`}
+          />
+          <button className="add-title-button" type="button" onClick={onToggleAdding}>
+            {adding ? "Close search" : "Add title"}
+          </button>
         </div>
 
         {adding ? (
           <section className="catalog-search">
-            <form onSubmit={(event) => { event.preventDefault(); void onCatalogSearch(); }}>
-              <input value={catalogQuery} onChange={(event) => onCatalogQuery(event.target.value)} placeholder={`Search AniList ${mediaType === "ANIME" ? "anime" : "manga"}…`} autoFocus />
-              <button type="submit" disabled={catalogSearching || catalogQuery.trim().length < 2}>{catalogSearching ? "Searching…" : "Search AniList"}</button>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void onCatalogSearch();
+              }}
+            >
+              <input
+                value={catalogQuery}
+                onChange={(event) => onCatalogQuery(event.target.value)}
+                placeholder={`Search AniList ${mediaType === "ANIME" ? "anime" : "manga"}…`}
+                autoFocus
+              />
+              <button type="submit" disabled={catalogSearching || catalogQuery.trim().length < 2}>
+                {catalogSearching ? "Searching…" : "Search AniList"}
+              </button>
             </form>
             <div className="catalog-results">
               {catalogResults.map((media) => {
@@ -378,8 +472,17 @@ function ProfileView({
                 return (
                   <article key={media.id}>
                     <img src={media.coverUrl} alt="" />
-                    <div><span>{formatMediaFormat(media.format)}</span><strong>{media.title}</strong></div>
-                    <button type="button" disabled={added || addingMediaId === media.id} onClick={() => void onAdd(media)}>{added ? "In list" : addingMediaId === media.id ? "Adding…" : "Add"}</button>
+                    <div>
+                      <span>{formatMediaFormat(media.format)}</span>
+                      <strong>{media.title}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={added || addingMediaId === media.id}
+                      onClick={() => void onAdd(media)}
+                    >
+                      {added ? "In list" : addingMediaId === media.id ? "Adding…" : "Add"}
+                    </button>
                   </article>
                 );
               })}
@@ -389,20 +492,36 @@ function ProfileView({
 
         <div className="group-tabs" role="tablist" aria-label="AniList groups">
           {groups.map((group) => (
-            <button className={group.name === activeGroupName ? "active" : ""} type="button" key={`${mediaType}-${group.name}`} onClick={() => onSelectGroup(group.name)}>
-              {group.name}<span>{group.entries.length}</span>
+            <button
+              className={group.name === activeGroupName ? "active" : ""}
+              type="button"
+              key={`${mediaType}-${group.name}`}
+              onClick={() => onSelectGroup(group.name)}
+            >
+              {group.name}
+              <span>{group.entries.length}</span>
             </button>
           ))}
         </div>
         {error ? <p className="error-banner">{error}</p> : null}
         <div className="library-heading">
-          <div><p className="eyebrow">AniList library</p><h2>{activeGroupName ?? (selectedGroup || "No list")}</h2></div>
+          <div>
+            <p className="eyebrow">AniList library</p>
+            <h2>{activeGroupName ?? (selectedGroup || "No list")}</h2>
+          </div>
           <span>{visibleEntries.length} titles</span>
         </div>
         <div className="media-grid">
-          {visibleEntries.map((entry) => <MediaCard entry={entry} key={entry.id} onSave={onSave} onDelete={onDelete} />)}
+          {visibleEntries.map((entry) => (
+            <MediaCard entry={entry} key={entry.id} onSave={onSave} onDelete={onDelete} />
+          ))}
         </div>
-        {!visibleEntries.length ? <div className="empty-state"><h3>Nothing here yet</h3><p>{listQuery ? "Try another filter." : "This AniList group has no titles."}</p></div> : null}
+        {!visibleEntries.length ? (
+          <div className="empty-state">
+            <h3>Nothing here yet</h3>
+            <p>{listQuery ? "Try another filter." : "This AniList group has no titles."}</p>
+          </div>
+        ) : null}
       </section>
     </>
   );
@@ -428,7 +547,13 @@ function MediaCard({
   async function save(): Promise<void> {
     setSaving(true);
     try {
-      await onSave({ id: entry.id, status, progress: Math.max(0, progress), score: Math.min(10, Math.max(0, score)), notes });
+      await onSave({
+        id: entry.id,
+        status,
+        progress: Math.max(0, progress),
+        score: Math.min(10, Math.max(0, score)),
+        notes,
+      });
       setEditing(false);
     } finally {
       setSaving(false);
@@ -439,29 +564,90 @@ function MediaCard({
     <article className="media-card">
       <div className="cover-wrap">
         <img src={entry.media.coverUrl} alt="" loading="lazy" />
-        <button className="progress-button" type="button" disabled={saving} onClick={() => {
-          const next = Math.min(entry.media.totalProgress ?? Number.MAX_SAFE_INTEGER, progress + 1);
-          setProgress(next);
-          void onSave({ id: entry.id, progress: next });
-        }}>+1</button>
+        <button
+          className="progress-button"
+          type="button"
+          disabled={saving}
+          onClick={() => {
+            const next = Math.min(
+              entry.media.totalProgress ?? Number.MAX_SAFE_INTEGER,
+              progress + 1,
+            );
+            setProgress(next);
+            void onSave({ id: entry.id, progress: next });
+          }}
+        >
+          +1
+        </button>
       </div>
       <div className="media-card-body">
         <p className="media-meta">{formatMediaFormat(entry.media.format)}</p>
         <h3 title={entry.media.title}>{entry.media.title}</h3>
-        <p className="progress-copy">{progress}{entry.media.totalProgress ? ` / ${entry.media.totalProgress}` : ""} {progressLabel}</p>
-        <div className="score-row"><span>{statusLabel(status)}</span><strong>{score ? `${score}/10` : "—"}</strong></div>
-        <button className="edit-button" type="button" onClick={() => setEditing((value) => !value)}>{editing ? "Close editor" : "Edit entry"}</button>
+        <p className="progress-copy">
+          {progress}
+          {entry.media.totalProgress ? ` / ${entry.media.totalProgress}` : ""} {progressLabel}
+        </p>
+        <div className="score-row">
+          <span>{statusLabel(status)}</span>
+          <strong>{score ? `${score}/10` : "—"}</strong>
+        </div>
+        <button className="edit-button" type="button" onClick={() => setEditing((value) => !value)}>
+          {editing ? "Close editor" : "Edit entry"}
+        </button>
         {editing ? (
           <div className="entry-editor">
-            <label>Status<select value={status} onChange={(event) => setStatus(event.target.value as AniListEntryStatus)}>{ENTRY_STATUSES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <label>
+              Status
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value as AniListEntryStatus)}
+              >
+                {ENTRY_STATUSES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="editor-row">
-              <label>Progress<input type="number" min="0" max={entry.media.totalProgress} value={progress} onChange={(event) => setProgress(Number(event.target.value))} /></label>
-              <label>Score<input type="number" min="0" max="10" step="0.5" value={score} onChange={(event) => setScore(Number(event.target.value))} /></label>
+              <label>
+                Progress
+                <input
+                  type="number"
+                  min="0"
+                  max={entry.media.totalProgress}
+                  value={progress}
+                  onChange={(event) => setProgress(Number(event.target.value))}
+                />
+              </label>
+              <label>
+                Score
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  value={score}
+                  onChange={(event) => setScore(Number(event.target.value))}
+                />
+              </label>
             </div>
-            <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} /></label>
+            <label>
+              Notes
+              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} />
+            </label>
             <div className="editor-actions">
-              <button className="save-button" type="button" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save to AniList"}</button>
-              <button className="delete-button" type="button" onClick={() => void onDelete(entry)}>Remove</button>
+              <button
+                className="save-button"
+                type="button"
+                disabled={saving}
+                onClick={() => void save()}
+              >
+                {saving ? "Saving…" : "Save to AniList"}
+              </button>
+              <button className="delete-button" type="button" onClick={() => void onDelete(entry)}>
+                Remove
+              </button>
             </div>
           </div>
         ) : null}
@@ -470,16 +656,39 @@ function MediaCard({
   );
 }
 
-function emptyDashboard(state: Extract<AniListAuthState, { status: "signed-in" }>): AniListDashboard {
-  return { profile: state.profile, animeLists: [], mangaLists: [], fetchedAt: new Date().toISOString() };
+function emptyDashboard(
+  state: Extract<AniListAuthState, { status: "signed-in" }>,
+): AniListDashboard {
+  return {
+    profile: state.profile,
+    animeLists: [],
+    mangaLists: [],
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
-function ProfileStat({ value, label }: { value: number | string; label: string }): React.JSX.Element {
-  return <div><strong>{value}</strong><span>{label}</span></div>;
+function ProfileStat({
+  value,
+  label,
+}: {
+  value: number | string;
+  label: string;
+}): React.JSX.Element {
+  return (
+    <div>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
 }
 
 function LoadingScreen({ label }: { label: string }): React.JSX.Element {
-  return <main className="loading-screen"><div className="loading-orbit" aria-hidden="true" /><p>{label}</p></main>;
+  return (
+    <main className="loading-screen">
+      <div className="loading-orbit" aria-hidden="true" />
+      <p>{label}</p>
+    </main>
+  );
 }
 
 function statusLabel(status: AniListEntryStatus): string {
