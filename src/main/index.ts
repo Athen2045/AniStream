@@ -3,21 +3,39 @@ import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { AniListClient } from "./anilist";
 import { getAnimeEpisodeGuide } from "./parse-anime";
 import { MangaDexClient } from "./mangadex";
+import { MangaBakaClient } from "./mangabaka";
+import { AnimeTorrentSourceClient } from "./anime-sources";
+import { AniwatchApiClient } from "./aniwatch";
 import { loadEnvironmentFile } from "./config";
 import { openAppDatabase, type AppDatabase } from "./database";
+import { HlsProxy, registerHlsSchemePrivileges } from "./hls-proxy";
+import { ZenshinEpisodeClient } from "./zenshin-episodes";
 import type {
+  AnimeEpisodeCatalogInput,
   AniListAuthState,
   AniListMediaType,
   AppInfo,
   BrowseAniListInput,
   MangaDexAvailabilityInput,
+  MangaDexPageInput,
+  MangaDexReaderInput,
+  AnimePlaybackInput,
+  AnimePlaybackResult,
+  SavePlaybackResumeInput,
   UpdateAniListEntryInput,
 } from "../shared/contracts";
+
+registerHlsSchemePrivileges();
 
 let database: AppDatabase | undefined;
 let mainWindow: BrowserWindow | undefined;
 let aniList: AniListClient | undefined;
 let mangaDex: MangaDexClient | undefined;
+let mangaBaka: MangaBakaClient | undefined;
+let animeTorrents: AnimeTorrentSourceClient | undefined;
+let aniwatch: AniwatchApiClient | undefined;
+let hlsProxy: HlsProxy | undefined;
+let zenshinEpisodes: ZenshinEpisodeClient | undefined;
 let pendingProtocolUrl: string | undefined;
 
 function createWindow(): void {
@@ -85,6 +103,12 @@ app.whenReady().then(async () => {
     emitAniListState,
   );
   mangaDex = new MangaDexClient();
+  mangaBaka = new MangaBakaClient();
+  animeTorrents = new AnimeTorrentSourceClient();
+  hlsProxy = new HlsProxy();
+  hlsProxy.register();
+  if (isAniwatchEnabled()) aniwatch = new AniwatchApiClient(hlsProxy);
+  zenshinEpisodes = new ZenshinEpisodeClient();
   app.setAsDefaultProtocolClient("anistream");
   await aniList.restore();
 
@@ -92,10 +116,7 @@ app.whenReady().then(async () => {
     version: app.getVersion(),
     platform: process.platform,
     databaseReady: database?.ready ?? false,
-    videoSourceStatus:
-      process.env.VIDEO_HLS_SOURCE_ID?.trim() && process.env.VIDEO_TORRENT_INDEXER_IDS?.trim()
-        ? "configured"
-        : "approved-not-implemented",
+    videoSourceStatus: aniwatch ? "configured" : "fallback-only",
   }));
 
   ipcMain.handle("anilist:auth-state", () => aniList?.getState() ?? { status: "signed-out" });
@@ -138,9 +159,73 @@ app.whenReady().then(async () => {
   ipcMain.handle("anime:episode-guide", async (_event, slug: string) => {
     return getAnimeEpisodeGuide(slug);
   });
+  ipcMain.handle("anime:episode-catalog", async (_event, input: AnimeEpisodeCatalogInput) => {
+    if (!zenshinEpisodes) throw new Error("Anime episode providers are not ready.");
+    try {
+      const zenshinCatalog = await zenshinEpisodes.getCatalog(input.aniListId);
+      if (zenshinCatalog.status === "available") return zenshinCatalog;
+      if (!aniwatch) return zenshinCatalog;
+      const aniwatchCatalog = await aniwatch.getEpisodeCatalog(input);
+      if (aniwatchCatalog.status === "available") return aniwatchCatalog;
+      return {
+        ...zenshinCatalog,
+        message: [zenshinCatalog.message, aniwatchCatalog.message].filter(Boolean).join(" "),
+      };
+    } catch (reason) {
+      return {
+        status: "unavailable",
+        provider: "zenshin",
+        seasons: [],
+        message:
+          reason instanceof Error
+            ? reason.message
+            : "The configured Aniwatch provider is unavailable.",
+        checkedAt: new Date().toISOString(),
+      };
+    }
+  });
   ipcMain.handle("mangadex:availability", async (_event, media: MangaDexAvailabilityInput[]) => {
     if (!mangaDex) throw new Error("MangaDex is not ready.");
     return mangaDex.getAvailability(media);
+  });
+  ipcMain.handle("mangadex:reader", async (_event, input: MangaDexReaderInput) => {
+    if (!mangaDex) throw new Error("MangaDex is not ready.");
+    return mangaDex.getReader(input);
+  });
+  ipcMain.handle("mangadex:page", async (_event, input: MangaDexPageInput) => {
+    if (!mangaDex) throw new Error("MangaDex is not ready.");
+    return mangaDex.getPage(input);
+  });
+  ipcMain.handle("manga:enrichment", async (_event, aniListId: number) => {
+    if (!mangaBaka) throw new Error("MangaBaka is not ready.");
+    return mangaBaka.getEnrichment(aniListId);
+  });
+  ipcMain.handle("anime:playback", async (_event, input: AnimePlaybackInput) => {
+    if (!animeTorrents) throw new Error("Anime sources are not ready.");
+    if (!aniwatch) return animeTorrents.getPlayback(input);
+    const [hlsResult, torrentResult] = await Promise.allSettled([
+      aniwatch.getPlayback(input),
+      animeTorrents.getPlayback(input),
+    ]);
+    return combinePlaybackResults(hlsResult, torrentResult);
+  });
+  ipcMain.handle("playback:resume", (_event, aniListId: number) => {
+    if (!database) throw new Error("AniStream database is not ready.");
+    return database.getPlaybackResume(aniListId);
+  });
+  ipcMain.handle("playback:save-resume", (_event, input: SavePlaybackResumeInput) => {
+    if (!database) throw new Error("AniStream database is not ready.");
+    database.savePlaybackResume(input);
+  });
+  ipcMain.handle("playback:clear-resume", (_event, aniListId: number) => {
+    if (!database) throw new Error("AniStream database is not ready.");
+    database.clearPlaybackResume(aniListId);
+  });
+  ipcMain.handle("anime:open-torrent", async (_event, magnetUrl: string) => {
+    if (!magnetUrl.startsWith("magnet:?") || magnetUrl.length > 8_000) {
+      throw new Error("Invalid torrent magnet URL.");
+    }
+    await shell.openExternal(magnetUrl);
   });
 
   createWindow();
@@ -163,3 +248,45 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   database?.close();
 });
+
+function combinePlaybackResults(
+  hlsResult: PromiseSettledResult<AnimePlaybackResult>,
+  torrentResult: PromiseSettledResult<AnimePlaybackResult>,
+): AnimePlaybackResult {
+  const hls = hlsResult.status === "fulfilled" ? hlsResult.value : undefined;
+  const torrents = torrentResult.status === "fulfilled" ? torrentResult.value : undefined;
+  const candidates = [
+    ...(hls?.candidates.filter((candidate) => candidate.kind === "hls") ?? []),
+    ...(torrents?.candidates.filter((candidate) => candidate.kind === "torrent") ?? []),
+  ];
+  const attemptedSources = [
+    ...new Set([
+      ...(hls?.attemptedSources ?? ["aniwatch"]),
+      ...(torrents?.attemptedSources ?? ["nyaa", "animetosho"]),
+    ]),
+  ];
+  if (candidates.length) return { status: "available", candidates, attemptedSources };
+  const hlsMessage =
+    hls?.message ??
+    (hlsResult.status === "rejected" && hlsResult.reason instanceof Error
+      ? hlsResult.reason.message
+      : undefined);
+  const torrentMessage =
+    torrents?.message ??
+    (torrentResult.status === "rejected" && torrentResult.reason instanceof Error
+      ? torrentResult.reason.message
+      : undefined);
+  return {
+    status: "unavailable",
+    candidates: [],
+    attemptedSources,
+    message:
+      [hlsMessage, torrentMessage].filter(Boolean).join(" ") ||
+      "No approved stream or torrent release is currently available.",
+  };
+}
+
+function isAniwatchEnabled(): boolean {
+  const configured = process.env.ANISTREAM_ANIWATCH_ENABLED?.trim().toLocaleLowerCase();
+  return configured !== "0" && configured !== "false" && configured !== "off";
+}

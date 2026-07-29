@@ -1,109 +1,148 @@
 # AniStream — Context
 
-Last updated: 2026-07-28 by Codex carousel-and-MangaDex session
+Last updated: 2026-07-29 by Codex Netflix episode browser and Video.js revamp session
 
 ## Current phase
 
-Phase 2 product shell and provider foundations. AniList discovery, durable login, list management,
-profile editing, catalog rails, title details, and tracker mutations work. A public MangaDex
-availability adapter now informs Continue Reading. MangaDex page reading/account sync and native
-anime HLS/torrent playback remain the next substantial slices.
+Phase 2 native media integration. AniList discovery/tracking, Zenshin episode enrichment, the
+Netflix-style episode browser, the fullscreen Video.js anime player/source broker, MangaDex reading,
+MangaBaka enrichment, local playback resume, and the Netflix/MangaFire-inspired title surfaces are
+implemented. Live HLS remains degraded because the approved public Aniwatch service is currently
+unhealthy; torrent handoff is the active fallback.
 
 ## What's working right now
 
-- AniList authorization-code login restores its encrypted token/profile before the Electron window
-  opens and persists until explicit logout.
-- Anime and Manga are the only primary navbar destinations; the avatar opens Profile, which contains
-  both AniList libraries.
-- Profile anime/manga lists can be filtered and sorted by Latest updated (default), Title A–Z,
-  Highest score, or Most progress.
-- AniList browse/search, pagination, detailed title data, list add/edit/remove, progress, score, and
-  completion mutations are implemented.
-- Netflix-style horizontal rails use native scroll snapping, visible-width paging, edge-hover
-  chevrons, keyboard arrows, reduced-motion handling, and real card-width expansion that pushes
-  neighboring cards.
-- “Based on Your Interest” uses AniList genre preferences and excludes every title already present
-  in the corresponding AniList library.
-- Continue Watching is sourced only from AniList `CURRENT` anime. Finished titles at total progress
-  and airing titles caught up to the episode before `nextAiringEpisode` are hidden until more content
-  is available.
-- Continue Reading is sourced only from AniList `CURRENT` manga. The main-process MangaDex adapter
-  searches publicly, accepts only one exact `attributes.links.al` match, loads the configured-language
-  chapter aggregate, and hides titles when AniList progress has reached the latest numeric chapter.
-  Unmapped/unavailable titles remain visible rather than being falsely marked caught up. Availability
-  is reevaluated every five minutes; the MangaDex cache permits a fresh network check every 30 minutes.
-- Manga detail pages no longer show the anime-only Studios field.
-- MangaDex requests use a truthful User-Agent, a shared 4 requests/second queue, a 30-minute bounded
-  cache, 20-second timeouts, exact mapping, and 429/403 cooldown behavior. Public reading remains
-  independent from credentials.
-- Optional Parse episode-guide and VidKing iframe seams exist but are not load-bearing.
-- `npm run typecheck`, all 50 Vitest tests, `npm run format:check`,
+- AniList authorization-code login restores its encrypted token/profile before window creation and
+  persists until explicit logout. Browse, unified search, pagination, title details, profile lists,
+  progress, scores, completion, add/edit/remove, and default latest-updated sorting work.
+- Anime and Manga remain the only primary navbar destinations; Profile contains both AniList
+  libraries. Continue rails use only AniList `CURRENT` entries and hide caught-up titles until new
+  episodes/chapters become available.
+- Netflix-style rails provide viewport-width paging, hover edge controls, keyboard navigation,
+  reduced-motion support, and cards that physically expand while pushing adjacent cards.
+- Zenshin's live mapping mirrors provide exact AniList-ID episode catalogs, episode titles,
+  thumbnails, summaries, runtimes, and season grouping. This was verified against live responses.
+- Anime detail and direct carousel Watch actions open a Netflix-style episode browser at the saved
+  episode or next AniList episode. Completed shows clamp to the final episode instead of requesting a
+  nonexistent one.
+- The episode browser matches the supplied Netflix reference with a full-width hero/detail sheet,
+  season picker, numbered 16:9 rows, hover play affordances, runtimes, summaries, dividers, and local
+  watched/resume progress.
+- Clicking an episode performs a reduced-motion-aware transform/opacity transition and requests real
+  fullscreen from the click gesture. The Video.js React v10 `HlsJsVideo` player supplies accessible
+  adaptive-HLS controls, quality, captions, playback speed, picture-in-picture, and fullscreen while
+  preserving AniStream's trusted main-process media broker, resume, AniList progress, next-episode
+  preview, alternate HLS candidates, and torrent fallback.
+- Playback position is persisted in SQLite every ten seconds and on pause/close. Reopening resumes the
+  episode, 90%/ended marks the episode watched, and the authenticated AniList entry advances or
+  completes.
+- A clean-room, removable Aniwatch client implements documented search → episode → server → source
+  contracts with exact unique-title matching, HTTPS validation, bounded throttling, timeouts, and
+  cooldowns. HLS manifests, segments, keys, maps, and subtitles are brokered through a privileged
+  `anistream-media://` main-process proxy; provider URLs never need direct renderer access.
+- Nyaa and AnimeTosho magnet discovery run concurrently as the fallback. AniStream opens an explicitly
+  selected magnet in the user's macOS handler and does not download, seed, or rehost torrents.
+- Manga detail pages use the MangaFire-inspired chapter layout, omit Studios, show search/language/
+  type/sort controls, completed marks, dates, and reader actions. The reader uses exact AniList →
+  MangaDex mapping and MangaDex@Home page delivery.
+- MangaDex image nodes are cached for at most 15 minutes and refreshed exactly once on image
+  `404`/`410`, addressing rotated MangaDex@Home hosts without aggressive retries.
+- MangaBaka enrichment is integrated through its stable exact AniList-ID route and supplies
+  author/artist/publisher, MangaUpdates ID/rating, status, type, and chapter-total fields when present.
+- The packaged Apple Silicon app was visually launched after this revamp; the renderer, persisted
+  AniList session, artwork, and preload bridge loaded without the prior blank-screen failure.
+- A Playwright-over-local-CDP interaction opened an anime, revealed the episode browser, selected the
+  first episode, and verified `watch-experience--player` with the AniStream watch surface as
+  `document.fullscreenElement`. The unhealthy public provider then resolved to the designed torrent
+  fallback.
+- `npm run typecheck`, 66 Vitest tests, `npm run format:check`, `npm run build`,
   `npm run check:product-slice`, `npm run check:anilist-oauth`, and
-  `npm run check:packaged-preload` pass. ESLint has zero errors and two documented React effect
-  warnings.
-- The packaged app launched for ten seconds with Electron logging and emitted no preload, bridge, or
-  renderer error.
-- The rebuilt unsigned Apple Silicon package is
-  `dist/AniStream-0.1.0-arm64.dmg` (134 MB, built 2026-07-28). SHA-256:
-  `90ac0fad7163c4d5b0814ccff113e7298fdabae541ac089118e57afa0b281e00`.
-- Current MangaDex research and implementation boundaries are recorded in
-  `docs/research/mangadex-runtime-evaluation.md`.
+  `npm run check:packaged-preload` pass. ESLint has zero errors and two documented pre-existing
+  React effect warnings.
+- Final unsigned package: `dist/AniStream-0.1.0-arm64.dmg` (167 MB).
+  SHA-256: `f42dc6fbaf38055d014dd39ce4de7189481d5ea61184ed89125d9b6efa339dc1`.
+- Current provider verification is recorded in
+  `docs/research/approved-aniwatch-zenshin-runtime-2026-07-28.md`; the original rejection report is
+  retained as historical context and marked superseded by the user's explicit approval.
 
 ## What's in progress
 
-- MangaDex chapter feeds, scanlation/language selection, MangaDex@Home page proxying, and the native
-  reader are not yet connected.
+- The approved public Aniwatch deployment currently returns empty search results, times out on
+  episode/server requests, or returns source-resolution 500 errors. The client and player are ready,
+  but a live HLS stream could not be verified from that deployment.
 - Full MangaDex account follows/read-marker synchronization remains planned as a separate opt-in
-  personal-client module.
-- No native HLS or torrent source is connected to the Watch surface. AnimePahe-style HLS remains the
-  approved primary direction, with AnimeTosho/Nyaa torrent fallback.
-- Local in-episode/in-chapter resume timestamps are not yet persisted; AniList integer progress is
-  currently the source for continue rails.
+  personal-client module. Public MangaDex reading does not depend on those credentials.
+- Native in-app torrent playback is not implemented; the current fallback requires an installed
+  macOS magnet handler.
+- Full MangaDex archive paging, translation/group selection, and local page/chapter resume are still
+  pending. Anime resume is implemented.
 
 ## Open decisions (need user input)
 
 - Before MangaDex account sync is enabled, confirm that the personal API client is approved and that
   storing its username, password, client secret, access token, and refresh token in macOS Keychain is
   acceptable. MangaDex documents that this personal-client flow bypasses account MFA.
-- Decide whether the optional Parse hosted scraper remains enabled after its target authorization,
-  cost, and live response schema are verified.
-- Decide whether VidKing should remain a clearly labeled fallback iframe after native HLS playback
-  lands.
-- Choose the local playback/read threshold for writing progress to AniList without excessive
-  mutations.
+- Decide whether to self-host/fork a compatible Aniwatch API service, provide another compatible
+  deployment through `ANISTREAM_ANIWATCH_API_URL`, or wait for the approved public deployment to
+  recover. The repository has no declared license, so its scraper code was not copied into AniStream.
+- Decide whether torrent fallback should remain an external magnet handoff or gain a local playback
+  engine with explicit download, storage, seeding, and cleanup rules.
+- Decide whether the inactive VidKing iframe seam should be removed entirely now that the native
+  player is the product surface.
 
 ## Known issues / tech debt
 
-- MangaDex availability currently uses the English aggregate by default (`MANGADEX_LANGUAGE=en`).
-  Licensed titles can have no MangaDex chapters in that language; those are treated as unknown and
-  stay in Continue Reading.
-- Exact AniList mapping can fail when the right MangaDex result is outside the first ten search
-  results or lacks `links.al`. A future manual mapping UI should resolve those cases safely.
-- MangaDex aggregate data is only an availability hint; concrete reading must use chapter feeds and
-  MangaDex@Home.
-- The carousel/UI changes were structurally tested and the desktop app launched without console
-  errors, but automated visual screenshot inspection was not permitted. Perform a manual hover,
-  paging, focus, and narrow-window pass before treating pixel behavior as final.
+- The approved public Aniwatch deployment is operationally unhealthy. Native HLS code is present and
+  tested with fixtures, but no live stream was available during the final check. The UI reports this
+  honestly and offers any torrent results instead of fabricating playback.
+- Zenshin supplies episode metadata/mapping only; it does not supply a video stream. Its mirror data
+  can also flatten provider-specific season numbering, so absolute episode numbers may appear in a
+  single season until a better mapping service or local correction UI is added.
+- `codex0555/Aniwatch-Api` has no declared license and its source resolver has public failure reports.
+  The user accepted the operational/legal risk, but AniStream uses only a clean-room HTTP client and
+  does not copy or bundle that repository's scraper/decryption implementation.
+- AnimeTosho stopped adding new torrents on 2026-05-09 according to its official notice, so it is
+  historical-only; Nyaa availability varies by network and title.
+- MangaDex defaults to `MANGADEX_LANGUAGE=en`. Licensed titles may have no chapters in that language.
+  Exact mapping can also fail when the correct result is outside the first ten search results or lacks
+  `attributes.links.al`; unknown titles stay visible rather than being falsely marked caught up.
+- The MangaDex reader fetches only the newest 100 readable chapters. Full archive pagination,
+  translation/group selection, account follows/read-marker sync, and chapter-level local resume are
+  not implemented.
+- MangaUpdates is consumed only through MangaBaka's normalized exact-ID record. The supplied direct
+  MangaUpdates OpenAPI did not provide a safe AniList-ID lookup contract, so direct integration is
+  deferred.
+- Automated visual inspection confirmed the packaged episode layout, and local CDP interaction
+  confirmed episode-click fullscreen entry. Manually verify every Video.js control, keyboard focus,
+  narrow-window behavior, exit/re-entry behavior, and actual HLS playback when a healthy endpoint
+  becomes available.
 - The two existing `react-hooks/set-state-in-effect` warnings in `CatalogView.tsx` and
   `GlobalSearch.tsx` remain. TanStack Query is the planned request-lifecycle fix.
-- Parse has not been live-tested with a real API key; VidKing remains an external iframe with
-  availability and provenance outside AniStream's control.
-- The DMG is unsigned because no valid Developer ID Application certificate is installed.
+- Video.js v10 is beta and may change its React API. The locked version is
+  `@videojs/react@10.0.0-beta.25`; review its changelog before every upgrade.
+- The renderer player chunks are large (about 903 KB main plus 1.60 MB lazy detail chunk). This is
+  acceptable for the local desktop app but should be split further if startup/detail latency grows.
+- The DMG is unsigned because the installed Apple Development certificate is expired and no valid
+  Developer ID Application identity is available.
 - Runtime dependency audit is clean; full audit still contains accepted development/build-only
   advisories in Electron Builder/ESLint dependency trees.
 - The AniList client secret was previously shared in chat and should be rotated if AniList permits.
 
 ## Next steps (in priority order)
 
-1. Implement MangaDex chapter-feed normalization, translation/group choice, MangaDex@Home allocation,
-   trusted image proxying, and the first native reader mode with fixture and live checks.
-2. Move planned MangaDex personal-client credentials to macOS Keychain, then implement opt-in token
-   refresh, follows/read markers, reconciliation, and explicit logout.
-3. Re-verify and implement the approved removable AnimePahe-style HLS adapter, then add
-   AnimeTosho/Nyaa torrent fallback.
-4. Persist local playback/reading resume state and define bounded AniList progress-write thresholds.
-5. Manually verify carousel edge reveal, card push expansion, keyboard navigation, profile sorting,
-   and Continue rail behavior in the packaged app.
+1. Restore live HLS by validating a healthy API-compatible Aniwatch deployment or a separately
+   operated service, then run a real sub/dub stream through the main-process HLS proxy and every
+   player control. Keep `ANISTREAM_ANIWATCH_ENABLED=0` as the immediate kill switch.
+2. Obtain/confirm the MangaDex personal client, move every credential/token into macOS Keychain, and
+   implement opt-in token refresh, follows, read markers, reconciliation, explicit logout, and
+   conflict handling.
+3. Add complete MangaDex archive pagination plus language/group selection and local chapter/page
+   resume.
+4. Manually verify direct Watch/Read card actions, episode switching, resume, AniList 90% progress,
+   MangaDex page navigation/node refresh, magnet handoff, carousel hover/paging, keyboard focus, and
+   narrow-window layout in the final packaged app.
+5. Replace the expired signing certificate with a valid Developer ID Application identity, sign and
+   notarize the DMG, then rotate the previously exposed AniList client secret.
 
 ## Key architectural decisions log
 
@@ -184,3 +223,15 @@ integration` against the workflow-runs API. `github/codeql-action/analyze` needs
 - 2026-07-28: User approved carousel direction A: native scroll snapping, edge-hover chevrons that page by the visible viewport, and actual flex-width expansion so hovered/focused cards push adjacent cards.
 - 2026-07-28: Continue rails now use only AniList `CURRENT` entries. Anime availability uses totals plus `nextAiringEpisode`; Manga uses exact AniList-to-MangaDex mapping and translated aggregate availability. Recommendation rails exclude all corresponding AniList library IDs.
 - 2026-07-28: Approved a public read-only MangaDex adapter after first-party research and live API checks. It is isolated in the main process, throttled to 4 requests/second, cached for 30 minutes, accepts only a unique exact `attributes.links.al` mapping, and treats unavailable data as unknown. Full personal-client account sync remains planned as a separate Keychain-backed opt-in because public OAuth clients are unavailable and the documented personal flow bypasses MFA.
+- 2026-07-28: Evaluated `namtxs/anistream` as a reference. It is an MIT-licensed static frontend whose source was last pushed in 2023 and whose runtime depends on an external Ngewibu API. AniStream will reuse only reviewed playback UX ideas—episode switching, quality/subtitle controls, resume/autoplay, retry states, and schedule interaction—not its backend URLs, DOM scripts, advertisements, or assumed media format.
+- 2026-07-28: Evaluated `ErickLimaS/anime-website` and `keerthivasansa/animos`. Neither adapter/API is adopted: both depend on disallowed Consumet or unapproved scraped-source stacks, use non-permissive Creative Commons licenses, and rely on stale or separately hosted service components. AniStream may independently implement their general ideas—source preferences, mapping caches, local resume, skip markers, player cleanup, and graceful provider failures—behind the existing native TypeScript contracts only.
+- 2026-07-28: Evaluated `codex0555/Aniwatch-Api` and rejected it as an adapter/API. It is an unlicensed, inactive Express scraper targeting unapproved AniwatchTV/MegaCloud endpoints; its deployed API is unauthenticated, unversioned, unsafeguarded, and has reported source-resolution failures. Only the generic title → episode → hoster → variant progression is retained as an independently implemented reference pattern.
+- 2026-07-28: Installed the public MangaDex reader adapter in the Electron main process: exact AniList mapping, chapter-feed normalization, MangaDex@Home allocation, no-auth image fetching, bounded page/node caches, and renderer-safe page data URLs. The first reader opens the newest 100 configured-language chapters and writes completed numeric chapters back to AniList; MangaDex account sync remains separate and opt-in.
+- 2026-07-28: Installed the approved torrent discovery fallback using Nyaa RSS and AnimeTosho JSON. A selected normalized magnet is handed explicitly to the user's macOS torrent handler; AniStream never auto-starts or rehosts a torrent. The AnimePahe primary remains disabled because its verified legacy origin redirected to a parked domain, and AnimeTosho is treated as historical-only after its official notice that new torrents stopped in May 2026.
+- 2026-07-28: Superseded the earlier `codex0555/Aniwatch-Api` rejection after the user explicitly approved the Aniwatch/Zenshin scraped-provider strategy and accepted its legal, reliability, and maintenance risks. AniStream implements a clean-room, removable HTTP client against the documented contract; the unlicensed scraper/decryption source is not copied or bundled.
+- 2026-07-28: Adopted Zenshin's exact AniList-ID mapping mirrors for episode metadata only and Aniwatch for video resolution. Metadata and playback remain independent so provider failure cannot break AniList discovery, profile/list management, or MangaDex reading.
+- 2026-07-28: Adopted hls.js with a privileged `anistream-media://` main-process broker for HLS manifests, segments, encryption keys, maps, and subtitles. The broker accepts only HTTPS upstream URLs, rewrites relative manifest resources, bounds temporary tokens, and keeps provider headers/URLs out of the renderer.
+- 2026-07-28: Added SQLite-backed per-title anime resume with ten-second checkpoints and AniList progression at 90%/ended. Direct carousel Watch actions resume the saved episode or advance to the next AniList episode; completed titles clamp to their final episode.
+- 2026-07-28: Adopted MangaBaka's stable `/v1/source/anilist/{id}` route as exact-ID supplemental manga metadata. Direct MangaUpdates lookup remains deferred because the supplied OpenAPI does not establish a safe AniList-ID mapping contract.
+- 2026-07-28: Replaced request-gate `finally()` cleanup with a handled two-branch cleanup after runtime testing exposed false unhandled-rejection warnings during expected provider outages. MangaDex@Home image `404`/`410` responses now invalidate the scoped node and retry once with a fresh allocation.
+- 2026-07-29: Replaced the compact player/episode drawer with a Netflix-reference episode browser and a separate fullscreen player state. Adopted `@videojs/react@10.0.0-beta.25` with its recommended `HlsJsVideo` media component for accessible controls and adaptive HLS, while keeping stream resolution, URL brokering, resume, tracker updates, and torrent fallback outside the player library. The episode-to-player transition uses only transform/opacity motion and honors reduced-motion preferences.

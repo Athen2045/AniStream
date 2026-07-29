@@ -1051,6 +1051,582 @@ button {
   text-decoration: none;
 }
 
+.detail-modal:has(.watch-experience) {
+  width: min(1380px, 96vw);
+}
+
+.detail-modal:has(.watch-experience) .detail-body {
+  padding-right: 28px;
+  padding-left: 28px;
+}
+
+.watch-experience {
+  margin: -8px 0 38px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 10px;
+  background: #08090b;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.45);
+}
+
+.watch-header {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(0, 2fr) 38px;
+  gap: 18px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  background: #0d0f13;
+}
+
+.watch-header > div {
+  display: grid;
+  min-width: 0;
+  text-align: center;
+}
+
+.watch-header strong,
+.watch-header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watch-header strong {
+  font-size: 0.83rem;
+}
+
+.watch-header span {
+  color: #8c9099;
+  font-size: 0.68rem;
+}
+
+.watch-back,
+.icon-button {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border-radius: 5px;
+  background: transparent;
+  color: #c8cbd1;
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+
+.watch-back {
+  justify-self: start;
+  padding: 0 9px 0 5px;
+}
+
+.watch-back:hover,
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.watch-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  min-height: 520px;
+}
+
+.watch-primary {
+  min-width: 0;
+  padding: 14px;
+  background: radial-gradient(circle at 50% 0, rgba(229, 9, 20, 0.08), transparent 38%), #050506;
+}
+
+.anistream-player,
+.player-unavailable {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 7px;
+  background: #000;
+}
+
+.anistream-player video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  object-fit: contain;
+}
+
+.player-unavailable {
+  display: grid;
+  place-content: center;
+  padding: 40px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(84, 185, 197, 0.13), transparent 36%), #08090b;
+  color: #8f949d;
+  text-align: center;
+}
+
+.player-unavailable svg {
+  margin: 0 auto;
+  color: #50545c;
+}
+
+.player-unavailable h3 {
+  margin: 16px 0 7px;
+  color: #e8e9eb;
+}
+
+.player-unavailable p {
+  max-width: 520px;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.player-gradient {
+  position: absolute;
+  z-index: 1;
+  inset: 42% 0 0;
+  pointer-events: none;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.93), transparent);
+}
+
+.player-title {
+  position: absolute;
+  z-index: 2;
+  top: 20px;
+  left: 22px;
+  display: grid;
+  gap: 2px;
+  text-shadow: 0 2px 9px #000;
+}
+
+.player-title span {
+  color: #a2a6ae;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.player-title strong {
+  font-size: 0.84rem;
+}
+
+.next-preview {
+  position: absolute;
+  z-index: 4;
+  right: 20px;
+  bottom: 84px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 16px;
+  align-items: center;
+  width: min(290px, 45%);
+  padding: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 4px;
+  background: rgba(22, 22, 24, 0.94);
+  cursor: pointer;
+  text-align: left;
+}
+
+.next-preview span {
+  color: #969aa2;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+}
+
+.next-preview strong {
+  overflow: hidden;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.next-preview svg {
+  grid-row: 1 / 3;
+  grid-column: 2;
+}
+
+.player-controls {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 0 19px 14px;
+}
+
+.player-progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.player-progress-row > span {
+  color: #c9c9cb;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.63rem;
+}
+
+.player-progress-row input,
+.volume-range {
+  height: 16px;
+  margin: 0;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.player-progress-row input::-webkit-slider-runnable-track,
+.volume-range::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 99px;
+  background: linear-gradient(
+    90deg,
+    var(--red) var(--player-progress, 0%),
+    rgba(255, 255, 255, 0.38) var(--player-progress, 0%)
+  );
+}
+
+.volume-range::-webkit-slider-runnable-track {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.player-progress-row input::-webkit-slider-thumb,
+.volume-range::-webkit-slider-thumb {
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  appearance: none;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.35);
+}
+
+.player-control-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-top: 7px;
+}
+
+.player-control-group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.player-control-right {
+  justify-content: flex-end;
+}
+
+.player-control-group button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: transparent;
+  color: #f4f4f4;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.player-control-group button:hover,
+.player-control-group button.active {
+  background: rgba(255, 255, 255, 0.13);
+  transform: scale(1.08);
+}
+
+.player-control-group button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.volume-range {
+  width: 66px;
+}
+
+.player-episode-label {
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.player-popover-anchor {
+  position: relative;
+}
+
+.speed-popover,
+.mini-next-popover {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  bottom: 45px;
+  width: 250px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  background: rgba(24, 24, 26, 0.98);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.55);
+}
+
+.speed-popover {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.speed-popover strong {
+  grid-column: 1 / -1;
+  padding-bottom: 5px;
+  font-size: 0.72rem;
+}
+
+.speed-popover button {
+  width: auto;
+  height: 32px;
+  border-radius: 4px;
+  color: #aeb0b6;
+  font-size: 0.61rem;
+}
+
+.speed-popover button.active {
+  background: white;
+  color: #111;
+}
+
+.mini-next-popover {
+  display: grid;
+  gap: 3px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mini-next-popover span {
+  color: #93969c;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+
+.mini-next-popover strong {
+  overflow: hidden;
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-hidden-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.source-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  padding: 12px 2px 0;
+}
+
+.source-strip > span {
+  margin-right: 3px;
+  color: #777b83;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.source-strip button {
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: #15171b;
+  color: #a8abb1;
+  cursor: pointer;
+  font-size: 0.65rem;
+}
+
+.source-strip button.active {
+  border-color: var(--red);
+  color: white;
+}
+
+.torrent-fallback {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: #0d0f12;
+}
+
+.torrent-fallback summary {
+  cursor: pointer;
+  color: #c9cbd0;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.torrent-fallback > p {
+  color: #858993;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.episode-drawer {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  background: #101217;
+}
+
+.episode-drawer-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  padding: 19px 18px 14px;
+}
+
+.episode-drawer-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.episode-drawer-heading > span {
+  color: #767b84;
+  font-size: 0.68rem;
+}
+
+.episode-drawer .provider-note {
+  margin: 0 18px 10px;
+}
+
+.episode-drawer-list {
+  overflow-y: auto;
+  padding: 0 10px 10px;
+}
+
+.episode-drawer-list > button {
+  display: grid;
+  grid-template-columns: 28px 78px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 74px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #d4d5d8;
+  cursor: pointer;
+  text-align: left;
+}
+
+.episode-drawer-list > button:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.episode-drawer-list > button.active {
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.episode-number {
+  color: #7f838b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.episode-thumb {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  border-radius: 3px;
+  background: linear-gradient(135deg, rgba(229, 9, 20, 0.26), transparent), #252831;
+}
+
+.episode-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.episode-thumb svg {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 2px 4px #000);
+}
+
+.episode-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.episode-copy strong,
+.episode-copy small {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+
+.episode-copy strong {
+  -webkit-line-clamp: 1;
+  font-size: 0.71rem;
+}
+
+.episode-copy small {
+  -webkit-line-clamp: 2;
+  color: #7f838c;
+  font-size: 0.61rem;
+  line-height: 1.35;
+}
+
+.episode-stepper {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.episode-stepper button {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border-radius: 4px;
+  background: #20232a;
+  color: #c0c3ca;
+  cursor: pointer;
+  font-size: 0.65rem;
+}
+
+.episode-stepper button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
 .playback-stage {
   position: relative;
   display: grid;
@@ -1064,11 +1640,746 @@ button {
   text-align: center;
 }
 
+@media (max-width: 1120px) {
+  .watch-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .episode-drawer {
+    max-height: 480px;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    border-left: 0;
+  }
+}
+
+/* Netflix-inspired episode browser and immersive Video.js surface */
+.detail-modal:has(.watch-experience) {
+  width: min(1120px, 94vw);
+}
+
+.detail-modal:has(.watch-experience) .detail-body {
+  padding-right: 54px;
+  padding-left: 54px;
+}
+
+.watch-experience {
+  margin: 0 0 42px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.netflix-episode-browser {
+  color: #fff;
+}
+
+.sr-only {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.episode-browser-heading {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+
+.episode-browser-heading h2 {
+  margin: 0;
+  font-size: clamp(1.65rem, 3vw, 2rem);
+  letter-spacing: -0.035em;
+}
+
+.season-picker {
+  position: relative;
+  display: flex;
+  min-width: 220px;
+  height: 52px;
+  align-items: center;
+}
+
+.season-picker select {
+  width: 100%;
+  height: 100%;
+  padding: 0 46px 0 19px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 3px;
+  appearance: none;
+  background: #242424;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.season-picker select:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.season-picker svg {
+  position: absolute;
+  right: 17px;
+  pointer-events: none;
+}
+
+.episode-browser-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  min-height: 24px;
+  margin-bottom: 13px;
+  color: #d2d2d2;
+  font-size: 0.74rem;
+}
+
+.episode-browser-meta > * + *::before {
+  margin-right: 7px;
+  color: #747474;
+  content: "·";
+}
+
+.netflix-episode-list {
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.netflix-episode-list > button {
+  display: grid;
+  grid-template-columns: 58px minmax(184px, 23%) minmax(0, 1fr);
+  gap: 21px;
+  align-items: center;
+  width: 100%;
+  min-height: 148px;
+  padding: 24px 16px 24px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.netflix-episode-list > button:hover,
+.netflix-episode-list > button:focus-visible {
+  background: #282828;
+}
+
+.netflix-episode-list > button:active {
+  transform: scale(0.995);
+}
+
+.netflix-episode-list > button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+.netflix-episode-number {
+  color: #d2d2d2;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.netflix-episode-thumb {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  border-radius: 4px;
+  background: linear-gradient(145deg, rgba(229, 9, 20, 0.22), transparent 50%), #303030;
+}
+
+.netflix-episode-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.netflix-episode-list > button:hover .netflix-episode-thumb img {
+  transform: scale(1.045);
+}
+
+.episode-thumb-fallback {
+  max-width: 80%;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.67rem;
+  font-weight: 750;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.episode-play {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.82);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: scale(0.84);
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.netflix-episode-list > button:hover .episode-play,
+.netflix-episode-list > button:focus-visible .episode-play,
+.netflix-episode-list > button.is-current .episode-play {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.episode-play svg {
+  margin-left: 2px;
+}
+
+.episode-watch-progress {
+  position: absolute;
+  z-index: 3;
+  right: 7px;
+  bottom: 6px;
+  left: 7px;
+  overflow: hidden;
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.episode-watch-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: #e50914;
+  transform-origin: left center;
+}
+
+.netflix-episode-copy {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
+}
+
+.netflix-episode-title {
+  display: flex;
+  gap: 18px;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.netflix-episode-title strong {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.netflix-episode-title > span {
+  flex: none;
+  color: #f1f1f1;
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.netflix-episode-copy small {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #b3b3b3;
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.watch-experience--player,
+.watch-experience--player:fullscreen {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.watch-player-view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+  transform-origin: center center;
+}
+
+.watch-player-back {
+  position: absolute;
+  z-index: 30;
+  top: 28px;
+  left: 28px;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px 0 8px;
+  border-radius: 999px;
+  background: rgba(15, 15, 15, 0.72);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+  opacity: 0.76;
+  transition:
+    background-color 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+  backdrop-filter: blur(12px);
+}
+
+.watch-player-back:hover,
+.watch-player-back:focus-visible {
+  background: rgba(36, 36, 36, 0.92);
+  opacity: 1;
+  transform: translateX(-2px);
+}
+
+.watch-player-heading {
+  position: absolute;
+  z-index: 24;
+  top: 31px;
+  left: 50%;
+  display: grid;
+  max-width: min(52vw, 720px);
+  pointer-events: none;
+  text-align: center;
+  text-shadow: 0 2px 12px #000;
+  transform: translateX(-50%);
+}
+
+.watch-player-heading span,
+.watch-player-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watch-player-heading span {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.watch-player-heading strong {
+  margin-top: 3px;
+  font-size: 0.84rem;
+}
+
+.anistream-player {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: #000;
+}
+
+.anistream-videojs {
+  width: 100%;
+  height: 100%;
+  --media-border-radius: 0;
+  --media-color-primary: #fff;
+  --media-video-border-radius: 0;
+  --media-object-fit: contain;
+}
+
+.anistream-videojs video {
+  width: 100%;
+  height: 100%;
+  background: #000;
+  object-fit: contain;
+}
+
+.anistream-videojs .media-slider__fill {
+  background: #e50914;
+}
+
+.anistream-videojs .media-controls {
+  padding-right: clamp(18px, 3vw, 50px);
+  padding-bottom: clamp(18px, 3vw, 44px);
+  padding-left: clamp(18px, 3vw, 50px);
+}
+
+.watch-player-view .player-unavailable {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: radial-gradient(circle at 50% 35%, rgba(229, 9, 20, 0.12), transparent 32%), #070707;
+}
+
+.watch-player-view .player-unavailable > p {
+  max-width: 620px;
+}
+
+.watch-player-view .torrent-fallback {
+  width: min(620px, 76vw);
+  max-height: 42vh;
+  overflow: auto;
+  text-align: left;
+}
+
+.watch-player-view .next-preview {
+  z-index: 25;
+  right: clamp(24px, 4vw, 62px);
+  bottom: clamp(92px, 13vh, 150px);
+  width: min(350px, 42vw);
+}
+
+.watch-source-select {
+  position: absolute;
+  z-index: 30;
+  top: 30px;
+  right: 30px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 9px 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 999px;
+  background: rgba(15, 15, 15, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.watch-source-select span {
+  color: #a8a8a8;
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.watch-source-select select {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.68rem;
+}
+
+.watch-player-error {
+  position: absolute;
+  z-index: 31;
+  top: 88px;
+  left: 50%;
+  max-width: min(680px, 80vw);
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(229, 9, 20, 0.48);
+  border-radius: 5px;
+  background: rgba(50, 6, 8, 0.9);
+  color: #fff;
+  font-size: 0.72rem;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 760px) {
+  .detail-modal:has(.watch-experience) .detail-body {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+
+  .episode-browser-heading {
+    align-items: stretch;
+  }
+
+  .season-picker {
+    min-width: 170px;
+    height: 46px;
+  }
+
+  .netflix-episode-list > button {
+    grid-template-columns: 34px minmax(128px, 38%) minmax(0, 1fr);
+    gap: 12px;
+    min-height: 112px;
+    padding: 18px 8px 18px 0;
+  }
+
+  .netflix-episode-number {
+    font-size: 1.05rem;
+  }
+
+  .netflix-episode-copy small {
+    -webkit-line-clamp: 1;
+  }
+
+  .watch-player-heading,
+  .watch-player-back span,
+  .watch-source-select span {
+    display: none;
+  }
+}
+
 .vidking-player {
   width: 100%;
   min-height: 520px;
   border: 0;
   background: #000;
+}
+
+.torrent-playback,
+.manga-reader {
+  width: min(100%, 920px);
+  padding: 22px;
+  text-align: left;
+}
+
+.manga-chapter-browser {
+  margin: 0 0 36px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: #11151d;
+}
+
+.chapter-browser-tabs {
+  display: inline-flex;
+  gap: 3px;
+  margin-bottom: 14px;
+  padding: 3px;
+  border-radius: 6px;
+  background: #1b202b;
+}
+
+.chapter-browser-tabs button {
+  min-width: 82px;
+  height: 31px;
+  border-radius: 4px;
+  background: transparent;
+  color: #777e8b;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.chapter-browser-tabs button.active {
+  background: rgba(84, 185, 197, 0.24);
+  color: #65c9d5;
+}
+
+.chapter-browser-tabs button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.chapter-browser-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 6px 6px 0 0;
+  background: #171c26;
+}
+
+.chapter-browser-toolbar input {
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  outline: 0;
+  background: #111621;
+  color: #e4e7eb;
+  font-size: 0.7rem;
+}
+
+.chapter-browser-toolbar input:focus {
+  border-color: rgba(84, 185, 197, 0.58);
+}
+
+.chapter-browser-toolbar span,
+.chapter-browser-toolbar button {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 5px;
+  background: #202632;
+  color: #9ca3ae;
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 34px;
+  white-space: nowrap;
+}
+
+.chapter-browser-toolbar button {
+  background: #1f98cf;
+  color: white;
+  cursor: pointer;
+}
+
+.chapter-browser-list {
+  max-height: 420px;
+  overflow-y: auto;
+  border-radius: 0 0 6px 6px;
+}
+
+.chapter-browser-list > button {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 20px 70px 20px;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 9px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  background: #151a23;
+  color: #c8cdd5;
+  cursor: pointer;
+  text-align: left;
+}
+
+.chapter-browser-list > button:hover {
+  background: #1a202b;
+}
+
+.chapter-language {
+  color: #65c9d5;
+  font-size: 0.6rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.chapter-browser-list strong {
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chapter-browser-list strong small {
+  color: #7f8692;
+  font-size: inherit;
+  font-weight: 500;
+}
+
+.chapter-browser-list > button > span:nth-last-child(2) {
+  color: #737985;
+  font-size: 0.62rem;
+  text-align: right;
+}
+
+.chapter-complete {
+  color: #42c980;
+}
+
+@media (max-width: 1120px) {
+  .chapter-browser-toolbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .chapter-browser-toolbar span {
+    display: none;
+  }
+}
+
+.torrent-playback h3 {
+  margin: 0;
+}
+
+.torrent-playback > p {
+  color: #aaa;
+  font-size: 0.82rem;
+}
+
+.torrent-list {
+  display: grid;
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.torrent-list button {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #f5f5f5;
+  cursor: pointer;
+  text-align: left;
+}
+
+.torrent-list button:hover {
+  border-color: var(--cyan);
+  background: rgba(84, 185, 197, 0.12);
+}
+
+.torrent-list span,
+.reader-toolbar span {
+  color: #9a9a9a;
+  font-size: 0.75rem;
+}
+
+.reader-toolbar,
+.reader-pagination {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reader-toolbar select,
+.reader-pagination button {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #171717;
+  color: #eee;
+}
+
+.manga-page {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: 18px auto;
+  background: #fff;
+}
+
+.reader-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .episode-guide,

@@ -102,7 +102,8 @@ AniList documents 90 requests/minute normally, with a current degraded-state war
 4. Construct each URL as `{baseUrl}/{quality}/{hash}/{filename}` using `baseUrl` exactly as returned.
 5. Proxy the image through the main process without authentication headers.
 6. For third-party MangaDex@Home nodes, report success/failure to the network report endpoint.
-7. On failure, report it and request a new node.
+7. On an image `404` or `410`, discard the cached node, request a fresh chapter-scoped node, and
+   retry exactly once. Other failures are surfaced without speculative retry.
 
 ### Account synchronization
 
@@ -118,8 +119,10 @@ MangaDex. Conflicts must be surfaced rather than blindly overwriting newer remot
 Public title mapping and translated chapter-availability lookup are integrated in the Electron main
 process. Continue Reading compares AniList `CURRENT` progress with the latest numeric MangaDex
 chapter when an exact mapping exists, so caught-up titles disappear and can return after the
-30-minute cache refresh finds a new chapter. Full chapter feeds, MangaDex@Home page delivery, and
-authenticated account synchronization remain pending.
+30-minute cache refresh finds a new chapter. The title detail surface also loads the newest 100
+configured-language chapters, allocates MangaDex@Home in the main process, and returns one requested
+page at a time as a renderer-safe data URL. Expired image nodes are refreshed once on `404`/`410`.
+Full archive paging/translation selection and authenticated account synchronization remain pending.
 
 ### Degraded mode
 
@@ -132,7 +135,7 @@ authenticated account synchronization remain pending.
 | Item                   | Value                                                                                     |
 | ---------------------- | ----------------------------------------------------------------------------------------- |
 | Strategy               | Scraped/aggregator adapters similar to Zenshin                                            |
-| Primary target         | AnimePahe-style HLS extraction                                                            |
+| Primary target         | Configurable AniWatch-compatible API returning direct HLS variants                        |
 | Fallback targets       | AnimeTosho and Nyaa torrent indexes                                                       |
 | Playback order         | HLS first; torrent fallback when HLS is unavailable or has no suitable variant            |
 | Auth/cookies           | Provider-specific; must remain in the main process                                        |
@@ -151,13 +154,69 @@ A video-source adapter must hide site-specific IDs, HTML parsing, cookies, Cloud
 
 The native TypeScript contracts are implemented in `src/shared/providers.ts` as the normalized
 chain `AnimeTitleMapping → AnimeSeason → AnimeEpisode → AnimeHoster → AnimeVideoVariant`, plus the
-`AnimeSourceAdapter` boundary. No provider implementation or scraped domain is connected yet, so
-the Watch surface reports a truthful unavailable state.
+`AnimeSourceAdapter` boundary. The installed main-process fallback uses Nyaa RSS and AnimeTosho JSON
+feeds only to discover normalized magnet URIs; it never downloads, seeds, proxies, or exposes a
+provider URL to the renderer. Selecting a release explicitly opens the user's macOS torrent handler.
+
+The user explicitly approved and accepted the risk of `codex0555/Aniwatch-Api` and Zenshin-style
+scraped playback on 2026-07-28. AniStream now clean-room implements the documented public HTTP
+contract; it does not copy the unlicensed scraper. HLS manifests, nested playlists, encryption-key
+URIs, initialization maps, and media segments are exposed through short-lived
+`anistream-media://` handles and fetched by the trusted main process. SQLite stores the most recent
+episode, position, duration, and timestamp for Continue Watching.
+
+The public AniWatch deployment was online but unhealthy in the bounded implementation check:
+search returned an empty catalog, episode/server calls timed out, and source resolution returned
+HTTP 500. The adapter therefore remains configurable and kill-switchable and truthfully degrades to
+torrents. AnimeTosho's official News Archive says new torrents ceased on 2026-05-09, so its feed is
+retained only as a degrading historical index while Nyaa remains the active fallback. See
+[`docs/research/approved-aniwatch-zenshin-runtime-2026-07-28.md`](docs/research/approved-aniwatch-zenshin-runtime-2026-07-28.md).
+
+### AniWatch-compatible HLS API
+
+| Item        | Value                                                                                |
+| ----------- | ------------------------------------------------------------------------------------ |
+| Default URL | `https://aniwatch-api-v1-0.onrender.com`                                             |
+| Auth        | None documented                                                                      |
+| Credentials | None                                                                                 |
+| Config      | `ANISTREAM_ANIWATCH_ENABLED`, `ANISTREAM_ANIWATCH_API_URL`                           |
+| Features    | Exact-title mapping, episode IDs, sub/dub hosters, direct HLS variants and subtitles |
+| Source      | [`codex0555/Aniwatch-Api`](https://github.com/codex0555/Aniwatch-Api)                |
+
+The documented sequence is
+`GET /api/search/{query}/{page}` → `GET /api/episode/{id}` →
+`GET /api/server/{episodeId}` → `GET /api/src-server/{sourceId}`. The README documents
+`serverSrc[].rest[].file`; current source returns `restres.sources[].url`. AniStream strictly accepts
+both observed shapes, HTTPS HLS URLs only, and bounded subtitle tracks. It makes at most 12
+requests/minute as a conservative app policy, uses eight-second request timeouts, pauses five
+minutes on 429/403, caches episode catalogs for ten minutes, and never retries aggressively.
+
+No provider limit, SLA, or cache policy is published. The public deployment must not be treated as
+reliable. Set `ANISTREAM_ANIWATCH_ENABLED=false` to disable it immediately. A compatible repaired or
+self-hosted service can be selected with `ANISTREAM_ANIWATCH_API_URL`; localhost HTTP is accepted for
+development, while non-local replacements require HTTPS.
+
+### Zenshin episode mapping
+
+| Item     | Value                                                                                         |
+| -------- | --------------------------------------------------------------------------------------------- |
+| Mirrors  | `https://zenshin-supabase-api.onrender.com`, `https://zenshin-supabase-api-myig.onrender.com` |
+| Auth     | None documented                                                                               |
+| Config   | `ANISTREAM_ZENSHIN_API_URL` for a preferred mirror                                            |
+| Features | Exact AniList-ID season/episode titles, summaries, runtime, artwork, and cross-site IDs       |
+| Source   | [`hitarth-gg/zenshin-API`](https://github.com/hitarth-gg/zenshin-API)                         |
+
+AniStream calls `GET /mappings?anilist_id={id}`, accepts numeric regular-episode keys only, groups
+them by `seasonNumber`, and caches the normalized catalog for 24 hours. It tries at most four
+requests/minute as an application policy and fails over between the two documented mirrors. Zenshin
+does not provide HLS URLs; it enriches the episode drawer only.
 
 ### Guardrails
 
 - No source domain, scraper, or endpoint may be added without explicit approval and current research.
-- The three approved target identities are AnimePahe, AnimeTosho, and Nyaa. Their current domains, request shapes, cookies, and extraction behavior must be re-verified immediately before implementation.
+- The approved runtime identities are an AniWatch-compatible HLS API plus AnimeTosho/Nyaa torrent
+  indexes. Zenshin is approved for episode metadata only. Their current domains and response shapes
+  must be re-verified before claiming live playback.
 - A different or replacement target still requires explicit user approval.
 - Metadata comes from AniList, not the scraped source.
 - A source outage disables playback from that adapter but leaves discovery, lists, progress, and manga working.
@@ -168,6 +227,27 @@ the Watch surface reports a truthful unavailable state.
 ### Degraded mode
 
 The title and library remain fully usable. Playback reports that the selected source is unavailable and may offer another approved adapter when one exists. Progress changes are not fabricated when playback never started.
+
+## MangaBaka manga enrichment
+
+| Item        | Value                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------- |
+| Base URL    | `https://api.mangabaka.org`                                                            |
+| Auth        | None declared for the integrated stable public read route                              |
+| Credentials | None                                                                                   |
+| Features    | Exact AniList-ID author, artist, publisher, chapter-total, and MangaUpdates enrichment |
+| Source      | User-provided MangaBaka OpenAPI document                                               |
+
+AniStream calls stable `GET /v1/source/anilist/{id}` with processed series enabled and raw/internal
+responses disabled. It accepts only one active series whose normalized `source.anilist.id` exactly
+matches the requested ID, uses a conservative six requests/minute application throttle, and caches
+the result for 24 hours. The MangaUpdates source ID/rating may be displayed from MangaBaka's
+normalized response; AniStream does not call MangaUpdates directly because the supplied
+MangaUpdates specification has no AniList lookup and leaves its identifier/auth relationship
+ambiguous.
+
+If MangaBaka is unavailable or the match is ambiguous, the MangaDex reader and AniList metadata
+continue normally; only supplemental author/artist/publisher/MangaUpdates fields are omitted.
 
 ## VidKing remote player (optional, explicitly labeled)
 
@@ -183,9 +263,14 @@ The title and library remain fully usable. Playback reports that the selected so
 
 VidKing documents `GET`-style embed URLs for `movie/{tmdbId}` and `tv/{tmdbId}/{season}/{episode}`. The documented query parameters include `color`, `autoPlay`, `nextEpisode`, and `episodeSelector`. The reviewed documentation does not publish a numeric request quota, native anime endpoint, direct HLS API, or AniList-ID mapping.
 
-AniStream therefore treats VidKing as a removable remote-player option, not as the primary anime source. It is used only when AniList details contain a TMDB external link; AniList title text is never used to guess a TMDB ID. A title without a verified mapping stays in the truthful unavailable state.
+AniStream therefore treats VidKing as a removable remote-player experiment, not as the primary
+anime source. It is not active in the current native player. If it is re-enabled later, it may be
+used only when AniList details contain a TMDB external link; AniList title text must never be used
+to guess a TMDB ID. A title without a verified mapping must stay in the truthful unavailable state.
 
-The parent window accepts only `PLAYER_EVENT` messages from `https://www.vidking.net`, validates the documented progress/ended signal, and advances the authenticated AniList entry through `SaveMediaListEntry`. The iframe itself remains an external service and its availability, source rights, and behavior are not controlled by AniStream.
+The retained iframe bridge accepts only `PLAYER_EVENT` messages from `https://www.vidking.net` and
+validates the documented progress/ended signal. VidKing remains an external service; its
+availability, source rights, and behavior are not controlled by AniStream.
 
 ### Degraded mode
 

@@ -43,6 +43,26 @@ describe("createRequestGate", () => {
     expect(calls).toBe(2);
   });
 
+  it("clears a rejected deduplicated call without creating an unhandled cleanup rejection", async () => {
+    const gate = createRequestGate({ requestsPerMinute: 25 });
+    let calls = 0;
+
+    await expect(
+      gate.run("recoverable-key", async () => {
+        calls += 1;
+        throw new Error("provider unavailable");
+      }),
+    ).rejects.toThrow("provider unavailable");
+
+    await expect(
+      gate.run("recoverable-key", async () => {
+        calls += 1;
+        return "recovered";
+      }),
+    ).resolves.toBe("recovered");
+    expect(calls).toBe(2);
+  });
+
   it("throttles starts to the configured limit within the window", async () => {
     vi.useFakeTimers();
     try {

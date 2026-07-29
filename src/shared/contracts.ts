@@ -2,7 +2,7 @@ export interface AppInfo {
   version: string;
   platform: string;
   databaseReady: boolean;
-  videoSourceStatus: "approved-not-implemented" | "configured";
+  videoSourceStatus: "approved-not-implemented" | "fallback-only" | "configured";
 }
 
 export type AniListMediaType = "ANIME" | "MANGA";
@@ -91,6 +91,38 @@ export interface AnimeEpisodeGuide {
   fetchedAt: string;
 }
 
+export interface AnimeEpisodeCatalogInput {
+  aniListId: number;
+  titles: string[];
+  seasonLabel?: string;
+  totalEpisodes?: number;
+}
+
+export interface AnimeProviderEpisode {
+  id: string;
+  number: number;
+  title?: string;
+  thumbnailUrl?: string;
+  description?: string;
+  durationMinutes?: number;
+}
+
+export interface AnimeProviderSeason {
+  id: string;
+  number: number;
+  title: string;
+  episodes: AnimeProviderEpisode[];
+}
+
+export interface AnimeEpisodeCatalog {
+  status: "available" | "unavailable";
+  provider: "aniwatch" | "zenshin";
+  providerTitle?: string;
+  seasons: AnimeProviderSeason[];
+  message?: string;
+  checkedAt: string;
+}
+
 export interface MangaDexAvailabilityInput {
   aniListId: number;
   title: string;
@@ -104,6 +136,111 @@ export interface MangaDexChapterAvailability {
   latestChapter?: number;
   checkedAt: string;
   message?: string;
+}
+
+export interface MangaDexReaderInput {
+  aniListId: number;
+  title: string;
+}
+
+export interface MangaDexReaderChapter {
+  id: string;
+  number?: number;
+  volume?: string;
+  title?: string;
+  translatedLanguage: string;
+  groupName?: string;
+  publishedAt?: string;
+  pages: number;
+}
+
+export interface MangaDexReaderSession {
+  status: "available" | "unmapped" | "unavailable";
+  aniListId: number;
+  mangaDexId?: string;
+  translatedLanguage: string;
+  chapters: MangaDexReaderChapter[];
+  message?: string;
+}
+
+export interface MangaDexPageInput {
+  chapterId: string;
+  page: number;
+  quality?: "data" | "data-saver";
+}
+
+export interface MangaDexReaderPage {
+  chapterId: string;
+  page: number;
+  pageCount: number;
+  imageDataUrl: string;
+}
+
+export interface MangaEnrichment {
+  status: "available" | "unavailable";
+  aniListId: number;
+  mangaBakaId?: number;
+  title?: string;
+  authors: string[];
+  artists: string[];
+  publishers: string[];
+  year?: number;
+  type?: string;
+  publicationStatus?: string;
+  rating?: number;
+  popularity?: number;
+  totalChapters?: number;
+  mangaUpdatesId?: string;
+  mangaUpdatesRating?: number;
+  message?: string;
+  checkedAt: string;
+}
+
+export interface AnimePlaybackInput {
+  aniListId: number;
+  title: string;
+  episode: number;
+  providerEpisodeId?: string;
+  audio?: "sub" | "dub";
+}
+
+export interface AnimePlaybackCandidate {
+  id: string;
+  label: string;
+  kind: "hls" | "torrent";
+  url: string;
+  quality?: string;
+  language?: string;
+  provider?: string;
+  subtitles?: Array<{
+    label: string;
+    language?: string;
+    url: string;
+  }>;
+  seeders?: number;
+  sizeBytes?: number;
+}
+
+export interface AnimePlaybackResult {
+  status: "available" | "unavailable";
+  candidates: AnimePlaybackCandidate[];
+  attemptedSources: string[];
+  message?: string;
+}
+
+export interface PlaybackResume {
+  aniListId: number;
+  episode: number;
+  positionSeconds: number;
+  durationSeconds: number;
+  updatedAt: string;
+}
+
+export interface SavePlaybackResumeInput {
+  aniListId: number;
+  episode: number;
+  positionSeconds: number;
+  durationSeconds: number;
 }
 
 export interface AniListNamedPerson {
@@ -204,8 +341,17 @@ export interface AniStreamBridge {
   updateAniListEntry(input: UpdateAniListEntryInput): Promise<void>;
   deleteAniListEntry(id: number): Promise<void>;
   getAnimeEpisodeGuide(slug: string): Promise<AnimeEpisodeGuide>;
+  getAnimeEpisodeCatalog(input: AnimeEpisodeCatalogInput): Promise<AnimeEpisodeCatalog>;
   getMangaDexAvailability(
     media: MangaDexAvailabilityInput[],
   ): Promise<MangaDexChapterAvailability[]>;
+  getMangaDexReader(input: MangaDexReaderInput): Promise<MangaDexReaderSession>;
+  getMangaDexPage(input: MangaDexPageInput): Promise<MangaDexReaderPage>;
+  getMangaEnrichment(aniListId: number): Promise<MangaEnrichment>;
+  getAnimePlayback(input: AnimePlaybackInput): Promise<AnimePlaybackResult>;
+  getPlaybackResume(aniListId: number): Promise<PlaybackResume | undefined>;
+  savePlaybackResume(input: SavePlaybackResumeInput): Promise<void>;
+  clearPlaybackResume(aniListId: number): Promise<void>;
+  openTorrentMagnet(magnetUrl: string): Promise<void>;
   onAniListAuthChanged(callback: (state: AniListAuthState) => void): () => void;
 }

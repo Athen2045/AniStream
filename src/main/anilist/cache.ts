@@ -1,6 +1,7 @@
 export interface BoundedCache<T> {
   get(key: string): T | undefined;
   set(key: string, value: T): void;
+  delete(key: string): void;
 }
 
 export interface BoundedCacheOptions {
@@ -31,6 +32,9 @@ export function createBoundedCache<T>(options: BoundedCacheOptions): BoundedCach
         const oldestKey = store.keys().next().value;
         if (oldestKey !== undefined) store.delete(oldestKey);
       }
+    },
+    delete(key) {
+      store.delete(key);
     },
   };
 }

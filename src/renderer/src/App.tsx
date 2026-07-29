@@ -37,6 +37,7 @@ export function App(): React.JSX.Element {
   const [view, setView] = useState<"ANIME" | "MANGA" | "PROFILE">("ANIME");
   const [browseQuery, setBrowseQuery] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<AniListCatalogMedia>();
+  const [selectedAction, setSelectedAction] = useState<"details" | "play" | "read">("details");
   const [mediaType, setMediaType] = useState<AniListMediaType>("ANIME");
   const [selectedGroup, setSelectedGroup] = useState("");
   const [listQuery, setListQuery] = useState("");
@@ -249,7 +250,7 @@ export function App(): React.JSX.Element {
           </button>
         </div>
         <GlobalSearch
-          onSelect={setSelectedMedia}
+          onSelect={(media) => openMedia(media, "details")}
           onSubmit={(query) => {
             setBrowseQuery(query);
             if (view === "PROFILE") setView("ANIME");
@@ -279,7 +280,8 @@ export function App(): React.JSX.Element {
           type={view}
           searchQuery={browseQuery}
           dashboard={dashboard}
-          onSelect={setSelectedMedia}
+          onSelect={(media) => openMedia(media, "details")}
+          onPrimary={(media) => openMedia(media, view === "ANIME" ? "play" : "read")}
         />
       ) : (
         <ProfileView
@@ -317,7 +319,11 @@ export function App(): React.JSX.Element {
         <Suspense fallback={null}>
           <MediaDetailModal
             media={selectedMedia}
-            onClose={() => setSelectedMedia(undefined)}
+            initialAction={selectedAction}
+            onClose={() => {
+              setSelectedMedia(undefined);
+              setSelectedAction("details");
+            }}
             onAdded={loadDashboard}
           />
         </Suspense>
@@ -328,6 +334,11 @@ export function App(): React.JSX.Element {
   function openCatalog(type: "ANIME" | "MANGA"): void {
     setBrowseQuery("");
     setView(type);
+  }
+
+  function openMedia(media: AniListCatalogMedia, action: "details" | "play" | "read"): void {
+    setSelectedAction(action);
+    setSelectedMedia(media);
   }
 }
 

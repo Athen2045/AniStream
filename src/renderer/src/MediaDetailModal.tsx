@@ -3,27 +3,34 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListMediaDetail,
-  AnimeEpisodeGuide,
-  AnimeEpisodeGuideEpisode,
+  MangaEnrichment,
+  MangaDexReaderChapter,
+  MangaDexReaderPage,
+  MangaDexReaderSession,
 } from "../../shared/contracts";
+import { AnimeWatchExperience } from "./AnimeWatchExperience";
 import { safeBackgroundUrl } from "./safe-css-url";
 
 export function MediaDetailModal({
   media,
+  initialAction = "details",
   onClose,
   onAdded,
 }: {
   media: AniListCatalogMedia;
+  initialAction?: "details" | "play" | "read";
   onClose: () => void;
   onAdded: () => Promise<void>;
 }): React.JSX.Element {
   const [detail, setDetail] = useState<AniListMediaDetail>();
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [showPlayback, setShowPlayback] = useState(false);
-  const [episodeGuide, setEpisodeGuide] = useState<AnimeEpisodeGuide>();
-  const [loadingGuide, setLoadingGuide] = useState(false);
-  const [activeEpisode, setActiveEpisode] = useState<AnimeEpisodeGuideEpisode>();
+  const [showPlayback, setShowPlayback] = useState(initialAction !== "details");
+  const [readerSession, setReaderSession] = useState<MangaDexReaderSession>();
+  const [activeChapter, setActiveChapter] = useState<MangaDexReaderChapter>();
+  const [readerPage, setReaderPage] = useState<MangaDexReaderPage>();
+  const [mangaEnrichment, setMangaEnrichment] = useState<MangaEnrichment>();
+  const [loadingReader, setLoadingReader] = useState(false);
   const [rating, setRating] = useState(0);
   const [savingTracker, setSavingTracker] = useState(false);
   const lastMarkedEpisode = useRef<number | undefined>(undefined);
@@ -51,6 +58,46 @@ export function MediaDetailModal({
   }, [media.id, media.type]);
 
   const resolved = detail ?? media;
+  const watchedEpisodes = detail?.listEntry?.progress ?? 0;
+  const initialEpisode =
+    resolved.totalProgress && watchedEpisodes >= resolved.totalProgress
+      ? resolved.totalProgress
+      : Math.max(1, watchedEpisodes + 1);
+
+  useEffect(() => {
+    if (media.type !== "MANGA") return;
+    let active = true;
+    void Promise.allSettled([
+      window.anistream.getMangaEnrichment(media.id),
+      window.anistream.getMangaDexReader({ aniListId: media.id, title: media.title }),
+    ]).then(([enrichmentResult, readerResult]) => {
+      if (!active) return;
+      if (enrichmentResult.status === "fulfilled") {
+        setMangaEnrichment(enrichmentResult.value);
+      }
+      if (readerResult.status === "fulfilled") {
+        setReaderSession(readerResult.value);
+        if (initialAction === "read") {
+          const nextChapter = (detail?.listEntry?.progress ?? 0) + 1;
+          const chapter =
+            readerResult.value.chapters.find(
+              (item) => item.number !== undefined && item.number >= nextChapter,
+            ) ?? readerResult.value.chapters.at(-1);
+          if (chapter) {
+            setActiveChapter(chapter);
+            void window.anistream
+              .getMangaDexPage({ chapterId: chapter.id, page: 0 })
+              .then((page) => {
+                if (active) setReaderPage(page);
+              });
+          }
+        }
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [detail?.listEntry?.progress, initialAction, media.id, media.title, media.type]);
 
   const ensureListEntry = useCallback(async (): Promise<AniListMediaDetail> => {
     const current = detail ?? (await window.anistream.getAniListMediaDetail(media.id, media.type));
@@ -114,34 +161,83 @@ export function MediaDetailModal({
     }
   }, [ensureListEntry, onAdded]);
 
-  useEffect(() => {
-    if (!showPlayback) return;
-    const handlePlayerMessage = (event: MessageEvent<unknown>): void => {
-      if (event.origin !== "https://www.vidking.net" || !isRecord(event.data)) return;
-      if (event.data.type !== "PLAYER_EVENT" || !isRecord(event.data.data)) return;
-      const playerData = event.data.data;
-      const progress = typeof playerData.progress === "number" ? playerData.progress : 0;
-      if (playerData.event === "ended" || progress >= 90) {
-        if (activeEpisode && !savingTracker) void markEpisodeWatched(activeEpisode.number);
-        else if (resolved.type === "ANIME" && resolved.format === "MOVIE" && !savingTracker) {
-          void markMediaCompleted();
-        }
+  const markChapterRead = useCallback(
+    async (chapter: MangaDexReaderChapter): Promise<void> => {
+      if (chapter.number === undefined) return;
+      setSavingTracker(true);
+      try {
+        const current = await ensureListEntry();
+        if (!current.listEntry) throw new Error("AniList entry was not created.");
+        const nextProgress = Math.max(current.listEntry.progress, Math.floor(chapter.number));
+        await window.anistream.updateAniListEntry({
+          id: current.listEntry.id,
+          progress: nextProgress,
+          status:
+            current.totalProgress && nextProgress >= current.totalProgress
+              ? "COMPLETED"
+              : "CURRENT",
+        });
+        const updated = await window.anistream.getAniListMediaDetail(current.id, current.type);
+        setDetail(updated);
+        await onAdded();
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : "Unable to update manga progress.");
+      } finally {
+        setSavingTracker(false);
       }
-    };
-    window.addEventListener("message", handlePlayerMessage);
-    return () => window.removeEventListener("message", handlePlayerMessage);
-  }, [
-    activeEpisode,
-    markEpisodeWatched,
-    markMediaCompleted,
-    resolved,
-    savingTracker,
-    showPlayback,
-  ]);
+    },
+    [ensureListEntry, onAdded],
+  );
+
+  const loadReader = useCallback(async (): Promise<void> => {
+    setLoadingReader(true);
+    setError(undefined);
+    try {
+      const session =
+        readerSession ??
+        (await window.anistream.getMangaDexReader({
+          aniListId: resolved.id,
+          title: resolved.title,
+        }));
+      setReaderSession(session);
+      const nextChapter = (detail?.listEntry?.progress ?? 0) + 1;
+      const chapter =
+        session.chapters.find((item) => item.number !== undefined && item.number >= nextChapter) ??
+        session.chapters.at(-1);
+      setActiveChapter(chapter);
+      setReaderPage(undefined);
+      if (chapter) {
+        const page = await window.anistream.getMangaDexPage({ chapterId: chapter.id, page: 0 });
+        setReaderPage(page);
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to open MangaDex reader.");
+    } finally {
+      setLoadingReader(false);
+    }
+  }, [detail, readerSession, resolved.id, resolved.title]);
+
+  const loadReaderPage = useCallback(
+    async (chapter: MangaDexReaderChapter, page: number): Promise<void> => {
+      setLoadingReader(true);
+      setError(undefined);
+      try {
+        setActiveChapter(chapter);
+        const nextPage = await window.anistream.getMangaDexPage({ chapterId: chapter.id, page });
+        setReaderPage(nextPage);
+        if (page + 1 === nextPage.pageCount) void markChapterRead(chapter);
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : "Unable to load MangaDex page.");
+      } finally {
+        setLoadingReader(false);
+      }
+    },
+    [markChapterRead],
+  );
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !document.fullscreenElement) onClose();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
@@ -173,8 +269,8 @@ export function MediaDetailModal({
                 className="play-action"
                 type="button"
                 onClick={() => {
-                  setActiveEpisode(episodeGuide?.episodes[0]);
                   setShowPlayback(true);
+                  if (resolved.type === "MANGA") void loadReader();
                 }}
               >
                 {resolved.type === "ANIME" ? (
@@ -213,95 +309,40 @@ export function MediaDetailModal({
           {error ? <p className="error-banner">{error}</p> : null}
 
           {showPlayback ? (
-            <section className="playback-stage">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPlayback(false);
-                  setActiveEpisode(undefined);
-                }}
-              >
-                Close player
-              </button>
-              {buildVidKingUrl(resolved, activeEpisode) ? (
-                <iframe
-                  className="vidking-player"
-                  title={`${resolved.title} player`}
-                  src={buildVidKingUrl(resolved, activeEpisode)}
-                  allow="autoplay; fullscreen; picture-in-picture"
-                  allowFullScreen
+            resolved.type === "ANIME" ? (
+              <AnimeWatchExperience
+                media={resolved}
+                initialEpisode={initialEpisode}
+                onEpisodeWatched={markEpisodeWatched}
+              />
+            ) : (
+              <section className="playback-stage">
+                <button type="button" onClick={() => setShowPlayback(false)}>
+                  Close reader
+                </button>
+                <MangaReader
+                  session={readerSession}
+                  chapter={activeChapter}
+                  page={readerPage}
+                  loading={loadingReader}
+                  onChapterChange={(chapter) => void loadReaderPage(chapter, 0)}
+                  onPageChange={(page) => {
+                    if (activeChapter) void loadReaderPage(activeChapter, page);
+                  }}
                 />
-              ) : (
-                <div>
-                  {resolved.type === "ANIME" ? <Play size={42} /> : <BookOpen size={42} />}
-                  <h3>
-                    {resolved.type === "ANIME"
-                      ? "VidKing mapping is unavailable for this title"
-                      : "MangaDex reader is the next adapter"}
-                  </h3>
-                  <p>
-                    VidKing requires a TMDB movie or TV ID. AniStream keeps AniList as the source of
-                    truth and will use VidKing only when a verified TMDB mapping is available.
-                  </p>
-                </div>
-              )}
-            </section>
+              </section>
+            )
           ) : null}
 
-          {resolved.type === "ANIME" ? (
-            <section className="episode-guide">
-              <div className="tracker-heading">
-                <div>
-                  <p className="catalog-kicker">Optional episode source</p>
-                  <h3>Episodes</h3>
-                </div>
-                <button
-                  className="quiet-button"
-                  type="button"
-                  disabled={loadingGuide}
-                  onClick={() => {
-                    setLoadingGuide(true);
-                    void window.anistream
-                      .getAnimeEpisodeGuide(slugify(resolved.title))
-                      .then(setEpisodeGuide)
-                      .catch((reason: unknown) =>
-                        setError(
-                          reason instanceof Error ? reason.message : "Episode guide failed.",
-                        ),
-                      )
-                      .finally(() => setLoadingGuide(false));
-                  }}
-                >
-                  {loadingGuide
-                    ? "Loading…"
-                    : episodeGuide
-                      ? "Refresh guide"
-                      : "Load episode guide"}
-                </button>
-              </div>
-              {episodeGuide?.message ? (
-                <p className="provider-note">{episodeGuide.message}</p>
-              ) : null}
-              {episodeGuide?.episodes.length ? (
-                <div className="episode-list">
-                  {episodeGuide.episodes.map((episode) => (
-                    <button
-                      type="button"
-                      key={episode.id}
-                      className={activeEpisode?.id === episode.id ? "active" : ""}
-                      onClick={() => {
-                        setActiveEpisode(episode);
-                        setShowPlayback(true);
-                      }}
-                    >
-                      <span>{episode.number}</span>
-                      <strong>{episode.title ?? `Episode ${episode.number}`}</strong>
-                      <Play size={15} fill="currentColor" />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </section>
+          {resolved.type === "MANGA" ? (
+            <MangaChapterBrowser
+              session={readerSession}
+              currentProgress={detail?.listEntry?.progress ?? 0}
+              onRead={(chapter) => {
+                setShowPlayback(true);
+                void loadReaderPage(chapter, 0);
+              }}
+            />
           ) : null}
 
           {detail ? (
@@ -388,6 +429,28 @@ export function MediaDetailModal({
                     <dd>{detail.studios.join(", ") || "—"}</dd>
                   </div>
                 ) : null}
+                {detail.type === "MANGA" && mangaEnrichment?.status === "available" ? (
+                  <>
+                    <div>
+                      <dt>Authors</dt>
+                      <dd>{mangaEnrichment.authors.join(", ") || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Artists</dt>
+                      <dd>{mangaEnrichment.artists.join(", ") || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Publishers</dt>
+                      <dd>{mangaEnrichment.publishers.join(", ") || "—"}</dd>
+                    </div>
+                    {mangaEnrichment.mangaUpdatesRating !== undefined ? (
+                      <div>
+                        <dt>MU score</dt>
+                        <dd>{mangaEnrichment.mangaUpdatesRating.toFixed(2)} / 10</dd>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
                 <div>
                   <dt>Genres</dt>
                   <dd>{detail.genres.join(", ") || "—"}</dd>
@@ -454,6 +517,145 @@ export function MediaDetailModal({
   );
 }
 
+function MangaReader({
+  session,
+  chapter,
+  page,
+  loading,
+  onChapterChange,
+  onPageChange,
+}: {
+  session?: MangaDexReaderSession;
+  chapter?: MangaDexReaderChapter;
+  page?: MangaDexReaderPage;
+  loading: boolean;
+  onChapterChange: (chapter: MangaDexReaderChapter) => void;
+  onPageChange: (page: number) => void;
+}): React.JSX.Element {
+  if (loading && !page) return <p className="catalog-loading">Opening MangaDex reader…</p>;
+  if (!session || session.status !== "available" || !chapter || !page) {
+    return <p className="provider-note">{session?.message ?? "MangaDex reader is unavailable."}</p>;
+  }
+  return (
+    <div className="manga-reader">
+      <div className="reader-toolbar">
+        <select
+          aria-label="Chapter"
+          value={chapter.id}
+          onChange={(event) => {
+            const next = session.chapters.find((item) => item.id === event.target.value);
+            if (next) onChapterChange(next);
+          }}
+        >
+          {session.chapters.map((item) => (
+            <option key={item.id} value={item.id}>
+              Ch. {item.number ?? "?"}
+              {item.title ? ` — ${item.title}` : ""}
+            </option>
+          ))}
+        </select>
+        <span>
+          Page {page.page + 1} / {page.pageCount}
+        </span>
+      </div>
+      <img src={page.imageDataUrl} alt={`Page ${page.page + 1}`} className="manga-page" />
+      <div className="reader-pagination">
+        <button
+          type="button"
+          disabled={loading || page.page <= 0}
+          onClick={() => onPageChange(page.page - 1)}
+        >
+          Previous page
+        </button>
+        <button
+          type="button"
+          disabled={loading || page.page + 1 >= page.pageCount}
+          onClick={() => onPageChange(page.page + 1)}
+        >
+          Next page
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MangaChapterBrowser({
+  session,
+  currentProgress,
+  onRead,
+}: {
+  session?: MangaDexReaderSession;
+  currentProgress: number;
+  onRead: (chapter: MangaDexReaderChapter) => void;
+}): React.JSX.Element {
+  const [query, setQuery] = useState("");
+  const [descending, setDescending] = useState(true);
+  const chapters = [...(session?.chapters ?? [])]
+    .filter((chapter) => {
+      const normalized = query.trim().toLocaleLowerCase();
+      if (!normalized) return true;
+      return (
+        String(chapter.number ?? "").includes(normalized) ||
+        chapter.title?.toLocaleLowerCase().includes(normalized)
+      );
+    })
+    .sort((left, right) =>
+      descending
+        ? (right.number ?? -Infinity) - (left.number ?? -Infinity)
+        : (left.number ?? Infinity) - (right.number ?? Infinity),
+    );
+
+  return (
+    <section className="manga-chapter-browser">
+      <div className="chapter-browser-tabs">
+        <button type="button" className="active">
+          Chapters
+        </button>
+        <button type="button" disabled>
+          Volumes
+        </button>
+      </div>
+      <div className="chapter-browser-toolbar">
+        <input
+          type="search"
+          placeholder="Search chapter number or title…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <span>LANG · {session?.translatedLanguage?.toLocaleUpperCase() ?? "EN"}</span>
+        <span>TYPE · All</span>
+        <button type="button" onClick={() => setDescending((value) => !value)}>
+          Chapter {descending ? "↓" : "↑"}
+        </button>
+      </div>
+      {session?.status === "unavailable" || session?.status === "unmapped" ? (
+        <p className="provider-note">{session.message}</p>
+      ) : null}
+      {!session ? <p className="catalog-loading">Loading MangaDex chapters…</p> : null}
+      <div className="chapter-browser-list">
+        {chapters.map((chapter) => {
+          const completed =
+            chapter.number !== undefined && Math.floor(chapter.number) <= currentProgress;
+          return (
+            <button type="button" key={chapter.id} onClick={() => onRead(chapter)}>
+              <span className="chapter-language">
+                {chapter.translatedLanguage.toLocaleUpperCase()}
+              </span>
+              <strong>
+                Ch. {chapter.number ?? "?"}
+                {chapter.title ? <small> · {chapter.title}</small> : null}
+              </strong>
+              {completed ? <Check size={15} className="chapter-complete" /> : null}
+              <span>{relativeDate(chapter.publishedAt)}</span>
+              <BookOpen size={16} />
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function DetailPeople({
   title,
   people,
@@ -490,41 +692,14 @@ function cleanDescription(value?: string): string {
     .trim();
 }
 
-function slugify(title: string): string {
-  return title
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function buildVidKingUrl(
-  media: AniListMediaDetail | AniListCatalogMedia,
-  episode?: AnimeEpisodeGuideEpisode,
-): string | undefined {
-  const tmdbLink =
-    "externalLinks" in media
-      ? media.externalLinks.find((link) => /tmdb|movie database/i.test(link.site))
-      : undefined;
-  if (!tmdbLink) return undefined;
-
-  let tmdbId: string | undefined;
-  try {
-    const url = new URL(tmdbLink.url);
-    tmdbId = [...url.pathname.split("/")].reverse().find((part) => /^\d+$/.test(part));
-  } catch {
-    return undefined;
-  }
-  if (!tmdbId) return undefined;
-
-  const format = media.format?.toLocaleUpperCase();
-  if (format === "MOVIE") {
-    return `https://www.vidking.net/embed/movie/${tmdbId}?color=e50914&autoPlay=true`;
-  }
-  if (!episode) return undefined;
-  const season = episode.season ?? 1;
-  return `https://www.vidking.net/embed/tv/${tmdbId}/${season}/${episode.number}?color=e50914&autoPlay=true&nextEpisode=true&episodeSelector=true`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function relativeDate(value?: string): string {
+  if (!value) return "";
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "";
+  const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
+  if (days === 0) return "today";
+  if (days < 7) return `${days}d ago`;
+  if (days < 35) return `${Math.floor(days / 7)}w ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
 }

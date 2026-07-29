@@ -6,7 +6,10 @@
 - macOS is the only supported platform. Do not add Windows/Linux packaging or compatibility work unless the user asks.
 - Never commit API keys, OAuth secrets, access tokens, passwords, cookies, or personal library data.
 - Never expose secrets or unrestricted filesystem/network access to the Electron renderer.
-- Approved targets are AnimePahe HLS first, then AnimeTosho/Nyaa torrent fallback. Re-verify their current behavior before implementation; never silently add or replace a target.
+- The user explicitly accepted the risk of an AniWatch-compatible scraped HLS API as the primary
+  playback adapter, with AnimeTosho/Nyaa as fallback. Zenshin mapping is approved for exact AniList-ID
+  episode metadata, not streaming. Keep the HLS adapter removable and configurable; never silently
+  add another target.
 - Consumet is research material only. Do not add `@consumet/extensions`, depend on `api.consumet.org`, or copy its provider implementations without a new user-approved review of source availability, licensing, maintenance, and legal/ToS risk.
 - Aniyomi is an architecture/UX reference. Do not load Android APK extensions; implement native TypeScript source contracts in the Electron main process.
 - Do not scrape Netflix or MangaFire. They are visual references only.
@@ -16,6 +19,9 @@
   assume the supplied endpoint schema is verified, and do not make it load-bearing without explicit
   target-site authorization and cost/ToS review.
 - AniList is the primary metadata and tracker source. MangaDex owns manga/chapter delivery and its account state.
+- MangaBaka may enrich manga only through its exact AniList-ID route. MangaUpdates data may be
+  displayed from that normalized mapping, but do not call MangaUpdates directly until its canonical
+  numeric ID and ambiguous auth contract are verified.
 - AniList-to-MangaDex mappings may be accepted automatically only from an exact, unique
   `attributes.links.al` match. Never establish identity from title similarity alone.
 - Keep MangaDex public reading independent from account sync. Its personal-client password flow is
@@ -70,7 +76,8 @@ Agents may decide autonomously:
 
 Agents must ask the user or record an open decision before:
 
-- changing or adding a scraped/aggregator video target beyond the approved AnimePahe → AnimeTosho/Nyaa fallback order;
+- changing or adding a scraped/aggregator video target beyond the approved
+  AniWatch-compatible HLS → AnimeTosho/Nyaa fallback order;
 - accepting a paid API tier or recurring service cost;
 - changing v1 scope, supported platform, or tracker ownership;
 - introducing cloud storage, telemetry, remote accounts, or data sharing;
@@ -85,6 +92,9 @@ Agents must ask the user or record an open decision before:
 - Stop on 429/403 according to provider instructions; do not retry aggressively.
 - MangaDex images must follow MangaDex@Home, use the returned base URL as-is, omit auth headers, and be proxied by the trusted process.
 - Scraped adapters must be removable. A broken source may degrade playback, but must not break discovery, lists, or manga.
+- The public AniWatch deployment was unhealthy on 2026-07-28. Keep
+  `ANISTREAM_ANIWATCH_ENABLED` as a kill switch and `ANISTREAM_ANIWATCH_API_URL` configurable; never
+  claim live playback was verified unless a manifest and at least one segment actually played.
 
 ## Testing and verification
 

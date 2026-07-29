@@ -61,9 +61,13 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
       if (dedupeKey) {
         const key = dedupeKey;
         inFlight.set(key, execution);
-        void execution.finally(() => {
+        const clearInFlight = (): void => {
           if (inFlight.get(key) === execution) inFlight.delete(key);
-        });
+        };
+        // `finally()` would create a second promise that rejects whenever `execution`
+        // rejects. If that cleanup promise is ignored, an expected provider outage is
+        // reported by Electron as an unhandled rejection even though the caller handled it.
+        void execution.then(clearInFlight, clearInFlight);
       }
 
       return execution;

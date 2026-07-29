@@ -18,11 +18,13 @@ export function CatalogView({
   searchQuery,
   dashboard,
   onSelect,
+  onPrimary,
 }: {
   type: AniListMediaType;
   searchQuery: string;
   dashboard?: AniListDashboard;
   onSelect: (media: AniListCatalogMedia) => void;
+  onPrimary: (media: AniListCatalogMedia) => void;
 }): React.JSX.Element {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<BrowseAniListInput["sort"]>("TRENDING_DESC");
@@ -207,7 +209,7 @@ export function CatalogView({
                 `Discover ${hero.title} and keep your progress synced with AniList.`}
             </p>
             <div className="hero-actions">
-              <button className="play-action" type="button" onClick={() => onSelect(hero)}>
+              <button className="play-action" type="button" onClick={() => onPrimary(hero)}>
                 {type === "ANIME" ? <Play size={20} fill="currentColor" /> : <Search size={20} />}
                 {type === "ANIME" ? "Watch" : "Read"}
               </button>
@@ -227,6 +229,7 @@ export function CatalogView({
             eyebrow="From your AniList"
             entries={continueEntries}
             onSelect={onSelect}
+            onPrimary={onPrimary}
           />
         ) : null}
         {!searchQuery && topRated.length ? (
@@ -348,12 +351,14 @@ function MediaRail({
   items,
   entries,
   onSelect,
+  onPrimary,
 }: {
   title: string;
   eyebrow: string;
   items?: AniListCatalogMedia[];
   entries?: AniListEntry[];
   onSelect: (media: AniListCatalogMedia) => void;
+  onPrimary?: (media: AniListCatalogMedia) => void;
 }): React.JSX.Element {
   const cards = items ?? entries?.map(toCatalogMedia) ?? [];
   return (
@@ -373,7 +378,7 @@ function MediaRail({
               type="button"
               className="rail-card"
               key={media.id}
-              onClick={() => onSelect(media)}
+              onClick={() => (entry && onPrimary ? onPrimary(media) : onSelect(media))}
             >
               <span className="rail-art">
                 <img src={media.coverUrl} alt="" loading="lazy" />

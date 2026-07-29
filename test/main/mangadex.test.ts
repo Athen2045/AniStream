@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  MangaDexClient,
   findExactAniListMapping,
   findLatestNumericChapter,
+  normalizeAtHomeNode,
+  normalizeChapters,
   parseRateLimitCooldownMs,
 } from "../../src/main/mangadex";
 
@@ -48,5 +51,92 @@ describe("MangaDex normalization", () => {
   it("honors MangaDex's UNIX reset timestamp before generic Retry-After", () => {
     const resetAt = Math.floor(Date.now() / 1_000) + 30;
     expect(parseRateLimitCooldownMs(String(resetAt), "120")).toBeGreaterThan(28_000);
+  });
+
+  it("normalizes only readable translated chapter records", () => {
+    expect(
+      normalizeChapters({
+        data: [
+          {
+            id: "chapter-one",
+            attributes: {
+              chapter: "1",
+              title: "Beginning",
+              pages: 24,
+              translatedLanguage: "en",
+              publishAt: "2026-01-01T00:00:00+00:00",
+            },
+            relationships: [{ type: "scanlation_group", attributes: { name: "Sample Group" } }],
+          },
+          { id: "invalid", attributes: { pages: 0, translatedLanguage: "en" } },
+        ],
+      }),
+    ).toEqual([
+      {
+        id: "chapter-one",
+        number: 1,
+        title: "Beginning",
+        pages: 24,
+        translatedLanguage: "en",
+        publishedAt: "2026-01-01T00:00:00+00:00",
+        groupName: "Sample Group",
+      },
+    ]);
+  });
+
+  it("accepts only HTTPS MangaDex@Home nodes with complete image metadata", () => {
+    expect(
+      normalizeAtHomeNode({
+        baseUrl: "https://uploads.mangadex.org",
+        chapter: { hash: "safe_hash", data: ["1.jpg"], dataSaver: ["1.jpg"] },
+      }),
+    ).toEqual({
+      baseUrl: "https://uploads.mangadex.org",
+      hash: "safe_hash",
+      data: ["1.jpg"],
+      dataSaver: ["1.jpg"],
+    });
+    expect(() =>
+      normalizeAtHomeNode({
+        baseUrl: "http://not-https.example",
+        chapter: { hash: "safe_hash", data: ["1.jpg"], dataSaver: ["1.jpg"] },
+      }),
+    ).toThrow(/non-HTTPS/);
+  });
+
+  it("refreshes an expired MangaDex@Home node once after an image 404", async () => {
+    const responses = [
+      Response.json({
+        baseUrl: "https://old-node.example",
+        chapter: { hash: "old_hash", data: ["1.jpg"], dataSaver: ["1.jpg"] },
+      }),
+      new Response("", { status: 404 }),
+      Response.json({
+        baseUrl: "https://fresh-node.example",
+        chapter: { hash: "fresh_hash", data: ["1.jpg"], dataSaver: ["1.jpg"] },
+      }),
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      }),
+    ];
+    const requestedUrls: string[] = [];
+    const fetcher = async (input: string | URL | Request): Promise<Response> => {
+      requestedUrls.push(String(input));
+      const response = responses.shift();
+      if (!response) throw new Error("Unexpected fetch.");
+      return response;
+    };
+    const client = new MangaDexClient("en", fetcher as typeof fetch);
+
+    const page = await client.getPage({ chapterId: "chapter-1", page: 0 });
+
+    expect(page.imageDataUrl).toBe("data:image/jpeg;base64,AQID");
+    expect(requestedUrls).toEqual([
+      "https://api.mangadex.org/at-home/server/chapter-1",
+      "https://old-node.example/data/old_hash/1.jpg",
+      "https://api.mangadex.org/at-home/server/chapter-1",
+      "https://fresh-node.example/data/fresh_hash/1.jpg",
+    ]);
   });
 });

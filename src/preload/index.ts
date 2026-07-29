@@ -8,10 +8,21 @@ import type {
   AniListMediaType,
   AniStreamBridge,
   AppInfo,
+  AnimeEpisodeCatalog,
+  AnimeEpisodeCatalogInput,
   AnimeEpisodeGuide,
   BrowseAniListInput,
   MangaDexAvailabilityInput,
   MangaDexChapterAvailability,
+  MangaDexPageInput,
+  MangaDexReaderInput,
+  MangaDexReaderPage,
+  MangaDexReaderSession,
+  MangaEnrichment,
+  AnimePlaybackInput,
+  AnimePlaybackResult,
+  PlaybackResume,
+  SavePlaybackResumeInput,
   UpdateAniListEntryInput,
 } from "../shared/contracts";
 
@@ -35,8 +46,26 @@ const bridge: AniStreamBridge = {
     ipcRenderer.invoke("anilist:delete-entry", id) as Promise<void>,
   getAnimeEpisodeGuide: (slug: string) =>
     ipcRenderer.invoke("anime:episode-guide", slug) as Promise<AnimeEpisodeGuide>,
+  getAnimeEpisodeCatalog: (input: AnimeEpisodeCatalogInput) =>
+    ipcRenderer.invoke("anime:episode-catalog", input) as Promise<AnimeEpisodeCatalog>,
   getMangaDexAvailability: (media: MangaDexAvailabilityInput[]) =>
     ipcRenderer.invoke("mangadex:availability", media) as Promise<MangaDexChapterAvailability[]>,
+  getMangaDexReader: (input: MangaDexReaderInput) =>
+    ipcRenderer.invoke("mangadex:reader", input) as Promise<MangaDexReaderSession>,
+  getMangaDexPage: (input: MangaDexPageInput) =>
+    ipcRenderer.invoke("mangadex:page", input) as Promise<MangaDexReaderPage>,
+  getMangaEnrichment: (aniListId: number) =>
+    ipcRenderer.invoke("manga:enrichment", aniListId) as Promise<MangaEnrichment>,
+  getAnimePlayback: (input: AnimePlaybackInput) =>
+    ipcRenderer.invoke("anime:playback", input) as Promise<AnimePlaybackResult>,
+  getPlaybackResume: (aniListId: number) =>
+    ipcRenderer.invoke("playback:resume", aniListId) as Promise<PlaybackResume | undefined>,
+  savePlaybackResume: (input: SavePlaybackResumeInput) =>
+    ipcRenderer.invoke("playback:save-resume", input) as Promise<void>,
+  clearPlaybackResume: (aniListId: number) =>
+    ipcRenderer.invoke("playback:clear-resume", aniListId) as Promise<void>,
+  openTorrentMagnet: (magnetUrl: string) =>
+    ipcRenderer.invoke("anime:open-torrent", magnetUrl) as Promise<void>,
   onAniListAuthChanged: (callback: (state: AniListAuthState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AniListAuthState): void => {
       callback(state);
