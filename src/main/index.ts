@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { AniListClient } from "./anilist";
 import { getAnimeEpisodeGuide } from "./parse-anime";
+import { MalClient } from "./mal";
 import { MangaDexClient } from "./mangadex";
 import { MangaBakaClient } from "./mangabaka";
 import { AnimeTorrentSourceClient } from "./anime-sources";
@@ -31,6 +32,7 @@ let database: AppDatabase | undefined;
 let mainWindow: BrowserWindow | undefined;
 let aniList: AniListClient | undefined;
 let mangaDex: MangaDexClient | undefined;
+let mal: MalClient | undefined;
 let mangaBaka: MangaBakaClient | undefined;
 let animeTorrents: AnimeTorrentSourceClient | undefined;
 let aniwatch: AniwatchApiClient | undefined;
@@ -40,8 +42,10 @@ let pendingProtocolUrl: string | undefined;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
+    // Standard macOS app default: matches the 1440x900 logical resolution of MacBook
+    // displays so the window opens full-feeling without being maximized.
+    width: 1440,
+    height: 900,
     minWidth: 960,
     minHeight: 640,
     titleBarStyle: "hiddenInset",
@@ -103,6 +107,7 @@ app.whenReady().then(async () => {
     emitAniListState,
   );
   mangaDex = new MangaDexClient();
+  mal = new MalClient();
   mangaBaka = new MangaBakaClient();
   animeTorrents = new AnimeTorrentSourceClient();
   hlsProxy = new HlsProxy();
@@ -183,6 +188,22 @@ app.whenReady().then(async () => {
         checkedAt: new Date().toISOString(),
       };
     }
+  });
+  ipcMain.handle("anilist:latest-anime", async () => {
+    if (!aniList) throw new Error("AniList is not ready.");
+    return aniList.getLatestAnimeUpdates();
+  });
+  ipcMain.handle("mal:score", async (_event, type: AniListMediaType, malId: number) => {
+    if (!mal) throw new Error("MyAnimeList is not ready.");
+    return mal.getScore(type, malId);
+  });
+  ipcMain.handle("mal:trending-fallback", async (_event, type: AniListMediaType) => {
+    if (!mal) throw new Error("MyAnimeList is not ready.");
+    return mal.getRanking(type);
+  });
+  ipcMain.handle("mangadex:latest", async () => {
+    if (!mangaDex) throw new Error("MangaDex is not ready.");
+    return mangaDex.getLatestUpdates();
   });
   ipcMain.handle("mangadex:availability", async (_event, media: MangaDexAvailabilityInput[]) => {
     if (!mangaDex) throw new Error("MangaDex is not ready.");

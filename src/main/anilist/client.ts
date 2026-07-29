@@ -15,6 +15,7 @@ import {
   readClientSecretFromKeychain,
 } from "./keychain";
 import {
+  normalizeAiringUpdates,
   normalizeCatalogPage,
   normalizeGroups,
   normalizeMediaDetail,
@@ -23,6 +24,7 @@ import {
 } from "./normalize";
 import {
   ADD_ENTRY_MUTATION,
+  AIRING_UPDATES_QUERY,
   BROWSE_MEDIA_QUERY,
   DASHBOARD_QUERY,
   DELETE_ENTRY_MUTATION,
@@ -30,6 +32,7 @@ import {
   SEARCH_MEDIA_QUERY,
   UPDATE_ENTRY_MUTATION,
   VIEWER_QUERY,
+  type AiringUpdatesResponse,
   type BrowseResponse,
   type DashboardResponse,
   type GraphQlEnvelope,
@@ -40,7 +43,12 @@ import {
 } from "./queries";
 import { createRequestGate, type RequestGate } from "./request-queue";
 import { deleteSession, isMissingFileError, loadSession, saveSession } from "./session-store";
-import type { AniListMedia, AniListMediaDetail, AniListProfile } from "../../shared/contracts";
+import type {
+  AniListMedia,
+  AniListMediaDetail,
+  AniListProfile,
+  LatestAnimeUpdate,
+} from "../../shared/contracts";
 
 const ANILIST_CLIENT_ID = "47053";
 const ANILIST_REDIRECT_URI = "anistream://auth/anilist";
@@ -53,6 +61,9 @@ const ANILIST_TOKEN_URL = "https://anilist.co/api/v2/oauth/token";
 const REQUESTS_PER_MINUTE = 25;
 const BROWSE_CACHE_TTL_MS = 2 * 60_000;
 const DETAIL_CACHE_TTL_MS = 5 * 60_000;
+// New episodes air continuously; refetch the "latest updates" rail at most every 5 minutes.
+const AIRING_CACHE_TTL_MS = 5 * 60_000;
+const LATEST_ANIME_LIMIT = 20;
 // Used only when AniList's 429 response has no Retry-After header to honor.
 const DEFAULT_RATE_LIMIT_PAUSE_MS = 60_000;
 
@@ -70,6 +81,10 @@ export class AniListClient {
   private readonly detailCache = createBoundedCache<AniListMediaDetail>({
     maxEntries: 60,
     ttlMs: DETAIL_CACHE_TTL_MS,
+  });
+  private readonly airingCache = createBoundedCache<LatestAnimeUpdate[]>({
+    maxEntries: 1,
+    ttlMs: AIRING_CACHE_TTL_MS,
   });
 
   public constructor(
@@ -273,6 +288,22 @@ export class AniListClient {
     const page = normalizeCatalogPage(response.Page, input.type);
     this.browseCache.set(cacheKey, page);
     return page;
+  }
+
+  public async getLatestAnimeUpdates(): Promise<LatestAnimeUpdate[]> {
+    const cached = this.airingCache.get("latest");
+    if (cached) return cached;
+
+    // Request more schedules than needed: consecutive rows often repeat a title
+    // (batch uploads) and adult entries are filtered out after the fact.
+    const response = await this.publicRequest<AiringUpdatesResponse>(
+      AIRING_UPDATES_QUERY,
+      { page: 1, perPage: 50 },
+      "airing:latest",
+    );
+    const updates = normalizeAiringUpdates(response.Page, LATEST_ANIME_LIMIT);
+    this.airingCache.set("latest", updates);
+    return updates;
   }
 
   public async getMediaDetail(id: number, type: AniListMediaType): Promise<AniListMediaDetail> {

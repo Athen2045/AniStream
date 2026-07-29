@@ -1,4 +1,5 @@
 import type {
+  LatestMangaUpdate,
   MangaDexAvailabilityInput,
   MangaDexChapterAvailability,
   MangaDexPageInput,
@@ -17,6 +18,10 @@ const DEFAULT_RATE_LIMIT_PAUSE_MS = 60_000;
 const FORBIDDEN_PAUSE_MS = 5 * 60_000;
 const AT_HOME_CACHE_TTL_MS = 15 * 60_000;
 const PAGE_CACHE_MAX_ENTRIES = 18;
+// New chapter uploads land continuously; refetch the "latest updates" rail at most
+// every 5 minutes to stay polite to MangaDex.
+const LATEST_UPDATES_TTL_MS = 5 * 60_000;
+const LATEST_UPDATES_LIMIT = 20;
 
 type Fetcher = typeof fetch;
 
@@ -46,6 +51,10 @@ export class MangaDexClient {
     maxEntries: PAGE_CACHE_MAX_ENTRIES,
     ttlMs: AT_HOME_CACHE_TTL_MS,
   });
+  private readonly latestUpdatesCache = createBoundedCache<LatestMangaUpdate[]>({
+    maxEntries: 1,
+    ttlMs: LATEST_UPDATES_TTL_MS,
+  });
 
   public constructor(
     private readonly translatedLanguage = process.env.MANGADEX_LANGUAGE?.trim() || DEFAULT_LANGUAGE,
@@ -67,6 +76,29 @@ export class MangaDexClient {
       }
     }
     return Promise.all([...unique.values()].map((item) => this.resolveAvailability(item)));
+  }
+
+  public async getLatestUpdates(): Promise<LatestMangaUpdate[]> {
+    const cached = this.latestUpdatesCache.get("latest");
+    if (cached) return cached;
+
+    const url = new URL("/manga", MANGADEX_API_URL);
+    url.searchParams.set("limit", String(LATEST_UPDATES_LIMIT));
+    url.searchParams.append("order[latestUploadedChapter]", "desc");
+    url.searchParams.append("includes[]", "cover_art");
+    // All four ratings requested explicitly: MangaDex's API default excludes
+    // pornographic, and the user directed that adult content must not be filtered
+    // (2026-07-29).
+    url.searchParams.append("contentRating[]", "safe");
+    url.searchParams.append("contentRating[]", "suggestive");
+    url.searchParams.append("contentRating[]", "erotica");
+    url.searchParams.append("contentRating[]", "pornographic");
+    url.searchParams.append("availableTranslatedLanguage[]", this.translatedLanguage);
+
+    const payload = await this.requestJson(url);
+    const updates = parseLatestMangaUpdates(payload);
+    this.latestUpdatesCache.set("latest", updates);
+    return updates;
   }
 
   public async getReader(input: MangaDexReaderInput): Promise<MangaDexReaderSession> {
@@ -317,6 +349,65 @@ export function normalizeAtHomeNode(payload: unknown): AtHomeNode {
     throw new Error("MangaDex returned invalid page metadata.");
   }
   return { baseUrl: base.toString().replace(/\/$/, ""), hash, data, dataSaver };
+}
+
+/**
+ * Parses the /manga listing (ordered by latestUploadedChapter) into display rows.
+ * Cover art comes from the included cover_art relationship's static CDN path;
+ * the optional AniList mapping uses the same exact attributes.links.al rule as
+ * availability mapping — never title similarity.
+ */
+export function parseLatestMangaUpdates(payload: unknown): LatestMangaUpdate[] {
+  if (!isRecord(payload) || !Array.isArray(payload.data)) return [];
+  return payload.data.flatMap((value): LatestMangaUpdate[] => {
+    if (!isRecord(value) || !isSafeId(value.id)) return [];
+    const attributes = value.attributes;
+    if (!isRecord(attributes)) return [];
+
+    const title = readLocalizedTitle(attributes.title);
+    if (!title) return [];
+
+    const aniListRaw = isRecord(attributes.links) ? attributes.links.al : undefined;
+    const aniListId =
+      typeof aniListRaw === "string" && /^\d{1,10}$/.test(aniListRaw)
+        ? Number(aniListRaw)
+        : undefined;
+
+    const updatedAt = typeof attributes.updatedAt === "string" ? attributes.updatedAt : undefined;
+    if (!updatedAt) return [];
+
+    const coverFileName = findCoverFileName(value.relationships);
+    return [
+      {
+        mangaDexId: value.id,
+        aniListId,
+        title,
+        coverUrl: coverFileName
+          ? `https://uploads.mangadex.org/covers/${value.id}/${coverFileName}.256.jpg`
+          : undefined,
+        updatedAt,
+        mangaDexUrl: `https://mangadex.org/title/${value.id}`,
+      },
+    ];
+  });
+}
+
+function readLocalizedTitle(value: unknown): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const preferred = value.en ?? value["ja-ro"] ?? Object.values(value)[0];
+  return typeof preferred === "string" && preferred.trim() ? preferred.trim() : undefined;
+}
+
+function findCoverFileName(relationships: unknown): string | undefined {
+  if (!Array.isArray(relationships)) return undefined;
+  for (const relationship of relationships) {
+    if (!isRecord(relationship) || relationship.type !== "cover_art") continue;
+    const attributes = relationship.attributes;
+    if (!isRecord(attributes)) continue;
+    const fileName = attributes.fileName;
+    if (typeof fileName === "string" && /^[\w.-]{1,200}$/.test(fileName)) return fileName;
+  }
+  return undefined;
 }
 
 export function findExactAniListMapping(payload: unknown, aniListId: number): string | undefined {

@@ -9,6 +9,7 @@ import type {
   AniListMediaType,
   AniListNamedPerson,
   AniListProfile,
+  LatestAnimeUpdate,
 } from "../../shared/contracts";
 
 export function normalizeProfile(value: unknown): AniListProfile {
@@ -153,6 +154,7 @@ export function normalizeCatalogMedia(
 
   return {
     id: requiredNumber(media.id, "media ID"),
+    malId: optionalNumber(media.idMal),
     type: expectedType,
     title: preferredTitle,
     coverUrl: optionalString(cover.extraLarge) ?? requiredString(cover.large, "cover image"),
@@ -178,6 +180,39 @@ export function normalizeCatalogMedia(
         }
       : undefined,
   };
+}
+
+/**
+ * Normalizes the airingSchedules page into "latest aired episodes". Malformed rows are
+ * dropped and each anime appears once with its most recently aired episode. Adult titles
+ * are intentionally NOT filtered, per explicit user direction (2026-07-29).
+ */
+export function normalizeAiringUpdates(value: unknown, limit: number): LatestAnimeUpdate[] {
+  const page = asRecord(value, "AniList returned an invalid airing page.");
+  if (!Array.isArray(page.airingSchedules)) {
+    throw new Error("AniList returned invalid airing schedules.");
+  }
+
+  const byMediaId = new Map<number, LatestAnimeUpdate>();
+  for (const scheduleValue of page.airingSchedules) {
+    if (byMediaId.size >= limit) break;
+    if (!scheduleValue || typeof scheduleValue !== "object") continue;
+    const schedule = scheduleValue as Record<string, unknown>;
+    const episode = optionalNumber(schedule.episode);
+    const airedAt = optionalNumber(schedule.airingAt);
+    if (!episode || !airedAt || !schedule.media) continue;
+
+    let media: AniListCatalogMedia;
+    try {
+      media = normalizeCatalogMedia(schedule.media, "ANIME");
+    } catch {
+      continue;
+    }
+    if (!byMediaId.has(media.id)) {
+      byMediaId.set(media.id, { media, episode, airedAt });
+    }
+  }
+  return [...byMediaId.values()];
 }
 
 export function normalizeMediaDetail(

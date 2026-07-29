@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListMediaDetail,
+  MalScore,
   MangaEnrichment,
   MangaDexReaderChapter,
   MangaDexReaderPage,
@@ -33,6 +34,7 @@ export function MediaDetailModal({
   const [loadingReader, setLoadingReader] = useState(false);
   const [rating, setRating] = useState(0);
   const [savingTracker, setSavingTracker] = useState(false);
+  const [malScore, setMalScore] = useState<MalScore>();
   const lastMarkedEpisode = useRef<number | undefined>(undefined);
   const [error, setError] = useState<string>();
 
@@ -58,6 +60,29 @@ export function MediaDetailModal({
   }, [media.id, media.type]);
 
   const resolved = detail ?? media;
+  const malId = resolved.malId;
+
+  // MAL score cross-reference via AniList's own idMal mapping. Optional enrichment:
+  // failures and unconfigured clients resolve to "no score", never an error state.
+  useEffect(() => {
+    if (!malId) {
+      setMalScore(undefined);
+      return;
+    }
+    let active = true;
+    void window.anistream
+      .getMalScore(media.type, malId)
+      .then((score) => {
+        if (active) setMalScore(score);
+      })
+      .catch(() => {
+        if (active) setMalScore(undefined);
+      });
+    return () => {
+      active = false;
+    };
+  }, [malId, media.type]);
+
   const watchedEpisodes = detail?.listEntry?.progress ?? 0;
   const initialEpisode =
     resolved.totalProgress && watchedEpisodes >= resolved.totalProgress
@@ -409,7 +434,22 @@ export function MediaDetailModal({
             <div>
               <div className="detail-facts">
                 {resolved.averageScore ? (
-                  <span className="match">{resolved.averageScore}% score</span>
+                  <span className="match">{resolved.averageScore}% AniList</span>
+                ) : null}
+                {malScore?.score ? (
+                  <a
+                    className="mal-score"
+                    href={malScore.malUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={
+                      malScore.scoredBy
+                        ? `${malScore.score}/10 from ${malScore.scoredBy.toLocaleString()} MAL users`
+                        : `${malScore.score}/10 on MyAnimeList`
+                    }
+                  >
+                    {malScore.score} MAL
+                  </a>
                 ) : null}
                 {resolved.seasonYear ? <span>{resolved.seasonYear}</span> : null}
                 <span>{formatLabel(resolved.format)}</span>

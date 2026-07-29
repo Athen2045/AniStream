@@ -12,6 +12,10 @@ import type {
   AnimeEpisodeCatalogInput,
   AnimeEpisodeGuide,
   BrowseAniListInput,
+  LatestAnimeUpdate,
+  LatestMangaUpdate,
+  MalRankingItem,
+  MalScore,
   MangaDexAvailabilityInput,
   MangaDexChapterAvailability,
   MangaDexPageInput,
@@ -48,6 +52,14 @@ const bridge: AniStreamBridge = {
     ipcRenderer.invoke("anime:episode-guide", slug) as Promise<AnimeEpisodeGuide>,
   getAnimeEpisodeCatalog: (input: AnimeEpisodeCatalogInput) =>
     ipcRenderer.invoke("anime:episode-catalog", input) as Promise<AnimeEpisodeCatalog>,
+  getLatestAnimeUpdates: () =>
+    ipcRenderer.invoke("anilist:latest-anime") as Promise<LatestAnimeUpdate[]>,
+  getLatestMangaUpdates: () =>
+    ipcRenderer.invoke("mangadex:latest") as Promise<LatestMangaUpdate[]>,
+  getMalScore: (type: AniListMediaType, malId: number) =>
+    ipcRenderer.invoke("mal:score", type, malId) as Promise<MalScore | undefined>,
+  getMalTrendingFallback: (type: AniListMediaType) =>
+    ipcRenderer.invoke("mal:trending-fallback", type) as Promise<MalRankingItem[]>,
   getMangaDexAvailability: (media: MangaDexAvailabilityInput[]) =>
     ipcRenderer.invoke("mangadex:availability", media) as Promise<MangaDexChapterAvailability[]>,
   getMangaDexReader: (input: MangaDexReaderInput) =>

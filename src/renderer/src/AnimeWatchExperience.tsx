@@ -19,6 +19,9 @@ import type {
 const VideoJsPlayer = createPlayer({ features: videoFeatures });
 const PLAYER_ENTER_DURATION_MS = 420;
 const PLAYER_ENTER_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+// Remembered across episodes/sources for the whole session so switching episodes
+// doesn't reset the user's chosen volume.
+let sessionVolume = 0.8;
 
 type WatchView = "episodes" | "player";
 
@@ -484,11 +487,14 @@ function AniStreamVideo({
             preload="auto"
             onLoadedMetadata={(event) => {
               const video = event.currentTarget;
-              video.volume = 0.8;
+              video.volume = sessionVolume;
               if (resume && resume.positionSeconds < video.duration - 20) {
                 video.currentTime = resume.positionSeconds;
               }
               void video.play().catch(() => undefined);
+            }}
+            onVolumeChange={(event) => {
+              sessionVolume = event.currentTarget.volume;
             }}
             onPause={() => saveResume(true)}
             onTimeUpdate={(event) => updateProgress(event.currentTarget)}

@@ -1,6 +1,6 @@
 # AniStream — Context
 
-Last updated: 2026-07-29 by Codex Netflix episode browser and Video.js revamp session
+Last updated: 2026-07-29 by Claude Code MAL/MangaBaka indexing session
 
 ## Current phase
 
@@ -12,6 +12,37 @@ unhealthy; torrent handoff is the active fallback.
 
 ## What's working right now
 
+- The catalog home was simplified per user direction (2026-07-29): the "Top Rated", "Based on Your
+  Interest", and "Browse" sections are removed. The default view is now rails-only: Continue
+  Watching/Reading, a dedicated Trending top-20 rail (its own `TRENDING_DESC` fetch, rank badges),
+  and a new "Latest Anime Updates" / "Latest Manga Updates" rail. The paginated grid still appears
+  for search results. The genre-preference computation and `SCORE_DESC` prefetch were removed with
+  their rails.
+- Latest Anime Updates uses AniList's `airingSchedules(notYetAired: false, sort: TIME_DESC)` (one
+  row per anime, adult titles filtered in the normalizer, 5-minute cache). Latest Manga Updates uses
+  MangaDex `GET /manga?order[latestUploadedChapter]=desc` with `cover_art` includes, safe/suggestive
+  content ratings, and the configured language (5-minute cache, same 4 req/s gate). Manga rows with
+  an exact `links.al` AniList mapping open the in-app detail modal; unmapped rows open the MangaDex
+  page externally and are visually badged.
+- The default window is 1440x900 (standard macOS size, matching MacBook logical resolution);
+  minimum remains 960x640.
+- MyAnimeList public-data integration is live behind `ANISTREAM_MAL_CLIENT_ID` (stored in the
+  gitignored `.env`, sent only as the `X-MAL-CLIENT-ID` header; no OAuth secret stored): the detail
+  modal cross-references MAL community scores through AniList's own `idMal` field (now requested in
+  the shared catalog fragment), and when the AniList trending fetch fails, a MAL ranking rail renders
+  as the Trending fallback with clearly badged external-link cards. All MAL access is optional and
+  gated — an unconfigured client returns empty results, never errors.
+- Adult content is no longer filtered anywhere in the catalog per explicit user direction
+  (2026-07-29): `isAdult: false` was removed from AniList browse/search, the airing-updates
+  normalizer no longer drops `isAdult` rows, and MangaDex latest-updates explicitly requests all
+  four content ratings (the API's default silently excludes `pornographic`).
+- MangaBaka requests attach `Authorization: Bearer` when `ANISTREAM_MANGABAKA_TOKEN` holds a real
+  `mb-`-prefixed PAT. The value the user supplied (`Anistream@401`) does not match MangaBaka's own
+  stated token format and is therefore deliberately not sent; unauthenticated access continues to
+  work in the meantime.
+- The session-scoped player volume now persists across episode/source switches instead of resetting
+  to 0.8; ~160 lines of dead episode-drawer/watch-layout CSS from the pre-Video.js design were
+  removed.
 - AniList authorization-code login restores its encrypted token/profile before window creation and
   persists until explicit logout. Browse, unified search, pagination, title details, profile lists,
   progress, scores, completion, add/edit/remove, and default latest-updated sorting work.
@@ -235,3 +266,25 @@ integration` against the workflow-runs API. `github/codeql-action/analyze` needs
 - 2026-07-28: Adopted MangaBaka's stable `/v1/source/anilist/{id}` route as exact-ID supplemental manga metadata. Direct MangaUpdates lookup remains deferred because the supplied OpenAPI does not establish a safe AniList-ID mapping contract.
 - 2026-07-28: Replaced request-gate `finally()` cleanup with a handled two-branch cleanup after runtime testing exposed false unhandled-rejection warnings during expected provider outages. MangaDex@Home image `404`/`410` responses now invalidate the scoped node and retry once with a fresh allocation.
 - 2026-07-29: Replaced the compact player/episode drawer with a Netflix-reference episode browser and a separate fullscreen player state. Adopted `@videojs/react@10.0.0-beta.25` with its recommended `HlsJsVideo` media component for accessible controls and adaptive HLS, while keeping stream resolution, URL brokering, resume, tracker updates, and torrent fallback outside the player library. The episode-to-player transition uses only transform/opacity motion and honors reduced-motion preferences.
+- 2026-07-29: Simplified the catalog home per user direction: removed the "Top Rated", "Based on
+  Your Interest", and "Browse" sections (the paginated grid remains for search results only),
+  promoted Trending to a dedicated top-20 rail with its own `TRENDING_DESC` fetch, and added
+  "Latest Anime Updates" (AniList `airingSchedules`, adult-filtered, deduped per title) and
+  "Latest Manga Updates" (MangaDex `order[latestUploadedChapter]=desc` with cover art). Latest-manga
+  rows use the existing exact `links.al` mapping rule — mapped rows open the in-app AniList detail
+  modal, unmapped rows open MangaDex externally with a visible badge, never guessed by title.
+  Default window raised to 1440×900. MyAnimeList and MangaBaka were _not_ integrated in this pass;
+  the user plans to supply their API documentation separately for future index strengthening
+  (MangaBaka's exact-ID route is already used for manga enrichment per the 2026-07-28 entry).
+- 2026-07-29 (later): Integrated MyAnimeList as supplemental indexing per user direction — "if one
+  fails, the other takes over" plus score cross-referencing. Scope: MAL community scores in the
+  detail modal (cross-referenced via AniList's own `idMal`, never title matching) and a MAL ranking
+  rail as the Trending fallback when AniList is unreachable. AniList remains the sole tracker and
+  primary metadata source; MAL cannot substitute for lists/auth. The MAL Client ID lives in the
+  gitignored `.env` (public reads only, ID-as-header; no OAuth secret stored) — it was shared in
+  chat but is a public identifier sent on every request, so rotation is unnecessary, unlike the
+  AniList secret incident. Also per explicit user direction, adult-content filtering was removed
+  across AniList browse/search, airing updates, and MangaDex latest updates. MangaBaka PAT plumbing
+  added but inactive: the supplied value doesn't match the documented `mb-` prefix (likely the token
+  name, not the token) and is deliberately withheld from request headers until a real PAT is
+  provided.

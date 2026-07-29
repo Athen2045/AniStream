@@ -19,7 +19,13 @@ export class MangaBakaClient {
   });
   private readonly cache = new Map<number, CachedEnrichment>();
 
-  public constructor(private readonly fetcher: Fetcher = fetch) {}
+  public constructor(
+    private readonly fetcher: Fetcher = fetch,
+    // Optional PAT: the API works unauthenticated, a token raises rate limits.
+    // Real MangaBaka tokens start with "mb-"; other values are ignored rather
+    // than sent, so a mispasted token name never leaks into request headers.
+    private readonly accessToken = readConfiguredToken(),
+  ) {}
 
   public async getEnrichment(aniListId: number): Promise<MangaEnrichment> {
     if (!Number.isInteger(aniListId) || aniListId <= 0) {
@@ -36,6 +42,7 @@ export class MangaBakaClient {
         headers: {
           Accept: "application/json",
           "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+          ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
         },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       }),
@@ -49,6 +56,11 @@ export class MangaBakaClient {
     this.cache.set(aniListId, { expiresAt: Date.now() + CACHE_TTL_MS, value });
     return value;
   }
+}
+
+export function readConfiguredToken(): string | undefined {
+  const token = process.env.ANISTREAM_MANGABAKA_TOKEN?.trim();
+  return token?.startsWith("mb-") ? token : undefined;
 }
 
 export function parseMangaBakaEnrichment(payload: unknown, aniListId: number): MangaEnrichment {

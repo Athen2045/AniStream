@@ -118,7 +118,7 @@ export const DELETE_ENTRY_MUTATION = `
 export const SEARCH_MEDIA_QUERY = `
   query SearchAniStreamMedia($query: String!, $type: MediaType!) {
     Page(page: 1, perPage: 12) {
-      media(search: $query, type: $type, isAdult: false) {
+      media(search: $query, type: $type) {
         id
         type
         title {
@@ -153,6 +153,7 @@ export const ADD_ENTRY_MUTATION = `
 const CATALOG_MEDIA_FIELDS = `
   fragment AniStreamCatalogMedia on Media {
     id
+    idMal
     type
     title {
       userPreferred
@@ -199,8 +200,23 @@ export const BROWSE_MEDIA_QUERY = `
         lastPage
         hasNextPage
       }
-      media(type: $type, search: $search, genre: $genre, sort: $sort, isAdult: false) {
+      media(type: $type, search: $search, genre: $genre, sort: $sort) {
         ...AniStreamCatalogMedia
+      }
+    }
+  }
+  ${CATALOG_MEDIA_FIELDS}
+`;
+
+export const AIRING_UPDATES_QUERY = `
+  query AniStreamAiringUpdates($page: Int!, $perPage: Int!) {
+    Page(page: $page, perPage: $perPage) {
+      airingSchedules(notYetAired: false, sort: TIME_DESC) {
+        episode
+        airingAt
+        media {
+          ...AniStreamCatalogMedia
+        }
       }
     }
   }
@@ -321,6 +337,10 @@ export interface SearchResponse {
 }
 
 export interface BrowseResponse {
+  Page?: unknown;
+}
+
+export interface AiringUpdatesResponse {
   Page?: unknown;
 }
 

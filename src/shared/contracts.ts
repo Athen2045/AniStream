@@ -44,6 +44,8 @@ export interface AniListMedia {
 }
 
 export interface AniListCatalogMedia extends AniListMedia {
+  /** MAL cross-reference from AniList's own idMal field; enables MAL score lookups. */
+  malId?: number;
   bannerUrl?: string;
   description?: string;
   genres: string[];
@@ -121,6 +123,37 @@ export interface AnimeEpisodeCatalog {
   seasons: AnimeProviderSeason[];
   message?: string;
   checkedAt: string;
+}
+
+export interface MalScore {
+  malId: number;
+  score?: number;
+  rank?: number;
+  scoredBy?: number;
+  malUrl: string;
+}
+
+export interface MalRankingItem {
+  malId: number;
+  title: string;
+  coverUrl?: string;
+  score?: number;
+  malUrl: string;
+}
+
+export interface LatestAnimeUpdate {
+  media: AniListCatalogMedia;
+  episode: number;
+  airedAt: number;
+}
+
+export interface LatestMangaUpdate {
+  mangaDexId: string;
+  aniListId?: number;
+  title: string;
+  coverUrl?: string;
+  updatedAt: string;
+  mangaDexUrl: string;
 }
 
 export interface MangaDexAvailabilityInput {
@@ -342,6 +375,10 @@ export interface AniStreamBridge {
   deleteAniListEntry(id: number): Promise<void>;
   getAnimeEpisodeGuide(slug: string): Promise<AnimeEpisodeGuide>;
   getAnimeEpisodeCatalog(input: AnimeEpisodeCatalogInput): Promise<AnimeEpisodeCatalog>;
+  getLatestAnimeUpdates(): Promise<LatestAnimeUpdate[]>;
+  getLatestMangaUpdates(): Promise<LatestMangaUpdate[]>;
+  getMalScore(type: AniListMediaType, malId: number): Promise<MalScore | undefined>;
+  getMalTrendingFallback(type: AniListMediaType): Promise<MalRankingItem[]>;
   getMangaDexAvailability(
     media: MangaDexAvailabilityInput[],
   ): Promise<MangaDexChapterAvailability[]>;

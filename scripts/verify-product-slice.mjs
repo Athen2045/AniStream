@@ -58,7 +58,13 @@ for (const [name, source, fragments] of [
   [
     "catalog rails",
     catalog,
-    ["ContentCarousel", "Based on Your Interest", "getMangaDexAvailability"],
+    [
+      "ContentCarousel",
+      "Trending {mediaName}",
+      "Latest Anime Updates",
+      "Latest Manga Updates",
+      "getMangaDexAvailability",
+    ],
   ],
 ]) {
   for (const fragment of fragments) {
