@@ -179,4 +179,62 @@ describe("MangaDex normalization", () => {
       /external publisher site or is no longer available/,
     );
   });
+
+  it("falls back across every language when the configured language has zero chapters", async () => {
+    const responses = [
+      Response.json({
+        data: [{ id: "manga-1", attributes: { links: { al: "500" }, status: "ongoing" } }],
+      }),
+      Response.json({ data: [], total: 0 }),
+      Response.json({
+        data: [
+          {
+            id: "chapter-es",
+            attributes: { chapter: "1", pages: 20, translatedLanguage: "es" },
+          },
+        ],
+        total: 1,
+      }),
+    ];
+    const requestedUrls: string[] = [];
+    const fetcher = async (input: string | URL | Request): Promise<Response> => {
+      requestedUrls.push(String(input));
+      const response = responses.shift();
+      if (!response) throw new Error("Unexpected fetch.");
+      return response;
+    };
+    const client = new MangaDexClient("en", fetcher as typeof fetch);
+
+    const session = await client.getReader({ aniListId: 500, title: "Sample Manga" });
+
+    expect(session.status).toBe("available");
+    expect(session.translatedLanguage).toBe("multi");
+    expect(session.chapters).toEqual([
+      expect.objectContaining({ id: "chapter-es", number: 1, translatedLanguage: "es" }),
+    ]);
+    expect(requestedUrls[1]).toContain("translatedLanguage%5B%5D=en");
+    expect(requestedUrls[2]).not.toContain("translatedLanguage%5B%5D");
+  });
+
+  it("does not filter the aggregate availability check to a single language", async () => {
+    const responses = [
+      Response.json({
+        data: [{ id: "manga-2", attributes: { links: { al: "700" }, status: "ongoing" } }],
+      }),
+      Response.json({ volumes: { "1": { chapters: { "3": {} } } } }),
+    ];
+    const requestedUrls: string[] = [];
+    const fetcher = async (input: string | URL | Request): Promise<Response> => {
+      requestedUrls.push(String(input));
+      const response = responses.shift();
+      if (!response) throw new Error("Unexpected fetch.");
+      return response;
+    };
+    const client = new MangaDexClient("en", fetcher as typeof fetch);
+
+    const [availability] = await client.getAvailability([{ aniListId: 700, title: "Another Manga" }]);
+
+    expect(availability).toMatchObject({ status: "available", latestChapter: 3 });
+    expect(requestedUrls[1]).not.toContain("translatedLanguage");
+  });
 });

@@ -154,6 +154,15 @@ export function App(): React.JSX.Element {
     }
     return ids;
   }, [dashboard]);
+  // Keyed by media id (not list-entry id) so catalog/rail cards can look up whether a
+  // given title is already on the list, and if so, its real list-entry id for removal.
+  const libraryEntries = useMemo(() => {
+    const map = new Map<number, AniListEntry>();
+    for (const list of [...(dashboard?.animeLists ?? []), ...(dashboard?.mangaLists ?? [])]) {
+      for (const entry of list.entries) map.set(entry.media.id, entry);
+    }
+    return map;
+  }, [dashboard]);
 
   function switchMediaType(type: AniListMediaType): void {
     setMediaType(type);
@@ -181,6 +190,11 @@ export function App(): React.JSX.Element {
   async function deleteEntry(entry: AniListEntry): Promise<void> {
     if (!window.confirm(`Remove “${entry.media.title}” from your AniList?`)) return;
     await window.anistream.deleteAniListEntry(entry.id);
+    await loadDashboard();
+  }
+
+  async function quickAddToLibrary(media: AniListCatalogMedia): Promise<void> {
+    await window.anistream.addAniListEntry(media.id);
     await loadDashboard();
   }
 
@@ -293,8 +307,11 @@ export function App(): React.JSX.Element {
           type={view}
           searchQuery={browseQuery}
           dashboard={dashboard}
+          libraryEntries={libraryEntries}
           onSelect={(media) => openMedia(media, "details")}
           onPrimary={(media) => openMedia(media, view === "ANIME" ? "play" : "read")}
+          onQuickAdd={quickAddToLibrary}
+          onQuickRemove={deleteEntry}
         />
       ) : (
         <ProfileView

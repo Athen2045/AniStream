@@ -150,17 +150,26 @@ export class MangaDexClient {
           message: "MangaDex has no exact AniList mapping for this title.",
         });
       }
-      const chapters = await this.getChapters(mapping.id);
+      let chapters = await this.getChapters(mapping.id, this.translatedLanguage);
+      let translatedLanguage: string = this.translatedLanguage;
+      if (!chapters.length) {
+        // Many licensed titles have zero chapters in the configured language (their
+        // scanlations were taken down) while chapters in other languages remain fully
+        // available on MangaDex. Retry across every language before reporting "no
+        // chapters" so the reader doesn't hide chapters that actually exist.
+        chapters = await this.getChapters(mapping.id);
+        if (chapters.length) translatedLanguage = "multi";
+      }
       return this.rememberReader(cacheKey, {
         status: "available",
         aniListId: input.aniListId,
         mangaDexId: mapping.id,
         publicationStatus: mapping.publicationStatus,
-        translatedLanguage: this.translatedLanguage,
+        translatedLanguage,
         chapters,
         message: chapters.length
           ? undefined
-          : `No ${this.translatedLanguage} chapters are currently available on MangaDex.`,
+          : "No chapters are currently available on MangaDex in any language.",
       });
     } catch (error) {
       return {
@@ -272,8 +281,11 @@ export class MangaDexClient {
         });
       }
 
+      // Deliberately no translatedLanguage filter here: whether a manga is "available"
+      // (and what its latest chapter is) should reflect MangaDex as a whole, not just
+      // the configured reading language -- otherwise a title with only, say, Spanish
+      // chapters reports as having none at all.
       const aggregateUrl = new URL(`/manga/${mapping.id}/aggregate`, MANGADEX_API_URL);
-      aggregateUrl.searchParams.append("translatedLanguage[]", this.translatedLanguage);
       const aggregate = await this.requestJson(aggregateUrl);
       return this.remember(cacheKey, {
         aniListId: item.aniListId,
@@ -304,12 +316,22 @@ export class MangaDexClient {
     return findExactAniListManga(await this.requestJson(searchUrl), aniListId);
   }
 
-  private async getChapters(mangaDexId: string): Promise<MangaDexReaderChapter[]> {
+  /**
+   * `translatedLanguage` filters to one language when given; omitting it (the
+   * cross-language fallback in `getReader`) returns chapters in every language
+   * MangaDex has for this title.
+   */
+  private async getChapters(
+    mangaDexId: string,
+    translatedLanguage?: string,
+  ): Promise<MangaDexReaderChapter[]> {
     const chapters = new Map<string, MangaDexReaderChapter>();
     const fetchBatch = async (offset: number): Promise<unknown> => {
       const chaptersUrl = new URL("/chapter", MANGADEX_API_URL);
       chaptersUrl.searchParams.set("manga", mangaDexId);
-      chaptersUrl.searchParams.append("translatedLanguage[]", this.translatedLanguage);
+      if (translatedLanguage) {
+        chaptersUrl.searchParams.append("translatedLanguage[]", translatedLanguage);
+      }
       chaptersUrl.searchParams.append("includes[]", "scanlation_group");
       chaptersUrl.searchParams.set("order[chapter]", "asc");
       chaptersUrl.searchParams.set("limit", String(CHAPTER_PAGE_LIMIT));

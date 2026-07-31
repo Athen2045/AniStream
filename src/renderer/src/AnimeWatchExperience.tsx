@@ -14,6 +14,7 @@ import type {
 import { parseMegaPlayEvent } from "../../shared/megaplay-events";
 
 const MEGAPLAY_ORIGIN = "https://megaplay.buzz";
+const EPISODES_PAGE_SIZE = 10;
 
 type WatchView = "episodes" | "player";
 
@@ -283,6 +284,7 @@ export function AnimeWatchExperience({
     >
       {view === "episodes" ? (
         <EpisodeBrowser
+          key={activeSeason?.id ?? media.id}
           media={media}
           seasons={seasons}
           activeSeason={activeSeason}
@@ -421,6 +423,10 @@ function EpisodeBrowser({
   const description = plainText(media.description);
   const format = media.format ? formatLabel(media.format) : "Anime";
   const runtime = "duration" in media ? media.duration : undefined;
+  const [expanded, setExpanded] = useState(false);
+  const episodes = activeSeason?.episodes ?? [];
+  const visibleEpisodes = expanded ? episodes : episodes.slice(0, EPISODES_PAGE_SIZE);
+  const hiddenCount = episodes.length - EPISODES_PAGE_SIZE;
 
   return (
     <div className="netflix-episode-browser">
@@ -454,7 +460,7 @@ function EpisodeBrowser({
       {providerMessage ? <p className="provider-note">{providerMessage}</p> : null}
 
       <div className="netflix-episode-list">
-        {(activeSeason?.episodes ?? []).map((episode) => {
+        {visibleEpisodes.map((episode) => {
           const isCurrent = sameEpisode(episode, activeEpisode);
           const isWatched = episode.number <= watchedEpisodes;
           const progress =
@@ -507,6 +513,17 @@ function EpisodeBrowser({
           );
         })}
       </div>
+      {episodes.length > EPISODES_PAGE_SIZE ? (
+        <button
+          type="button"
+          className="episode-list-toggle"
+          aria-expanded={expanded}
+          aria-label={expanded ? "Show fewer episodes" : `Show ${hiddenCount} more episodes`}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <ChevronDown size={22} className={expanded ? "is-expanded" : undefined} />
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,30 @@
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/lato-regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/lato-bold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("./assets/fonts/lato-black.woff2") format("woff2");
+}
+
 :root {
   font-family:
+    "Lato",
     "Avenir Next",
     Avenir,
     -apple-system,
@@ -258,7 +283,7 @@ button {
   justify-content: space-between;
   padding: 11px 13px;
   border-bottom: 1px solid var(--line);
-  color: #8e8e8e;
+  color: #9a9a9a;
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -314,6 +339,20 @@ button {
   text-align: center;
 }
 
+.search-result-skeleton {
+  display: block;
+  height: 68px;
+  margin: 0 12px;
+  border-radius: 4px;
+  background: linear-gradient(110deg, #202020 20%, #2b2b2b 42%, #202020 64%);
+  background-size: 240% 100%;
+  animation: latest-update-shimmer 1.25s linear infinite;
+}
+
+.search-result-skeleton + .search-result-skeleton {
+  margin-top: 8px;
+}
+
 .catalog-page {
   min-height: 100vh;
   background: var(--ink);
@@ -326,6 +365,12 @@ button {
   padding: 150px 5vw 105px;
   background-position: center 20%;
   background-size: cover;
+}
+
+.catalog-hero-skeleton {
+  background: linear-gradient(110deg, #181818 20%, #232323 42%, #181818 64%);
+  background-size: 240% 100%;
+  animation: latest-update-shimmer 1.6s linear infinite;
 }
 
 .catalog-hero-copy {
@@ -469,7 +514,7 @@ button {
 }
 
 .rail-count {
-  color: #777;
+  color: #8a8a8a;
   font-size: 0.7rem;
 }
 
@@ -627,7 +672,8 @@ a.rail-card {
 }
 
 .rail-card:hover,
-.rail-card:focus-visible {
+.rail-card:focus-visible,
+.rail-card:has(:focus-visible) {
   z-index: 3;
   flex-basis: var(--rail-card-expanded);
   transform: translateY(-4px) scale(1.015);
@@ -652,23 +698,88 @@ a.rail-card {
 }
 
 .rail-card:hover .rail-art img,
-.rail-card:focus-visible .rail-art img {
+.rail-card:focus-visible .rail-art img,
+.rail-card:has(:focus-visible) .rail-art img {
   transform: scale(1.055);
   filter: brightness(0.62);
 }
 
-.rail-overlay {
+/* Full-cover hit target for "open details" -- a sibling of the hover-action buttons
+   below rather than their parent, since buttons cannot legally nest. */
+.rail-art-hit {
   position: absolute;
+  z-index: 1;
   inset: 0;
-  display: grid;
-  place-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.rail-hover-actions {
+  position: absolute;
+  z-index: 2;
+  right: 8px;
+  bottom: 18px;
+  left: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
   opacity: 0;
   transition: opacity 180ms ease;
 }
 
-.rail-card:hover .rail-overlay,
-.rail-card:focus-visible .rail-overlay {
+.rail-card:hover .rail-hover-actions,
+.rail-card:focus-visible .rail-hover-actions,
+.rail-card:has(:focus-visible) .rail-hover-actions {
   opacity: 1;
+}
+
+.rail-hover-play,
+.rail-hover-secondary {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
+}
+
+.rail-hover-play {
+  background: white;
+  color: #111;
+}
+
+.rail-hover-play:hover,
+.rail-hover-play:focus-visible {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.rail-hover-secondary {
+  background: rgba(20, 20, 20, 0.72);
+  color: white;
+  backdrop-filter: blur(6px);
+}
+
+.rail-hover-secondary:hover,
+.rail-hover-secondary:focus-visible {
+  background: rgba(50, 50, 50, 0.88);
+  border-color: rgba(255, 255, 255, 0.82);
+}
+
+.rail-hover-secondary:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.rail-hover-info {
+  margin-left: auto;
 }
 
 .rail-progress {
@@ -699,7 +810,7 @@ a.rail-card {
 
 .rail-card > span:last-child {
   overflow: hidden;
-  color: #8e8e8e;
+  color: #9a9a9a;
   font-size: 0.68rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -988,7 +1099,7 @@ a.rail-card {
 
 .browse-card > span:last-child {
   overflow: hidden;
-  color: #8e8e8e;
+  color: #9a9a9a;
   font-size: 0.68rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1088,7 +1199,7 @@ a.rail-card {
   display: grid;
   height: 36px;
   place-items: center;
-  color: #777;
+  color: #8a8a8a;
 }
 
 .detail-backdrop {
@@ -1687,6 +1798,53 @@ a.rail-card {
   line-height: 1.55;
 }
 
+.episode-list-toggle {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+.episode-list-toggle::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.episode-list-toggle svg {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  padding: 7px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 50%;
+  background: #181818;
+  transition:
+    background 150ms ease,
+    transform 220ms ease;
+}
+
+.episode-list-toggle:hover svg,
+.episode-list-toggle:focus-visible svg {
+  background: #262626;
+  color: #fff;
+}
+
+.episode-list-toggle svg.is-expanded {
+  transform: rotate(180deg);
+}
+
 .watch-experience--player,
 .watch-experience--player:fullscreen {
   position: fixed;
@@ -2048,6 +2206,15 @@ a.rail-card {
   color: #42c980;
 }
 
+.chapter-row-skeleton {
+  display: block;
+  min-height: 52px;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  background: linear-gradient(110deg, #151a23 20%, #1e242f 42%, #151a23 64%);
+  background-size: 240% 100%;
+  animation: latest-update-shimmer 1.25s linear infinite;
+}
+
 .chapter-reading-progress {
   position: absolute;
   right: 0;
@@ -2093,15 +2260,19 @@ a.rail-card {
   position: absolute;
   inset: 18px 22px auto;
   z-index: 3;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 18px;
   pointer-events: none;
 }
 
 .manga-reader-header > * {
   pointer-events: auto;
+}
+
+.manga-reader-close {
+  justify-self: end;
 }
 
 .manga-reader-chapter-chip {
@@ -2112,8 +2283,7 @@ a.rail-card {
 }
 
 .manga-reader-header button,
-.manga-reader-chapter-chip button,
-.manga-end-actions button {
+.manga-reader-chapter-chip button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2130,15 +2300,13 @@ a.rail-card {
 }
 
 .manga-reader-header button:hover,
-.manga-reader-chapter-chip button:hover:not(:disabled),
-.manga-end-actions button:hover {
+.manga-reader-chapter-chip button:hover:not(:disabled) {
   color: #fff;
   background: rgba(33, 39, 53, 0.94);
 }
 
 .manga-reader-header button:focus-visible,
-.manga-reader-chapter-chip button:focus-visible,
-.manga-end-actions button:focus-visible {
+.manga-reader-chapter-chip button:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.9);
   outline-offset: 3px;
 }
@@ -2305,6 +2473,7 @@ a.rail-card {
 
 .manga-reader-end {
   width: min(100%, 900px);
+  margin: 0 auto;
   padding: 70px 0 42px;
   text-align: center;
 }
@@ -2381,13 +2550,6 @@ a.rail-card {
   font-size: 0.96rem;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.manga-end-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 20px;
 }
 
 @keyframes reader-shimmer {
@@ -2555,7 +2717,7 @@ a.rail-card {
 
 .privacy-note {
   margin: 18px 0 0;
-  color: #777;
+  color: #8a8a8a;
   font-size: 0.74rem;
   line-height: 1.55;
 }
@@ -2821,7 +2983,7 @@ a.rail-card {
 }
 
 .library-heading > span {
-  color: #777;
+  color: #8a8a8a;
   font-size: 0.78rem;
 }
 
@@ -2981,7 +3143,7 @@ a.rail-card {
   padding: 68px;
   border: 1px dashed var(--line);
   border-radius: 7px;
-  color: #777;
+  color: #8a8a8a;
   text-align: center;
 }
 

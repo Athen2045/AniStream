@@ -1,5 +1,6 @@
 import { ExternalLink, Info, Play, Plus, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListCatalogPage,
@@ -14,6 +15,7 @@ import type {
 } from "../../shared/contracts";
 import { ContentCarousel } from "./ContentCarousel";
 import { Pagination } from "./Pagination";
+import { RailHoverActions } from "./RailHoverActions";
 import { safeBackgroundUrl } from "./safe-css-url";
 
 const TRENDING_LIMIT = 20;
@@ -23,20 +25,41 @@ export function CatalogView({
   type,
   searchQuery,
   dashboard,
+  libraryEntries,
   onSelect,
   onPrimary,
+  onQuickAdd,
+  onQuickRemove,
 }: {
   type: AniListMediaType;
   searchQuery: string;
   dashboard?: AniListDashboard;
+  libraryEntries: Map<number, AniListEntry>;
   onSelect: (media: AniListCatalogMedia) => void;
   onPrimary: (media: AniListCatalogMedia) => void;
+  onQuickAdd: (media: AniListCatalogMedia) => Promise<void>;
+  onQuickRemove: (entry: AniListEntry) => Promise<void>;
 }): React.JSX.Element {
+  const reducedMotion = useReducedMotion();
   const [page, setPage] = useState(1);
   const [latestPage, setLatestPage] = useState(1);
   const [searchResults, setSearchResults] = useState<AniListCatalogPage>();
-  const [trending, setTrending] = useState<AniListCatalogMedia[]>([]);
-  const [malTrendingFallback, setMalTrendingFallback] = useState<MalRankingItem[]>([]);
+  // Cached per media type (not reset on Anime<->Manga switch) so returning to a type
+  // already fetched this session shows its hero/rail instantly instead of a fresh
+  // loading flash -- switching type used to force a full refetch every time.
+  const [trendingByType, setTrendingByType] = useState<
+    Partial<Record<AniListMediaType, AniListCatalogMedia[]>>
+  >({});
+  const [malFallbackByType, setMalFallbackByType] = useState<
+    Partial<Record<AniListMediaType, MalRankingItem[]>>
+  >({});
+  const [trendingLoadingByType, setTrendingLoadingByType] = useState<
+    Partial<Record<AniListMediaType, boolean>>
+  >({});
+  const trendingFetchStarted = useRef<Set<AniListMediaType>>(new Set());
+  const trending = trendingByType[type] ?? [];
+  const malTrendingFallback = malFallbackByType[type] ?? [];
+  const trendingLoading = trendingLoadingByType[type] ?? true;
   const [latestAnime, setLatestAnime] = useState<LatestAnimeUpdate[]>([]);
   const [latestManga, setLatestManga] = useState<LatestMangaUpdate[]>([]);
   const [latestPageInfo, setLatestPageInfo] = useState<AniListPageInfo>();
@@ -86,7 +109,10 @@ export function CatalogView({
 
   useEffect(() => {
     if (searchQuery) return;
+    if (trendingFetchStarted.current.has(type)) return;
+    trendingFetchStarted.current.add(type);
     let active = true;
+    setTrendingLoadingByType((state) => ({ ...state, [type]: true }));
     void window.anistream
       .browseAniList({
         type,
@@ -96,25 +122,28 @@ export function CatalogView({
       })
       .then((result) => {
         if (!active) return;
-        setTrending(result.items.slice(0, TRENDING_LIMIT));
-        setMalTrendingFallback([]);
+        setTrendingByType((state) => ({
+          ...state,
+          [type]: result.items.slice(0, TRENDING_LIMIT),
+        }));
       })
       .catch((reason: unknown) => {
         if (!active) return;
         setError(reason instanceof Error ? reason.message : "AniList browse failed.");
+        setTrendingByType((state) => ({ ...state, [type]: [] }));
         // AniList is down: fall back to the MyAnimeList ranking so Trending still
         // renders. Cards link out to MAL because there is no AniList ID to open.
         void window.anistream
           .getMalTrendingFallback(type)
           .then((ranking) => {
-            if (active) setMalTrendingFallback(ranking);
+            if (active) setMalFallbackByType((state) => ({ ...state, [type]: ranking }));
           })
           .catch(() => {
             // Fallback is best-effort; the AniList error banner already explains the outage.
           });
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setTrendingLoadingByType((state) => ({ ...state, [type]: false }));
       });
     return () => {
       active = false;
@@ -219,11 +248,15 @@ export function CatalogView({
   return (
     <section className={`catalog-page ${type === "MANGA" ? "manga-catalog" : "anime-catalog"}`}>
       {hero ? (
-        <header
+        <motion.header
+          key={`${type}:${searchQuery}:${hero.id}`}
           className="catalog-hero"
           style={{
             backgroundImage: `linear-gradient(90deg, #141414 5%, rgba(20,20,20,.88) 42%, rgba(20,20,20,.18) 76%), linear-gradient(0deg, #141414 0%, transparent 45%), ${safeBackgroundUrl(hero.bannerUrl ?? hero.coverUrl)}`,
           }}
+          initial={reducedMotion ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: reducedMotion ? 0 : 0.35, ease: "easeOut" }}
         >
           <div className="catalog-hero-copy">
             <p className="catalog-kicker">
@@ -259,7 +292,9 @@ export function CatalogView({
               </button>
             </div>
           </div>
-        </header>
+        </motion.header>
+      ) : !searchQuery && trendingLoading ? (
+        <div className="catalog-hero catalog-hero-skeleton" aria-hidden="true" />
       ) : null}
 
       <div className="catalog-content">
@@ -267,7 +302,7 @@ export function CatalogView({
         {searchQuery && loading && !searchItems.length ? (
           <div className="catalog-loading">Loading AniList catalog…</div>
         ) : null}
-        {!searchQuery && loading && !trending.length && !malTrendingFallback.length ? (
+        {!searchQuery && trendingLoading && !trending.length && !malTrendingFallback.length ? (
           <section className="media-rail" aria-label={`Trending ${mediaName}`}>
             <div className="rail-heading">
               <div>
@@ -345,6 +380,8 @@ export function CatalogView({
                 entries={continueEntries}
                 onSelect={onSelect}
                 onPrimary={onPrimary}
+                onQuickAdd={onQuickAdd}
+                onQuickRemove={onQuickRemove}
               />
             ) : null}
 
@@ -358,21 +395,33 @@ export function CatalogView({
                 </div>
                 <ContentCarousel label={`Trending ${mediaName}`}>
                   {trending.map((media, index) => (
-                    <button
-                      className="rail-card"
-                      type="button"
-                      key={media.id}
-                      onClick={() => onSelect(media)}
-                    >
+                    <div className="rail-card" key={media.id}>
                       <span className="rail-art">
+                        <button
+                          type="button"
+                          className="rail-art-hit"
+                          aria-label={`${media.title} details`}
+                          onClick={() => onSelect(media)}
+                        />
                         <span className="rank">{index + 1}</span>
                         <img src={media.coverUrl} alt="" loading="lazy" decoding="async" />
+                        <RailHoverActions
+                          title={media.title}
+                          inLibrary={libraryEntries.has(media.id)}
+                          onPlay={() => onPrimary(media)}
+                          onAdd={() => void onQuickAdd(media)}
+                          onRemove={() => {
+                            const entry = libraryEntries.get(media.id);
+                            if (entry) void onQuickRemove(entry);
+                          }}
+                          onInfo={() => onSelect(media)}
+                        />
                       </span>
                       <span className="shelf-copy">
                         <strong>{media.title}</strong>
                         <small>{formatLabel(media.format)}</small>
                       </span>
-                    </button>
+                    </div>
                   ))}
                 </ContentCarousel>
               </section>
@@ -594,6 +643,8 @@ function MediaRail({
   entries,
   onSelect,
   onPrimary,
+  onQuickAdd,
+  onQuickRemove,
 }: {
   title: string;
   eyebrow: string;
@@ -601,6 +652,8 @@ function MediaRail({
   entries?: AniListEntry[];
   onSelect: (media: AniListCatalogMedia) => void;
   onPrimary?: (media: AniListCatalogMedia) => void;
+  onQuickAdd: (media: AniListCatalogMedia) => Promise<void>;
+  onQuickRemove: (entry: AniListEntry) => Promise<void>;
 }): React.JSX.Element {
   const cards = items ?? entries?.map(toCatalogMedia) ?? [];
   return (
@@ -616,19 +669,25 @@ function MediaRail({
         {cards.map((media, index) => {
           const entry = entries?.[index];
           return (
-            <button
-              type="button"
-              className="rail-card"
-              key={media.id}
-              onClick={() => (entry && onPrimary ? onPrimary(media) : onSelect(media))}
-            >
+            <div className="rail-card" key={media.id}>
               <span className="rail-art">
+                <button
+                  type="button"
+                  className="rail-art-hit"
+                  aria-label={`${media.title} details`}
+                  onClick={() => (entry && onPrimary ? onPrimary(media) : onSelect(media))}
+                />
                 <img src={media.coverUrl} alt="" loading="lazy" decoding="async" />
-                <span className="rail-overlay">
-                  <span className="round-action">
-                    <Play size={16} fill="currentColor" />
-                  </span>
-                </span>
+                <RailHoverActions
+                  title={media.title}
+                  inLibrary={Boolean(entry)}
+                  onPlay={() => (onPrimary ? onPrimary(media) : onSelect(media))}
+                  onAdd={() => void onQuickAdd(media)}
+                  onRemove={() => {
+                    if (entry) void onQuickRemove(entry);
+                  }}
+                  onInfo={() => onSelect(media)}
+                />
                 {entry ? (
                   <span className="rail-progress" aria-label={`${entry.progress} completed`}>
                     <span style={{ width: `${progressPercent(entry)}%` }} />
@@ -645,7 +704,7 @@ function MediaRail({
                     ? `${media.averageScore}% match`
                     : formatLabel(media.format)}
               </span>
-            </button>
+            </div>
           );
         })}
       </ContentCarousel>

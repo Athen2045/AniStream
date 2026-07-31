@@ -678,33 +678,40 @@ function MangaChapterBrowser({
       {session?.status === "unavailable" || session?.status === "unmapped" ? (
         <p className="provider-note">{session.message}</p>
       ) : null}
-      {!session || loading ? <p className="catalog-loading">Loading MangaDex chapters…</p> : null}
-      <div className="chapter-browser-list">
-        {chapters.map((chapter) => {
-          const completed =
-            chapter.number !== undefined && Math.floor(chapter.number) <= currentProgress;
-          const readingProgress = resume?.chapterId === chapter.id ? resume.progress : 0;
-          return (
-            <button type="button" key={chapter.id} onClick={() => onRead(chapter)}>
-              <span className="chapter-language">
-                {chapter.translatedLanguage.toLocaleUpperCase()}
-              </span>
-              <strong>
-                Ch. {chapter.number ?? "?"}
-                {chapter.title ? <small> · {chapter.title}</small> : null}
-              </strong>
-              {completed ? <Check size={15} className="chapter-complete" /> : null}
-              <span>{relativeDate(chapter.publishedAt)}</span>
-              <BookOpen size={16} />
-              {readingProgress > 0 && readingProgress < 1 ? (
-                <span className="chapter-reading-progress" aria-hidden="true">
-                  <span style={{ transform: `scaleX(${readingProgress})` }} />
+      {!session || loading ? (
+        <div className="chapter-browser-list" aria-hidden="true">
+          {Array.from({ length: 6 }, (_, index) => (
+            <span className="chapter-row-skeleton" key={`chapter-skeleton-${index}`} />
+          ))}
+        </div>
+      ) : (
+        <div className="chapter-browser-list">
+          {chapters.map((chapter) => {
+            const completed =
+              chapter.number !== undefined && Math.floor(chapter.number) <= currentProgress;
+            const readingProgress = resume?.chapterId === chapter.id ? resume.progress : 0;
+            return (
+              <button type="button" key={chapter.id} onClick={() => onRead(chapter)}>
+                <span className="chapter-language">
+                  {chapter.translatedLanguage.toLocaleUpperCase()}
                 </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
+                <strong>
+                  Ch. {chapter.number ?? "?"}
+                  {chapter.title ? <small> · {chapter.title}</small> : null}
+                </strong>
+                {completed ? <Check size={15} className="chapter-complete" /> : null}
+                <span>{relativeDate(chapter.publishedAt)}</span>
+                <BookOpen size={16} />
+                {readingProgress > 0 && readingProgress < 1 ? (
+                  <span className="chapter-reading-progress" aria-hidden="true">
+                    <span style={{ transform: `scaleX(${readingProgress})` }} />
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

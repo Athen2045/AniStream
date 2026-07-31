@@ -122,6 +122,15 @@ export function GlobalSearch({
               <span>{loading ? "Searching AniList…" : "Search results"}</span>
               <span>Anime + manga</span>
             </div>
+            {loading && !results.length
+              ? Array.from({ length: 3 }, (_, index) => (
+                  <span
+                    className="search-result-skeleton"
+                    aria-hidden="true"
+                    key={`search-skeleton-${index}`}
+                  />
+                ))
+              : null}
             {results.map((media, index) => (
               <button
                 type="button"

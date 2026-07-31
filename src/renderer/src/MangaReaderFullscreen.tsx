@@ -6,7 +6,7 @@ import {
   useScroll,
   useSpring,
 } from "framer-motion";
-import { BookOpen, ChevronLeft, ChevronRight, Home, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type {
   MangaDexReaderChapter,
@@ -242,15 +242,17 @@ export function MangaReaderFullscreen({
       />
 
       <header className="manga-reader-header">
-        <button type="button" onClick={onClose} aria-label="Back to chapter list">
-          <ChevronLeft size={22} />
-          <span>Chapters</span>
-        </button>
+        <span aria-hidden="true" />
         <div>
           <strong>{title}</strong>
           <span>Chapter {formatChapterNumber(chapter)}</span>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close reader">
+        <button
+          type="button"
+          className="manga-reader-close"
+          onClick={onClose}
+          aria-label="Close reader"
+        >
           <X size={20} />
         </button>
       </header>
@@ -335,16 +337,6 @@ export function MangaReaderFullscreen({
                 <ChevronRight size={22} />
               </button>
             )}
-          </div>
-          <div className="manga-end-actions">
-            <button type="button" onClick={onClose}>
-              <BookOpen size={17} />
-              Series
-            </button>
-            <button type="button" onClick={onClose}>
-              <Home size={17} />
-              Chapters
-            </button>
           </div>
         </footer>
       </div>
