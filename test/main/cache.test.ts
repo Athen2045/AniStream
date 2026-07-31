@@ -42,4 +42,15 @@ describe("createBoundedCache", () => {
     expect(cache.get("b")).toBeUndefined();
     expect(cache.get("c")).toBe(3);
   });
+
+  it("clears every cached value when viewer state changes", () => {
+    const cache = createBoundedCache<number>({ maxEntries: 2, ttlMs: 60_000 });
+    cache.set("a", 1);
+    cache.set("b", 2);
+
+    cache.clear();
+
+    expect(cache.get("a")).toBeUndefined();
+    expect(cache.get("b")).toBeUndefined();
+  });
 });

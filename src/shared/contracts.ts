@@ -2,7 +2,7 @@ export interface AppInfo {
   version: string;
   platform: string;
   databaseReady: boolean;
-  videoSourceStatus: "approved-not-implemented" | "fallback-only" | "configured";
+  videoSourceStatus: "configured" | "unavailable";
 }
 
 export type AniListMediaType = "ANIME" | "MANGA";
@@ -76,28 +76,13 @@ export interface BrowseAniListInput {
   sort?: "TRENDING_DESC" | "POPULARITY_DESC" | "SCORE_DESC" | "START_DATE_DESC";
 }
 
-export interface AnimeEpisodeGuideEpisode {
-  id: string;
-  number: number;
-  season?: number;
-  title?: string;
-  thumbnailUrl?: string;
-  airDate?: string;
-}
-
-export interface AnimeEpisodeGuide {
-  status: "configured" | "unconfigured" | "unavailable";
-  slug: string;
-  episodes: AnimeEpisodeGuideEpisode[];
-  message?: string;
-  fetchedAt: string;
-}
-
 export interface AnimeEpisodeCatalogInput {
   aniListId: number;
   titles: string[];
   seasonLabel?: string;
   totalEpisodes?: number;
+  fallbackThumbnailUrl?: string;
+  fallbackDescription?: string;
 }
 
 export interface AnimeProviderEpisode {
@@ -118,7 +103,7 @@ export interface AnimeProviderSeason {
 
 export interface AnimeEpisodeCatalog {
   status: "available" | "unavailable";
-  provider: "aniwatch" | "zenshin";
+  provider: "anikoto";
   providerTitle?: string;
   seasons: AnimeProviderSeason[];
   message?: string;
@@ -147,11 +132,23 @@ export interface LatestAnimeUpdate {
   airedAt: number;
 }
 
+export interface LatestUpdatesPage<T> {
+  pageInfo: AniListPageInfo;
+  items: T[];
+}
+
+export type MangaPublicationKind = "MANGA" | "MANHWA" | "MANHUA" | "OTHER";
+
 export interface LatestMangaUpdate {
   mangaDexId: string;
   aniListId?: number;
+  malId?: number;
   title: string;
   coverUrl?: string;
+  coverUrlFallback?: string;
+  chapter?: string;
+  originalLanguage?: string;
+  publicationKind: MangaPublicationKind;
   updatedAt: string;
   mangaDexUrl: string;
 }
@@ -191,6 +188,7 @@ export interface MangaDexReaderSession {
   status: "available" | "unmapped" | "unavailable";
   aniListId: number;
   mangaDexId?: string;
+  publicationStatus?: "ongoing" | "completed" | "hiatus" | "cancelled";
   translatedLanguage: string;
   chapters: MangaDexReaderChapter[];
   message?: string;
@@ -206,7 +204,8 @@ export interface MangaDexReaderPage {
   chapterId: string;
   page: number;
   pageCount: number;
-  imageDataUrl: string;
+  mimeType: string;
+  imageBytes: ArrayBuffer;
 }
 
 export interface MangaEnrichment {
@@ -240,18 +239,10 @@ export interface AnimePlaybackInput {
 export interface AnimePlaybackCandidate {
   id: string;
   label: string;
-  kind: "hls" | "torrent";
+  kind: "embed";
   url: string;
-  quality?: string;
   language?: string;
   provider?: string;
-  subtitles?: Array<{
-    label: string;
-    language?: string;
-    url: string;
-  }>;
-  seeders?: number;
-  sizeBytes?: number;
 }
 
 export interface AnimePlaybackResult {
@@ -276,6 +267,21 @@ export interface SavePlaybackResumeInput {
   durationSeconds: number;
 }
 
+export interface MangaReadingResume {
+  aniListId: number;
+  chapterId: string;
+  chapterNumber?: number;
+  progress: number;
+  updatedAt: string;
+}
+
+export interface SaveMangaReadingResumeInput {
+  aniListId: number;
+  chapterId: string;
+  chapterNumber?: number;
+  progress: number;
+}
+
 export interface AniListNamedPerson {
   id: number;
   name: string;
@@ -292,6 +298,13 @@ export interface AniListExternalLink {
   site: string;
   url: string;
   type?: string;
+}
+
+export interface AniListListEntrySummary {
+  id: number;
+  status: AniListEntryStatus;
+  score: number;
+  progress: number;
 }
 
 export interface AniListMediaDetail extends AniListCatalogMedia {
@@ -312,12 +325,7 @@ export interface AniListMediaDetail extends AniListCatalogMedia {
   recommendations: AniListCatalogMedia[];
   externalLinks: AniListExternalLink[];
   trailerUrl?: string;
-  listEntry?: {
-    id: number;
-    status: AniListEntryStatus;
-    score: number;
-    progress: number;
-  };
+  listEntry?: AniListListEntrySummary;
 }
 
 export interface AniListEntry {
@@ -366,17 +374,17 @@ export interface AniStreamBridge {
   getAniListAuthState(): Promise<AniListAuthState>;
   startAniListLogin(): Promise<void>;
   logoutAniList(): Promise<void>;
+  getCachedAniListDashboard(): Promise<AniListDashboard | undefined>;
   getAniListDashboard(): Promise<AniListDashboard>;
   searchAniList(query: string, type: AniListMediaType): Promise<AniListMedia[]>;
   browseAniList(input: BrowseAniListInput): Promise<AniListCatalogPage>;
   getAniListMediaDetail(id: number, type: AniListMediaType): Promise<AniListMediaDetail>;
-  addAniListEntry(mediaId: number): Promise<void>;
-  updateAniListEntry(input: UpdateAniListEntryInput): Promise<void>;
+  addAniListEntry(mediaId: number): Promise<AniListListEntrySummary>;
+  updateAniListEntry(input: UpdateAniListEntryInput): Promise<AniListListEntrySummary>;
   deleteAniListEntry(id: number): Promise<void>;
-  getAnimeEpisodeGuide(slug: string): Promise<AnimeEpisodeGuide>;
   getAnimeEpisodeCatalog(input: AnimeEpisodeCatalogInput): Promise<AnimeEpisodeCatalog>;
-  getLatestAnimeUpdates(): Promise<LatestAnimeUpdate[]>;
-  getLatestMangaUpdates(): Promise<LatestMangaUpdate[]>;
+  getLatestAnimeUpdates(page: number): Promise<LatestUpdatesPage<LatestAnimeUpdate>>;
+  getLatestMangaUpdates(page: number): Promise<LatestUpdatesPage<LatestMangaUpdate>>;
   getMalScore(type: AniListMediaType, malId: number): Promise<MalScore | undefined>;
   getMalTrendingFallback(type: AniListMediaType): Promise<MalRankingItem[]>;
   getMangaDexAvailability(
@@ -389,6 +397,8 @@ export interface AniStreamBridge {
   getPlaybackResume(aniListId: number): Promise<PlaybackResume | undefined>;
   savePlaybackResume(input: SavePlaybackResumeInput): Promise<void>;
   clearPlaybackResume(aniListId: number): Promise<void>;
-  openTorrentMagnet(magnetUrl: string): Promise<void>;
+  getMangaReadingResume(aniListId: number): Promise<MangaReadingResume | undefined>;
+  saveMangaReadingResume(input: SaveMangaReadingResumeInput): Promise<void>;
+  clearMangaReadingResume(aniListId: number): Promise<void>;
   onAniListAuthChanged(callback: (state: AniListAuthState) => void): () => void;
 }

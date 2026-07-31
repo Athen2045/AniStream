@@ -1,5 +1,6 @@
 import type {
   LatestMangaUpdate,
+  LatestUpdatesPage,
   MangaDexAvailabilityInput,
   MangaDexChapterAvailability,
   MangaDexPageInput,
@@ -10,6 +11,7 @@ import type {
 } from "../shared/contracts";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
+import { mangaKindFromOriginalLanguage } from "./manga-kind";
 
 const MANGADEX_API_URL = "https://api.mangadex.org";
 const DEFAULT_LANGUAGE = "en";
@@ -21,7 +23,9 @@ const PAGE_CACHE_MAX_ENTRIES = 18;
 // New chapter uploads land continuously; refetch the "latest updates" rail at most
 // every 5 minutes to stay polite to MangaDex.
 const LATEST_UPDATES_TTL_MS = 5 * 60_000;
-const LATEST_UPDATES_LIMIT = 20;
+const LATEST_UPDATES_LIMIT = 21;
+const CHAPTER_PAGE_LIMIT = 100;
+const MAX_READER_CHAPTERS = 2_000;
 
 type Fetcher = typeof fetch;
 
@@ -34,6 +38,9 @@ export class MangaDexClient {
   private readonly requestGate: RequestGate = createRequestGate({
     requestsPerMinute: 4,
     windowMs: 1_000,
+  });
+  private readonly atHomeRequestGate: RequestGate = createRequestGate({
+    requestsPerMinute: 35,
   });
   private readonly cache = createBoundedCache<MangaDexChapterAvailability>({
     maxEntries: 120,
@@ -51,8 +58,9 @@ export class MangaDexClient {
     maxEntries: PAGE_CACHE_MAX_ENTRIES,
     ttlMs: AT_HOME_CACHE_TTL_MS,
   });
-  private readonly latestUpdatesCache = createBoundedCache<LatestMangaUpdate[]>({
-    maxEntries: 1,
+  private readonly pageInFlight = new Map<string, Promise<MangaDexReaderPage>>();
+  private readonly latestUpdatesCache = createBoundedCache<LatestUpdatesPage<LatestMangaUpdate>>({
+    maxEntries: 20,
     ttlMs: LATEST_UPDATES_TTL_MS,
   });
 
@@ -78,12 +86,17 @@ export class MangaDexClient {
     return Promise.all([...unique.values()].map((item) => this.resolveAvailability(item)));
   }
 
-  public async getLatestUpdates(): Promise<LatestMangaUpdate[]> {
-    const cached = this.latestUpdatesCache.get("latest");
+  public async getLatestUpdates(page: number): Promise<LatestUpdatesPage<LatestMangaUpdate>> {
+    if (!Number.isInteger(page) || page < 1 || page > 5_000) {
+      throw new Error("Invalid latest manga page.");
+    }
+    const cacheKey = `latest:${page}`;
+    const cached = this.latestUpdatesCache.get(cacheKey);
     if (cached) return cached;
 
     const url = new URL("/manga", MANGADEX_API_URL);
     url.searchParams.set("limit", String(LATEST_UPDATES_LIMIT));
+    url.searchParams.set("offset", String((page - 1) * LATEST_UPDATES_LIMIT));
     url.searchParams.append("order[latestUploadedChapter]", "desc");
     url.searchParams.append("includes[]", "cover_art");
     // All four ratings requested explicitly: MangaDex's API default excludes
@@ -96,8 +109,25 @@ export class MangaDexClient {
     url.searchParams.append("availableTranslatedLanguage[]", this.translatedLanguage);
 
     const payload = await this.requestJson(url);
-    const updates = parseLatestMangaUpdates(payload);
-    this.latestUpdatesCache.set("latest", updates);
+    let items = parseLatestMangaUpdates(payload);
+    const chapterIds = findLatestChapterIds(payload);
+    if (chapterIds.size) {
+      const chapterUrl = new URL("/chapter", MANGADEX_API_URL);
+      chapterUrl.searchParams.set("limit", String(Math.min(100, chapterIds.size)));
+      for (const chapterId of chapterIds.values()) {
+        chapterUrl.searchParams.append("ids[]", chapterId);
+      }
+      try {
+        items = mergeLatestChapterDetails(items, chapterIds, await this.requestJson(chapterUrl));
+      } catch {
+        // The listing itself remains useful if the optional chapter-detail batch fails.
+      }
+    }
+    const updates = {
+      pageInfo: parseMangaDexPageInfo(payload, page, LATEST_UPDATES_LIMIT),
+      items,
+    };
+    this.latestUpdatesCache.set(cacheKey, updates);
     return updates;
   }
 
@@ -110,8 +140,8 @@ export class MangaDexClient {
     if (cached) return cached;
 
     try {
-      const mangaDexId = await this.findMappedManga(input.aniListId, input.title);
-      if (!mangaDexId) {
+      const mapping = await this.findMappedManga(input.aniListId, input.title);
+      if (!mapping) {
         return this.rememberReader(cacheKey, {
           status: "unmapped",
           aniListId: input.aniListId,
@@ -120,11 +150,12 @@ export class MangaDexClient {
           message: "MangaDex has no exact AniList mapping for this title.",
         });
       }
-      const chapters = await this.getChapters(mangaDexId);
+      const chapters = await this.getChapters(mapping.id);
       return this.rememberReader(cacheKey, {
         status: "available",
         aniListId: input.aniListId,
-        mangaDexId,
+        mangaDexId: mapping.id,
+        publicationStatus: mapping.publicationStatus,
         translatedLanguage: this.translatedLanguage,
         chapters,
         message: chapters.length
@@ -151,23 +182,51 @@ export class MangaDexClient {
     const cached = this.pageCache.get(cacheKey);
     if (cached) return cached;
 
-    let image = await this.fetchPageImage(input.chapterId, input.page, quality);
-    if (image.response.status === 404 || image.response.status === 410) {
-      // MangaDex@Home nodes are temporary. Refresh the scoped chapter node once
-      // when a cached image host says the resource has moved or expired.
-      this.atHomeCache.delete(input.chapterId);
+    const existing = this.pageInFlight.get(cacheKey);
+    if (existing) return existing;
+    const request = this.loadPage(input, quality, cacheKey);
+    this.pageInFlight.set(cacheKey, request);
+    const clear = (): void => {
+      if (this.pageInFlight.get(cacheKey) === request) this.pageInFlight.delete(cacheKey);
+    };
+    void request.then(clear, clear);
+    return request;
+  }
+
+  private async loadPage(
+    input: MangaDexPageInput,
+    quality: "data" | "data-saver",
+    cacheKey: string,
+  ): Promise<MangaDexReaderPage> {
+    let image: { response: Response; files: string[] };
+    try {
       image = await this.fetchPageImage(input.chapterId, input.page, quality);
+      if (image.response.status === 404 || image.response.status === 410) {
+        // MangaDex@Home nodes are temporary. Refresh the scoped chapter node once
+        // when a cached image host says the resource has moved or expired.
+        this.atHomeCache.delete(input.chapterId);
+        image = await this.fetchPageImage(input.chapterId, input.page, quality);
+      }
+    } catch (error) {
+      if (error instanceof MangaDexRequestError && error.status === 404) {
+        throw new Error(
+          "This chapter is hosted on an external publisher site or is no longer available through MangaDex@Home.",
+          { cause: error },
+        );
+      }
+      throw error;
     }
     const { response, files } = image;
     if (!response.ok) throw new Error(`MangaDex page request failed (${response.status}).`);
     const mime = response.headers.get("content-type")?.split(";")[0] || "image/jpeg";
     if (!mime.startsWith("image/")) throw new Error("MangaDex did not return an image.");
-    const bytes = Buffer.from(await response.arrayBuffer()).toString("base64");
+    const imageBytes = await response.arrayBuffer();
     const page = {
       chapterId: input.chapterId,
       page: input.page,
       pageCount: files.length,
-      imageDataUrl: `data:${mime};base64,${bytes}`,
+      mimeType: mime,
+      imageBytes,
     };
     this.pageCache.set(cacheKey, page);
     return page;
@@ -202,8 +261,8 @@ export class MangaDexClient {
 
     const checkedAt = new Date().toISOString();
     try {
-      const mangaDexId = await this.findMappedManga(item.aniListId, item.title);
-      if (!mangaDexId) {
+      const mapping = await this.findMappedManga(item.aniListId, item.title);
+      if (!mapping) {
         return this.remember(cacheKey, {
           aniListId: item.aniListId,
           status: "unmapped",
@@ -213,12 +272,12 @@ export class MangaDexClient {
         });
       }
 
-      const aggregateUrl = new URL(`/manga/${mangaDexId}/aggregate`, MANGADEX_API_URL);
+      const aggregateUrl = new URL(`/manga/${mapping.id}/aggregate`, MANGADEX_API_URL);
       aggregateUrl.searchParams.append("translatedLanguage[]", this.translatedLanguage);
       const aggregate = await this.requestJson(aggregateUrl);
       return this.remember(cacheKey, {
         aniListId: item.aniListId,
-        mangaDexId,
+        mangaDexId: mapping.id,
         status: "available",
         translatedLanguage: this.translatedLanguage,
         latestChapter: findLatestNumericChapter(aggregate),
@@ -235,31 +294,66 @@ export class MangaDexClient {
     }
   }
 
-  private async findMappedManga(aniListId: number, title: string): Promise<string | undefined> {
+  private async findMappedManga(
+    aniListId: number,
+    title: string,
+  ): Promise<ExactMangaDexMapping | undefined> {
     const searchUrl = new URL("/manga", MANGADEX_API_URL);
     searchUrl.searchParams.set("title", title);
     searchUrl.searchParams.set("limit", "10");
-    return findExactAniListMapping(await this.requestJson(searchUrl), aniListId);
+    return findExactAniListManga(await this.requestJson(searchUrl), aniListId);
   }
 
   private async getChapters(mangaDexId: string): Promise<MangaDexReaderChapter[]> {
-    const chaptersUrl = new URL("/chapter", MANGADEX_API_URL);
-    chaptersUrl.searchParams.set("manga", mangaDexId);
-    chaptersUrl.searchParams.append("translatedLanguage[]", this.translatedLanguage);
-    chaptersUrl.searchParams.append("includes[]", "scanlation_group");
-    // Fetch the newest window first so opening a long-running manga starts at
-    // a recent readable chapter instead of chapter 1. Full archive paging is
-    // deliberately deferred to a dedicated chapter browser.
-    chaptersUrl.searchParams.set("order[chapter]", "desc");
-    chaptersUrl.searchParams.set("limit", "100");
-    return normalizeChapters(await this.requestJson(chaptersUrl));
+    const chapters = new Map<string, MangaDexReaderChapter>();
+    const fetchBatch = async (offset: number): Promise<unknown> => {
+      const chaptersUrl = new URL("/chapter", MANGADEX_API_URL);
+      chaptersUrl.searchParams.set("manga", mangaDexId);
+      chaptersUrl.searchParams.append("translatedLanguage[]", this.translatedLanguage);
+      chaptersUrl.searchParams.append("includes[]", "scanlation_group");
+      chaptersUrl.searchParams.set("order[chapter]", "asc");
+      chaptersUrl.searchParams.set("limit", String(CHAPTER_PAGE_LIMIT));
+      chaptersUrl.searchParams.set("offset", String(offset));
+      return this.requestJson(chaptersUrl);
+    };
+
+    const firstPayload = await fetchBatch(0);
+    for (const chapter of normalizeChapters(firstPayload)) chapters.set(chapter.id, chapter);
+    const firstBatchSize = readCollectionSize(firstPayload);
+    const reportedTotal = readCollectionTotal(firstPayload);
+
+    if (reportedTotal !== undefined) {
+      const total = Math.min(reportedTotal, MAX_READER_CHAPTERS);
+      const offsets: number[] = [];
+      for (let offset = firstBatchSize; offset < total; offset += CHAPTER_PAGE_LIMIT) {
+        offsets.push(offset);
+      }
+      const payloads = await Promise.all(offsets.map((offset) => fetchBatch(offset)));
+      for (const payload of payloads) {
+        for (const chapter of normalizeChapters(payload)) chapters.set(chapter.id, chapter);
+      }
+    } else {
+      let offset = firstBatchSize;
+      let batchSize = firstBatchSize;
+      while (batchSize === CHAPTER_PAGE_LIMIT && offset < MAX_READER_CHAPTERS) {
+        const payload = await fetchBatch(offset);
+        for (const chapter of normalizeChapters(payload)) chapters.set(chapter.id, chapter);
+        batchSize = readCollectionSize(payload);
+        offset += batchSize;
+      }
+    }
+
+    return [...chapters.values()].sort(
+      (left, right) => (left.number ?? Infinity) - (right.number ?? Infinity),
+    );
   }
 
   private async getAtHomeNode(chapterId: string): Promise<AtHomeNode> {
     const cached = this.atHomeCache.get(chapterId);
     if (cached) return cached;
     const url = new URL(`/at-home/server/${chapterId}`, MANGADEX_API_URL);
-    const node = normalizeAtHomeNode(await this.requestJson(url));
+    const payload = await this.atHomeRequestGate.run(chapterId, () => this.requestJson(url));
+    const node = normalizeAtHomeNode(payload);
     this.atHomeCache.set(chapterId, node);
     return node;
   }
@@ -288,7 +382,12 @@ export class MangaDexClient {
           "MangaDex temporarily refused requests. AniStream paused its request queue.",
         );
       }
-      if (!response.ok) throw new Error(`MangaDex request failed (${response.status}).`);
+      if (!response.ok) {
+        throw new MangaDexRequestError(
+          response.status,
+          `MangaDex request failed (${response.status}).`,
+        );
+      }
       return response.json() as Promise<unknown>;
     });
   }
@@ -311,6 +410,21 @@ interface AtHomeNode {
   dataSaver: string[];
 }
 
+interface ExactMangaDexMapping {
+  id: string;
+  publicationStatus?: "ongoing" | "completed" | "hiatus" | "cancelled";
+}
+
+class MangaDexRequestError extends Error {
+  public constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "MangaDexRequestError";
+  }
+}
+
 export function normalizeChapters(payload: unknown): MangaDexReaderChapter[] {
   if (!isRecord(payload) || !Array.isArray(payload.data)) return [];
   const chapters = payload.data
@@ -318,6 +432,9 @@ export function normalizeChapters(payload: unknown): MangaDexReaderChapter[] {
       if (!isRecord(item) || !isSafeId(item.id) || !isRecord(item.attributes)) return undefined;
       const attributes = item.attributes;
       if (typeof attributes.translatedLanguage !== "string") return undefined;
+      if (typeof attributes.externalUrl === "string" && attributes.externalUrl.trim()) {
+        return undefined;
+      }
       const pages = typeof attributes.pages === "number" ? attributes.pages : 0;
       if (!Number.isInteger(pages) || pages <= 0) return undefined;
       const groupName = findGroupName(item.relationships);
@@ -372,23 +489,104 @@ export function parseLatestMangaUpdates(payload: unknown): LatestMangaUpdate[] {
       typeof aniListRaw === "string" && /^\d{1,10}$/.test(aniListRaw)
         ? Number(aniListRaw)
         : undefined;
+    const malRaw = isRecord(attributes.links) ? attributes.links.mal : undefined;
+    const malId =
+      (typeof malRaw === "string" || typeof malRaw === "number") &&
+      /^\d{1,10}$/.test(String(malRaw))
+        ? Number(malRaw)
+        : undefined;
+    const originalLanguage =
+      typeof attributes.originalLanguage === "string" ? attributes.originalLanguage : undefined;
 
     const updatedAt = typeof attributes.updatedAt === "string" ? attributes.updatedAt : undefined;
     if (!updatedAt) return [];
 
     const coverFileName = findCoverFileName(value.relationships);
+    const coverBase = coverFileName
+      ? `https://uploads.mangadex.org/covers/${value.id}/${coverFileName}`
+      : undefined;
     return [
       {
         mangaDexId: value.id,
         aniListId,
+        malId,
         title,
-        coverUrl: coverFileName
-          ? `https://uploads.mangadex.org/covers/${value.id}/${coverFileName}.256.jpg`
-          : undefined,
+        coverUrl: coverBase ? `${coverBase}.512.jpg` : undefined,
+        coverUrlFallback: coverBase,
+        originalLanguage,
+        publicationKind: mangaKindFromOriginalLanguage(originalLanguage) ?? "OTHER",
         updatedAt,
         mangaDexUrl: `https://mangadex.org/title/${value.id}`,
       },
     ];
+  });
+}
+
+export function parseMangaDexPageInfo(
+  payload: unknown,
+  requestedPage: number,
+  perPage: number,
+): LatestUpdatesPage<never>["pageInfo"] {
+  const record = isRecord(payload) ? payload : {};
+  const total =
+    typeof record.total === "number" && Number.isFinite(record.total) && record.total >= 0
+      ? record.total
+      : 0;
+  const offset =
+    typeof record.offset === "number" && Number.isFinite(record.offset) && record.offset >= 0
+      ? record.offset
+      : (requestedPage - 1) * perPage;
+  return {
+    currentPage: requestedPage,
+    perPage,
+    lastPage: Math.max(requestedPage, Math.max(1, Math.ceil(total / perPage))),
+    hasNextPage: total > 0 ? offset + perPage < total : false,
+  };
+}
+
+export function findLatestChapterIds(payload: unknown): Map<string, string> {
+  const ids = new Map<string, string>();
+  if (!isRecord(payload) || !Array.isArray(payload.data)) return ids;
+  for (const value of payload.data) {
+    if (!isRecord(value) || !isSafeId(value.id) || !isRecord(value.attributes)) continue;
+    const chapterId = value.attributes.latestUploadedChapter;
+    if (isSafeId(chapterId)) ids.set(value.id, chapterId);
+  }
+  return ids;
+}
+
+export function mergeLatestChapterDetails(
+  items: LatestMangaUpdate[],
+  chapterIds: ReadonlyMap<string, string>,
+  payload: unknown,
+): LatestMangaUpdate[] {
+  if (!isRecord(payload) || !Array.isArray(payload.data)) return items;
+  const details = new Map<string, { chapter?: string; updatedAt?: string }>();
+  for (const value of payload.data) {
+    if (!isRecord(value) || !isSafeId(value.id) || !isRecord(value.attributes)) continue;
+    const attributes = value.attributes;
+    const chapter =
+      typeof attributes.chapter === "string" && attributes.chapter.trim()
+        ? attributes.chapter.trim()
+        : undefined;
+    const updatedAt =
+      typeof attributes.publishAt === "string"
+        ? attributes.publishAt
+        : typeof attributes.readableAt === "string"
+          ? attributes.readableAt
+          : undefined;
+    details.set(value.id, { chapter, updatedAt });
+  }
+  return items.map((item) => {
+    const chapterId = chapterIds.get(item.mangaDexId);
+    const detail = chapterId ? details.get(chapterId) : undefined;
+    return detail
+      ? {
+          ...item,
+          chapter: detail.chapter,
+          updatedAt: detail.updatedAt ?? item.updatedAt,
+        }
+      : item;
   });
 }
 
@@ -411,15 +609,26 @@ function findCoverFileName(relationships: unknown): string | undefined {
 }
 
 export function findExactAniListMapping(payload: unknown, aniListId: number): string | undefined {
+  return findExactAniListManga(payload, aniListId)?.id;
+}
+
+function findExactAniListManga(
+  payload: unknown,
+  aniListId: number,
+): ExactMangaDexMapping | undefined {
   if (!isRecord(payload) || !Array.isArray(payload.data)) return undefined;
-  const matches = new Set<string>();
+  const matches = new Map<string, ExactMangaDexMapping>();
   for (const candidate of payload.data) {
     if (!isRecord(candidate) || typeof candidate.id !== "string") continue;
     const attributes = candidate.attributes;
     if (!isRecord(attributes) || !isRecord(attributes.links)) continue;
-    if (String(attributes.links.al) === String(aniListId)) matches.add(candidate.id);
+    if (String(attributes.links.al) !== String(aniListId)) continue;
+    matches.set(candidate.id, {
+      id: candidate.id,
+      publicationStatus: readPublicationStatus(attributes.status),
+    });
   }
-  return matches.size === 1 ? [...matches][0] : undefined;
+  return matches.size === 1 ? [...matches.values()][0] : undefined;
 }
 
 export function findLatestNumericChapter(payload: unknown): number | undefined {
@@ -468,6 +677,22 @@ function isSafeId(value: unknown): value is string {
 
 function isSafeTitle(value: string): boolean {
   return value.trim().length >= 1 && value.trim().length <= 240;
+}
+
+function readCollectionSize(payload: unknown): number {
+  return isRecord(payload) && Array.isArray(payload.data) ? payload.data.length : 0;
+}
+
+function readCollectionTotal(payload: unknown): number | undefined {
+  return isRecord(payload) && Number.isInteger(payload.total) && Number(payload.total) >= 0
+    ? Number(payload.total)
+    : undefined;
+}
+
+function readPublicationStatus(value: unknown): ExactMangaDexMapping["publicationStatus"] {
+  return value === "ongoing" || value === "completed" || value === "hiatus" || value === "cancelled"
+    ? value
+    : undefined;
 }
 
 function parseChapterNumber(value: unknown): number | undefined {

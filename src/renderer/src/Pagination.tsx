@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "framer-motion";
 import { useId, useMemo } from "react";
 
 const ELLIPSIS = "ellipsis" as const;
@@ -28,11 +28,13 @@ function buildPageRange(page: number, totalPages: number, siblings = 1): PageIte
 }
 
 export function Pagination({
+  label = "Catalog pages",
   page,
   totalPages,
   hasNextPage,
   onPageChange,
 }: {
+  label?: string;
   page: number;
   totalPages: number;
   hasNextPage: boolean;
@@ -43,7 +45,7 @@ export function Pagination({
   const items = useMemo(() => buildPageRange(page, Math.max(page, totalPages)), [page, totalPages]);
 
   return (
-    <nav className="pagination" aria-label="Catalog pages">
+    <nav className="pagination" aria-label={label}>
       <button
         type="button"
         disabled={page <= 1}

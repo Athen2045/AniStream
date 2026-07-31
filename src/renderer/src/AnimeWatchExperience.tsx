@@ -1,10 +1,6 @@
-import "@videojs/react/video/skin.css";
-import { createPlayer } from "@videojs/react";
-import { HlsJsVideo } from "@videojs/react/media/hlsjs-video";
-import { VideoSkin, videoFeatures } from "@videojs/react/video";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, ChevronLeft, Play, SkipForward } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import type {
   AniListCatalogMedia,
   AniListMediaDetail,
@@ -15,26 +11,29 @@ import type {
   AnimeProviderSeason,
   PlaybackResume,
 } from "../../shared/contracts";
+import { parseMegaPlayEvent } from "../../shared/megaplay-events";
 
-const VideoJsPlayer = createPlayer({ features: videoFeatures });
-const PLAYER_ENTER_DURATION_MS = 420;
-const PLAYER_ENTER_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
-// Remembered across episodes/sources for the whole session so switching episodes
-// doesn't reset the user's chosen volume.
-let sessionVolume = 0.8;
+const MEGAPLAY_ORIGIN = "https://megaplay.buzz";
 
 type WatchView = "episodes" | "player";
 
 export function AnimeWatchExperience({
   media,
   initialEpisode,
+  autoPlayRequest = 0,
   onEpisodeWatched,
 }: {
   media: AniListCatalogMedia | AniListMediaDetail;
   initialEpisode: number;
+  autoPlayRequest?: number;
   onEpisodeWatched: (episode: number) => Promise<void>;
 }): React.JSX.Element {
   const rootRef = useRef<HTMLElement>(null);
+  const backButtonRef = useRef<HTMLButtonElement>(null);
+  const reducedMotion = useReducedMotion();
+  const transitionCommitted = useRef(false);
+  const handledAutoPlayRequest = useRef(0);
+  const pendingEpisodeRef = useRef<AnimeProviderEpisode | null>(null);
   const [catalog, setCatalog] = useState<AnimeEpisodeCatalog>();
   const [activeEpisode, setActiveEpisode] = useState<AnimeProviderEpisode>(() =>
     episodePlaceholder(initialEpisode),
@@ -47,6 +46,8 @@ export function AnimeWatchExperience({
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [loadingPlayback, setLoadingPlayback] = useState(false);
   const [error, setError] = useState<string>();
+  const [transitionTarget, setTransitionTarget] = useState<WatchView>();
+  const [retryCount, setRetryCount] = useState(0);
 
   const titles = useMemo(() => {
     const detailTitles =
@@ -65,14 +66,25 @@ export function AnimeWatchExperience({
     seasons.find((season) => season.id === selectedSeasonId) ??
     seasonContainingEpisode(seasons, activeEpisode) ??
     seasons[0];
-  const allEpisodes = seasons.flatMap((season) => season.episodes);
-  const activeIndex = allEpisodes.findIndex((episode) => sameEpisode(episode, activeEpisode));
-  const nextEpisode =
-    activeIndex >= 0 && activeIndex + 1 < allEpisodes.length
-      ? allEpisodes[activeIndex + 1]
-      : undefined;
-  const hlsSources = playback?.candidates.filter((candidate) => candidate.kind === "hls") ?? [];
-  const torrents = playback?.candidates.filter((candidate) => candidate.kind === "torrent") ?? [];
+  const allEpisodes = useMemo(
+    () => seasons.flatMap((season) => season.episodes),
+    [seasons],
+  );
+  const activeIndex = useMemo(
+    () => allEpisodes.findIndex((episode) => sameEpisode(episode, activeEpisode)),
+    [allEpisodes, activeEpisode],
+  );
+  const nextEpisode = useMemo(
+    () =>
+      activeIndex >= 0 && activeIndex + 1 < allEpisodes.length
+        ? allEpisodes[activeIndex + 1]
+        : undefined,
+    [activeIndex, allEpisodes],
+  );
+  const embedSources = useMemo(
+    () => playback?.candidates.filter((candidate) => candidate.kind === "embed") ?? [],
+    [playback],
+  );
   const watchedEpisodes = "listEntry" in media ? (media.listEntry?.progress ?? 0) : 0;
 
   useEffect(() => {
@@ -85,7 +97,13 @@ export function AnimeWatchExperience({
           media.season && media.seasonYear
             ? `${formatLabel(media.season)} ${media.seasonYear}`
             : "Season 1",
-        totalEpisodes: media.totalProgress,
+        totalEpisodes: Math.max(
+          media.totalProgress ?? 0,
+          media.nextAiringEpisode ? media.nextAiringEpisode.episode - 1 : 0,
+          initialEpisode,
+        ),
+        fallbackThumbnailUrl: media.bannerUrl ?? media.coverUrl,
+        fallbackDescription: plainText(media.description),
       }),
       window.anistream.getPlaybackResume(media.id),
     ]).then(([catalogResult, resumeResult]) => {
@@ -96,9 +114,9 @@ export function AnimeWatchExperience({
           ? catalogResult.value
           : {
               status: "unavailable" as const,
-              provider: "aniwatch" as const,
+              provider: "anikoto" as const,
               seasons: [],
-              message: messageFrom(catalogResult.reason, "Aniwatch episode data is unavailable."),
+              message: messageFrom(catalogResult.reason, "Anikoto episode data is unavailable."),
               checkedAt: new Date().toISOString(),
             };
       const saved = resumeResult.status === "fulfilled" ? resumeResult.value : undefined;
@@ -124,7 +142,11 @@ export function AnimeWatchExperience({
   }, [
     fallback,
     initialEpisode,
+    media.bannerUrl,
+    media.coverUrl,
+    media.description,
     media.id,
+    media.nextAiringEpisode,
     media.season,
     media.seasonYear,
     media.totalProgress,
@@ -145,7 +167,7 @@ export function AnimeWatchExperience({
       .then((result) => {
         if (!active) return;
         setPlayback(result);
-        setSource(result.candidates.find((candidate) => candidate.kind === "hls"));
+        setSource(result.candidates.find((candidate) => candidate.kind === "embed"));
       })
       .catch((reason: unknown) => {
         if (active) setError(messageFrom(reason, "Unable to resolve playback sources."));
@@ -159,22 +181,33 @@ export function AnimeWatchExperience({
     };
   }, [activeEpisode.id, activeEpisode.number, media.id, media.title, view]);
 
-  const animatePlayerEntry = useCallback((): void => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const playerView = rootRef.current?.querySelector<HTMLElement>(".watch-player-view");
-    const animation = playerView?.animate(
-      [
-        { opacity: 0, transform: "translate3d(0, 18px, 0) scale(0.965)" },
-        { opacity: 1, transform: "translate3d(0, 0, 0) scale(1)" },
-      ],
-      {
-        duration: PLAYER_ENTER_DURATION_MS,
-        easing: PLAYER_ENTER_EASING,
-        fill: "both",
-      },
-    );
-    void animation?.finished.finally(() => animation.cancel());
+  const commitPendingEpisode = useCallback((): void => {
+    const pending = pendingEpisodeRef.current;
+    if (pending) {
+      pendingEpisodeRef.current = null;
+      setActiveEpisode(pending);
+    }
   }, []);
+
+  const transitionTo = useCallback(
+    (target: WatchView): void => {
+      if (transitionTarget) return;
+      if (target === view) {
+        // Already on the target view (e.g. selecting the next episode while still in the
+        // player) — there's no curtain animation to defer behind, so apply immediately.
+        commitPendingEpisode();
+        return;
+      }
+      if (reducedMotion) {
+        commitPendingEpisode();
+        setView(target);
+        return;
+      }
+      transitionCommitted.current = false;
+      setTransitionTarget(target);
+    },
+    [commitPendingEpisode, reducedMotion, transitionTarget, view],
+  );
 
   const playEpisode = useCallback(
     (episode: AnimeProviderEpisode, requestFullscreen: boolean): void => {
@@ -183,25 +216,64 @@ export function AnimeWatchExperience({
         void root.requestFullscreen().catch(() => undefined);
       }
 
-      flushSync(() => {
-        setResume((current) => (current?.episode === episode.number ? current : undefined));
-        setLoadingPlayback(true);
-        setPlayback(undefined);
-        setSource(undefined);
-        setError(undefined);
-        setActiveEpisode(episode);
-        setSelectedSeasonId(seasonContainingEpisode(seasons, episode)?.id ?? selectedSeasonId);
-        setView("player");
-      });
-      animatePlayerEntry();
+      setResume((current) => (current?.episode === episode.number ? current : undefined));
+      setLoadingPlayback(true);
+      setPlayback(undefined);
+      setSource(undefined);
+      setError(undefined);
+      setSelectedSeasonId(seasonContainingEpisode(seasons, episode)?.id ?? selectedSeasonId);
+      // Defer setActiveEpisode (which triggers the getAnimePlayback IPC/data-fetch effect)
+      // until the curtain transition's onAnimationComplete fires, so the IPC round trip
+      // doesn't compete with the in-flight 300ms curtain animation for frames.
+      pendingEpisodeRef.current = episode;
+      transitionTo("player");
     },
-    [animatePlayerEntry, seasons, selectedSeasonId],
+    [seasons, selectedSeasonId, transitionTo],
   );
 
+  useEffect(() => {
+    if (
+      loadingCatalog ||
+      autoPlayRequest <= 0 ||
+      handledAutoPlayRequest.current >= autoPlayRequest
+    ) {
+      return;
+    }
+    handledAutoPlayRequest.current = autoPlayRequest;
+    const preferredEpisode =
+      allEpisodes.find((episode) => episode.number === initialEpisode) ?? activeEpisode;
+    playEpisode(preferredEpisode, false);
+  }, [activeEpisode, allEpisodes, autoPlayRequest, initialEpisode, loadingCatalog, playEpisode]);
+
   const returnToEpisodes = useCallback((): void => {
-    setView("episodes");
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-  }, []);
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => transitionTo("episodes"));
+      return;
+    }
+    transitionTo("episodes");
+  }, [transitionTo]);
+
+  useEffect(() => {
+    if (view !== "player") return;
+    const handleFullscreenChange = (): void => {
+      if (!document.fullscreenElement) transitionTo("episodes");
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, [transitionTo, view]);
+
+  useEffect(() => {
+    if (view !== "player") return;
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape" && !document.fullscreenElement) returnToEpisodes();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [returnToEpisodes, view]);
+
+  useEffect(() => {
+    if (view === "player") backButtonRef.current?.focus();
+  }, [view]);
 
   return (
     <section
@@ -223,8 +295,9 @@ export function AnimeWatchExperience({
           onPlay={(episode) => playEpisode(episode, true)}
         />
       ) : (
-        <div className="watch-player-view">
+        <div className="watch-player-view" role="dialog" aria-modal="true" aria-label={`${media.title} player`}>
           <button
+            ref={backButtonRef}
             type="button"
             className="watch-player-back"
             aria-label="Back to episode list"
@@ -243,50 +316,49 @@ export function AnimeWatchExperience({
           </div>
 
           {source ? (
-            <AniStreamVideo
-              key={`${activeEpisode.number}:${source.id}`}
+            <AnikotoEmbedPlayer
+              key={`${activeEpisode.number}:${source.id}:${retryCount}`}
               mediaId={media.id}
+              title={media.title}
               episode={activeEpisode}
               source={source}
-              poster={activeEpisode.thumbnailUrl ?? media.bannerUrl ?? media.coverUrl}
               resume={resume?.episode === activeEpisode.number ? resume : undefined}
               nextEpisode={nextEpisode}
               onNext={(episode) => playEpisode(episode, false)}
               onWatched={onEpisodeWatched}
               onError={setError}
+              onRetry={() => setRetryCount((count) => count + 1)}
             />
           ) : (
             <div className="player-unavailable" role="status">
               <Play size={54} />
-              <h3>{loadingPlayback ? "Finding a stream…" : "HLS source unavailable"}</h3>
+              <h3>{loadingPlayback ? "Opening Anikoto…" : "Anikoto player unavailable"}</h3>
               <p>
                 {loadingPlayback
-                  ? "Checking the approved AniWatch hosters and preparing adaptive playback."
-                  : (playback?.message ??
-                    "The provider returned no playable HLS variant for this episode.")}
+                  ? "Preparing the approved Anikoto episode embed."
+                  : (playback?.message ?? "Anikoto returned no playable embed for this episode.")}
               </p>
-              {torrents.length ? <TorrentFallback candidates={torrents} /> : null}
             </div>
           )}
 
           {error ? <p className="watch-player-error">{error}</p> : null}
 
-          {hlsSources.length > 1 ? (
+          {embedSources.length > 1 ? (
             <label className="watch-source-select">
-              <span>Stream</span>
+              <span>Audio</span>
               <select
-                aria-label="Video stream"
+                aria-label="Episode audio"
                 value={source?.id ?? ""}
                 onChange={(event) => {
-                  const selected = hlsSources.find(
+                  const selected = embedSources.find(
                     (candidate) => candidate.id === event.target.value,
                   );
                   if (selected) setSource(selected);
                 }}
               >
-                {hlsSources.map((candidate) => (
+                {embedSources.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
-                    {candidate.quality ?? candidate.label}
+                    {candidate.label}
                   </option>
                 ))}
               </select>
@@ -294,6 +366,31 @@ export function AnimeWatchExperience({
           ) : null}
         </div>
       )}
+      <AnimatePresence
+        initial={false}
+        onExitComplete={() => {
+          transitionCommitted.current = false;
+        }}
+      >
+        {transitionTarget ? (
+          <motion.div
+            key={`watch-transition-${transitionTarget}`}
+            className="watch-view-transition"
+            aria-hidden="true"
+            initial={{ y: "100%" }}
+            animate={{ y: "0%" }}
+            exit={{ y: "-100%" }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            onAnimationComplete={() => {
+              if (transitionCommitted.current) return;
+              transitionCommitted.current = true;
+              commitPendingEpisode();
+              setView(transitionTarget);
+              setTransitionTarget(undefined);
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
     </section>
   );
 }
@@ -377,8 +474,12 @@ function EpisodeBrowser({
             >
               <span className="netflix-episode-number">{episode.number}</span>
               <span className="netflix-episode-thumb">
-                {episode.thumbnailUrl ? (
-                  <img src={episode.thumbnailUrl} alt="" loading="lazy" />
+                {(episode.thumbnailUrl ?? media.bannerUrl ?? media.coverUrl) ? (
+                  <img
+                    src={episode.thumbnailUrl ?? media.bannerUrl ?? media.coverUrl}
+                    alt=""
+                    loading="lazy"
+                  />
                 ) : (
                   <span className="episode-thumb-fallback">{media.title}</span>
                 )}
@@ -410,109 +511,166 @@ function EpisodeBrowser({
   );
 }
 
-function AniStreamVideo({
+function AnikotoEmbedPlayer({
   mediaId,
+  title,
   episode,
   source,
-  poster,
   resume,
   nextEpisode,
   onNext,
   onWatched,
   onError,
+  onRetry,
 }: {
   mediaId: number;
+  title: string;
   episode: AnimeProviderEpisode;
   source: AnimePlaybackCandidate;
-  poster: string;
   resume?: PlaybackResume;
   nextEpisode?: AnimeProviderEpisode;
   onNext: (episode: AnimeProviderEpisode) => void;
   onWatched: (episode: number) => Promise<void>;
   onError: (message: string) => void;
+  onRetry: () => void;
 }): React.JSX.Element {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const markedRef = useRef(false);
+  const completedRef = useRef(false);
   const lastSavedAt = useRef(0);
+  const latestProgress = useRef<{ currentTime: number; duration: number } | undefined>(undefined);
+  const loadedRef = useRef(false);
+  const [loaded, setLoaded] = useState(false);
+  const [hasProgressed, setHasProgressed] = useState(false);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const [ended, setEnded] = useState(false);
 
+  const reportError = useCallback(
+    (message: string): void => {
+      setHasError(true);
+      onError(message);
+    },
+    [onError],
+  );
+
+  // Mount-scoped timeout: this whole component remounts (via its parent `key`, which
+  // includes episode number, source id, and a retry counter) whenever a new episode/source
+  // is selected or the user retries, so a plain-mount effect is equivalent to keying on
+  // those values directly.
+  useEffect(() => {
+    loadedRef.current = false;
+    const timer = setTimeout(() => {
+      if (!loadedRef.current) setLoadTimedOut(true);
+    }, 15_000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const saveResume = useCallback(
-    (force = false): void => {
-      const video = videoRef.current;
-      if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
+    (currentTime: number, duration: number, force = false): void => {
       const now = Date.now();
       if (!force && now - lastSavedAt.current < 10_000) return;
       lastSavedAt.current = now;
       void window.anistream.savePlaybackResume({
         aniListId: mediaId,
         episode: episode.number,
-        positionSeconds: Math.max(0, video.currentTime),
-        durationSeconds: video.duration,
+        positionSeconds: Math.max(0, currentTime),
+        durationSeconds: duration,
       });
     },
     [episode.number, mediaId],
   );
 
-  useEffect(() => () => saveResume(true), [saveResume]);
+  useEffect(
+    () => () => {
+      const progress = latestProgress.current;
+      if (progress) saveResume(progress.currentTime, progress.duration, true);
+    },
+    [saveResume],
+  );
 
-  const updateProgress = (video: HTMLVideoElement): void => {
-    saveResume();
-    if (
-      !markedRef.current &&
-      Number.isFinite(video.duration) &&
-      video.duration > 0 &&
-      video.currentTime / video.duration >= 0.9
-    ) {
-      markedRef.current = true;
-      void onWatched(episode.number);
-    }
-  };
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent<unknown>): void => {
+      if (event.origin !== MEGAPLAY_ORIGIN || event.source !== iframeRef.current?.contentWindow) {
+        return;
+      }
 
-  const completeEpisode = (): void => {
-    markedRef.current = true;
-    setEnded(true);
-    void window.anistream.clearPlaybackResume(mediaId);
-    void onWatched(episode.number);
-  };
+      const message = parseMegaPlayEvent(event.data);
+      if (!message) return;
+
+      if (message.kind === "progress") {
+        setHasProgressed(true);
+        const ratio = message.percent ?? (message.currentTime / message.duration) * 100;
+        if (!markedRef.current && ratio >= 90) {
+          markedRef.current = true;
+          completedRef.current = true;
+          latestProgress.current = undefined;
+          void window.anistream.clearPlaybackResume(mediaId);
+          void onWatched(episode.number);
+        } else if (!completedRef.current) {
+          latestProgress.current = {
+            currentTime: message.currentTime,
+            duration: message.duration,
+          };
+          saveResume(message.currentTime, message.duration);
+        }
+        return;
+      }
+
+      if (message.kind === "complete") {
+        const shouldMark = !markedRef.current;
+        markedRef.current = true;
+        completedRef.current = true;
+        latestProgress.current = undefined;
+        setEnded(true);
+        void window.anistream.clearPlaybackResume(mediaId);
+        if (shouldMark) void onWatched(episode.number);
+        return;
+      }
+
+      reportError(message.message ?? "The Anikoto player reported a playback error.");
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [episode.number, mediaId, onWatched, reportError, saveResume]);
 
   return (
-    <div className="anistream-player">
-      <VideoJsPlayer.Provider>
-        <VideoSkin className="anistream-videojs" poster={poster}>
-          <HlsJsVideo
-            ref={videoRef}
-            src={source.url}
-            autoPlay
-            playsInline
-            preload="auto"
-            onLoadedMetadata={(event) => {
-              const video = event.currentTarget;
-              video.volume = sessionVolume;
-              if (resume && resume.positionSeconds < video.duration - 20) {
-                video.currentTime = resume.positionSeconds;
-              }
-              void video.play().catch(() => undefined);
-            }}
-            onVolumeChange={(event) => {
-              sessionVolume = event.currentTarget.volume;
-            }}
-            onPause={() => saveResume(true)}
-            onTimeUpdate={(event) => updateProgress(event.currentTarget)}
-            onEnded={completeEpisode}
-            onError={() => onError("The selected HLS stream could not be played.")}
-          >
-            {source.subtitles?.map((track) => (
-              <track
-                key={track.url}
-                kind="subtitles"
-                label={track.label}
-                srcLang={track.language ?? "en"}
-                src={track.url}
-              />
-            ))}
-          </HlsJsVideo>
-        </VideoSkin>
-      </VideoJsPlayer.Provider>
+    <div className="anistream-player anikoto-player">
+      <iframe
+        ref={iframeRef}
+        className="anikoto-embed"
+        src={source.url}
+        title={`${title} episode ${episode.number} · ${source.label}`}
+        allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+        onLoad={() => {
+          loadedRef.current = true;
+          setLoaded(true);
+        }}
+      />
+
+      {loadTimedOut ? (
+        <div className="anikoto-player-loading anikoto-player-error" role="alert">
+          <strong>The Anikoto player didn&apos;t respond in time.</strong>
+          <p>The embed may be slow, blocked, or unavailable.</p>
+          <button type="button" onClick={onRetry}>
+            Retry
+          </button>
+        </div>
+      ) : !hasError && !ended && !(loaded && hasProgressed) ? (
+        <div className="anikoto-player-loading" role="status">
+          <span className="spinner" />
+          <strong>Loading Anikoto player…</strong>
+        </div>
+      ) : null}
+
+      {resume && resume.positionSeconds > 0 ? (
+        <p className="anikoto-resume-note">
+          Saved at {formatPlaybackTime(resume.positionSeconds)} · Anikoto controls playback position
+        </p>
+      ) : null}
 
       {ended && nextEpisode ? (
         <button className="next-preview" type="button" onClick={() => onNext(nextEpisode)}>
@@ -527,39 +685,15 @@ function AniStreamVideo({
   );
 }
 
-function TorrentFallback({
-  candidates,
-}: {
-  candidates: AnimePlaybackCandidate[];
-}): React.JSX.Element {
-  return (
-    <details className="torrent-fallback">
-      <summary>Use torrent fallback ({candidates.length})</summary>
-      <p>
-        AniStream opens the selected magnet in your installed torrent client. It does not download
-        or seed media itself.
-      </p>
-      <div className="torrent-list">
-        {candidates.map((candidate) => (
-          <button
-            key={candidate.id}
-            type="button"
-            onClick={() => void window.anistream.openTorrentMagnet(candidate.url)}
-          >
-            <strong>{candidate.label}</strong>
-            <span>
-              {candidate.quality ?? "release"}
-              {candidate.seeders !== undefined ? ` · ${candidate.seeders} seeders` : ""}
-            </span>
-          </button>
-        ))}
-      </div>
-    </details>
-  );
-}
-
 function fallbackSeason(media: AniListCatalogMedia | AniListMediaDetail): AnimeProviderSeason {
-  const count = Math.min(Math.max(media.totalProgress ?? 1, 1), 500);
+  const count = Math.min(
+    Math.max(
+      media.totalProgress ?? 0,
+      media.nextAiringEpisode ? media.nextAiringEpisode.episode - 1 : 0,
+      1,
+    ),
+    2_000,
+  );
   return {
     id: `anilist:${media.id}`,
     number: 1,
@@ -568,6 +702,8 @@ function fallbackSeason(media: AniListCatalogMedia | AniListMediaDetail): AnimeP
       id: "",
       number: index + 1,
       title: `Episode ${index + 1}`,
+      thumbnailUrl: media.bannerUrl ?? media.coverUrl,
+      description: plainText(media.description),
     })),
   };
 }
@@ -608,6 +744,13 @@ function formatLabel(value: string): string {
 
 function messageFrom(value: unknown, fallback: string): string {
   return value instanceof Error ? value.message : fallback;
+}
+
+function formatPlaybackTime(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(total / 60);
+  const remainder = total % 60;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
 function isNonEmptyString(value: string | undefined): value is string {

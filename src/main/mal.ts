@@ -1,11 +1,18 @@
-import type { AniListMediaType, MalRankingItem, MalScore } from "../shared/contracts";
+import type {
+  AniListMediaType,
+  MalRankingItem,
+  MalScore,
+  MangaPublicationKind,
+} from "../shared/contracts";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
+import { mangaKindFromMalMediaType } from "./manga-kind";
 
 const MAL_API_URL = "https://api.myanimelist.net/v2";
 const REQUEST_TIMEOUT_MS = 10_000;
 const SCORE_CACHE_TTL_MS = 30 * 60_000;
 const RANKING_CACHE_TTL_MS = 10 * 60_000;
+const MEDIA_TYPE_CACHE_TTL_MS = 24 * 60 * 60_000;
 const RANKING_LIMIT = 20;
 
 type Fetcher = typeof fetch;
@@ -28,6 +35,10 @@ export class MalClient {
   private readonly rankingCache = createBoundedCache<MalRankingItem[]>({
     maxEntries: 2,
     ttlMs: RANKING_CACHE_TTL_MS,
+  });
+  private readonly mangaKindCache = createBoundedCache<MangaPublicationKind>({
+    maxEntries: 120,
+    ttlMs: MEDIA_TYPE_CACHE_TTL_MS,
   });
 
   public constructor(
@@ -79,6 +90,25 @@ export class MalClient {
     const ranking = parseMalRanking(payload, kind);
     this.rankingCache.set(kind, ranking);
     return ranking;
+  }
+
+  public async getMangaPublicationKind(malId: number): Promise<MangaPublicationKind | undefined> {
+    if (!this.configured) return undefined;
+    if (!Number.isInteger(malId) || malId <= 0) throw new Error("Invalid MyAnimeList ID.");
+    const cacheKey = `manga-kind:${malId}`;
+    const cached = this.mangaKindCache.get(cacheKey);
+    if (cached) return cached;
+
+    const url = new URL(`${MAL_API_URL}/manga/${malId}`);
+    url.searchParams.set("fields", "media_type");
+    try {
+      const payload = await this.requestJson(url, cacheKey);
+      const publicationKind = parseMalMangaPublicationKind(payload);
+      if (publicationKind) this.mangaKindCache.set(cacheKey, publicationKind);
+      return publicationKind;
+    } catch {
+      return undefined;
+    }
   }
 
   private async requestJson(url: URL, deduplicationKey: string): Promise<unknown> {
@@ -136,6 +166,13 @@ export function parseMalRanking(payload: unknown, kind: "anime" | "manga"): MalR
       },
     ];
   });
+}
+
+export function parseMalMangaPublicationKind(payload: unknown): MangaPublicationKind | undefined {
+  if (!isRecord(payload)) return undefined;
+  return mangaKindFromMalMediaType(
+    typeof payload.media_type === "string" ? payload.media_type : undefined,
+  );
 }
 
 function readHttpsUrl(candidate: unknown): string | undefined {

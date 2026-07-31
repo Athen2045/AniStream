@@ -4,10 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: blob: anistream-media:; connect-src 'self' https: blob: anistream-media:; worker-src 'self' blob:; font-src 'self' data:;"
-    />
+    <!-- The authoritative Content-Security-Policy is the HTTP response header set by
+         src/main/renderer-server.ts, applied before this document is even parsed. A
+         duplicate meta-tag policy here would only risk drifting out of sync with it. -->
     <title>AniStream</title>
   </head>
   <body>

@@ -1,179 +1,209 @@
 # AniStream — Context
 
-Last updated: 2026-07-29 by Claude Code MAL/MangaBaka indexing session
+Last updated: 2026-07-31 by Codex Electron performance and IPC session
 
 ## Current phase
 
-Phase 2 native media integration. AniList discovery/tracking, Zenshin episode enrichment, the
-Netflix-style episode browser, the fullscreen Video.js anime player/source broker, MangaDex reading,
-MangaBaka enrichment, local playback resume, and the Netflix/MangaFire-inspired title surfaces are
-implemented. Live HLS remains degraded because the approved public Aniwatch service is currently
-unhealthy; torrent handoff is the active fallback.
+Phase 2 native media integration. AniList discovery/tracking, Anikoto episode lookup, MegaPlay
+embedded anime playback, Netflix-style episode browsing, Framer Motion detail/player/reader
+transitions, independently paged Latest Updates grids, MangaDex long-strip reading, MangaBaka
+enrichment, SQLite anime/manga resume state, typed origin-validated IPC, persistent dashboard
+caching, viewport-lazy reader pages, and feature-level renderer chunks are implemented. The former
+AniWatch, Zenshin, AnimeTosho, Nyaa, custom HLS broker, torrent handoff, Video.js, hls.js, and
+direct Motion runtime paths remain removed.
 
 ## What's working right now
 
-- The catalog home was simplified per user direction (2026-07-29): the "Top Rated", "Based on Your
-  Interest", and "Browse" sections are removed. The default view is now rails-only: Continue
-  Watching/Reading, a dedicated Trending top-20 rail (its own `TRENDING_DESC` fetch, rank badges),
-  and a new "Latest Anime Updates" / "Latest Manga Updates" rail. The paginated grid still appears
-  for search results. The genre-preference computation and `SCORE_DESC` prefetch were removed with
-  their rails.
-- Latest Anime Updates uses AniList's `airingSchedules(notYetAired: false, sort: TIME_DESC)` (one
-  row per anime, adult titles filtered in the normalizer, 5-minute cache). Latest Manga Updates uses
-  MangaDex `GET /manga?order[latestUploadedChapter]=desc` with `cover_art` includes, safe/suggestive
-  content ratings, and the configured language (5-minute cache, same 4 req/s gate). Manga rows with
-  an exact `links.al` AniList mapping open the in-app detail modal; unmapped rows open the MangaDex
-  page externally and are visually badged.
-- The default window is 1440x900 (standard macOS size, matching MacBook logical resolution);
-  minimum remains 960x640.
-- MyAnimeList public-data integration is live behind `ANISTREAM_MAL_CLIENT_ID` (stored in the
-  gitignored `.env`, sent only as the `X-MAL-CLIENT-ID` header; no OAuth secret stored): the detail
-  modal cross-references MAL community scores through AniList's own `idMal` field (now requested in
-  the shared catalog fragment), and when the AniList trending fetch fails, a MAL ranking rail renders
-  as the Trending fallback with clearly badged external-link cards. All MAL access is optional and
-  gated — an unconfigured client returns empty results, never errors.
-- Adult content is no longer filtered anywhere in the catalog per explicit user direction
-  (2026-07-29): `isAdult: false` was removed from AniList browse/search, the airing-updates
-  normalizer no longer drops `isAdult` rows, and MangaDex latest-updates explicitly requests all
-  four content ratings (the API's default silently excludes `pornographic`).
-- MangaBaka requests attach `Authorization: Bearer` when `ANISTREAM_MANGABAKA_TOKEN` holds a real
-  `mb-`-prefixed PAT. The value the user supplied (`Anistream@401`) does not match MangaBaka's own
-  stated token format and is therefore deliberately not sent; unauthenticated access continues to
-  work in the meantime.
-- The session-scoped player volume now persists across episode/source switches instead of resetting
-  to 0.8; ~160 lines of dead episode-drawer/watch-layout CSS from the pre-Video.js design were
-  removed.
-- AniList authorization-code login restores its encrypted token/profile before window creation and
-  persists until explicit logout. Browse, unified search, pagination, title details, profile lists,
-  progress, scores, completion, add/edit/remove, and default latest-updated sorting work.
-- Anime and Manga remain the only primary navbar destinations; Profile contains both AniList
-  libraries. Continue rails use only AniList `CURRENT` entries and hide caught-up titles until new
-  episodes/chapters become available.
-- Netflix-style rails provide viewport-width paging, hover edge controls, keyboard navigation,
-  reduced-motion support, and cards that physically expand while pushing adjacent cards.
-- Zenshin's live mapping mirrors provide exact AniList-ID episode catalogs, episode titles,
-  thumbnails, summaries, runtimes, and season grouping. This was verified against live responses.
-- Anime detail and direct carousel Watch actions open a Netflix-style episode browser at the saved
-  episode or next AniList episode. Completed shows clamp to the final episode instead of requesting a
-  nonexistent one.
-- The episode browser matches the supplied Netflix reference with a full-width hero/detail sheet,
-  season picker, numbered 16:9 rows, hover play affordances, runtimes, summaries, dividers, and local
-  watched/resume progress.
-- Clicking an episode performs a reduced-motion-aware transform/opacity transition and requests real
-  fullscreen from the click gesture. The Video.js React v10 `HlsJsVideo` player supplies accessible
-  adaptive-HLS controls, quality, captions, playback speed, picture-in-picture, and fullscreen while
-  preserving AniStream's trusted main-process media broker, resume, AniList progress, next-episode
-  preview, alternate HLS candidates, and torrent fallback.
-- Playback position is persisted in SQLite every ten seconds and on pause/close. Reopening resumes the
-  episode, 90%/ended marks the episode watched, and the authenticated AniList entry advances or
-  completes.
-- A clean-room, removable Aniwatch client implements documented search → episode → server → source
-  contracts with exact unique-title matching, HTTPS validation, bounded throttling, timeouts, and
-  cooldowns. HLS manifests, segments, keys, maps, and subtitles are brokered through a privileged
-  `anistream-media://` main-process proxy; provider URLs never need direct renderer access.
-- Nyaa and AnimeTosho magnet discovery run concurrently as the fallback. AniStream opens an explicitly
-  selected magnet in the user's macOS handler and does not download, seed, or rehost torrents.
-- Manga detail pages use the MangaFire-inspired chapter layout, omit Studios, show search/language/
-  type/sort controls, completed marks, dates, and reader actions. The reader uses exact AniList →
-  MangaDex mapping and MangaDex@Home page delivery.
-- MangaDex image nodes are cached for at most 15 minutes and refreshed exactly once on image
-  `404`/`410`, addressing rotated MangaDex@Home hosts without aggressive retries.
-- MangaBaka enrichment is integrated through its stable exact AniList-ID route and supplies
-  author/artist/publisher, MangaUpdates ID/rating, status, type, and chapter-total fields when present.
-- The packaged Apple Silicon app was visually launched after this revamp; the renderer, persisted
-  AniList session, artwork, and preload bridge loaded without the prior blank-screen failure.
-- A Playwright-over-local-CDP interaction opened an anime, revealed the episode browser, selected the
-  first episode, and verified `watch-experience--player` with the AniStream watch surface as
-  `document.fullscreenElement`. The unhealthy public provider then resolved to the designed torrent
-  fallback.
-- `npm run typecheck`, 66 Vitest tests, `npm run format:check`, `npm run build`,
-  `npm run check:product-slice`, `npm run check:anilist-oauth`, and
-  `npm run check:packaged-preload` pass. ESLint has zero errors and two documented pre-existing
-  React effect warnings.
-- Final unsigned package: `dist/AniStream-0.1.0-arm64.dmg` (167 MB).
-  SHA-256: `f42dc6fbaf38055d014dd39ce4de7189481d5ea61184ed89125d9b6efa339dc1`.
+- AniList authorization-code login starts restoring its encrypted token/profile during main-process
+  initialization and persists until explicit logout. The local BrowserWindow can paint without
+  waiting for a legacy-session profile request; auth IPC resolves only after restoration. Browse,
+  unified search, pagination, title details, profile lists, progress, scores, completion,
+  add/edit/remove, and latest-updated sorting work.
+- The last verified AniList dashboard is persisted in SQLite and shown immediately after account
+  restoration while a background refresh runs. Dashboard/search/browse/detail/latest response
+  caches are TTL-bounded, identical reads are deduplicated in flight, and viewer caches are
+  invalidated after mutations/logout.
+- Anime and Manga are the primary navbar destinations; Profile contains both AniList libraries.
+  Continue rails use AniList `CURRENT` entries and hide titles that appear caught up until new
+  AniList/MangaDex availability is observed.
+- Continue Watching/Reading and Trending remain Netflix-style horizontal carousels with edge
+  controls, keyboard navigation, reduced motion, and real flex-width card expansion.
+- Latest Anime and Latest Manga are separate static grids: 21 titles per provider page, seven
+  columns × three rows at the default 1440px window, responsive at narrower widths, and no
+  horizontal slider. Paging either field replaces only its own grid with 21 skeletons; Trending,
+  Continue, and the rest of the catalog do not reload.
+- Latest Anime is backed by paged AniList `airingSchedules` and carries normalized `pageInfo`
+  through the typed preload bridge.
+- Latest Manga is backed by paged MangaDex `order[latestUploadedChapter]=desc`; a bounded chapter
+  batch supplies chapter number/publish time. Covers use `.512.jpg`, retry the original MangaDex
+  cover URL once, and then show a title fallback.
+- Every Latest Manga card has a Manga, Manhwa, Manhua, or Comic tag. MangaDex original language is
+  primary, AniList country is the batch exact-ID cross-check, and MAL `media_type` is consulted only
+  for up to six exact-ID gaps/disagreements per page. No title matching is used.
+- The active anime adapter is `src/main/anikoto.ts`. It checks Anikoto's first 100 recent rows,
+  accepts only one exact `ani_id` match, loads normalized episode rows from `/series/{id}`, and
+  never maps titles by text similarity.
+- Titles absent from Anikoto's recent index retain an AniList-numbered episode list and use
+  MegaPlay's documented `/stream/ani/{anilistId}/{episode}/{sub|dub}` route. Exact Anikoto episode
+  IDs use `/stream/s-2/{episodeEmbedId}/{sub|dub}`.
+- Anikoto calls are main-process-only, serialized at one request per 2.1 seconds, bounded by a
+  12-second timeout, cached for 15/30 minutes in bounded stores, deduplicated by URL while in
+  flight, and paused on 429/403. The provider has a local `ANISTREAM_ANIKOTO_ENABLED` kill switch.
+- Packaged AniStream serves only its built renderer assets from an ephemeral `127.0.0.1` port.
+  This gives the embed a truthful HTTP referrer while retaining context isolation, a narrow preload
+  bridge, host/path validation, CSP, and no renderer Node access. Fingerprinted Vite assets are
+  immutable-cacheable; `index.html` is always revalidated.
+- Every invoke channel is declared once in a shared TypeScript channel map. Main handlers reject
+  calls whose `senderFrame` origin is not the exact local renderer origin, and the preload exposes
+  only typed domain methods rather than raw `ipcRenderer`.
+- Selecting a carousel title opens its details and Netflix-style episode list. Selecting an episode
+  uses Framer Motion `AnimatePresence` to sweep a transform-only full-screen curtain over the view
+  swap and enters real fullscreen from the trusted click gesture. Reduced-motion mode swaps
+  immediately.
+- Anime title cards and More Info now open directly to the episode browser. Episode rows always
+  receive provider artwork/summary when present and fall back to the title banner/cover and AniList
+  synopsis, so the list remains complete when Anikoto supplies only numbering.
+- Watch selects the locally resumed episode when one exists; otherwise it selects the next AniList
+  episode or episode 1. A thin red line shows local/AniList progress. Reaching the 90% completion
+  threshold clears the local checkpoint so a later Watch action advances instead of reopening a
+  completed episode.
+- The fullscreen player embeds MegaPlay with sub/dub selection. `postMessage` progress is accepted
+  only from `https://megaplay.buzz` and the current iframe window, persisted to SQLite every ten
+  seconds, and used to update/complete the authenticated AniList entry at 90%/completion.
+- The exact MegaPlay iframe intentionally has no HTML `sandbox` attribute because sandboxed
+  playback was provider-blocked. Electron's BrowserWindow still uses `sandbox: true`,
+  `contextIsolation: true`, no Node integration, denied child windows/navigation, source-URL
+  validation, and exact message origin/window checks.
+- Pressing Escape or using the visible Episodes/back control exits fullscreen, runs the same
+  curtain transition, and restores the episode list. Completed embeds clear the local resume
+  checkpoint without the unmount cleanup recreating it.
+- The old AniWatch client, Zenshin episode mapper, AnimeTosho/Nyaa torrent discovery, magnet IPC,
+  HLS manifest/proxy code, custom media protocol, Video.js, hls.js, and direct `motion` dependency
+  are gone. `framer-motion` is the only renderer animation runtime.
+- Manga title cards and More Info now open directly to a chapter-only detail surface; the old inline
+  reader panel and the “AniList Sync / Keep your progress current” cards are removed from both media
+  types.
+- MangaDex chapter feeds page through the available configured-language archive in ascending order
+  (bounded to 2,000 provider rows), rather than loading only the newest 100. Chapters with a
+  non-empty `externalUrl` are excluded because they cannot be allocated through MangaDex@Home.
+- Clicking a chapter opens a dedicated fullscreen MangaFire-inspired vertical long-strip reader.
+  Framer Motion `AnimatePresence` handles entry/exit and chapter swaps; `useScroll` drives the thin
+  transform-only reading indicator; Escape/fullscreen exit returns to the chapter list.
+- Manga chapter ID, numeric chapter, and scroll ratio persist in SQLite every eight seconds and on
+  exit. Read chooses the saved chapter, advances after 90%, falls back to the next AniList chapter,
+  and otherwise opens the first available chapter. Chapter rows show a thin red local-progress line.
+- The reader shows Previous/Next chapter controls at the end. Ongoing/hiatus titles show an opaque
+  disabled Next control when no chapter is released; completed/cancelled titles omit it.
+- MangaDex@Home page delivery remains main-process-only, uses both the shared 4 req/s API gate and a
+  35 allocations/minute AtHome gate, refreshes a rotated image node once, and transfers binary
+  `ArrayBuffer` page data instead of base64. The reproduced One Piece failure was fixed by
+  filtering Manga Plus `externalUrl` chapters before reader selection.
+- The manga reader now starts with only the first/resume-neighbor pages and admits additional pages
+  through a two-request `IntersectionObserver` queue. Blob URLs are revoked on exit, failed pages
+  can retry individually, and off-screen pages/episode rows/chapter rows use
+  `content-visibility`.
+- Concurrent MangaBaka enrichment now shares the parsed immutable result rather than sharing a
+  one-use `Response` body; the runtime `Body is unusable` error found during this session is fixed
+  and covered by a regression test.
+- Verification passes for this session: TypeScript, ESLint with zero warnings, Prettier,
+  production build, product-slice checks, 97 Vitest tests across 14 files, strict Electron security
+  analysis (35 files, zero medium/high/critical findings), and runtime dependency audit (zero
+  vulnerabilities).
+- The development desktop runtime was driven through local CDP. A live title opened 12 episode rows;
+  the unsandboxed MegaPlay embed returned HTTP 200; the Framer Motion curtain appeared; native
+  fullscreen engaged; and both Escape and the visible exit control restored the episode browser.
+- A second live desktop pass verified More Info opening directly to the episode browser with
+  artwork and summaries, the removed sync card, a real MangaDex page in the fullscreen long-strip
+  reader, the scroll indicator, retained chapter list, and fullscreen exit back to chapters.
+- The same live pass verified 21 Anime cards in seven CSS-grid columns, Latest Anime page 2 without
+  changing Trending, and 21 Manga cards in seven columns with 21/21 covers loaded and 21/21
+  classification tags (`MANGA`, `MANHWA`, and `MANHUA` observed).
+- The packaged app was launched normally with Electron logging enabled. It restored the saved
+  account, rendered the signed-in seven-column Latest Anime page with remote covers, and produced
+  no preload or renderer startup error. The additional DIPS database warning came from deliberately
+  launching a second test instance against the same user-data directory.
+- Final unsigned Apple Silicon package: `dist/AniStream-0.1.0-arm64.dmg`
+  (140,062,549 bytes / 134 MiB). SHA-256:
+  `d01cde15653ca023d1663fd74aac77012ee8d6296884630df6c578f6e64382a7`.
 - Current provider verification is recorded in
-  `docs/research/approved-aniwatch-zenshin-runtime-2026-07-28.md`; the original rejection report is
-  retained as historical context and marked superseded by the user's explicit approval.
+  `docs/research/anikoto-megaplay-runtime-2026-07-29.md`.
 
 ## What's in progress
 
-- The approved public Aniwatch deployment currently returns empty search results, times out on
-  episode/server requests, or returns source-resolution 500 errors. The client and player are ready,
-  but a live HLS stream could not be verified from that deployment.
-- Full MangaDex account follows/read-marker synchronization remains planned as a separate opt-in
-  personal-client module. Public MangaDex reading does not depend on those credentials.
-- Native in-app torrent playback is not implemented; the current fallback requires an installed
-  macOS magnet handler.
-- Full MangaDex archive paging, translation/group selection, and local page/chapter resume are still
-  pending. Anime resume is implemented.
+- Full MangaDex account follows/read-marker synchronization remains planned as a separate,
+  opt-in, Keychain-backed personal-client module. Public MangaDex reading is independent.
+- MangaDex language and scanlation-group selection remain pending. Archive paging and local
+  chapter/scroll resume are now implemented.
+- A full real-time episode watch is still needed to exercise every provider-owned playback control
+  and observe MegaPlay's progress/completion messages over an entire stream. The packaged embed
+  document and application flow are verified; direct media URLs are intentionally not extracted.
+- The 21-title Latest grids need a final narrow-window visual pass below the default 1440px size;
+  responsive five- and three-column rules are implemented and compile, but live CDP verification
+  covered the default window.
 
 ## Open decisions (need user input)
 
-- Before MangaDex account sync is enabled, confirm that the personal API client is approved and that
-  storing its username, password, client secret, access token, and refresh token in macOS Keychain is
-  acceptable. MangaDex documents that this personal-client flow bypasses account MFA.
-- Decide whether to self-host/fork a compatible Aniwatch API service, provide another compatible
-  deployment through `ANISTREAM_ANIWATCH_API_URL`, or wait for the approved public deployment to
-  recover. The repository has no declared license, so its scraper code was not copied into AniStream.
-- Decide whether torrent fallback should remain an external magnet handoff or gain a local playback
-  engine with explicit download, storage, seeding, and cleanup rules.
-- Decide whether the inactive VidKing iframe seam should be removed entirely now that the native
-  player is the product surface.
+- Before MangaDex account sync is enabled, confirm the personal API client and approve storing its
+  username, password, client secret, access token, and refresh token in macOS Keychain. MangaDex
+  documents that this personal-client flow bypasses account MFA.
+- Provide a valid Developer ID Application certificate if the DMG should be signed and notarized.
+  The installed Apple Development certificate is expired.
+- Decide later whether the inactive VidKing and Parse experimental seams should be removed. Neither
+  participates in current anime playback.
 
 ## Known issues / tech debt
 
-- The approved public Aniwatch deployment is operationally unhealthy. Native HLS code is present and
-  tested with fixtures, but no live stream was available during the final check. The UI reports this
-  honestly and offers any torrent results instead of fabricating playback.
-- Zenshin supplies episode metadata/mapping only; it does not supply a video stream. Its mirror data
-  can also flatten provider-specific season numbering, so absolute episode numbers may appear in a
-  single season until a better mapping service or local correction UI is added.
-- `codex0555/Aniwatch-Api` has no declared license and its source resolver has public failure reports.
-  The user accepted the operational/legal risk, but AniStream uses only a clean-room HTTP client and
-  does not copy or bundle that repository's scraper/decryption implementation.
-- AnimeTosho stopped adding new torrents on 2026-05-09 according to its official notice, so it is
-  historical-only; Nyaa availability varies by network and title.
-- MangaDex defaults to `MANGADEX_LANGUAGE=en`. Licensed titles may have no chapters in that language.
-  Exact mapping can also fail when the correct result is outside the first ten search results or lacks
-  `attributes.links.al`; unknown titles stay visible rather than being falsely marked caught up.
-- The MangaDex reader fetches only the newest 100 readable chapters. Full archive pagination,
-  translation/group selection, account follows/read-marker sync, and chapter-level local resume are
-  not implemented.
-- MangaUpdates is consumed only through MangaBaka's normalized exact-ID record. The supplied direct
-  MangaUpdates OpenAPI did not provide a safe AniList-ID lookup contract, so direct integration is
-  deferred.
-- Automated visual inspection confirmed the packaged episode layout, and local CDP interaction
-  confirmed episode-click fullscreen entry. Manually verify every Video.js control, keyboard focus,
-  narrow-window behavior, exit/re-entry behavior, and actual HLS playback when a healthy endpoint
-  becomes available.
-- The two existing `react-hooks/set-state-in-effect` warnings in `CatalogView.tsx` and
-  `GlobalSearch.tsx` remain. TanStack Query is the planned request-lifecycle fix.
-- Video.js v10 is beta and may change its React API. The locked version is
-  `@videojs/react@10.0.0-beta.25`; review its changelog before every upgrade.
-- The renderer player chunks are large (about 903 KB main plus 1.60 MB lazy detail chunk). This is
-  acceptable for the local desktop app but should be split further if startup/detail latency grows.
-- The DMG is unsigned because the installed Apple Development certificate is expired and no valid
-  Developer ID Application identity is available.
-- Runtime dependency audit is clean; full audit still contains accepted development/build-only
-  advisories in Electron Builder/ESLint dependency trees.
-- The AniList client secret was previously shared in chat and should be rotated if AniList permits.
+- Anikoto documents no full-catalog search route. AniStream deliberately checks only the first 100
+  recent rows instead of crawling roughly 90 pages; older titles therefore use AniList episode
+  numbers and MegaPlay's direct AniList-ID route.
+- MegaPlay does not map every AniList ID. An unmapped direct route may report provider error 410; the
+  episode browser, AniList library, manga reader, and local state continue working.
+- MegaPlay is embed-only and does not document a parent command for seeking. AniStream can remember
+  an episode/time checkpoint and display it, but the provider-owned player controls exact seeking.
+- Removing the provider iframe's HTML sandbox broadens what the approved MegaPlay document can do
+  inside that frame. This explicit compatibility tradeoff is constrained by the retained Electron
+  sandbox, context isolation, window/navigation denial, HTTPS source validation, and exact
+  postMessage origin/source checks.
+- The live check proves the packaged iframe received an HTTP 200 player document and the app's
+  fullscreen/return flow works. It does not claim that direct HLS manifests or segments were
+  extracted or that every MegaPlay control was exhaustively tested.
+- MangaDex defaults to `MANGADEX_LANGUAGE=en`; licensed titles can have no chapters in that
+  language. External publisher chapters such as Manga Plus are intentionally omitted because they
+  have no MangaDex@Home image allocation. Exact mapping remains unavailable when
+  `attributes.links.al` is absent or ambiguous.
+- The MangaDex reader archive is bounded to 2,000 provider rows. Translation and scanlation-group
+  selection are not implemented, so duplicate chapter numbers from different groups can appear.
+- Page buffers are bounded by entry count rather than total bytes. A chapter is viewport-loaded,
+  but an unusually large provider image can still create a temporary memory spike while decoded.
+- MangaUpdates is consumed only through MangaBaka's normalized exact-ID record; direct integration
+  remains deferred because the supplied specification did not establish a safe AniList lookup.
+- MAL manga-kind cross-checks require `ANISTREAM_MAL_CLIENT_ID`. If it is absent or unreachable,
+  MangaDex language remains the primary classifier and AniList country remains the available
+  supplemental signal.
+- TanStack Query is not installed. The existing request lifecycle remains intentionally small and
+  main-process-backed; revisit only if renderer query invalidation grows substantially.
+- The renderer entry is about 916 KB uncompressed. Detail, anime runtime, and manga reader are now
+  separate lazy chunks (about 34 KB, 26 KB, and 39 KB respectively), so opening one media type no
+  longer parses both runtimes. The entry remains worth monitoring if more global UI dependencies
+  are added.
+- The DMG is unsigned because no valid Developer ID Application identity is installed.
+- Runtime dependency audit is clean. Development/build tooling still has previously accepted
+  advisory chains.
+- The AniList client secret was shared in chat and should be rotated if AniList permits.
 
 ## Next steps (in priority order)
 
-1. Restore live HLS by validating a healthy API-compatible Aniwatch deployment or a separately
-   operated service, then run a real sub/dub stream through the main-process HLS proxy and every
-   player control. Keep `ANISTREAM_ANIWATCH_ENABLED=0` as the immediate kill switch.
+1. Watch representative sub and dub episodes in the packaged app long enough to validate MegaPlay
+   progress/completion events, local checkpoints, next-episode behavior, and AniList advancement.
 2. Obtain/confirm the MangaDex personal client, move every credential/token into macOS Keychain, and
-   implement opt-in token refresh, follows, read markers, reconciliation, explicit logout, and
-   conflict handling.
-3. Add complete MangaDex archive pagination plus language/group selection and local chapter/page
-   resume.
-4. Manually verify direct Watch/Read card actions, episode switching, resume, AniList 90% progress,
-   MangaDex page navigation/node refresh, magnet handoff, carousel hover/paging, keyboard focus, and
-   narrow-window layout in the final packaged app.
-5. Replace the expired signing certificate with a valid Developer ID Application identity, sign and
-   notarize the DMG, then rotate the previously exposed AniList client secret.
+   implement opt-in token refresh, follows, read markers, reconciliation, logout, and conflicts.
+3. Add MangaDex language/group selection and consider a byte-budgeted page cache if real-world
+   memory profiling shows the current 18-entry bound is too permissive.
+4. Exercise the Latest grids at narrow window sizes plus keyboard focus, retained carousel paging,
+   completed-series end navigation, and all provider-owned player controls in a focused manual UX
+   pass.
+5. Install a valid Developer ID Application identity, sign/notarize the DMG, and rotate the exposed
+   AniList client secret.
 
 ## Key architectural decisions log
 
@@ -288,3 +318,23 @@ integration` against the workflow-runs API. `github/codeql-action/analyze` needs
   added but inactive: the supplied value doesn't match the documented `mb-` prefix (likely the token
   name, not the token) and is deliberately withheld from request headers until a real PAT is
   provided.
+- 2026-07-29: Superseded the AniWatch/Zenshin/AnimeTosho/Nyaa and Video.js/HLS architecture with a removable Anikoto catalog adapter plus MegaPlay's documented embedded player. AniStream accepts only exact AniList IDs from Anikoto's recent index, falls back to MegaPlay's AniList-ID route without title guessing, rate-limits and caches all Anikoto calls, validates player messages against the exact frame/origin, and serves packaged renderer assets from an ephemeral loopback-only HTTP origin because MegaPlay rejects `file://`/referrerless embeds. The packaged card → episode list → native fullscreen → Escape/exit → episode list flow was verified live.
+- 2026-07-29: Replaced the direct `motion` dependency with `framer-motion` and adopted an `AnimatePresence` full-screen curtain for episode-list/player swaps. The curtain animates only transforms and becomes an immediate swap for reduced-motion users.
+- 2026-07-29: Removed the HTML `sandbox` attribute from the exact MegaPlay iframe after the provider reported sandboxed playback. This is an explicit compatibility exception for that approved frame only; Electron's renderer sandbox, context isolation, denied child navigation/windows, HTTPS source validation, and exact postMessage origin/source validation remain mandatory.
+- 2026-07-29: Replaced the horizontal Latest Anime/Manga rails with independently fetched 21-title pages rendered as seven columns × three rows at 1440px. Latest pagination owns its own loading/error/page state and does not refetch or blank Continue/Trending.
+- 2026-07-29: Latest Manga publication kind now uses an exact-ID three-provider decision: MangaDex original language is primary, AniList country is the batch cross-check, and MAL `media_type` resolves only bounded gaps/disagreements. MangaDex covers use a 512px CDN image with one original-image fallback.
+- 2026-07-30: Made episode and chapter lists the default title-detail content. Watch/Read are
+  continuation actions: local SQLite resume wins, completed local progress advances, AniList
+  progress is the remote fallback, and episode/chapter 1 is the final fallback.
+- 2026-07-30: Replaced the inline MangaDex reader with a fullscreen vertical long-strip reader.
+  Framer Motion owns view transitions and scroll-linked progress; SQLite owns local chapter and
+  scroll resume while AniList remains the tracker.
+- 2026-07-30: MangaDex chapter records with `attributes.externalUrl` are not readable
+  MangaDex@Home chapters even when `pages > 0`; AniStream now filters them before selection and
+  never sends their IDs to `/at-home/server/{chapterId}`.
+- 2026-07-31: Kept Electron 43.2.0 after confirming it is the current stable release rather than
+  forcing a Chromium roller workflow intended for Electron's source repository. Hardened the app
+  instead: exact-origin typed IPC, non-blocking first paint, persistent/TTL-bounded caches,
+  immutable fingerprinted assets, separate anime/manga lazy chunks, binary MangaDex IPC, and
+  viewport-driven reader loading. Electron sandbox/context isolation and the approved unsandboxed
+  MegaPlay iframe exception are unchanged.

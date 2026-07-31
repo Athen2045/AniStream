@@ -6,14 +6,13 @@
 - macOS is the only supported platform. Do not add Windows/Linux packaging or compatibility work unless the user asks.
 - Never commit API keys, OAuth secrets, access tokens, passwords, cookies, or personal library data.
 - Never expose secrets or unrestricted filesystem/network access to the Electron renderer.
-- The user explicitly accepted the risk of an AniWatch-compatible scraped HLS API as the primary
-  playback adapter, with AnimeTosho/Nyaa as fallback. Zenshin mapping is approved for exact AniList-ID
-  episode metadata, not streaming. Keep the HLS adapter removable and configurable; never silently
-  add another target.
+- The approved anime runtime is Anikoto catalog/episode data plus MegaPlay embedded playback. The
+  former AniWatch, Zenshin, AnimeTosho, Nyaa, HLS-proxy, and magnet paths were explicitly removed.
+  Keep Anikoto removable and configurable; never silently restore an old source or add another target.
 - Consumet is research material only. Do not add `@consumet/extensions`, depend on `api.consumet.org`, or copy its provider implementations without a new user-approved review of source availability, licensing, maintenance, and legal/ToS risk.
 - Aniyomi is an architecture/UX reference. Do not load Android APK extensions; implement native TypeScript source contracts in the Electron main process.
 - Do not scrape Netflix or MangaFire. They are visual references only.
-- VidKing is an optional remote iframe experiment, not a native HLS source. Keep its origin and
+- VidKing is an optional remote iframe experiment, not the active anime source. Keep its origin and
   postMessage handling strictly validated, and never infer TMDB IDs from title text.
 - Parse is an optional hosted episode-guide adapter. Keep its bearer key in the main process, do not
   assume the supplied endpoint schema is verified, and do not make it load-bearing without explicit
@@ -76,8 +75,7 @@ Agents may decide autonomously:
 
 Agents must ask the user or record an open decision before:
 
-- changing or adding a scraped/aggregator video target beyond the approved
-  AniWatch-compatible HLS → AnimeTosho/Nyaa fallback order;
+- changing or adding a video target beyond the approved Anikoto → MegaPlay embed flow;
 - accepting a paid API tier or recurring service cost;
 - changing v1 scope, supported platform, or tracker ownership;
 - introducing cloud storage, telemetry, remote accounts, or data sharing;
@@ -92,9 +90,20 @@ Agents must ask the user or record an open decision before:
 - Stop on 429/403 according to provider instructions; do not retry aggressively.
 - MangaDex images must follow MangaDex@Home, use the returned base URL as-is, omit auth headers, and be proxied by the trusted process.
 - Scraped adapters must be removable. A broken source may degrade playback, but must not break discovery, lists, or manga.
-- The public AniWatch deployment was unhealthy on 2026-07-28. Keep
-  `ANISTREAM_ANIWATCH_ENABLED` as a kill switch and `ANISTREAM_ANIWATCH_API_URL` configurable; never
-  claim live playback was verified unless a manifest and at least one segment actually played.
+- Keep `ANISTREAM_ANIKOTO_ENABLED` as a kill switch and
+  `ANISTREAM_ANIKOTO_API_URL` configurable for verified HTTPS-compatible deployments.
+- Anikoto permits 60 requests per IP per 120 seconds. Stop on 429/403, honor its rate headers, and
+  never crawl every catalog page to find one AniList title.
+- MegaPlay is embed-only. Keep `event.origin` and `event.source` checks strict, keep the packaged
+  renderer on its truthful loopback HTTP origin, and do not spoof a third-party referrer or extract
+  media URLs. The approved MegaPlay iframe intentionally has no HTML `sandbox` attribute because the
+  provider rejected sandboxed playback. Do not weaken Electron's own `sandbox: true`,
+  `contextIsolation`, navigation allowlist, window-open denial, or message validation.
+- Latest Updates are fixed 21-item provider pages rendered as a static seven-column grid at the
+  1440px default window. Do not put these fields back inside `ContentCarousel`; their pagination
+  must reload only the Latest Updates field.
+- Latest manga publication tags use exact provider IDs only: MangaDex original language is primary,
+  AniList country is the batch cross-check, and MAL `media_type` is a bounded ambiguity fallback.
 
 ## Testing and verification
 

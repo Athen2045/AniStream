@@ -9,6 +9,10 @@ export interface RequestGate {
 export interface RequestGateOptions {
   requestsPerMinute: number;
   windowMs?: number;
+  /** Minimum spacing between request starts, independent of the per-minute budget.
+   * Used by providers (e.g. Anikoto) that document a strict inter-request gap rather
+   * than a sliding-window quota. */
+  minIntervalMs?: number;
 }
 
 /**
@@ -19,10 +23,12 @@ export interface RequestGateOptions {
 export function createRequestGate(options: RequestGateOptions): RequestGate {
   const windowMs = options.windowMs ?? 60_000;
   const limit = Math.max(1, Math.floor(options.requestsPerMinute));
+  const minIntervalMs = Math.max(0, options.minIntervalMs ?? 0);
   const startTimestamps: number[] = [];
   const inFlight = new Map<string, Promise<unknown>>();
   let queueTail: Promise<void> = Promise.resolve();
   let blockedUntil = 0;
+  let lastStartAt = 0;
 
   function acquireSlot(): Promise<void> {
     queueTail = queueTail.then(async () => {
@@ -32,11 +38,16 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
           await sleep(blockedUntil - now);
           continue;
         }
+        if (minIntervalMs && now - lastStartAt < minIntervalMs) {
+          await sleep(minIntervalMs - (now - lastStartAt));
+          continue;
+        }
         while (startTimestamps.length && now - startTimestamps[0] >= windowMs) {
           startTimestamps.shift();
         }
         if (startTimestamps.length < limit) {
           startTimestamps.push(now);
+          lastStartAt = now;
           return;
         }
         const waitMs = windowMs - (now - startTimestamps[0]) + 1;

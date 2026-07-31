@@ -15,9 +15,10 @@ import {
   readClientSecretFromKeychain,
 } from "./keychain";
 import {
-  normalizeAiringUpdates,
+  normalizeAiringUpdatesPage,
   normalizeCatalogPage,
   normalizeGroups,
+  normalizeListEntry,
   normalizeMediaDetail,
   normalizeMedia,
   normalizeProfile,
@@ -29,6 +30,7 @@ import {
   DASHBOARD_QUERY,
   DELETE_ENTRY_MUTATION,
   MEDIA_DETAIL_QUERY,
+  MANGA_KIND_HINTS_QUERY,
   SEARCH_MEDIA_QUERY,
   UPDATE_ENTRY_MUTATION,
   VIEWER_QUERY,
@@ -36,18 +38,23 @@ import {
   type BrowseResponse,
   type DashboardResponse,
   type GraphQlEnvelope,
+  type MangaKindHintsResponse,
   type MediaDetailResponse,
+  type SaveEntryResponse,
   type SearchResponse,
   type TokenResponse,
   type ViewerResponse,
 } from "./queries";
 import { createRequestGate, type RequestGate } from "./request-queue";
 import { deleteSession, isMissingFileError, loadSession, saveSession } from "./session-store";
+import { parseAniListMangaKindHints, type AniListMangaKindHint } from "../manga-kind";
 import type {
+  AniListListEntrySummary,
   AniListMedia,
   AniListMediaDetail,
   AniListProfile,
   LatestAnimeUpdate,
+  LatestUpdatesPage,
 } from "../../shared/contracts";
 
 const ANILIST_CLIENT_ID = "47053";
@@ -60,10 +67,13 @@ const ANILIST_TOKEN_URL = "https://anilist.co/api/v2/oauth/token";
 // The client stays conservative and starts at 25 req/min while that warning remains.
 const REQUESTS_PER_MINUTE = 25;
 const BROWSE_CACHE_TTL_MS = 2 * 60_000;
+const SEARCH_CACHE_TTL_MS = 2 * 60_000;
+const DASHBOARD_CACHE_TTL_MS = 30_000;
 const DETAIL_CACHE_TTL_MS = 5 * 60_000;
 // New episodes air continuously; refetch the "latest updates" rail at most every 5 minutes.
 const AIRING_CACHE_TTL_MS = 5 * 60_000;
-const LATEST_ANIME_LIMIT = 20;
+const LATEST_UPDATE_PAGE_SIZE = 21;
+const MANGA_KIND_CACHE_TTL_MS = 24 * 60 * 60_000;
 // Used only when AniList's 429 response has no Retry-After header to honor.
 const DEFAULT_RATE_LIMIT_PAUSE_MS = 60_000;
 
@@ -78,13 +88,25 @@ export class AniListClient {
     maxEntries: 40,
     ttlMs: BROWSE_CACHE_TTL_MS,
   });
+  private readonly searchCache = createBoundedCache<AniListMedia[]>({
+    maxEntries: 30,
+    ttlMs: SEARCH_CACHE_TTL_MS,
+  });
+  private readonly dashboardCache = createBoundedCache<AniListDashboard>({
+    maxEntries: 2,
+    ttlMs: DASHBOARD_CACHE_TTL_MS,
+  });
   private readonly detailCache = createBoundedCache<AniListMediaDetail>({
     maxEntries: 60,
     ttlMs: DETAIL_CACHE_TTL_MS,
   });
-  private readonly airingCache = createBoundedCache<LatestAnimeUpdate[]>({
-    maxEntries: 1,
+  private readonly airingCache = createBoundedCache<LatestUpdatesPage<LatestAnimeUpdate>>({
+    maxEntries: 20,
     ttlMs: AIRING_CACHE_TTL_MS,
+  });
+  private readonly mangaKindCache = createBoundedCache<AniListMangaKindHint>({
+    maxEntries: 240,
+    ttlMs: MANGA_KIND_CACHE_TTL_MS,
   });
 
   public constructor(
@@ -186,25 +208,34 @@ export class AniListClient {
   public async getDashboard(): Promise<AniListDashboard> {
     const profile = this.profile ?? (await this.fetchProfile());
     this.profile = profile;
+    const cacheKey = `dashboard:${profile.id}`;
+    const cached = this.dashboardCache.get(cacheKey);
+    if (cached) return cached;
 
-    const response = await this.request<DashboardResponse>(DASHBOARD_QUERY, {
-      userId: profile.id,
-    });
+    const response = await this.request<DashboardResponse>(
+      DASHBOARD_QUERY,
+      {
+        userId: profile.id,
+      },
+      cacheKey,
+    );
 
-    return {
+    const dashboard = {
       profile,
       animeLists: normalizeGroups(response.anime, "ANIME"),
       mangaLists: normalizeGroups(response.manga, "MANGA"),
       fetchedAt: new Date().toISOString(),
     };
+    this.dashboardCache.set(cacheKey, dashboard);
+    return dashboard;
   }
 
-  public async updateEntry(input: UpdateAniListEntryInput): Promise<void> {
+  public async updateEntry(input: UpdateAniListEntryInput): Promise<AniListListEntrySummary> {
     if (!Number.isInteger(input.id) || input.id <= 0) {
       throw new Error("Invalid AniList entry.");
     }
 
-    await this.request(
+    const response = await this.request<SaveEntryResponse>(
       UPDATE_ENTRY_MUTATION,
       {
         id: input.id,
@@ -217,6 +248,8 @@ export class AniListClient {
       },
       // No dedupe key: identical concurrent mutations must never be silently merged.
     );
+    this.invalidateViewerData();
+    return normalizeListEntry(response.SaveMediaListEntry);
   }
 
   public async searchMedia(query: string, type: AniListMediaType): Promise<AniListMedia[]> {
@@ -225,15 +258,20 @@ export class AniListClient {
       throw new Error("Search with between 2 and 120 characters.");
     }
     if (type !== "ANIME" && type !== "MANGA") throw new Error("Invalid media type.");
+    const cacheKey = `search:${type}:${trimmedQuery.toLocaleLowerCase()}`;
+    const cached = this.searchCache.get(cacheKey);
+    if (cached) return cached;
 
     const response = await this.request<SearchResponse>(
       SEARCH_MEDIA_QUERY,
       { query: trimmedQuery, type },
-      `search:${type}:${trimmedQuery}`,
+      cacheKey,
     );
     const page = asRecord(response.Page, "AniList returned an invalid search page.");
     if (!Array.isArray(page.media)) throw new Error("AniList returned invalid search results.");
-    return page.media.map((media) => normalizeMedia(media, type));
+    const results = page.media.map((media) => normalizeMedia(media, type));
+    this.searchCache.set(cacheKey, results);
+    return results;
   }
 
   public async browseMedia(input: BrowseAniListInput): Promise<AniListCatalogPage> {
@@ -290,52 +328,83 @@ export class AniListClient {
     return page;
   }
 
-  public async getLatestAnimeUpdates(): Promise<LatestAnimeUpdate[]> {
-    const cached = this.airingCache.get("latest");
+  public async getLatestAnimeUpdates(page: number): Promise<LatestUpdatesPage<LatestAnimeUpdate>> {
+    if (!Number.isInteger(page) || page < 1 || page > 5_000) {
+      throw new Error("Invalid latest anime page.");
+    }
+    const cacheKey = `latest:${page}`;
+    const cached = this.airingCache.get(cacheKey);
     if (cached) return cached;
 
-    // Request more schedules than needed: consecutive rows often repeat a title
-    // (batch uploads) and adult entries are filtered out after the fact.
+    // Request more schedules than needed because consecutive rows can repeat a
+    // title after batch uploads; normalization keeps the newest row per title.
     const response = await this.publicRequest<AiringUpdatesResponse>(
       AIRING_UPDATES_QUERY,
-      { page: 1, perPage: 50 },
-      "airing:latest",
+      { page, perPage: 50 },
+      `airing:${page}`,
     );
-    const updates = normalizeAiringUpdates(response.Page, LATEST_ANIME_LIMIT);
-    this.airingCache.set("latest", updates);
+    const updates = normalizeAiringUpdatesPage(response.Page, LATEST_UPDATE_PAGE_SIZE);
+    this.airingCache.set(cacheKey, updates);
     return updates;
+  }
+
+  public async getMangaKindHints(ids: number[]): Promise<Map<number, AniListMangaKindHint>> {
+    const uniqueIds = [
+      ...new Set(ids.filter((id) => Number.isInteger(id) && id > 0 && id <= 2_147_483_647)),
+    ].slice(0, 50);
+    const hints = new Map<number, AniListMangaKindHint>();
+    const missing: number[] = [];
+    for (const id of uniqueIds) {
+      const cached = this.mangaKindCache.get(String(id));
+      if (cached) hints.set(id, cached);
+      else missing.push(id);
+    }
+    if (!missing.length) return hints;
+
+    const response = await this.publicRequest<MangaKindHintsResponse>(
+      MANGA_KIND_HINTS_QUERY,
+      { ids: missing },
+      `manga-kind:${missing.join(",")}`,
+    );
+    const page = asRecord(response.Page, "AniList returned invalid manga-kind data.");
+    for (const hint of parseAniListMangaKindHints(page)) {
+      this.mangaKindCache.set(String(hint.aniListId), hint);
+      hints.set(hint.aniListId, hint);
+    }
+    return hints;
   }
 
   public async getMediaDetail(id: number, type: AniListMediaType): Promise<AniListMediaDetail> {
     if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid AniList media.");
     if (type !== "ANIME" && type !== "MANGA") throw new Error("Invalid media type.");
 
-    // Signed-in requests carry the viewer's list-entry context, so only cache
-    // the signed-out (public) shape to avoid leaking one profile's entry into another's view.
-    const cacheKey = this.token ? undefined : `detail:${type}:${id}`;
-    if (cacheKey) {
-      const cached = this.detailCache.get(cacheKey);
-      if (cached) return cached;
-    }
+    // Include the active profile in the key so the signed-in list-entry context
+    // can be cached safely for this single-user app.
+    const cacheKey = `detail:${this.profile?.id ?? "public"}:${type}:${id}`;
+    const cached = this.detailCache.get(cacheKey);
+    if (cached) return cached;
 
     const response = await this.publicRequest<MediaDetailResponse>(
       MEDIA_DETAIL_QUERY,
       { id, type },
-      cacheKey ?? `detail-live:${type}:${id}`,
+      cacheKey,
     );
     const detail = normalizeMediaDetail(response.Media, type);
-    if (cacheKey) this.detailCache.set(cacheKey, detail);
+    this.detailCache.set(cacheKey, detail);
     return detail;
   }
 
-  public async addEntry(mediaId: number): Promise<void> {
+  public async addEntry(mediaId: number): Promise<AniListListEntrySummary> {
     if (!Number.isInteger(mediaId) || mediaId <= 0) throw new Error("Invalid AniList media.");
-    await this.request(ADD_ENTRY_MUTATION, { mediaId });
+    const response = await this.request<SaveEntryResponse>(ADD_ENTRY_MUTATION, { mediaId });
+    this.invalidateViewerData();
+    return normalizeListEntry(response.SaveMediaListEntry);
   }
 
   public async deleteEntry(id: number): Promise<void> {
     if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid AniList entry.");
     await this.request(DELETE_ENTRY_MUTATION, { id });
+    this.invalidateViewerData();
   }
 
   private async fetchProfile(): Promise<AniListProfile> {
@@ -468,6 +537,12 @@ export class AniListClient {
     this.profile = undefined;
     this.authorizing = false;
     await deleteSession(this.tokenPath);
+    this.invalidateViewerData();
+  }
+
+  private invalidateViewerData(): void {
+    this.dashboardCache.clear();
+    this.detailCache.clear();
   }
 }
 

@@ -103,6 +103,9 @@ export const UPDATE_ENTRY_MUTATION = `
       notes: $notes
     ) {
       id
+      status
+      score(format: POINT_10_DECIMAL)
+      progress
     }
   }
 `;
@@ -146,6 +149,9 @@ export const ADD_ENTRY_MUTATION = `
   mutation AddAniStreamEntry($mediaId: Int!) {
     SaveMediaListEntry(mediaId: $mediaId, status: PLANNING) {
       id
+      status
+      score(format: POINT_10_DECIMAL)
+      progress
     }
   }
 `;
@@ -211,6 +217,12 @@ export const BROWSE_MEDIA_QUERY = `
 export const AIRING_UPDATES_QUERY = `
   query AniStreamAiringUpdates($page: Int!, $perPage: Int!) {
     Page(page: $page, perPage: $perPage) {
+      pageInfo {
+        currentPage
+        perPage
+        lastPage
+        hasNextPage
+      }
       airingSchedules(notYetAired: false, sort: TIME_DESC) {
         episode
         airingAt
@@ -221,6 +233,19 @@ export const AIRING_UPDATES_QUERY = `
     }
   }
   ${CATALOG_MEDIA_FIELDS}
+`;
+
+export const MANGA_KIND_HINTS_QUERY = `
+  query AniStreamMangaKindHints($ids: [Int]) {
+    Page(page: 1, perPage: 50) {
+      media(id_in: $ids, type: MANGA) {
+        id
+        idMal
+        countryOfOrigin
+        format
+      }
+    }
+  }
 `;
 
 export const MEDIA_DETAIL_QUERY = `
@@ -344,8 +369,16 @@ export interface AiringUpdatesResponse {
   Page?: unknown;
 }
 
+export interface MangaKindHintsResponse {
+  Page?: unknown;
+}
+
 export interface MediaDetailResponse {
   Media?: unknown;
+}
+
+export interface SaveEntryResponse {
+  SaveMediaListEntry?: unknown;
 }
 
 export interface TokenResponse {

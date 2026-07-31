@@ -1,6 +1,9 @@
 # AniStream
 
-AniStream is a personal macOS desktop application that combines anime and manga discovery, list management, anime playback, manga reading, and tracker synchronization in one coherent library. AniList is the primary catalog and tracker, MangaDex supplies manga and chapter delivery, and anime video extraction is isolated behind replaceable source adapters inspired by Zenshin’s provider strategy.
+AniStream is a personal macOS desktop application that combines anime and manga discovery, list
+management, anime playback, manga reading, and tracker synchronization in one coherent library.
+AniList is the primary catalog and tracker, MangaDex supplies manga and chapter delivery, and
+Anikoto/MegaPlay supplies removable embedded anime playback.
 
 ## Feature scope
 
@@ -9,23 +12,24 @@ AniStream is a personal macOS desktop application that combines anime and manga 
 - Unified anime and manga search backed by AniList.
 - Netflix-inspired anime and editorial manga browse pages with featured titles, catalog sorting,
   keyboard-accessible unified search, detailed title modals, fluid discovery rails, and pagination.
-- AniList-driven Continue Watching/Reading, Top Rated, and interest-based discovery rails.
+- AniList-driven Continue Watching/Reading and Trending rails, plus independently paged 21-title
+  Latest Anime/Manga grids.
 - Local SQLite library and progress state for one user on one Mac.
 - AniList browser OAuth, profile, complete anime/manga lists, and progress/score/status/notes synchronization.
-- MangaDex search, chapter feeds, MangaDex@Home page delivery, reader preferences, and account synchronization.
-- Manga reader with single-page, double-page, long-strip, and right-to-left modes.
-- Replaceable anime playback adapters: an AniWatch-compatible HLS API as the primary source, with
-  AnimeTosho/Nyaa-indexed torrents as fallback.
-- Internal playback with resume progress and external-player handoff where needed.
+- MangaDex exact-ID mapping, chapter feeds, MangaDex@Home page delivery, and opt-in account
+  synchronization (account sync is still pending).
+- Fullscreen vertical long-strip manga reader with local chapter/scroll resume and previous/next
+  chapter navigation.
+- Replaceable Anikoto episode adapter with sub/dub playback through MegaPlay's documented embed.
+- Fullscreen episode playback with local progress checkpoints and AniList completion updates.
 
 Currently implemented from this scope: durable AniList login, profile/list management, unified
-search, Anime/Manga navigation, paginated catalog browse, expanding content carousels,
-AniList-driven discovery rails that exclude owned titles, Zenshin season/episode enrichment,
-AniWatch-compatible HLS resolution and trusted-process playlist proxying, torrent fallback,
-per-episode SQLite resume, MangaDex chapter/page reading, MangaBaka exact-ID enrichment, rich AniList
-title details, and AniList progress/rating/completion updates. The public AniWatch deployment was
-unhealthy during the latest live check, so HLS currently degrades to the torrent fallback unless a
-working compatible base URL is configured.
+search, Anime/Manga navigation, paginated catalog search, expanding content carousels, AniList
+Continue/Trending rails, static paginated Latest Updates grids, Anikoto episode lookup, MegaPlay
+sub/dub embeds, Framer Motion fullscreen episode-list transitions, per-episode SQLite progress,
+direct-to-list anime/manga details, MangaDex archive paging and fullscreen long-strip reading,
+per-chapter SQLite resume, MangaBaka exact-ID enrichment, rich AniList title details, and AniList
+progress/rating/completion updates.
 
 ### Later
 
@@ -38,16 +42,16 @@ working compatible base URL is configured.
 
 ## Tech stack
 
-| Choice                       | Why                                                                                                                          |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Electron                     | Mature macOS desktop shell with file, media, IPC, custom-protocol OAuth, and native-module support.                          |
-| React + TypeScript           | One typed language across the renderer, preload, and main process, with a productive solo-developer workflow.                |
-| electron-vite                | Fast development and a conventional main/preload/renderer build.                                                             |
-| SQLite via `better-sqlite3`  | Simple local persistence for one user without a database server.                                                             |
-| TanStack Query               | Planned request deduplication, caching, retries, and remote-state lifecycle management.                                      |
-| Motion + Lucide              | Accessible iconography and reduced-motion-aware search/pagination transitions.                                               |
-| Video.js React v10 + hls.js  | Accessible player controls and adaptive HLS playback while AniStream proxies media through the trusted process; v10 is beta. |
-| Plain CSS with design tokens | Keeps the desktop UI direct while sharing the inspected Netflix reference palette and AniStream-specific tracker accents.    |
+| Choice                       | Why                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Electron                     | Mature macOS desktop shell with file, media, IPC, custom-protocol OAuth, and native-module support.                       |
+| React + TypeScript           | One typed language across the renderer, preload, and main process, with a productive solo-developer workflow.             |
+| electron-vite                | Fast development and a conventional main/preload/renderer build.                                                          |
+| SQLite via `better-sqlite3`  | Simple local persistence for one user without a database server.                                                          |
+| TanStack Query               | Planned request deduplication, caching, retries, and remote-state lifecycle management.                                   |
+| Framer Motion + Lucide       | Accessible iconography and reduced-motion-aware search, pagination, and fullscreen view transitions.                      |
+| Anikoto + MegaPlay embed     | Exact provider episode IDs when available and documented AniList-ID sub/dub embeds without extracting direct media URLs.  |
+| Plain CSS with design tokens | Keeps the desktop UI direct while sharing the inspected Netflix reference palette and AniStream-specific tracker accents. |
 
 ## Local setup
 
@@ -61,7 +65,7 @@ Requirements:
 ```bash
 git clone <your-anistream-repository-url>
 cd AniStream
-npm install
+npm install --legacy-peer-deps
 cp .env.example .env
 npm run dev
 ```
@@ -80,7 +84,7 @@ npm run check:anilist-oauth
 npm run check:product-slice
 ```
 
-Create an unpacked Apple Silicon application:
+Create the Apple Silicon application and DMG:
 
 ```bash
 npm run package:mac
@@ -106,19 +110,20 @@ AniStream/
 
 ## Environment variables
 
-| Variable                        | Service                     | Where to get it                                            | Required                                                        |
-| ------------------------------- | --------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------- |
-| `MANGADEX_CLIENT_ID`            | MangaDex personal client    | MangaDex Settings → API clients                            | Planned for opt-in account sync; not used by the public adapter |
-| `MANGADEX_CLIENT_SECRET`        | MangaDex personal client    | MangaDex API client settings                               | Planned for opt-in account sync; must move to Keychain          |
-| `MANGADEX_USERNAME`             | MangaDex personal client    | Your MangaDex account                                      | Planned for opt-in account sync; must move to Keychain          |
-| `MANGADEX_PASSWORD`             | MangaDex personal client    | Your MangaDex account                                      | Planned for opt-in account sync; must move to Keychain          |
-| `MANGADEX_LANGUAGE`             | MangaDex public API         | ISO 639-1 language code                                    | Optional; defaults to `en` for chapter availability             |
-| `ANISTREAM_ANIWATCH_ENABLED`    | AniWatch-compatible HLS API | Set to `false`/`0`/`off` to disable the risky adapter      | Optional; enabled by default for this approved personal build   |
-| `ANISTREAM_ANIWATCH_API_URL`    | AniWatch-compatible HLS API | Public deployment or a repaired/self-hosted compatible URL | Optional; defaults to the reviewed Render deployment            |
-| `ANISTREAM_ZENSHIN_API_URL`     | Zenshin episode mapping     | Optional preferred mirror URL                              | Optional; official mirrors are tried by default                 |
-| `PARSE_API_KEY`                 | Parse episode-guide adapter | Parse dashboard → Settings → API Key                       | Optional; required for episode-guide loading                    |
-| `PARSE_ANIME_SCRAPER_ID`        | Parse episode-guide adapter | Supplied/generated Parse scraper ID                        | Optional; defaults to the configured anime scraper              |
-| `PARSE_ANIME_EPISODES_ENDPOINT` | Parse episode-guide adapter | Supplied/generated Parse endpoint name                     | Optional; defaults to `get_show_episodes`                       |
+| Variable                        | Service                     | Where to get it                                    | Required                                                        |
+| ------------------------------- | --------------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
+| `MANGADEX_CLIENT_ID`            | MangaDex personal client    | MangaDex Settings → API clients                    | Planned for opt-in account sync; not used by the public adapter |
+| `MANGADEX_CLIENT_SECRET`        | MangaDex personal client    | MangaDex API client settings                       | Planned for opt-in account sync; must move to Keychain          |
+| `MANGADEX_USERNAME`             | MangaDex personal client    | Your MangaDex account                              | Planned for opt-in account sync; must move to Keychain          |
+| `MANGADEX_PASSWORD`             | MangaDex personal client    | Your MangaDex account                              | Planned for opt-in account sync; must move to Keychain          |
+| `MANGADEX_LANGUAGE`             | MangaDex public API         | ISO 639-1 language code                            | Optional; defaults to `en` for chapter availability             |
+| `ANISTREAM_ANIKOTO_ENABLED`     | Anikoto/MegaPlay            | Set to `false`/`0`/`off` for the local kill switch | Optional; enabled by default                                    |
+| `ANISTREAM_ANIKOTO_API_URL`     | Anikoto catalog API         | Verified HTTPS-compatible deployment               | Optional; defaults to `https://anikotoapi.site`                 |
+| `ANISTREAM_MAL_CLIENT_ID`       | MyAnimeList public API      | MyAnimeList API client settings                    | Optional score/index fallback                                   |
+| `ANISTREAM_MANGABAKA_TOKEN`     | MangaBaka                   | MangaBaka personal access token                    | Optional; unauthenticated enrichment still works                |
+| `PARSE_API_KEY`                 | Parse episode-guide adapter | Parse dashboard → Settings → API Key               | Optional; required for episode-guide loading                    |
+| `PARSE_ANIME_SCRAPER_ID`        | Parse episode-guide adapter | Supplied/generated Parse scraper ID                | Optional; defaults to the configured anime scraper              |
+| `PARSE_ANIME_EPISODES_ENDPOINT` | Parse episode-guide adapter | Supplied/generated Parse endpoint name             | Optional; defaults to `get_show_episodes`                       |
 
 Provider base URLs are application constants unless a development proxy is explicitly required. Secrets must never be exposed to renderer code or committed. The main process loads `.env` during development and `~/Library/Application Support/AniStream/.env` for a packaged personal install; shell variables take precedence. Parse keys remain main-process-only and should move to Keychain before treating the adapter as production-ready.
 
@@ -130,10 +135,8 @@ The resulting access token is encrypted with Electron `safeStorage`, also backed
 ## Status
 
 Durable AniList login, profile/list management, unified Anime/Manga browse and search, expanding
-content carousels, Zenshin episode details, typed HLS/torrent source resolution, local playback
-resume, MangaDex chapter/page reading, MangaBaka enrichment, rich title details, pagination, the
-typed Electron bridge, SQLite persistence, production build, and unsigned Apple Silicon package
-have been structurally verified on macOS. The reviewed public AniWatch deployment currently returns
-empty/time-out/error responses, so a successful live HLS playback still requires that service to
-recover or a compatible base URL to be configured. For current build status and next steps, see
-[CONTEXT.md](CONTEXT.md).
+Continue/Trending carousels, static 21-title Latest Updates grids, Anikoto episode catalogs, the
+fullscreen MegaPlay player flow, local playback progress, MangaDex chapter/page reading, MangaBaka
+enrichment, fullscreen long-strip reading, local chapter/scroll resume, rich title details,
+pagination, the typed Electron bridge, SQLite persistence, and the production build are
+implemented. For current verified runtime status and next steps, see [CONTEXT.md](CONTEXT.md).

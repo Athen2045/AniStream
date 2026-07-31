@@ -1,7 +1,7 @@
 // Approved direction A: native scroll snapping, edge-reveal navigation, and real
 // flex-width expansion so a focused title pushes its neighbors instead of covering them.
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useReducedMotion } from "motion/react";
+import { useReducedMotion } from "framer-motion";
 import { Children, useCallback, useEffect, useRef, useState } from "react";
 
 export function ContentCarousel({
@@ -34,6 +34,24 @@ export function ContentCarousel({
     if (trackRef.current) resizeObserver.observe(trackRef.current);
     return () => resizeObserver.disconnect();
   }, [itemCount, updateBoundaries]);
+
+  // Tabbing through cards can otherwise leave the newly focused card hidden behind
+  // the edge-fade gradients; keep it scrolled into view as focus moves.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const scrollFocusedCardIntoView = (event: FocusEvent): void => {
+      if (event.target instanceof HTMLElement && event.target !== viewport) {
+        event.target.scrollIntoView({
+          block: "nearest",
+          inline: "nearest",
+          behavior: reducedMotion ? "auto" : "smooth",
+        });
+      }
+    };
+    viewport.addEventListener("focusin", scrollFocusedCardIntoView);
+    return () => viewport.removeEventListener("focusin", scrollFocusedCardIntoView);
+  }, [reducedMotion]);
 
   const scrollByPage = useCallback(
     (direction: -1 | 1): void => {

@@ -1,4 +1,4 @@
-export type AnimeProviderKind = "hls" | "torrent";
+export type AnimeProviderKind = "embed";
 
 export interface AnimeTitleMapping {
   providerId: string;
@@ -36,19 +36,13 @@ export interface AnimeVideoVariant {
   id: string;
   url: string;
   kind: AnimeProviderKind;
-  quality?: string;
   language?: string;
-  subtitles?: string[];
-  headers?: Record<string, string>;
-  seeders?: number;
-  sizeBytes?: number;
 }
 
 export interface AnimeSourceAdapter {
   readonly id: string;
   readonly displayName: string;
   readonly kind: AnimeProviderKind;
-  searchTitles(query: string): Promise<AnimeTitleMapping[]>;
   resolveTitle(aniListId: number, titles: string[]): Promise<AnimeTitleMapping | undefined>;
   getEpisodes(providerSeasonId: string): Promise<AnimeEpisode[]>;
   getVideoVariants(providerEpisodeId: string): Promise<AnimeVideoVariant[]>;

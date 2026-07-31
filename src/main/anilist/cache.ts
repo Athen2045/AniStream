@@ -2,6 +2,7 @@ export interface BoundedCache<T> {
   get(key: string): T | undefined;
   set(key: string, value: T): void;
   delete(key: string): void;
+  clear(): void;
 }
 
 export interface BoundedCacheOptions {
@@ -35,6 +36,9 @@ export function createBoundedCache<T>(options: BoundedCacheOptions): BoundedCach
     },
     delete(key) {
       store.delete(key);
+    },
+    clear() {
+      store.clear();
     },
   };
 }

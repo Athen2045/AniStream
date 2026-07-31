@@ -1,4 +1,5 @@
 import { RefreshCw, UserRound } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AniListAuthState,
@@ -11,6 +12,7 @@ import type {
   UpdateAniListEntryInput,
 } from "../../shared/contracts";
 import { CatalogView } from "./CatalogView";
+import { CoverImage } from "./CoverImage";
 import { GlobalSearch } from "./GlobalSearch";
 import { safeBackgroundUrl } from "./safe-css-url";
 
@@ -79,7 +81,18 @@ export function App(): React.JSX.Element {
       setError(state.status === "error" ? state.message : undefined);
       if (state.status === "signed-in") {
         setDashboard((current) => current ?? emptyDashboard(state));
-        void loadDashboard();
+        void window.anistream
+          .getCachedAniListDashboard()
+          .then((cached) => {
+            if (!mounted || !cached || cached.profile.id !== state.profile.id) return;
+            setDashboard(cached);
+            setSelectedGroup((current) => current || cached.animeLists[0]?.name || "");
+            setLoading(false);
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            if (mounted) void loadDashboard();
+          });
       } else if (state.status === "signed-out") {
         setDashboard(undefined);
         setLoading(false);
@@ -267,7 +280,7 @@ export function App(): React.JSX.Element {
             aria-label="Open profile"
           >
             {dashboard.profile.avatarUrl ? (
-              <img src={dashboard.profile.avatarUrl} alt="" />
+              <img src={dashboard.profile.avatarUrl} alt="" decoding="async" />
             ) : (
               <UserRound size={17} />
             )}
@@ -315,19 +328,30 @@ export function App(): React.JSX.Element {
         />
       )}
 
-      {selectedMedia ? (
-        <Suspense fallback={null}>
-          <MediaDetailModal
-            media={selectedMedia}
-            initialAction={selectedAction}
-            onClose={() => {
-              setSelectedMedia(undefined);
-              setSelectedAction("details");
-            }}
-            onAdded={loadDashboard}
-          />
-        </Suspense>
-      ) : null}
+      <Suspense
+        fallback={
+          selectedMedia ? (
+            <div className="modal-suspense-fallback" role="status" aria-label="Loading details">
+              <span className="loading-orbit" aria-hidden="true" />
+            </div>
+          ) : null
+        }
+      >
+        <AnimatePresence mode="wait">
+          {selectedMedia ? (
+            <MediaDetailModal
+              key={`${selectedMedia.type}:${selectedMedia.id}`}
+              media={selectedMedia}
+              initialAction={selectedAction}
+              onClose={() => {
+                setSelectedMedia(undefined);
+                setSelectedAction("details");
+              }}
+              onAdded={loadDashboard}
+            />
+          ) : null}
+        </AnimatePresence>
+      </Suspense>
     </main>
   );
 
@@ -337,6 +361,9 @@ export function App(): React.JSX.Element {
   }
 
   function openMedia(media: AniListCatalogMedia, action: "details" | "play" | "read"): void {
+    if (action !== "details") {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
     setSelectedAction(action);
     setSelectedMedia(media);
   }
@@ -418,6 +445,7 @@ function ProfileView({
             className="profile-avatar"
             src={dashboard.profile.avatarUrl}
             alt={`${dashboard.profile.name}'s avatar`}
+            decoding="async"
           />
           <div>
             <p className="eyebrow">AniList profile</p>
@@ -508,7 +536,7 @@ function ProfileView({
                 const added = libraryMediaIds.has(media.id);
                 return (
                   <article key={media.id}>
-                    <img src={media.coverUrl} alt="" />
+                    <CoverImage src={media.coverUrl} title={media.title} />
                     <div>
                       <span>{formatMediaFormat(media.format)}</span>
                       <strong>{media.title}</strong>

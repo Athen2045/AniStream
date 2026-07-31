@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAiringUpdates } from "../../src/main/anilist/normalize";
-import { parseLatestMangaUpdates } from "../../src/main/mangadex";
+import {
+  normalizeAiringUpdates,
+  normalizeAiringUpdatesPage,
+} from "../../src/main/anilist/normalize";
+import {
+  findLatestChapterIds,
+  mergeLatestChapterDetails,
+  parseLatestMangaUpdates,
+  parseMangaDexPageInfo,
+} from "../../src/main/mangadex";
+import { classifyLatestMangaUpdates, parseAniListMangaKindHints } from "../../src/main/manga-kind";
+import { parseMalMangaPublicationKind } from "../../src/main/mal";
 
 function airingMedia(id: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -63,6 +73,23 @@ describe("normalizeAiringUpdates", () => {
       /invalid airing schedules/,
     );
   });
+
+  it("returns the independent latest-update page metadata", () => {
+    const page = normalizeAiringUpdatesPage(
+      {
+        pageInfo: { currentPage: 2, perPage: 50, lastPage: 12, hasNextPage: true },
+        airingSchedules: [{ episode: 2, airingAt: 20, media: airingMedia(2) }],
+      },
+      21,
+    );
+    expect(page.pageInfo).toEqual({
+      currentPage: 2,
+      perPage: 21,
+      lastPage: 12,
+      hasNextPage: true,
+    });
+    expect(page.items).toHaveLength(1);
+  });
 });
 
 describe("parseLatestMangaUpdates", () => {
@@ -70,7 +97,9 @@ describe("parseLatestMangaUpdates", () => {
     id: "b73c9d2a-1111-2222-3333-444455556666",
     attributes: {
       title: { en: "Latest Manga" },
-      links: { al: "30013" },
+      links: { al: "30013", mal: "13" },
+      originalLanguage: "ja",
+      latestUploadedChapter: "chapter-uuid",
       updatedAt: "2026-07-29T10:00:00+00:00",
     },
     relationships: [
@@ -85,9 +114,14 @@ describe("parseLatestMangaUpdates", () => {
       {
         mangaDexId: "b73c9d2a-1111-2222-3333-444455556666",
         aniListId: 30013,
+        malId: 13,
         title: "Latest Manga",
         coverUrl:
-          "https://uploads.mangadex.org/covers/b73c9d2a-1111-2222-3333-444455556666/cover-abc.jpg.256.jpg",
+          "https://uploads.mangadex.org/covers/b73c9d2a-1111-2222-3333-444455556666/cover-abc.jpg.512.jpg",
+        coverUrlFallback:
+          "https://uploads.mangadex.org/covers/b73c9d2a-1111-2222-3333-444455556666/cover-abc.jpg",
+        originalLanguage: "ja",
+        publicationKind: "MANGA",
         updatedAt: "2026-07-29T10:00:00+00:00",
         mangaDexUrl: "https://mangadex.org/title/b73c9d2a-1111-2222-3333-444455556666",
       },
@@ -126,5 +160,60 @@ describe("parseLatestMangaUpdates", () => {
   it("returns an empty list for a malformed payload", () => {
     expect(parseLatestMangaUpdates(undefined)).toEqual([]);
     expect(parseLatestMangaUpdates({ data: "nope" })).toEqual([]);
+  });
+
+  it("parses pagination and merges the latest chapter's number and publish time", () => {
+    const payload = { limit: 21, offset: 21, total: 60, data: [manga] };
+    const items = parseLatestMangaUpdates(payload);
+    const chapterIds = findLatestChapterIds(payload);
+    const merged = mergeLatestChapterDetails(items, chapterIds, {
+      data: [
+        {
+          id: "chapter-uuid",
+          attributes: { chapter: "1189", publishAt: "2026-07-29T12:00:00+00:00" },
+        },
+      ],
+    });
+    expect(parseMangaDexPageInfo(payload, 2, 21)).toEqual({
+      currentPage: 2,
+      perPage: 21,
+      lastPage: 3,
+      hasNextPage: true,
+    });
+    expect(merged[0]).toMatchObject({
+      chapter: "1189",
+      updatedAt: "2026-07-29T12:00:00+00:00",
+    });
+  });
+});
+
+describe("manga publication-kind cross-reference", () => {
+  it("uses AniList country as a cross-check and MAL as an exact-ID tiebreaker", () => {
+    const hints = parseAniListMangaKindHints({
+      media: [{ id: 30013, idMal: 13, countryOfOrigin: "KR", format: "MANGA" }],
+    });
+    expect(hints[0].publicationKind).toBe("MANHWA");
+    expect(parseMalMangaPublicationKind({ media_type: "manhua" })).toBe("MANHUA");
+
+    const item = parseLatestMangaUpdates({
+      data: [
+        {
+          id: "manga-id",
+          attributes: {
+            title: { en: "Cross Referenced" },
+            links: { al: "30013", mal: "13" },
+            originalLanguage: "ja",
+            updatedAt: "2026-07-29T10:00:00+00:00",
+          },
+          relationships: [],
+        },
+      ],
+    })[0];
+    const classified = classifyLatestMangaUpdates(
+      [item],
+      new Map(hints.map((hint) => [hint.aniListId, hint])),
+      new Map([[13, "MANHUA"]]),
+    );
+    expect(classified[0].publicationKind).toBe("MANHUA");
   });
 });

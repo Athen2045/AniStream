@@ -10,6 +10,13 @@ const [
   providers,
   renderer,
   catalog,
+  catalogStyles,
+  mangaKind,
+  anikoto,
+  animeWatch,
+  mediaDetail,
+  mangaReader,
+  database,
 ] = await Promise.all([
   readFile("src/main/index.ts", "utf8"),
   readFile("src/main/anilist/client.ts", "utf8"),
@@ -20,11 +27,27 @@ const [
   readFile("src/shared/providers.ts", "utf8"),
   readFile("src/renderer/src/App.tsx", "utf8"),
   readFile("src/renderer/src/CatalogView.tsx", "utf8"),
+  readFile("src/renderer/src/styles.css", "utf8"),
+  readFile("src/main/manga-kind.ts", "utf8"),
+  readFile("src/main/anikoto.ts", "utf8"),
+  readFile("src/renderer/src/AnimeWatchExperience.tsx", "utf8"),
+  readFile("src/renderer/src/MediaDetailModal.tsx", "utf8"),
+  readFile("src/renderer/src/MangaReaderFullscreen.tsx", "utf8"),
+  readFile("src/main/database.ts", "utf8"),
 ]);
 const aniList = aniListClient + aniListQueries;
 
 for (const [name, source, fragments] of [
-  ["main process", main, ["await aniList.restore()", '"anilist:browse"', '"anilist:media-detail"']],
+  [
+    "main process",
+    main,
+    [
+      "const restorePromise = aniList.restore()",
+      "registerTrustedIpcHandler",
+      '"anilist:browse"',
+      '"anilist:media-detail"',
+    ],
+  ],
   [
     "AniList client",
     aniList,
@@ -33,11 +56,7 @@ for (const [name, source, fragments] of [
   [
     "preload bridge",
     preload,
-    [
-      'ipcRenderer.invoke("anilist:browse"',
-      'ipcRenderer.invoke("anilist:media-detail"',
-      '"mangadex:availability"',
-    ],
+    ['invoke("anilist:browse"', 'invoke("anilist:media-detail"', 'invoke("mangadex:availability"'],
   ],
   [
     "shared contracts",
@@ -56,15 +75,61 @@ for (const [name, source, fragments] of [
     ["findExactAniListMapping", "findLatestNumericChapter", "translatedLanguage[]"],
   ],
   [
-    "catalog rails",
+    "catalog surfaces",
     catalog,
     [
       "ContentCarousel",
       "Trending {mediaName}",
       "Latest Anime Updates",
       "Latest Manga Updates",
+      "latest-updates-grid",
       "getMangaDexAvailability",
     ],
+  ],
+  ["latest grid styles", catalogStyles, ["grid-template-columns: repeat(7", "latest-update-card"]],
+  [
+    "manga publication classifier",
+    mangaKind,
+    ["mangaKindFromOriginalLanguage", "mangaKindFromCountry", "mangaKindFromMalMediaType"],
+  ],
+  [
+    "Anikoto adapter",
+    anikoto,
+    ["https://anikotoapi.site", "https://megaplay.buzz", "getEpisodeCatalog", "getPlayback"],
+  ],
+  [
+    "anime player",
+    animeWatch,
+    [
+      "AnikotoEmbedPlayer",
+      "requestFullscreen",
+      '"fullscreenchange"',
+      "parseMegaPlayEvent",
+      "AnimatePresence",
+      "watch-view-transition",
+    ],
+  ],
+  [
+    "media detail",
+    mediaDetail,
+    ["MangaChapterBrowser", "MangaReaderFullscreen", "autoPlayRequest", "chooseChapterToRead"],
+  ],
+  [
+    "manga reader",
+    mangaReader,
+    [
+      "useScroll",
+      "scrollYProgress",
+      "saveMangaReadingResume",
+      '"fullscreenchange"',
+      "Previous chapter",
+      "Next chapter",
+    ],
+  ],
+  [
+    "manga resume database",
+    database,
+    ["manga_reading_resume", "saveMangaReadingResume", "getMangaReadingResume"],
   ],
 ]) {
   for (const fragment of fragments) {
@@ -72,10 +137,25 @@ for (const [name, source, fragments] of [
   }
 }
 
-if (main.indexOf("await aniList.restore()") > main.indexOf("\n  createWindow();")) {
-  throw new Error("AniList session restoration must finish before the renderer is created.");
+if (main.includes("await aniList.restore()")) {
+  throw new Error("AniList session restoration must not block the first renderer paint.");
+}
+
+if (
+  main.indexOf("const restorePromise = aniList.restore()") >
+  main.indexOf("createWindow(rendererUrl)")
+) {
+  throw new Error("AniList session restoration must begin before the renderer is created.");
+}
+
+if (animeWatch.includes("sandbox=")) {
+  throw new Error("The approved MegaPlay iframe must not regain an HTML sandbox attribute.");
+}
+
+if (mediaDetail.includes("Keep your progress current")) {
+  throw new Error("The removed AniList sync card must not return to the title detail.");
 }
 
 console.log(
-  "Verified durable session, catalog/detail IPC, MangaDex availability, carousels, and provider contracts.",
+  "Verified durable session, catalog/detail IPC, static Latest grids, MangaDex classification/reader resume, Framer Motion transitions, Anikoto playback, and provider contracts.",
 );

@@ -1,83 +1,43 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type {
-  AniListAuthState,
-  AniListCatalogPage,
-  AniListDashboard,
-  AniListMedia,
-  AniListMediaDetail,
-  AniListMediaType,
-  AniStreamBridge,
-  AppInfo,
-  AnimeEpisodeCatalog,
-  AnimeEpisodeCatalogInput,
-  AnimeEpisodeGuide,
-  BrowseAniListInput,
-  LatestAnimeUpdate,
-  LatestMangaUpdate,
-  MalRankingItem,
-  MalScore,
-  MangaDexAvailabilityInput,
-  MangaDexChapterAvailability,
-  MangaDexPageInput,
-  MangaDexReaderInput,
-  MangaDexReaderPage,
-  MangaDexReaderSession,
-  MangaEnrichment,
-  AnimePlaybackInput,
-  AnimePlaybackResult,
-  PlaybackResume,
-  SavePlaybackResumeInput,
-  UpdateAniListEntryInput,
-} from "../shared/contracts";
+import type { AniListAuthState, AniStreamBridge } from "../shared/contracts";
+import type { IpcInvokeArgs, IpcInvokeChannel, IpcInvokeResult } from "../shared/ipc";
+
+function invoke<Channel extends IpcInvokeChannel>(
+  channel: Channel,
+  ...args: IpcInvokeArgs<Channel>
+): Promise<IpcInvokeResult<Channel>> {
+  return ipcRenderer.invoke(channel, ...args) as Promise<IpcInvokeResult<Channel>>;
+}
 
 const bridge: AniStreamBridge = {
-  getAppInfo: () => ipcRenderer.invoke("app:get-info") as Promise<AppInfo>,
-  getAniListAuthState: () => ipcRenderer.invoke("anilist:auth-state") as Promise<AniListAuthState>,
-  startAniListLogin: () => ipcRenderer.invoke("anilist:login") as Promise<void>,
-  logoutAniList: () => ipcRenderer.invoke("anilist:logout") as Promise<void>,
-  getAniListDashboard: () => ipcRenderer.invoke("anilist:dashboard") as Promise<AniListDashboard>,
-  searchAniList: (query: string, type: AniListMediaType) =>
-    ipcRenderer.invoke("anilist:search", query, type) as Promise<AniListMedia[]>,
-  browseAniList: (input: BrowseAniListInput) =>
-    ipcRenderer.invoke("anilist:browse", input) as Promise<AniListCatalogPage>,
-  getAniListMediaDetail: (id: number, type: AniListMediaType) =>
-    ipcRenderer.invoke("anilist:media-detail", id, type) as Promise<AniListMediaDetail>,
-  addAniListEntry: (mediaId: number) =>
-    ipcRenderer.invoke("anilist:add-entry", mediaId) as Promise<void>,
-  updateAniListEntry: (input: UpdateAniListEntryInput) =>
-    ipcRenderer.invoke("anilist:update-entry", input) as Promise<void>,
-  deleteAniListEntry: (id: number) =>
-    ipcRenderer.invoke("anilist:delete-entry", id) as Promise<void>,
-  getAnimeEpisodeGuide: (slug: string) =>
-    ipcRenderer.invoke("anime:episode-guide", slug) as Promise<AnimeEpisodeGuide>,
-  getAnimeEpisodeCatalog: (input: AnimeEpisodeCatalogInput) =>
-    ipcRenderer.invoke("anime:episode-catalog", input) as Promise<AnimeEpisodeCatalog>,
-  getLatestAnimeUpdates: () =>
-    ipcRenderer.invoke("anilist:latest-anime") as Promise<LatestAnimeUpdate[]>,
-  getLatestMangaUpdates: () =>
-    ipcRenderer.invoke("mangadex:latest") as Promise<LatestMangaUpdate[]>,
-  getMalScore: (type: AniListMediaType, malId: number) =>
-    ipcRenderer.invoke("mal:score", type, malId) as Promise<MalScore | undefined>,
-  getMalTrendingFallback: (type: AniListMediaType) =>
-    ipcRenderer.invoke("mal:trending-fallback", type) as Promise<MalRankingItem[]>,
-  getMangaDexAvailability: (media: MangaDexAvailabilityInput[]) =>
-    ipcRenderer.invoke("mangadex:availability", media) as Promise<MangaDexChapterAvailability[]>,
-  getMangaDexReader: (input: MangaDexReaderInput) =>
-    ipcRenderer.invoke("mangadex:reader", input) as Promise<MangaDexReaderSession>,
-  getMangaDexPage: (input: MangaDexPageInput) =>
-    ipcRenderer.invoke("mangadex:page", input) as Promise<MangaDexReaderPage>,
-  getMangaEnrichment: (aniListId: number) =>
-    ipcRenderer.invoke("manga:enrichment", aniListId) as Promise<MangaEnrichment>,
-  getAnimePlayback: (input: AnimePlaybackInput) =>
-    ipcRenderer.invoke("anime:playback", input) as Promise<AnimePlaybackResult>,
-  getPlaybackResume: (aniListId: number) =>
-    ipcRenderer.invoke("playback:resume", aniListId) as Promise<PlaybackResume | undefined>,
-  savePlaybackResume: (input: SavePlaybackResumeInput) =>
-    ipcRenderer.invoke("playback:save-resume", input) as Promise<void>,
-  clearPlaybackResume: (aniListId: number) =>
-    ipcRenderer.invoke("playback:clear-resume", aniListId) as Promise<void>,
-  openTorrentMagnet: (magnetUrl: string) =>
-    ipcRenderer.invoke("anime:open-torrent", magnetUrl) as Promise<void>,
+  getAppInfo: () => invoke("app:get-info"),
+  getAniListAuthState: () => invoke("anilist:auth-state"),
+  startAniListLogin: () => invoke("anilist:login"),
+  logoutAniList: () => invoke("anilist:logout"),
+  getCachedAniListDashboard: () => invoke("anilist:cached-dashboard"),
+  getAniListDashboard: () => invoke("anilist:dashboard"),
+  searchAniList: (query, type) => invoke("anilist:search", query, type),
+  browseAniList: (input) => invoke("anilist:browse", input),
+  getAniListMediaDetail: (id, type) => invoke("anilist:media-detail", id, type),
+  addAniListEntry: (mediaId) => invoke("anilist:add-entry", mediaId),
+  updateAniListEntry: (input) => invoke("anilist:update-entry", input),
+  deleteAniListEntry: (id) => invoke("anilist:delete-entry", id),
+  getAnimeEpisodeCatalog: (input) => invoke("anime:episode-catalog", input),
+  getLatestAnimeUpdates: (page) => invoke("anilist:latest-anime", page),
+  getLatestMangaUpdates: (page) => invoke("mangadex:latest", page),
+  getMalScore: (type, malId) => invoke("mal:score", type, malId),
+  getMalTrendingFallback: (type) => invoke("mal:trending-fallback", type),
+  getMangaDexAvailability: (media) => invoke("mangadex:availability", media),
+  getMangaDexReader: (input) => invoke("mangadex:reader", input),
+  getMangaDexPage: (input) => invoke("mangadex:page", input),
+  getMangaEnrichment: (aniListId) => invoke("manga:enrichment", aniListId),
+  getAnimePlayback: (input) => invoke("anime:playback", input),
+  getPlaybackResume: (aniListId) => invoke("playback:resume", aniListId),
+  savePlaybackResume: (input) => invoke("playback:save-resume", input),
+  clearPlaybackResume: (aniListId) => invoke("playback:clear-resume", aniListId),
+  getMangaReadingResume: (aniListId) => invoke("manga:reading-resume", aniListId),
+  saveMangaReadingResume: (input) => invoke("manga:save-reading-resume", input),
+  clearMangaReadingResume: (aniListId) => invoke("manga:clear-reading-resume", aniListId),
   onAniListAuthChanged: (callback: (state: AniListAuthState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AniListAuthState): void => {
       callback(state);

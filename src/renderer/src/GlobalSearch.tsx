@@ -1,5 +1,5 @@
 import { Search, X } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import type { AniListCatalogMedia } from "../../shared/contracts";
 
@@ -23,10 +23,12 @@ export function GlobalSearch({
     // A too-short query never renders the results popover (see the JSX below), so
     // there is nothing to reset here -- avoid calling setState synchronously in the
     // effect body for a branch with no observable effect.
-    if (normalized.length < 2) return;
+    if (normalized.length < 2) {
+      requestId.current += 1;
+      return;
+    }
 
     const currentRequest = ++requestId.current;
-    setLoading(true);
     const timer = window.setTimeout(() => {
       void Promise.all([
         window.anistream.browseAniList({ type: "ANIME", page: 1, perPage: 4, query: normalized }),
@@ -48,6 +50,7 @@ export function GlobalSearch({
   function choose(media: AniListCatalogMedia): void {
     setFocused(false);
     setQuery("");
+    setLoading(false);
     onSelect(media);
   }
 
@@ -66,7 +69,11 @@ export function GlobalSearch({
         <Search size={17} aria-hidden="true" />
         <input
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            const nextQuery = event.target.value;
+            setQuery(nextQuery);
+            setLoading(nextQuery.trim().length >= 2);
+          }}
           onFocus={() => setFocused(true)}
           onBlur={() => window.setTimeout(() => setFocused(false), 160)}
           onKeyDown={(event) => {
@@ -87,7 +94,14 @@ export function GlobalSearch({
           aria-expanded={focused && query.trim().length >= 2}
         />
         {query ? (
-          <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => {
+              setQuery("");
+              setLoading(false);
+            }}
+          >
             <X size={15} />
           </button>
         ) : (
@@ -116,7 +130,7 @@ export function GlobalSearch({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => choose(media)}
               >
-                <img src={media.coverUrl} alt="" />
+                <img src={media.coverUrl} alt="" loading="lazy" decoding="async" />
                 <span>
                   <strong>{media.title}</strong>
                   <small>

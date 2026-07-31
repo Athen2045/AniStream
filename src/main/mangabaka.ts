@@ -1,23 +1,23 @@
 import type { MangaEnrichment } from "../shared/contracts";
+import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
 
 const BASE_URL = "https://api.mangabaka.org";
 const REQUEST_TIMEOUT_MS = 12_000;
 const CACHE_TTL_MS = 24 * 60 * 60_000;
+const CACHE_MAX_ENTRIES = 150;
 
 type Fetcher = typeof fetch;
-
-interface CachedEnrichment {
-  expiresAt: number;
-  value: MangaEnrichment;
-}
 
 export class MangaBakaClient {
   private readonly requestGate: RequestGate = createRequestGate({
     requestsPerMinute: 6,
     windowMs: 60_000,
   });
-  private readonly cache = new Map<number, CachedEnrichment>();
+  private readonly cache = createBoundedCache<MangaEnrichment>({
+    maxEntries: CACHE_MAX_ENTRIES,
+    ttlMs: CACHE_TTL_MS,
+  });
 
   public constructor(
     private readonly fetcher: Fetcher = fetch,
@@ -31,29 +31,29 @@ export class MangaBakaClient {
     if (!Number.isInteger(aniListId) || aniListId <= 0) {
       throw new Error("Invalid AniList manga ID.");
     }
-    const cached = this.cache.get(aniListId);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const cached = this.cache.get(String(aniListId));
+    if (cached) return cached;
     const url = new URL(`/v1/source/anilist/${aniListId}`, BASE_URL);
     url.searchParams.set("with_series", "true");
     url.searchParams.set("with_internal", "false");
     url.searchParams.set("with_source_response", "false");
-    const response = await this.requestGate.run(url.toString(), () =>
-      this.fetcher(url, {
+    const value = await this.requestGate.run(url.toString(), async () => {
+      const response = await this.fetcher(url, {
         headers: {
           Accept: "application/json",
           "User-Agent": "AniStream/0.1.0 (personal macOS app)",
           ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
         },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      }),
-    );
-    if (response.status === 429 || response.status === 403) {
-      this.requestGate.reportRateLimited(5 * 60_000);
-      throw new Error(`MangaBaka temporarily refused requests (${response.status}).`);
-    }
-    if (!response.ok) throw new Error(`MangaBaka request failed (${response.status}).`);
-    const value = parseMangaBakaEnrichment(await response.json(), aniListId);
-    this.cache.set(aniListId, { expiresAt: Date.now() + CACHE_TTL_MS, value });
+      });
+      if (response.status === 429 || response.status === 403) {
+        this.requestGate.reportRateLimited(5 * 60_000);
+        throw new Error(`MangaBaka temporarily refused requests (${response.status}).`);
+      }
+      if (!response.ok) throw new Error(`MangaBaka request failed (${response.status}).`);
+      return parseMangaBakaEnrichment(await response.json(), aniListId);
+    });
+    this.cache.set(String(aniListId), value);
     return value;
   }
 }

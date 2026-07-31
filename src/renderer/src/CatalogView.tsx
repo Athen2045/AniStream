@@ -6,6 +6,7 @@ import type {
   AniListDashboard,
   AniListEntry,
   AniListMediaType,
+  AniListPageInfo,
   LatestAnimeUpdate,
   LatestMangaUpdate,
   MalRankingItem,
@@ -16,6 +17,7 @@ import { Pagination } from "./Pagination";
 import { safeBackgroundUrl } from "./safe-css-url";
 
 const TRENDING_LIMIT = 20;
+const AVAILABILITY_REFRESH_INTERVAL_MS = 30 * 60_000;
 
 export function CatalogView({
   type,
@@ -31,11 +33,15 @@ export function CatalogView({
   onPrimary: (media: AniListCatalogMedia) => void;
 }): React.JSX.Element {
   const [page, setPage] = useState(1);
+  const [latestPage, setLatestPage] = useState(1);
   const [searchResults, setSearchResults] = useState<AniListCatalogPage>();
   const [trending, setTrending] = useState<AniListCatalogMedia[]>([]);
   const [malTrendingFallback, setMalTrendingFallback] = useState<MalRankingItem[]>([]);
   const [latestAnime, setLatestAnime] = useState<LatestAnimeUpdate[]>([]);
   const [latestManga, setLatestManga] = useState<LatestMangaUpdate[]>([]);
+  const [latestPageInfo, setLatestPageInfo] = useState<AniListPageInfo>();
+  const [latestLoading, setLatestLoading] = useState(true);
+  const [latestError, setLatestError] = useState<string>();
   const [mangaAvailability, setMangaAvailability] = useState<
     Map<number, MangaDexChapterAvailability>
   >(new Map());
@@ -50,17 +56,18 @@ export function CatalogView({
   if (resetKey.type !== type || resetKey.searchQuery !== searchQuery) {
     setResetKey({ type, searchQuery });
     setPage(1);
+    setLatestPage(1);
+    setSearchResults(undefined);
+    setLoading(true);
+    setError(undefined);
+    setLatestLoading(true);
+    setLatestError(undefined);
   }
 
   // Search results keep the paginated grid; the default view is rails-only.
   useEffect(() => {
-    if (!searchQuery) {
-      setSearchResults(undefined);
-      return;
-    }
+    if (!searchQuery) return;
     let active = true;
-    setLoading(true);
-    setError(undefined);
     void window.anistream
       .browseAniList({ type, page, perPage: 24, query: searchQuery, sort: "POPULARITY_DESC" })
       .then((result) => {
@@ -80,29 +87,21 @@ export function CatalogView({
   useEffect(() => {
     if (searchQuery) return;
     let active = true;
-    setLoading(true);
-    setError(undefined);
-    void Promise.allSettled([
-      window.anistream.browseAniList({
+    void window.anistream
+      .browseAniList({
         type,
         page: 1,
         perPage: TRENDING_LIMIT,
         sort: "TRENDING_DESC",
-      }),
-      type === "ANIME"
-        ? window.anistream.getLatestAnimeUpdates()
-        : window.anistream.getLatestMangaUpdates(),
-    ]).then(([trendingResult, latestResult]) => {
-      if (!active) return;
-      if (trendingResult.status === "fulfilled") {
-        setTrending(trendingResult.value.items.slice(0, TRENDING_LIMIT));
+      })
+      .then((result) => {
+        if (!active) return;
+        setTrending(result.items.slice(0, TRENDING_LIMIT));
         setMalTrendingFallback([]);
-      } else {
-        setError(
-          trendingResult.reason instanceof Error
-            ? trendingResult.reason.message
-            : "AniList browse failed.",
-        );
+      })
+      .catch((reason: unknown) => {
+        if (!active) return;
+        setError(reason instanceof Error ? reason.message : "AniList browse failed.");
         // AniList is down: fall back to the MyAnimeList ranking so Trending still
         // renders. Cards link out to MAL because there is no AniList ID to open.
         void window.anistream
@@ -113,17 +112,46 @@ export function CatalogView({
           .catch(() => {
             // Fallback is best-effort; the AniList error banner already explains the outage.
           });
-      }
-      if (latestResult.status === "fulfilled") {
-        if (type === "ANIME") setLatestAnime(latestResult.value as LatestAnimeUpdate[]);
-        else setLatestManga(latestResult.value as LatestMangaUpdate[]);
-      }
-      setLoading(false);
-    });
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
   }, [searchQuery, type]);
+
+  useEffect(() => {
+    if (searchQuery) return;
+    let active = true;
+    const request =
+      type === "ANIME"
+        ? window.anistream.getLatestAnimeUpdates(latestPage)
+        : window.anistream.getLatestMangaUpdates(latestPage);
+    void request
+      .then((result) => {
+        if (!active) return;
+        setLatestPageInfo(result.pageInfo);
+        if (type === "ANIME") {
+          setLatestAnime(result.items as LatestAnimeUpdate[]);
+        } else {
+          setLatestManga(result.items as LatestMangaUpdate[]);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setLatestError(
+            reason instanceof Error ? reason.message : `Latest ${type.toLowerCase()} failed.`,
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLatestLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [latestPage, searchQuery, type]);
 
   const continueCandidates = useMemo(() => {
     const groups = type === "ANIME" ? dashboard?.animeLists : dashboard?.mangaLists;
@@ -172,10 +200,15 @@ export function CatalogView({
         });
     };
     refreshAvailability();
-    const timer = window.setInterval(refreshAvailability, 5 * 60_000);
+    const refreshWhenVisible = (): void => {
+      if (document.visibilityState === "visible") refreshAvailability();
+    };
+    const timer = window.setInterval(refreshWhenVisible, AVAILABILITY_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       active = false;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [continueCandidates, type]);
 
@@ -231,8 +264,23 @@ export function CatalogView({
 
       <div className="catalog-content">
         {error ? <p className="error-banner">{error}</p> : null}
-        {loading && !trending.length && !searchItems.length ? (
+        {searchQuery && loading && !searchItems.length ? (
           <div className="catalog-loading">Loading AniList catalog…</div>
+        ) : null}
+        {!searchQuery && loading && !trending.length && !malTrendingFallback.length ? (
+          <section className="media-rail" aria-label={`Trending ${mediaName}`}>
+            <div className="rail-heading">
+              <div>
+                <p className="catalog-kicker">Loading</p>
+                <h2>Trending {mediaName}</h2>
+              </div>
+            </div>
+            <div className="rail-skeleton-row" aria-hidden="true">
+              {Array.from({ length: 6 }, (_, index) => (
+                <span className="rail-card-skeleton" key={`trending-skeleton-${index}`} />
+              ))}
+            </div>
+          </section>
         ) : null}
 
         {searchQuery ? (
@@ -243,7 +291,10 @@ export function CatalogView({
                 <h2>{`${mediaName} results`}</h2>
               </div>
             </div>
-            <div className="browse-grid">
+            <div
+              className={`browse-grid${loading && searchItems.length ? " is-loading" : ""}`}
+              aria-busy={loading}
+            >
               {searchItems.map((media) => (
                 <button
                   type="button"
@@ -252,7 +303,7 @@ export function CatalogView({
                   onClick={() => onSelect(media)}
                 >
                   <span className="browse-art">
-                    <img src={media.coverUrl} alt="" loading="lazy" />
+                    <img src={media.coverUrl} alt="" loading="lazy" decoding="async" />
                     <span className="browse-hover">
                       <span className="round-action">
                         <Play size={16} fill="currentColor" />
@@ -277,6 +328,8 @@ export function CatalogView({
                 totalPages={searchResults.pageInfo.lastPage}
                 hasNextPage={searchResults.pageInfo.hasNextPage}
                 onPageChange={(nextPage) => {
+                  setLoading(true);
+                  setError(undefined);
                   setPage(nextPage);
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
@@ -313,7 +366,7 @@ export function CatalogView({
                     >
                       <span className="rail-art">
                         <span className="rank">{index + 1}</span>
-                        <img src={media.coverUrl} alt="" loading="lazy" />
+                        <img src={media.coverUrl} alt="" loading="lazy" decoding="async" />
                       </span>
                       <span className="shelf-copy">
                         <strong>{media.title}</strong>
@@ -350,7 +403,7 @@ export function CatalogView({
                           MAL
                         </span>
                         {item.coverUrl ? (
-                          <img src={item.coverUrl} alt="" loading="lazy" />
+                          <img src={item.coverUrl} alt="" loading="lazy" decoding="async" />
                         ) : (
                           <span className="rail-art-fallback">{item.title}</span>
                         )}
@@ -363,67 +416,131 @@ export function CatalogView({
               </section>
             ) : null}
 
-            {type === "ANIME" && latestAnime.length ? (
-              <section className="media-rail" aria-label="Latest anime updates">
+            {type === "ANIME" ? (
+              <section
+                className="latest-updates-section"
+                aria-label="Latest anime updates"
+                aria-busy={latestLoading}
+              >
                 <div className="rail-heading">
                   <div>
                     <p className="catalog-kicker">Fresh episodes from AniList airing data</p>
                     <h2>Latest Anime Updates</h2>
                   </div>
+                  <span className="rail-count">Page {latestPage}</span>
                 </div>
-                <ContentCarousel label="Latest anime updates">
-                  {latestAnime.map((update) => (
-                    <button
-                      className="rail-card"
-                      type="button"
-                      key={update.media.id}
-                      onClick={() => onSelect(update.media)}
-                    >
-                      <span className="rail-art">
-                        <span className="rail-badge">EP {update.episode}</span>
-                        <img src={update.media.coverUrl} alt="" loading="lazy" />
-                      </span>
-                      <strong>{update.media.title}</strong>
-                      <span>{relativeTime(update.airedAt * 1_000)}</span>
-                    </button>
-                  ))}
-                </ContentCarousel>
+                {latestError ? <p className="latest-updates-error">{latestError}</p> : null}
+                <div className="latest-updates-grid">
+                  {latestLoading
+                    ? Array.from({ length: 21 }, (_, index) => (
+                        <span
+                          className="latest-update-skeleton"
+                          key={`anime-latest-skeleton-${index}`}
+                          aria-hidden="true"
+                        />
+                      ))
+                    : latestAnime.map((update) => (
+                        <button
+                          className="latest-update-card"
+                          type="button"
+                          key={update.media.id}
+                          onClick={() => onSelect(update.media)}
+                        >
+                          <span className="latest-update-art">
+                            <span className="latest-kind-badge">
+                              {formatLabel(update.media.format)}
+                            </span>
+                            <img
+                              src={update.media.coverUrl}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          </span>
+                          <span className="latest-update-meta">
+                            <span>EP {update.episode}</span>
+                            <span>{relativeTime(update.airedAt * 1_000)}</span>
+                          </span>
+                          <strong title={update.media.title}>{update.media.title}</strong>
+                        </button>
+                      ))}
+                </div>
+                {latestPageInfo ? (
+                  <Pagination
+                    label="Latest anime update pages"
+                    page={latestPage}
+                    totalPages={latestPageInfo.lastPage}
+                    hasNextPage={latestPageInfo.hasNextPage}
+                    onPageChange={(nextPage) => {
+                      setLatestLoading(true);
+                      setLatestError(undefined);
+                      setLatestPage(nextPage);
+                    }}
+                  />
+                ) : null}
               </section>
             ) : null}
 
-            {type === "MANGA" && latestManga.length ? (
-              <section className="media-rail" aria-label="Latest manga updates">
+            {type === "MANGA" ? (
+              <section
+                className="latest-updates-section"
+                aria-label="Latest manga updates"
+                aria-busy={latestLoading}
+              >
                 <div className="rail-heading">
                   <div>
                     <p className="catalog-kicker">New chapters from MangaDex</p>
                     <h2>Latest Manga Updates</h2>
                   </div>
+                  <span className="rail-count">Page {latestPage}</span>
                 </div>
-                <ContentCarousel label="Latest manga updates">
-                  {latestManga.map((update) =>
-                    update.aniListId ? (
-                      <button
-                        className="rail-card"
-                        type="button"
-                        key={update.mangaDexId}
-                        onClick={() => onSelect(toMangaCatalogMedia(update))}
-                      >
-                        <LatestMangaArt update={update} />
-                      </button>
-                    ) : (
-                      <a
-                        className="rail-card"
-                        key={update.mangaDexId}
-                        href={update.mangaDexUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`${update.title} on MangaDex`}
-                      >
-                        <LatestMangaArt update={update} external />
-                      </a>
-                    ),
-                  )}
-                </ContentCarousel>
+                {latestError ? <p className="latest-updates-error">{latestError}</p> : null}
+                <div className="latest-updates-grid">
+                  {latestLoading
+                    ? Array.from({ length: 21 }, (_, index) => (
+                        <span
+                          className="latest-update-skeleton"
+                          key={`manga-latest-skeleton-${index}`}
+                          aria-hidden="true"
+                        />
+                      ))
+                    : latestManga.map((update) =>
+                        update.aniListId ? (
+                          <button
+                            className="latest-update-card"
+                            type="button"
+                            key={update.mangaDexId}
+                            onClick={() => onSelect(toMangaCatalogMedia(update))}
+                          >
+                            <LatestMangaCardContent update={update} />
+                          </button>
+                        ) : (
+                          <a
+                            className="latest-update-card"
+                            key={update.mangaDexId}
+                            href={update.mangaDexUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`${update.title} on MangaDex`}
+                          >
+                            <LatestMangaCardContent update={update} />
+                          </a>
+                        ),
+                      )}
+                </div>
+                {latestPageInfo ? (
+                  <Pagination
+                    label="Latest manga update pages"
+                    page={latestPage}
+                    totalPages={latestPageInfo.lastPage}
+                    hasNextPage={latestPageInfo.hasNextPage}
+                    onPageChange={(nextPage) => {
+                      setLatestLoading(true);
+                      setLatestError(undefined);
+                      setLatestPage(nextPage);
+                    }}
+                  />
+                ) : null}
               </section>
             ) : null}
           </>
@@ -433,31 +550,40 @@ export function CatalogView({
   );
 }
 
-function LatestMangaArt({
-  update,
-  external,
-}: {
-  update: LatestMangaUpdate;
-  external?: boolean;
-}): React.JSX.Element {
+function LatestMangaCardContent({ update }: { update: LatestMangaUpdate }): React.JSX.Element {
   return (
     <>
-      <span className="rail-art">
-        {external ? (
-          <span className="rail-badge rail-badge--external">
-            <ExternalLink size={11} aria-hidden="true" />
-            MangaDex
-          </span>
-        ) : null}
-        {update.coverUrl ? (
-          <img src={update.coverUrl} alt="" loading="lazy" />
-        ) : (
-          <span className="rail-art-fallback">{update.title}</span>
-        )}
+      <span className="latest-update-art">
+        <span className="latest-kind-badge">{formatMangaKind(update.publicationKind)}</span>
+        <LatestMangaCover update={update} />
       </span>
-      <strong>{update.title}</strong>
-      <span>{relativeTime(Date.parse(update.updatedAt))}</span>
+      <span className="latest-update-meta">
+        <span>{update.chapter ? `CH ${update.chapter}` : "NEW CHAPTER"}</span>
+        <span>{relativeTime(Date.parse(update.updatedAt))}</span>
+      </span>
+      <strong title={update.title}>{update.title}</strong>
     </>
+  );
+}
+
+function LatestMangaCover({ update }: { update: LatestMangaUpdate }): React.JSX.Element {
+  const [source, setSource] = useState(update.coverUrl);
+
+  if (!source) {
+    return <span className="latest-update-art-fallback">{update.title}</span>;
+  }
+  return (
+    <img
+      src={source}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => {
+        setSource((current) =>
+          current !== update.coverUrlFallback ? update.coverUrlFallback : undefined,
+        );
+      }}
+    />
   );
 }
 
@@ -497,7 +623,7 @@ function MediaRail({
               onClick={() => (entry && onPrimary ? onPrimary(media) : onSelect(media))}
             >
               <span className="rail-art">
-                <img src={media.coverUrl} alt="" loading="lazy" />
+                <img src={media.coverUrl} alt="" loading="lazy" decoding="async" />
                 <span className="rail-overlay">
                   <span className="round-action">
                     <Play size={16} fill="currentColor" />
@@ -597,6 +723,10 @@ export function relativeTime(timestampMs: number, now = Date.now()): string {
 
 function formatLabel(value?: string): string {
   return value?.replaceAll("_", " ").toLocaleLowerCase() ?? "media";
+}
+
+function formatMangaKind(value: LatestMangaUpdate["publicationKind"]): string {
+  return value === "OTHER" ? "COMIC" : value;
 }
 
 function cleanDescription(value?: string): string {

@@ -4,12 +4,14 @@ import type {
   AniListEntry,
   AniListEntryStatus,
   AniListGroup,
+  AniListListEntrySummary,
   AniListMedia,
   AniListMediaDetail,
   AniListMediaType,
   AniListNamedPerson,
   AniListProfile,
   LatestAnimeUpdate,
+  LatestUpdatesPage,
 } from "../../shared/contracts";
 
 export function normalizeProfile(value: unknown): AniListProfile {
@@ -70,6 +72,20 @@ export function normalizeEntry(value: unknown, expectedType: AniListMediaType): 
     notes: optionalString(entry.notes),
     updatedAt: requiredNumber(entry.updatedAt, "entry update time"),
     media: normalizeMedia(entry.media, expectedType),
+  };
+}
+
+/** Normalizes a mutation's returned `SaveMediaListEntry` payload (id/status/score/progress only). */
+export function normalizeListEntry(value: unknown): AniListListEntrySummary {
+  const entry = asRecord(value, "AniList returned an invalid list entry.");
+  const status = requiredString(entry.status, "entry status");
+  if (!isEntryStatus(status)) throw new Error(`AniList returned an unknown list status: ${status}`);
+
+  return {
+    id: requiredNumber(entry.id, "entry ID"),
+    status,
+    score: requiredNumber(entry.score, "entry score"),
+    progress: requiredNumber(entry.progress, "entry progress"),
   };
 }
 
@@ -213,6 +229,23 @@ export function normalizeAiringUpdates(value: unknown, limit: number): LatestAni
     }
   }
   return [...byMediaId.values()];
+}
+
+export function normalizeAiringUpdatesPage(
+  value: unknown,
+  limit: number,
+): LatestUpdatesPage<LatestAnimeUpdate> {
+  const page = asRecord(value, "AniList returned an invalid airing page.");
+  const pageInfo = asRecord(page.pageInfo, "AniList returned invalid airing pagination.");
+  return {
+    pageInfo: {
+      currentPage: requiredNumber(pageInfo.currentPage, "current page"),
+      perPage: limit,
+      lastPage: requiredNumber(pageInfo.lastPage, "last page"),
+      hasNextPage: Boolean(pageInfo.hasNextPage),
+    },
+    items: normalizeAiringUpdates(page, limit),
+  };
 }
 
 export function normalizeMediaDetail(

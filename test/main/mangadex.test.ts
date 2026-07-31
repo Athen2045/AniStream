@@ -69,6 +69,15 @@ describe("MangaDex normalization", () => {
             relationships: [{ type: "scanlation_group", attributes: { name: "Sample Group" } }],
           },
           { id: "invalid", attributes: { pages: 0, translatedLanguage: "en" } },
+          {
+            id: "external-publisher-chapter",
+            attributes: {
+              chapter: "1183",
+              pages: 1,
+              translatedLanguage: "en",
+              externalUrl: "https://mangaplus.shueisha.co.jp/",
+            },
+          },
         ],
       }),
     ).toEqual([
@@ -82,6 +91,25 @@ describe("MangaDex normalization", () => {
         groupName: "Sample Group",
       },
     ]);
+  });
+
+  it("does not expose externally hosted chapters to MangaDex@Home", () => {
+    expect(
+      normalizeChapters({
+        data: [
+          {
+            id: "2dd494f6-1b7c-4498-9d54-b83405aca902",
+            attributes: {
+              chapter: "1183",
+              title: "Good Morn-Maid",
+              translatedLanguage: "en",
+              externalUrl: "https://mangaplus.shueisha.co.jp/",
+              pages: 1,
+            },
+          },
+        ],
+      }),
+    ).toEqual([]);
   });
 
   it("accepts only HTTPS MangaDex@Home nodes with complete image metadata", () => {
@@ -131,12 +159,24 @@ describe("MangaDex normalization", () => {
 
     const page = await client.getPage({ chapterId: "chapter-1", page: 0 });
 
-    expect(page.imageDataUrl).toBe("data:image/jpeg;base64,AQID");
+    expect(page.mimeType).toBe("image/jpeg");
+    expect(new Uint8Array(page.imageBytes)).toEqual(new Uint8Array([1, 2, 3]));
     expect(requestedUrls).toEqual([
       "https://api.mangadex.org/at-home/server/chapter-1",
       "https://old-node.example/data/old_hash/1.jpg",
       "https://api.mangadex.org/at-home/server/chapter-1",
       "https://fresh-node.example/data/fresh_hash/1.jpg",
     ]);
+  });
+
+  it("reports an unavailable external chapter instead of leaking a raw at-home 404", async () => {
+    const client = new MangaDexClient(
+      "en",
+      (async () => new Response("", { status: 404 })) as typeof fetch,
+    );
+
+    await expect(client.getPage({ chapterId: "external-chapter", page: 0 })).rejects.toThrow(
+      /external publisher site or is no longer available/,
+    );
   });
 });
