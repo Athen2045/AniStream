@@ -74,6 +74,31 @@ describe("Anikoto response normalization", () => {
       }).status,
     ).toBe("unavailable");
   });
+
+  it("decodes HTML entities in provider episode titles and summaries", () => {
+    const result = parseAnikotoSeriesCatalog(
+      {
+        ok: true,
+        data: {
+          anime: { ani_id: "194829", title: "One Piece" },
+          episodes: [
+            {
+              number: 1,
+              title: "I&#39;m Luffy! The Man Who&#39;s Gonna Be King &amp; Pirate!",
+              description: "A &quot;great&quot; adventure &mdash; begins.",
+              episode_embed_id: "775493",
+            },
+          ],
+        },
+      },
+      { aniListId: 194829, titles: ["One Piece"] },
+    );
+
+    expect(result.seasons[0]?.episodes[0]).toMatchObject({
+      title: "I'm Luffy! The Man Who's Gonna Be King & Pirate!",
+      description: 'A "great" adventure — begins.',
+    });
+  });
 });
 
 describe("Anikoto client", () => {

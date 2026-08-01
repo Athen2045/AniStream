@@ -302,6 +302,27 @@ ambiguous.
 If MangaBaka is unavailable or the match is ambiguous, the MangaDex reader and AniList metadata
 continue normally; only supplemental author/artist/publisher/MangaUpdates fields are omitted.
 
+## MangaUpdates release metadata
+
+| Item          | Value                                                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Base URL      | `https://api.mangaupdates.com/v1`                                                                                                   |
+| Auth          | Public exact-series and scanlation-group reads; release search requires a bearer session according to the supplied OpenAPI document |
+| Credentials   | None for the integrated public reads; no MangaUpdates bearer token is stored                                                        |
+| Features      | Exact series status/latest chapter and scanlation-group metadata from MangaBaka's canonical MangaUpdates ID                         |
+| Official docs | Supplied `openapi.json` (`MangaUpdates API`, version `1.0.0`)                                                                       |
+
+AniStream calls `GET /series/{id}` and `GET /series/{id}/groups` only after MangaBaka has returned
+one canonical numeric MangaUpdates ID for the requested AniList title. Responses are normalized in
+the main process, cached for 24 hours, and requested through a conservative six-requests-per-minute
+gate because the supplied document asks clients to space requests and cache results but does not
+publish a numeric service-wide limit.
+
+The documented `POST /releases/search` endpoint is not integrated: its OpenAPI security declaration
+requires bearer authentication, and AniStream has no approved MangaUpdates account/session flow.
+MangaUpdates does not provide chapter page images in this specification. MangaDex remains the only
+page-delivery provider through MangaDex@Home.
+
 ## VidKing remote player (optional, explicitly labeled)
 
 | Item          | Value                                                                                                                             |

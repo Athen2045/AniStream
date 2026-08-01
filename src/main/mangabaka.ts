@@ -42,7 +42,9 @@ export class MangaBakaClient {
         headers: {
           Accept: "application/json",
           "User-Agent": "AniStream/0.1.0 (personal macOS app)",
-          ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
+          // MangaBaka documents PATs as x-api-key credentials. OAuth bearer
+          // tokens use Authorization and are a separate future integration.
+          ...(this.accessToken ? { "x-api-key": this.accessToken } : {}),
         },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });

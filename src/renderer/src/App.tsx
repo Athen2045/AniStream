@@ -1,6 +1,6 @@
 import { RefreshCw, UserRound } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AniListAuthState,
   AniListCatalogMedia,
@@ -15,6 +15,8 @@ import { CatalogView } from "./CatalogView";
 import { CoverImage } from "./CoverImage";
 import { GlobalSearch } from "./GlobalSearch";
 import { safeBackgroundUrl } from "./safe-css-url";
+import { formatMediaLabel } from "./format-label";
+import { isProgressComplete } from "../../shared/progress";
 
 // Only needed once a title is opened, never on initial launch -- load it as its own
 // chunk instead of paying its parse/compile cost during startup.
@@ -444,6 +446,20 @@ function ProfileView({
   onLogout: () => Promise<void>;
 }): React.JSX.Element {
   const groups = mediaType === "ANIME" ? dashboard.animeLists : dashboard.mangaLists;
+  const groupTabsRef = useRef<HTMLDivElement>(null);
+  const [groupTabsOverflow, setGroupTabsOverflow] = useState(false);
+
+  useEffect(() => {
+    const element = groupTabsRef.current;
+    if (!element) return;
+    const updateOverflow = (): void => {
+      setGroupTabsOverflow(element.scrollWidth - element.clientWidth > 1);
+    };
+    updateOverflow();
+    const observer = new ResizeObserver(updateOverflow);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [groups]);
 
   return (
     <>
@@ -572,18 +588,29 @@ function ProfileView({
           </section>
         ) : null}
 
-        <div className="group-tabs" role="tablist" aria-label="AniList groups">
-          {groups.map((group) => (
-            <button
-              className={group.name === activeGroupName ? "active" : ""}
-              type="button"
-              key={`${mediaType}-${group.name}`}
-              onClick={() => onSelectGroup(group.name)}
-            >
-              {group.name}
-              <span>{group.entries.length}</span>
-            </button>
-          ))}
+        <div className={`group-tabs-scroll${groupTabsOverflow ? " has-overflow" : ""}`}>
+          <div
+            className="group-tabs"
+            ref={groupTabsRef}
+            role="tablist"
+            aria-label="AniList groups"
+            onScroll={() => {
+              const element = groupTabsRef.current;
+              if (element) setGroupTabsOverflow(element.scrollWidth - element.clientWidth > 1);
+            }}
+          >
+            {groups.map((group) => (
+              <button
+                className={group.name === activeGroupName ? "active" : ""}
+                type="button"
+                key={`${mediaType}-${group.name}`}
+                onClick={() => onSelectGroup(group.name)}
+              >
+                {group.name}
+                <span>{group.entries.length}</span>
+              </button>
+            ))}
+          </div>
         </div>
         {error ? <p className="error-banner">{error}</p> : null}
         <div className="library-heading">
@@ -646,21 +673,23 @@ function MediaCard({
     <article className="media-card">
       <div className="cover-wrap">
         <img src={entry.media.coverUrl} alt="" loading="lazy" />
-        <button
-          className="progress-button"
-          type="button"
-          disabled={saving}
-          onClick={() => {
-            const next = Math.min(
-              entry.media.totalProgress ?? Number.MAX_SAFE_INTEGER,
-              progress + 1,
-            );
-            setProgress(next);
-            void onSave({ id: entry.id, progress: next });
-          }}
-        >
-          +1
-        </button>
+        {!isProgressComplete(status, progress, entry.media.totalProgress) ? (
+          <button
+            className="progress-button"
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              const next = Math.min(
+                entry.media.totalProgress ?? Number.MAX_SAFE_INTEGER,
+                progress + 1,
+              );
+              setProgress(next);
+              void onSave({ id: entry.id, progress: next });
+            }}
+          >
+            +1
+          </button>
+        ) : null}
       </div>
       <div className="media-card-body">
         <p className="media-meta">{formatMediaFormat(entry.media.format)}</p>
@@ -778,7 +807,7 @@ function statusLabel(status: AniListEntryStatus): string {
 }
 
 function formatMediaFormat(format?: string): string {
-  return format?.replaceAll("_", " ").toLocaleLowerCase() ?? "media";
+  return formatMediaLabel(format);
 }
 
 function formatMinutes(minutes: number): string {

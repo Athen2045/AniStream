@@ -1355,6 +1355,13 @@ a.rail-card {
   aspect-ratio: 0.72;
 }
 
+.people-row .person-image-fallback {
+  display: grid;
+  place-items: center;
+  color: #9aa0ad;
+  background: #20242c;
+}
+
 .detail-mini-grid img,
 .detail-mini-grid .cover-image-fallback {
   aspect-ratio: 0.72;
@@ -2723,6 +2730,9 @@ a.rail-card {
 }
 
 .profile-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   min-height: 520px;
   padding: 148px max(48px, calc((100vw - 1240px) / 2)) 42px;
   background:
@@ -2732,7 +2742,21 @@ a.rail-card {
   background-size: cover;
 }
 
+.profile-hero::after {
+  position: absolute;
+  z-index: -1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 42%;
+  background: linear-gradient(180deg, transparent 0%, rgba(20, 20, 20, 0.78) 58%, var(--ink) 100%);
+  content: "";
+  pointer-events: none;
+}
+
 .profile-summary {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 150px minmax(0, 660px);
   gap: 30px;
@@ -2760,6 +2784,8 @@ a.rail-card {
 }
 
 .profile-stats {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(6, minmax(90px, 1fr));
   gap: 1px;
@@ -2944,11 +2970,30 @@ a.rail-card {
   opacity: 0.45;
 }
 
+.group-tabs-scroll {
+  position: relative;
+  margin: 28px 0 42px;
+  min-width: 0;
+}
+
+.group-tabs-scroll.has-overflow::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 8px;
+  width: 56px;
+  background: linear-gradient(90deg, rgba(20, 20, 20, 0), var(--ink) 88%);
+  content: "";
+  pointer-events: none;
+}
+
 .group-tabs {
   display: flex;
   gap: 7px;
-  margin: 28px 0 42px;
+  padding: 2px 58px 8px 2px;
   overflow-x: auto;
+  scrollbar-color: #555 transparent;
+  scrollbar-width: thin;
 }
 
 .group-tabs button {

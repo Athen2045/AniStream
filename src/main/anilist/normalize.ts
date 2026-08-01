@@ -13,6 +13,7 @@ import type {
   LatestAnimeUpdate,
   LatestUpdatesPage,
 } from "../../shared/contracts";
+import { decodeHtmlEntities } from "../../shared/text";
 
 export function normalizeProfile(value: unknown): AniListProfile {
   const viewer = asRecord(value, "AniList returned an invalid profile.");
@@ -423,18 +424,18 @@ function asRecord(value: unknown, message: string): Record<string, unknown> {
 
 function requiredString(value: unknown, field: string): string {
   if (typeof value !== "string" || !value) throw new Error(`AniList returned an invalid ${field}.`);
-  return value;
+  return decodeHtmlEntities(value);
 }
 
 function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value ? value : undefined;
+  return typeof value === "string" && value ? decodeHtmlEntities(value) : undefined;
 }
 
 function optionalStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const values = value.filter(
-    (item): item is string => typeof item === "string" && item.length > 0,
-  );
+  const values = value
+    .filter((item): item is string => typeof item === "string" && item.length > 0)
+    .map(decodeHtmlEntities);
   return values.length ? values : undefined;
 }
 

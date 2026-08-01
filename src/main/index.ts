@@ -5,6 +5,7 @@ import { AnikotoClient } from "./anikoto";
 import { MalClient } from "./mal";
 import { MangaDexClient } from "./mangadex";
 import { MangaBakaClient } from "./mangabaka";
+import { MangaUpdatesClient } from "./mangaupdates";
 import { loadEnvironmentFile } from "./config";
 import { openAppDatabase, type AppDatabase } from "./database";
 import {
@@ -37,6 +38,7 @@ let anikoto: AnikotoClient | undefined;
 let mangaDex: MangaDexClient | undefined;
 let mal: MalClient | undefined;
 let mangaBaka: MangaBakaClient | undefined;
+let mangaUpdates: MangaUpdatesClient | undefined;
 let rendererServer: RendererServer | undefined;
 let pendingProtocolUrl: string | undefined;
 
@@ -132,6 +134,7 @@ app.whenReady().then(async () => {
   mangaDex = new MangaDexClient();
   mal = new MalClient();
   mangaBaka = new MangaBakaClient();
+  mangaUpdates = new MangaUpdatesClient();
   if (isAnikotoEnabled()) anikoto = new AnikotoClient();
   app.setAsDefaultProtocolClient("anistream");
   rendererServer = await rendererServerPromise;
@@ -338,7 +341,24 @@ app.whenReady().then(async () => {
     "manga:enrichment",
     async (_event, aniListId: number) => {
       if (!mangaBaka) throw new Error("MangaBaka is not ready.");
-      return mangaBaka.getEnrichment(aniListId);
+      const enrichment = await mangaBaka.getEnrichment(aniListId);
+      if (enrichment.status !== "available" || !enrichment.mangaUpdatesId || !mangaUpdates) {
+        return enrichment;
+      }
+      const seriesId = Number(enrichment.mangaUpdatesId);
+      if (!Number.isInteger(seriesId) || seriesId <= 0) return enrichment;
+      try {
+        const [series, groups] = await Promise.all([
+          mangaUpdates.getSeries(seriesId),
+          mangaUpdates.getGroups(seriesId),
+        ]);
+        return {
+          ...enrichment,
+          mangaUpdates: { ...series, groups },
+        };
+      } catch {
+        return enrichment;
+      }
     },
   );
   registerTrustedIpcHandler(

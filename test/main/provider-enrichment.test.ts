@@ -72,4 +72,30 @@ describe("MangaBaka exact AniList enrichment", () => {
     expect(first).toEqual(second);
     expect(first.status).toBe("available");
   });
+
+  it("sends a configured PAT through MangaBaka's documented x-api-key header", async () => {
+    const fetcher = vi.fn(() =>
+      Promise.resolve(
+        Response.json({
+          data: {
+            series: [
+              {
+                id: 84926,
+                state: "active",
+                title: "One Piece",
+                source: { anilist: { id: 30013 } },
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    const client = new MangaBakaClient(fetcher as typeof fetch, "mb-test-token");
+
+    await client.getEnrichment(30013);
+
+    const request = fetcher.mock.calls[0]?.[1];
+    expect(request?.headers).toEqual(expect.objectContaining({ "x-api-key": "mb-test-token" }));
+    expect(request?.headers).not.toHaveProperty("Authorization");
+  });
 });

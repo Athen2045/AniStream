@@ -2,6 +2,7 @@ import { Search, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import type { AniListCatalogMedia } from "../../shared/contracts";
+import { formatMediaLabel } from "./format-label";
 
 export function GlobalSearch({
   onSelect,
@@ -159,5 +160,5 @@ export function GlobalSearch({
 }
 
 function formatLabel(value?: string): string {
-  return value?.replaceAll("_", " ").toLocaleLowerCase() ?? "media";
+  return formatMediaLabel(value);
 }

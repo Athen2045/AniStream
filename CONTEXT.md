@@ -1,6 +1,6 @@
 # AniStream — Context
 
-Last updated: 2026-07-31 by Codex Electron performance and IPC session
+Last updated: 2026-08-01 by Codex MangaBaka/MangaUpdates bridge implementation
 
 ## Current phase
 
@@ -8,7 +8,8 @@ Phase 2 native media integration. AniList discovery/tracking, Anikoto episode lo
 embedded anime playback, Netflix-style episode browsing, Framer Motion detail/player/reader
 transitions, independently paged Latest Updates grids, MangaDex long-strip reading, MangaBaka
 enrichment, SQLite anime/manga resume state, typed origin-validated IPC, persistent dashboard
-caching, viewport-lazy reader pages, and feature-level renderer chunks are implemented. The former
+caching, viewport-lazy reader pages, feature-level renderer chunks, and audit-driven UI correctness
+fixes are implemented. The former
 AniWatch, Zenshin, AnimeTosho, Nyaa, custom HLS broker, torrent handoff, Video.js, hls.js, and
 direct Motion runtime paths remain removed.
 
@@ -127,6 +128,26 @@ direct Motion runtime paths remain removed.
   `d01cde15653ca023d1663fd74aac77012ee8d6296884630df6c578f6e64382a7`.
 - Current provider verification is recorded in
   `docs/research/anikoto-megaplay-runtime-2026-07-29.md`.
+- Provider episode titles and summaries now decode common named and numeric HTML entities before
+  display, including `&#39;`, `&#x27;`, `&amp;`, `&quot;`, and encoded markup. AniList normalized
+  string fields use the same entity decoder.
+- Completed profile cards no longer render the `+1` quick-progress action when the AniList status is
+  `COMPLETED` or known progress has reached the title total. The behavior is covered by a pure
+  progress-completion test.
+- Media format labels now share one renderer formatter: `TV`, `ONA`, `OVA`, `EN`, and similar
+  acronyms remain uppercase while compound labels render as `TV Short`/`One Shot`. The manga hero
+  uses the same `BookOpen` affordance as chapter/read actions.
+- Profile group pills now expose a ResizeObserver-backed horizontal overflow cue with a native
+  scrollable row. The profile hero has a stronger bottom fade into its stats/background, AniList
+  default/no-image people art is masked with a neutral icon, and duplicate external-link sites
+  such as repeated `WEBTOON` entries are reduced to one button.
+- UI audit remediation verification passes: 103 Vitest tests across 16 files, typecheck, lint,
+  production build, product-slice checks, packaged-preload checks, and AniList OAuth checks.
+- Updated unsigned Apple Silicon package: `dist/AniStream-0.1.0-arm64.dmg` (140,097,067 bytes /
+  134 MiB). SHA-256: `3943ac6d18deba5368a02ad95fd3e0546c8cf735aceda49b65d91599a0d1b4f4`.
+- MangaBaka PAT configuration is recognized from `.env` when it has the documented `mb-` prefix.
+  Requests now send that value through the documented `x-api-key` header; OAuth bearer credentials
+  remain a separate, unimplemented integration.
 
 ## What's in progress
 
@@ -175,8 +196,21 @@ direct Motion runtime paths remain removed.
   selection are not implemented, so duplicate chapter numbers from different groups can appear.
 - Page buffers are bounded by entry count rather than total bytes. A chapter is viewport-loaded,
   but an unusually large provider image can still create a temporary memory spike while decoded.
-- MangaUpdates is consumed only through MangaBaka's normalized exact-ID record; direct integration
-  remains deferred because the supplied specification did not establish a safe AniList lookup.
+- MangaUpdates is consumed through MangaBaka's normalized exact-ID record for exact series/group
+  enrichment. Release search remains deferred because the supplied specification requires a bearer
+  session and does not document a public exact-series release endpoint; page delivery remains
+  MangaDex@Home.
+- MangaBaka OAuth discovery and account-library synchronization are not implemented. The supplied
+  OpenAPI document defines the OAuth discovery URL and scopes, but does not provide enough redirect
+  and authorization-flow details to add a safe native OAuth client yet.
+- MangaBaka page delivery is not verified or available in the supplied OpenAPI document. Its image
+  route is explicitly for series cover images; no chapter/page-image or reader delivery endpoint is
+  documented. MangaBaka therefore remains metadata enrichment only until a documented, authorized
+  page source is provided.
+- The approved MangaBaka bridge now performs exact MangaUpdates series/group enrichment when a
+  canonical numeric MangaUpdates ID is returned. It exposes latest chapter, license/completion
+  state, series URL, and scanlation groups alongside existing MangaBaka metadata. The authenticated
+  MangaUpdates release-search endpoint remains intentionally unused.
 - MAL manga-kind cross-checks require `ANISTREAM_MAL_CLIENT_ID`. If it is absent or unreachable,
   MangaDex language remains the primary classifier and AniList country remains the available
   supplemental signal.
@@ -190,6 +224,10 @@ direct Motion runtime paths remain removed.
 - Runtime dependency audit is clean. Development/build tooling still has previously accepted
   advisory chains.
 - The AniList client secret was shared in chat and should be rotated if AniList permits.
+- The repository-wide Prettier check still reports three older files outside this remediation:
+  `docs/research/codebase-audit-2026-07-31.md`, `docs/research/mangadex-consumet-followup-2026-07-31.md`,
+  and `test/main/mangadex.test.ts`. Every file changed for the UI audit is individually formatted
+  and lint-clean; these unrelated formatting warnings remain for a separate cleanup.
 
 ## Next steps (in priority order)
 
@@ -200,9 +238,10 @@ direct Motion runtime paths remain removed.
 3. Add MangaDex language/group selection and consider a byte-budgeted page cache if real-world
    memory profiling shows the current 18-entry bound is too permissive.
 4. Exercise the Latest grids at narrow window sizes plus keyboard focus, retained carousel paging,
-   completed-series end navigation, and all provider-owned player controls in a focused manual UX
-   pass.
-5. Install a valid Developer ID Application identity, sign/notarize the DMG, and rotate the exposed
+   completed-series end navigation, the profile pill overflow cue, and all provider-owned player
+   controls in a focused manual UX pass.
+5. Decide whether to format the three pre-existing repository-wide Prettier warnings, then install
+   a valid Developer ID Application identity, sign/notarize the DMG, and rotate the exposed
    AniList client secret.
 
 ## Key architectural decisions log
@@ -338,3 +377,16 @@ integration` against the workflow-runs API. `github/codeql-action/analyze` needs
   immutable fingerprinted assets, separate anime/manga lazy chunks, binary MangaDex IPC, and
   viewport-driven reader loading. Electron sandbox/context isolation and the approved unsandboxed
   MegaPlay iframe exception are unchanged.
+- 2026-07-31: Applied the hands-on UI audit fixes without changing provider architecture: centralized
+  HTML entity decoding, guarded completed progress actions, uppercase acronym formatting, consistent
+  manga read iconography, keyboard/native-scroll-friendly profile group overflow, stronger profile
+  fade continuity, neutral people placeholders, and site-level external-link deduplication. Rebuilt
+  the unsigned arm64 DMG after 103 passing tests.
+- 2026-07-31: Verified MangaBaka's supplied OpenAPI document distinguishes PAT authentication
+  (`x-api-key: mb-...`) from OAuth bearer authentication. AniStream now sends its optional PAT via
+  the documented header; MangaBaka OAuth remains deferred until its complete native-app flow is
+  verified.
+- 2026-08-01: Implemented the approved exact-ID metadata bridge: AniList → MangaBaka →
+  MangaUpdates series/groups → MangaDex exact mapping → MangaDex@Home pages. MangaUpdates public
+  series/group reads are cached and rate-gated; its bearer-protected release search and any page
+  delivery are explicitly out of scope until separately authorized and documented.

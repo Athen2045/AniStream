@@ -1,4 +1,4 @@
-import { ExternalLink, Info, Play, Plus, Search } from "lucide-react";
+import { BookOpen, ExternalLink, Info, Play, Plus } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -17,6 +17,8 @@ import { ContentCarousel } from "./ContentCarousel";
 import { Pagination } from "./Pagination";
 import { RailHoverActions } from "./RailHoverActions";
 import { safeBackgroundUrl } from "./safe-css-url";
+import { formatMediaLabel } from "./format-label";
+import { decodeHtmlEntities } from "../../shared/text";
 
 const TRENDING_LIMIT = 20;
 const AVAILABILITY_REFRESH_INTERVAL_MS = 30 * 60_000;
@@ -283,7 +285,7 @@ export function CatalogView({
             </p>
             <div className="hero-actions">
               <button className="play-action" type="button" onClick={() => onPrimary(hero)}>
-                {type === "ANIME" ? <Play size={20} fill="currentColor" /> : <Search size={20} />}
+                {type === "ANIME" ? <Play size={20} fill="currentColor" /> : <BookOpen size={20} />}
                 {type === "ANIME" ? "Watch" : "Read"}
               </button>
               <button className="info-action" type="button" onClick={() => onSelect(hero)}>
@@ -781,7 +783,7 @@ export function relativeTime(timestampMs: number, now = Date.now()): string {
 }
 
 function formatLabel(value?: string): string {
-  return value?.replaceAll("_", " ").toLocaleLowerCase() ?? "media";
+  return formatMediaLabel(value);
 }
 
 function formatMangaKind(value: LatestMangaUpdate["publicationKind"]): string {
@@ -790,10 +792,12 @@ function formatMangaKind(value: LatestMangaUpdate["publicationKind"]): string {
 
 function cleanDescription(value?: string): string {
   if (!value) return "";
-  return value
-    .replace(/<[^>]+>/g, " ")
-    .replace(/~!/g, "")
-    .replace(/!~/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return decodeHtmlEntities(
+    value
+      .replace(/<[^>]+>/g, " ")
+      .replace(/~!/g, "")
+      .replace(/!~/g, "")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
 }

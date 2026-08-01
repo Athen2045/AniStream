@@ -12,6 +12,8 @@ import type {
   PlaybackResume,
 } from "../../shared/contracts";
 import { parseMegaPlayEvent } from "../../shared/megaplay-events";
+import { formatMediaLabel } from "./format-label";
+import { decodeHtmlEntities } from "../../shared/text";
 
 const MEGAPLAY_ORIGIN = "https://megaplay.buzz";
 const EPISODES_PAGE_SIZE = 10;
@@ -67,10 +69,7 @@ export function AnimeWatchExperience({
     seasons.find((season) => season.id === selectedSeasonId) ??
     seasonContainingEpisode(seasons, activeEpisode) ??
     seasons[0];
-  const allEpisodes = useMemo(
-    () => seasons.flatMap((season) => season.episodes),
-    [seasons],
-  );
+  const allEpisodes = useMemo(() => seasons.flatMap((season) => season.episodes), [seasons]);
   const activeIndex = useMemo(
     () => allEpisodes.findIndex((episode) => sameEpisode(episode, activeEpisode)),
     [allEpisodes, activeEpisode],
@@ -297,7 +296,12 @@ export function AnimeWatchExperience({
           onPlay={(episode) => playEpisode(episode, true)}
         />
       ) : (
-        <div className="watch-player-view" role="dialog" aria-modal="true" aria-label={`${media.title} player`}>
+        <div
+          className="watch-player-view"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${media.title} player`}
+        >
           <button
             ref={backButtonRef}
             type="button"
@@ -752,11 +756,12 @@ function plainText(value?: string): string | undefined {
     .replaceAll(/<[^>]+>/g, " ")
     .replaceAll(/\s+/g, " ")
     .trim();
-  return text || undefined;
+  const decoded = decodeHtmlEntities(text);
+  return decoded || undefined;
 }
 
 function formatLabel(value: string): string {
-  return value.replaceAll("_", " ").toLocaleLowerCase();
+  return formatMediaLabel(value, "Anime");
 }
 
 function messageFrom(value: unknown, fallback: string): string {

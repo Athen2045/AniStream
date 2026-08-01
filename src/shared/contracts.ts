@@ -224,6 +224,27 @@ export interface MangaEnrichment {
   totalChapters?: number;
   mangaUpdatesId?: string;
   mangaUpdatesRating?: number;
+  mangaUpdates?: MangaUpdatesEnrichment;
+  message?: string;
+  checkedAt: string;
+}
+
+export interface MangaUpdatesGroup {
+  id: number;
+  name: string;
+  url?: string;
+}
+
+export interface MangaUpdatesEnrichment {
+  status: "available" | "unavailable";
+  seriesId: number;
+  title?: string;
+  url?: string;
+  type?: string;
+  latestChapter?: number;
+  licensed?: boolean;
+  completed?: boolean;
+  groups: MangaUpdatesGroup[];
   message?: string;
   checkedAt: string;
 }

@@ -6,6 +6,7 @@ import type {
   AnimePlaybackResult,
   AnimeProviderEpisode,
 } from "../shared/contracts";
+import { cleanDisplayText } from "../shared/text";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
 
@@ -338,8 +339,8 @@ function positiveInteger(value: unknown): number | undefined {
 
 function cleanString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
-  const cleaned = value.replaceAll(/\s+/g, " ").trim();
-  return cleaned ? cleaned.slice(0, 500) : undefined;
+  const cleaned = cleanDisplayText(value);
+  return cleaned || undefined;
 }
 
 function safeHttpsUrl(value: unknown): string | undefined {

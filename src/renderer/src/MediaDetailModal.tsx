@@ -1,4 +1,4 @@
-import { BookOpen, Check, ExternalLink, Play, Plus, Star, X } from "lucide-react";
+import { BookOpen, Check, ExternalLink, Play, Plus, Star, UserRound, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -12,6 +12,8 @@ import type {
 } from "../../shared/contracts";
 import { CoverImage } from "./CoverImage";
 import { safeBackgroundUrl } from "./safe-css-url";
+import { formatMediaLabel } from "./format-label";
+import { decodeHtmlEntities } from "../../shared/text";
 
 const AnimeWatchExperience = lazy(() =>
   import("./AnimeWatchExperience").then((module) => ({
@@ -524,6 +526,22 @@ export function MediaDetailModal({
                         <dd>{mangaEnrichment.mangaUpdatesRating.toFixed(2)} / 10</dd>
                       </div>
                     ) : null}
+                    {mangaEnrichment.mangaUpdates?.latestChapter !== undefined ? (
+                      <div>
+                        <dt>MU latest chapter</dt>
+                        <dd>{mangaEnrichment.mangaUpdates.latestChapter}</dd>
+                      </div>
+                    ) : null}
+                    {mangaEnrichment.mangaUpdates?.groups.length ? (
+                      <div>
+                        <dt>Scanlation groups</dt>
+                        <dd>
+                          {mangaEnrichment.mangaUpdates.groups
+                            .map((group) => group.name)
+                            .join(", ")}
+                        </dd>
+                      </div>
+                    ) : null}
                   </>
                 ) : null}
                 <div>
@@ -572,17 +590,19 @@ export function MediaDetailModal({
             <section className="detail-section">
               <h3>Official links</h3>
               <div className="external-links">
-                {detail.externalLinks.slice(0, 8).map((link) => (
-                  <a
-                    key={`${link.site}-${link.url}`}
-                    href={link.url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {link.site}
-                    <ExternalLink size={13} />
-                  </a>
-                ))}
+                {distinctExternalLinks(detail.externalLinks)
+                  .slice(0, 8)
+                  .map((link) => (
+                    <a
+                      key={`${link.site}-${link.url}`}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {link.site}
+                      <ExternalLink size={13} />
+                    </a>
+                  ))}
               </div>
             </section>
           ) : null}
@@ -729,10 +749,12 @@ function DetailPeople({
       <div className="people-row">
         {people.map((person) => (
           <div key={`${title}-${person.id}-${person.role ?? ""}`}>
-            {person.imageUrl ? (
+            {person.imageUrl && !isAnilistPlaceholderImage(person.imageUrl) ? (
               <img src={person.imageUrl} alt="" loading="lazy" decoding="async" />
             ) : (
-              <span />
+              <span className="person-image-fallback" aria-hidden="true">
+                <UserRound size={22} />
+              </span>
             )}
             <strong>{person.name}</strong>
             <small>{formatLabel(person.role)}</small>
@@ -744,16 +766,39 @@ function DetailPeople({
 }
 
 function formatLabel(value?: string): string {
-  return value?.replaceAll("_", " ").toLocaleLowerCase() ?? "—";
+  return formatMediaLabel(value, "—");
 }
 
 function cleanDescription(value?: string): string {
   if (!value) return "AniList does not currently provide a summary for this title.";
-  return value
-    .replace(/<[^>]+>/g, " ")
-    .replace(/~!|!~/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return decodeHtmlEntities(
+    value
+      .replace(/<[^>]+>/g, " ")
+      .replace(/~!|!~/g, "")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+}
+
+function distinctExternalLinks(
+  links: AniListMediaDetail["externalLinks"],
+): AniListMediaDetail["externalLinks"] {
+  const seenSites = new Set<string>();
+  return links.filter((link) => {
+    const key = link.site.trim().toLocaleLowerCase();
+    if (seenSites.has(key)) return false;
+    seenSites.add(key);
+    return true;
+  });
+}
+
+function isAnilistPlaceholderImage(url: string): boolean {
+  const normalized = url.toLocaleLowerCase();
+  return (
+    normalized.includes("no_image") ||
+    normalized.includes("noimage") ||
+    normalized.includes("default")
+  );
 }
 
 function relativeDate(value?: string): string {
