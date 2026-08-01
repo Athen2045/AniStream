@@ -17,6 +17,8 @@ const [
   mediaDetail,
   mangaReader,
   database,
+  trackerDomain,
+  ipcValidation,
 ] = await Promise.all([
   readFile("src/main/index.ts", "utf8"),
   readFile("src/main/anilist/client.ts", "utf8"),
@@ -34,20 +36,19 @@ const [
   readFile("src/renderer/src/MediaDetailModal.tsx", "utf8"),
   readFile("src/renderer/src/MangaReaderFullscreen.tsx", "utf8"),
   readFile("src/main/database.ts", "utf8"),
+  readFile("src/main/domains/tracker.ts", "utf8"),
+  readFile("src/main/ipc-validation.ts", "utf8"),
 ]);
 const aniList = aniListClient + aniListQueries;
 
 for (const [name, source, fragments] of [
+  ["main process", main, ["const restorePromise = aniList.restore()", "registerTrustedIpcHandler"]],
   [
-    "main process",
-    main,
-    [
-      "const restorePromise = aniList.restore()",
-      "registerTrustedIpcHandler",
-      '"anilist:browse"',
-      '"anilist:media-detail"',
-    ],
+    "tracker IPC domain",
+    trackerDomain,
+    ["registerTrustedIpcHandler", '"anilist:browse"', '"anilist:media-detail"'],
   ],
+  ["IPC argument validation", ipcValidation, ['"anilist:browse"', '"anilist:media-detail"']],
   [
     "AniList client",
     aniList,
