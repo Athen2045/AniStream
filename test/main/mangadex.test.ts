@@ -232,7 +232,9 @@ describe("MangaDex normalization", () => {
     };
     const client = new MangaDexClient("en", fetcher as typeof fetch);
 
-    const [availability] = await client.getAvailability([{ aniListId: 700, title: "Another Manga" }]);
+    const [availability] = await client.getAvailability([
+      { aniListId: 700, title: "Another Manga" },
+    ]);
 
     expect(availability).toMatchObject({ status: "available", latestChapter: 3 });
     expect(requestedUrls[1]).not.toContain("translatedLanguage");

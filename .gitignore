@@ -9,3 +9,13 @@ coverage/
 *.sqlite-shm
 *.sqlite-wal
 *.tsbuildinfo
+
+# Local coding-agent working notes: verified-state/decision logs, external-integration
+# notes, agent operating instructions, provider research/audits, and CI specs written
+# for AI consumption. Kept on disk for agent context, not published in the repository.
+/CONTEXT.md
+/API.md
+/AGENTS.md
+/docs/research/
+/docs/superpowers/
+/spec/

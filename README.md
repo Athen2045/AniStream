@@ -97,16 +97,18 @@ The current checkout is local and may not yet have a Git remote. Replace the clo
 ```text
 AniStream/
 ├── assets/app-icon/    Source artwork used for the macOS application icon
-├── docs/research/       Phase 0 provider and UX research
 ├── src/main/            Trusted Electron process, persistence, network adapters, IPC
+│   └── domains/          Per-domain IPC registration (tracker/anime/manga/resume)
 ├── src/preload/         Narrow, typed bridge exposed to the renderer
 ├── src/renderer/        React user interface
 ├── src/shared/          Contracts safe to share across process seams
-├── API.md               External integration contracts and degraded behavior
-├── AGENTS.md            Operating instructions for coding agents
-├── CONTEXT.md           Current verified state, open decisions, and next work
 └── electron.vite.config.ts
 ```
+
+`API.md` (external integration contracts), `AGENTS.md` (agent operating instructions), `CONTEXT.md`
+(verified state/decision log), `docs/research/` (provider research), `docs/superpowers/`, and
+`spec/` are local coding-agent working notes, not published product docs. They're gitignored and
+stay on disk for local/agent context but aren't part of the tracked repository.
 
 ## Environment variables
 
@@ -138,5 +140,7 @@ Durable AniList login, profile/list management, unified Anime/Manga browse and s
 Continue/Trending carousels, static 21-title Latest Updates grids, Anikoto episode catalogs, the
 fullscreen MegaPlay player flow, local playback progress, MangaDex chapter/page reading, MangaBaka
 enrichment, fullscreen long-strip reading, local chapter/scroll resume, rich title details,
-pagination, the typed Electron bridge, SQLite persistence, and the production build are
-implemented. For current verified runtime status and next steps, see [CONTEXT.md](CONTEXT.md).
+pagination, the origin- and argument-validated Electron IPC bridge (split into
+`src/main/domains/{tracker,anime,manga,resume}.ts`, with `src/main/index.ts` as the composition
+root), SQLite persistence, and the production build are implemented. `CONTEXT.md` (gitignored,
+present in a local checkout) carries the current verified runtime status and next steps.

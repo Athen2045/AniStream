@@ -5,9 +5,16 @@ import type {
   IpcInvokeChannel,
   IpcInvokeResult,
 } from "../shared/ipc";
+import { ipcArgValidators } from "./ipc-validation";
 
 type MaybePromise<T> = T | Promise<T>;
 
+/**
+ * Registers a handler behind two checks a raw `ipcMain.handle` gives up for
+ * free: the sender-frame origin check below, and per-channel argument
+ * validation (see ./ipc-validation) that replaces a blind `unknown[]` cast
+ * with a real runtime shape check. Every domain module goes through this.
+ */
 export function registerTrustedIpcHandler<Channel extends IpcInvokeChannel>(
   trustedRendererOrigin: string,
   channel: Channel,
@@ -18,7 +25,8 @@ export function registerTrustedIpcHandler<Channel extends IpcInvokeChannel>(
 ): void {
   ipcMain.handle(channel, (event, ...args: unknown[]) => {
     assertTrustedIpcSender(event, trustedRendererOrigin);
-    return handler(event, ...(args as IpcInvokeArgs<Channel>));
+    const validatedArgs = ipcArgValidators[channel](args) as IpcInvokeArgs<Channel>;
+    return handler(event, ...validatedArgs);
   });
 }
 
