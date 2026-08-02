@@ -1,17 +1,12 @@
 import { BookOpen, ExternalLink, Info, Play, Plus } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   AniListCatalogMedia,
-  AniListCatalogPage,
   AniListDashboard,
   AniListEntry,
   AniListMediaType,
-  AniListPageInfo,
-  LatestAnimeUpdate,
   LatestMangaUpdate,
-  MalRankingItem,
-  MangaDexChapterAvailability,
 } from "../../shared/contracts";
 import { ContentCarousel } from "./ContentCarousel";
 import { Pagination } from "./Pagination";
@@ -19,9 +14,7 @@ import { RailHoverActions } from "./RailHoverActions";
 import { safeBackgroundUrl } from "./safe-css-url";
 import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
-
-const TRENDING_LIMIT = 20;
-const AVAILABILITY_REFRESH_INTERVAL_MS = 30 * 60_000;
+import { useCatalogData } from "./useCatalogData";
 
 export function CatalogView({
   type,
@@ -43,147 +36,6 @@ export function CatalogView({
   onQuickRemove: (entry: AniListEntry) => Promise<void>;
 }): React.JSX.Element {
   const reducedMotion = useReducedMotion();
-  const [page, setPage] = useState(1);
-  const [latestPage, setLatestPage] = useState(1);
-  const [searchResults, setSearchResults] = useState<AniListCatalogPage>();
-  // Cached per media type (not reset on Anime<->Manga switch) so returning to a type
-  // already fetched this session shows its hero/rail instantly instead of a fresh
-  // loading flash -- switching type used to force a full refetch every time.
-  const [trendingByType, setTrendingByType] = useState<
-    Partial<Record<AniListMediaType, AniListCatalogMedia[]>>
-  >({});
-  const [malFallbackByType, setMalFallbackByType] = useState<
-    Partial<Record<AniListMediaType, MalRankingItem[]>>
-  >({});
-  const [trendingLoadingByType, setTrendingLoadingByType] = useState<
-    Partial<Record<AniListMediaType, boolean>>
-  >({});
-  const trendingFetchStarted = useRef<Set<AniListMediaType>>(new Set());
-  const trending = trendingByType[type] ?? [];
-  const malTrendingFallback = malFallbackByType[type] ?? [];
-  const trendingLoading = trendingLoadingByType[type] ?? true;
-  const [latestAnime, setLatestAnime] = useState<LatestAnimeUpdate[]>([]);
-  const [latestManga, setLatestManga] = useState<LatestMangaUpdate[]>([]);
-  const [latestPageInfo, setLatestPageInfo] = useState<AniListPageInfo>();
-  const [latestLoading, setLatestLoading] = useState(true);
-  const [latestError, setLatestError] = useState<string>();
-  const [mangaAvailability, setMangaAvailability] = useState<
-    Map<number, MangaDexChapterAvailability>
-  >(new Map());
-  const [availabilityNow, setAvailabilityNow] = useState<number>();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>();
-
-  // Reset to page 1 whenever the browse identity changes. Adjusting state directly
-  // during render (rather than in an effect) avoids an extra committed render pass --
-  // see https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
-  const [resetKey, setResetKey] = useState({ type, searchQuery });
-  if (resetKey.type !== type || resetKey.searchQuery !== searchQuery) {
-    setResetKey({ type, searchQuery });
-    setPage(1);
-    setLatestPage(1);
-    setSearchResults(undefined);
-    setLoading(true);
-    setError(undefined);
-    setLatestLoading(true);
-    setLatestError(undefined);
-  }
-
-  // Search results keep the paginated grid; the default view is rails-only.
-  useEffect(() => {
-    if (!searchQuery) return;
-    let active = true;
-    void window.anistream
-      .browseAniList({ type, page, perPage: 24, query: searchQuery, sort: "POPULARITY_DESC" })
-      .then((result) => {
-        if (active) setSearchResults(result);
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "AniList search failed.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [page, searchQuery, type]);
-
-  useEffect(() => {
-    if (searchQuery) return;
-    if (trendingFetchStarted.current.has(type)) return;
-    trendingFetchStarted.current.add(type);
-    let active = true;
-    setTrendingLoadingByType((state) => ({ ...state, [type]: true }));
-    void window.anistream
-      .browseAniList({
-        type,
-        page: 1,
-        perPage: TRENDING_LIMIT,
-        sort: "TRENDING_DESC",
-      })
-      .then((result) => {
-        if (!active) return;
-        setTrendingByType((state) => ({
-          ...state,
-          [type]: result.items.slice(0, TRENDING_LIMIT),
-        }));
-      })
-      .catch((reason: unknown) => {
-        if (!active) return;
-        setError(reason instanceof Error ? reason.message : "AniList browse failed.");
-        setTrendingByType((state) => ({ ...state, [type]: [] }));
-        // AniList is down: fall back to the MyAnimeList ranking so Trending still
-        // renders. Cards link out to MAL because there is no AniList ID to open.
-        void window.anistream
-          .getMalTrendingFallback(type)
-          .then((ranking) => {
-            if (active) setMalFallbackByType((state) => ({ ...state, [type]: ranking }));
-          })
-          .catch(() => {
-            // Fallback is best-effort; the AniList error banner already explains the outage.
-          });
-      })
-      .finally(() => {
-        if (active) setTrendingLoadingByType((state) => ({ ...state, [type]: false }));
-      });
-    return () => {
-      active = false;
-    };
-  }, [searchQuery, type]);
-
-  useEffect(() => {
-    if (searchQuery) return;
-    let active = true;
-    const request =
-      type === "ANIME"
-        ? window.anistream.getLatestAnimeUpdates(latestPage)
-        : window.anistream.getLatestMangaUpdates(latestPage);
-    void request
-      .then((result) => {
-        if (!active) return;
-        setLatestPageInfo(result.pageInfo);
-        if (type === "ANIME") {
-          setLatestAnime(result.items as LatestAnimeUpdate[]);
-        } else {
-          setLatestManga(result.items as LatestMangaUpdate[]);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (active) {
-          setLatestError(
-            reason instanceof Error ? reason.message : `Latest ${type.toLowerCase()} failed.`,
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setLatestLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [latestPage, searchQuery, type]);
-
   const continueCandidates = useMemo(() => {
     const groups = type === "ANIME" ? dashboard?.animeLists : dashboard?.mangaLists;
     return (groups ?? [])
@@ -192,6 +44,38 @@ export function CatalogView({
       .sort((left, right) => right.updatedAt - left.updatedAt)
       .slice(0, 24);
   }, [dashboard, type]);
+  const availabilityMedia = useMemo(
+    () =>
+      continueCandidates.map((entry) => ({
+        aniListId: entry.media.id,
+        title: entry.media.title,
+      })),
+    [continueCandidates],
+  );
+  const {
+    page,
+    latestPage,
+    searchResults,
+    trending,
+    malTrendingFallback,
+    trendingLoading,
+    latestAnime,
+    latestManga,
+    latestPageInfo,
+    latestLoading,
+    latestError,
+    mangaAvailability,
+    availabilityNow,
+    loading,
+    error,
+    setSearchPage,
+    setLatestPage,
+  } = useCatalogData({
+    type,
+    searchQuery,
+    availabilityMedia,
+    trackAvailabilityNow: Boolean(dashboard && !searchQuery),
+  });
   const continueEntries = useMemo(
     () =>
       continueCandidates.filter((entry) =>
@@ -203,45 +87,6 @@ export function CatalogView({
       ),
     [availabilityNow, continueCandidates, mangaAvailability],
   );
-
-  useEffect(() => {
-    if (!dashboard || searchQuery) return;
-    const timer = window.setInterval(() => setAvailabilityNow(Date.now()), 5 * 60_000);
-    return () => window.clearInterval(timer);
-  }, [dashboard, searchQuery]);
-
-  useEffect(() => {
-    if (type !== "MANGA" || continueCandidates.length === 0) return;
-    let active = true;
-    const refreshAvailability = (): void => {
-      void window.anistream
-        .getMangaDexAvailability(
-          continueCandidates.map((entry) => ({
-            aniListId: entry.media.id,
-            title: entry.media.title,
-          })),
-        )
-        .then((availability) => {
-          if (active) {
-            setMangaAvailability(new Map(availability.map((item) => [item.aniListId, item])));
-          }
-        })
-        .catch(() => {
-          // Availability enrichment is optional; AniList progress remains visible on provider failure.
-        });
-    };
-    refreshAvailability();
-    const refreshWhenVisible = (): void => {
-      if (document.visibilityState === "visible") refreshAvailability();
-    };
-    const timer = window.setInterval(refreshWhenVisible, AVAILABILITY_REFRESH_INTERVAL_MS);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [continueCandidates, type]);
 
   const hero = searchQuery ? searchResults?.items[0] : trending[0];
   const mediaName = type === "ANIME" ? "anime" : "manga";
@@ -365,9 +210,7 @@ export function CatalogView({
                 totalPages={searchResults.pageInfo.lastPage}
                 hasNextPage={searchResults.pageInfo.hasNextPage}
                 onPageChange={(nextPage) => {
-                  setLoading(true);
-                  setError(undefined);
-                  setPage(nextPage);
+                  setSearchPage(nextPage);
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
               />
@@ -522,11 +365,7 @@ export function CatalogView({
                     page={latestPage}
                     totalPages={latestPageInfo.lastPage}
                     hasNextPage={latestPageInfo.hasNextPage}
-                    onPageChange={(nextPage) => {
-                      setLatestLoading(true);
-                      setLatestError(undefined);
-                      setLatestPage(nextPage);
-                    }}
+                    onPageChange={setLatestPage}
                   />
                 ) : null}
               </section>
@@ -585,11 +424,7 @@ export function CatalogView({
                     page={latestPage}
                     totalPages={latestPageInfo.lastPage}
                     hasNextPage={latestPageInfo.hasNextPage}
-                    onPageChange={(nextPage) => {
-                      setLatestLoading(true);
-                      setLatestError(undefined);
-                      setLatestPage(nextPage);
-                    }}
+                    onPageChange={setLatestPage}
                   />
                 ) : null}
               </section>

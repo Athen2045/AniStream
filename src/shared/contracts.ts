@@ -229,6 +229,23 @@ export interface MangaEnrichment {
   checkedAt: string;
 }
 
+export type MangaTitleIssueSource =
+  "mangabaka" | "mangaupdates-series" | "mangaupdates-groups" | "mangadex-reader" | "resume";
+
+export interface MangaTitleIssue {
+  source: MangaTitleIssueSource;
+  message: string;
+}
+
+/** One main-process-owned snapshot for the manga detail surface. Page bytes stay a separate seam. */
+export interface MangaTitleSnapshot {
+  aniListId: number;
+  enrichment?: MangaEnrichment;
+  reader?: MangaDexReaderSession;
+  resume?: MangaReadingResume;
+  issues: MangaTitleIssue[];
+}
+
 export interface MangaUpdatesGroup {
   id: number;
   name: string;
@@ -394,6 +411,7 @@ export interface AniStreamBridge {
   getAppInfo(): Promise<AppInfo>;
   getAniListAuthState(): Promise<AniListAuthState>;
   startAniListLogin(): Promise<void>;
+  cancelAniListLogin(): Promise<void>;
   logoutAniList(): Promise<void>;
   getCachedAniListDashboard(): Promise<AniListDashboard | undefined>;
   getAniListDashboard(): Promise<AniListDashboard>;
@@ -411,9 +429,9 @@ export interface AniStreamBridge {
   getMangaDexAvailability(
     media: MangaDexAvailabilityInput[],
   ): Promise<MangaDexChapterAvailability[]>;
-  getMangaDexReader(input: MangaDexReaderInput): Promise<MangaDexReaderSession>;
+  getMangaTitleSnapshot(input: MangaDexReaderInput, requestId: string): Promise<MangaTitleSnapshot>;
+  cancelRequest(requestId: string): Promise<void>;
   getMangaDexPage(input: MangaDexPageInput): Promise<MangaDexReaderPage>;
-  getMangaEnrichment(aniListId: number): Promise<MangaEnrichment>;
   getAnimePlayback(input: AnimePlaybackInput): Promise<AnimePlaybackResult>;
   getPlaybackResume(aniListId: number): Promise<PlaybackResume | undefined>;
   savePlaybackResume(input: SavePlaybackResumeInput): Promise<void>;

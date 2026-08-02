@@ -131,4 +131,24 @@ describe("createRequestGate", () => {
       vi.useRealTimers();
     }
   });
+
+  it("cancels queued work before it consumes a provider slot", async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createRequestGate({ requestsPerMinute: 25 });
+      const controller = new AbortController();
+      const fn = vi.fn(async () => "unexpected");
+      gate.reportRateLimited(10_000);
+
+      const run = gate.run(undefined, fn, controller.signal);
+      const assertion = expect(run).rejects.toMatchObject({ name: "AbortError" });
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(0);
+
+      await assertion;
+      expect(fn).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

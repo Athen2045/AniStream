@@ -22,8 +22,7 @@ import type {
   MangaDexPageInput,
   MangaDexReaderInput,
   MangaDexReaderPage,
-  MangaDexReaderSession,
-  MangaEnrichment,
+  MangaTitleSnapshot,
   MangaReadingResume,
   PlaybackResume,
   SaveMangaReadingResumeInput,
@@ -40,7 +39,9 @@ export interface IpcInvokeChannelMap {
   "app:get-info": { args: []; result: AppInfo };
   "anilist:auth-state": { args: []; result: AniListAuthState };
   "anilist:login": { args: []; result: void };
+  "anilist:cancel-login": { args: []; result: void };
   "anilist:logout": { args: []; result: void };
+  "request:cancel": { args: [requestId: string]; result: void };
   "anilist:cached-dashboard": { args: []; result: AniListDashboard | undefined };
   "anilist:dashboard": { args: []; result: AniListDashboard };
   "anilist:search": { args: [query: string, type: AniListMediaType]; result: AniListMedia[] };
@@ -80,12 +81,11 @@ export interface IpcInvokeChannelMap {
     args: [media: MangaDexAvailabilityInput[]];
     result: MangaDexChapterAvailability[];
   };
-  "mangadex:reader": {
-    args: [input: MangaDexReaderInput];
-    result: MangaDexReaderSession;
+  "manga:title-snapshot": {
+    args: [input: MangaDexReaderInput, requestId: string];
+    result: MangaTitleSnapshot;
   };
   "mangadex:page": { args: [input: MangaDexPageInput]; result: MangaDexReaderPage };
-  "manga:enrichment": { args: [aniListId: number]; result: MangaEnrichment };
   "playback:resume": { args: [aniListId: number]; result: PlaybackResume | undefined };
   "playback:save-resume": { args: [input: SavePlaybackResumeInput]; result: void };
   "playback:clear-resume": { args: [aniListId: number]; result: void };

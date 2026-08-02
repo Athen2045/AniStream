@@ -12,6 +12,10 @@ import type {
   SavePlaybackResumeInput,
   UpdateAniListEntryInput,
 } from "../shared/contracts";
+import {
+  isValidMangaReadingResumeInput,
+  isValidPlaybackResumeInput,
+} from "../shared/resume-validation";
 
 export type IpcArgValidator<Channel extends IpcInvokeChannel> = (
   args: unknown[],
@@ -42,6 +46,12 @@ function asRecord(value: unknown): Record<string, unknown> {
 function asString(value: unknown): string {
   if (typeof value !== "string") fail();
   return value;
+}
+
+function asRequestId(value: unknown): string {
+  const requestId = asString(value);
+  if (!/^[A-Za-z0-9:-]{1,128}$/.test(requestId)) fail();
+  return requestId;
 }
 
 function asOptionalString(value: unknown): string | undefined {
@@ -195,22 +205,26 @@ function mangaDexPageInput(value: unknown): MangaDexPageInput {
 
 function savePlaybackResumeInput(value: unknown): SavePlaybackResumeInput {
   const input = asRecord(value);
-  return {
+  const parsed: SavePlaybackResumeInput = {
     aniListId: asPositiveInt(input.aniListId),
     episode: asNonNegativeNumber(input.episode),
     positionSeconds: asNonNegativeNumber(input.positionSeconds),
     durationSeconds: asNonNegativeNumber(input.durationSeconds),
   };
+  if (!isValidPlaybackResumeInput(parsed)) fail();
+  return parsed;
 }
 
 function saveMangaReadingResumeInput(value: unknown): SaveMangaReadingResumeInput {
   const input = asRecord(value);
-  return {
+  const parsed: SaveMangaReadingResumeInput = {
     aniListId: asPositiveInt(input.aniListId),
     chapterId: asString(input.chapterId),
     chapterNumber: asOptionalNonNegativeNumber(input.chapterNumber),
-    progress: asNonNegativeInt(input.progress),
+    progress: asNonNegativeNumber(input.progress),
   };
+  if (!isValidMangaReadingResumeInput(parsed)) fail();
+  return parsed;
 }
 
 function noArgs(value: unknown[]): [] {
@@ -222,7 +236,12 @@ export const ipcArgValidators: IpcArgValidatorMap = {
   "app:get-info": noArgs,
   "anilist:auth-state": noArgs,
   "anilist:login": noArgs,
+  "anilist:cancel-login": noArgs,
   "anilist:logout": noArgs,
+  "request:cancel": (value) => {
+    const [requestId] = argsOfLength(value, 1);
+    return [asRequestId(requestId)];
+  },
   "anilist:cached-dashboard": noArgs,
   "anilist:dashboard": noArgs,
   "anilist:search": (value) => {
@@ -277,17 +296,13 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     const [media] = argsOfLength(value, 1);
     return [mangaDexAvailabilityInput(media)];
   },
-  "mangadex:reader": (value) => {
-    const [input] = argsOfLength(value, 1);
-    return [mangaDexReaderInput(input)];
+  "manga:title-snapshot": (value) => {
+    const [input, requestId] = argsOfLength(value, 2);
+    return [mangaDexReaderInput(input), asRequestId(requestId)];
   },
   "mangadex:page": (value) => {
     const [input] = argsOfLength(value, 1);
     return [mangaDexPageInput(input)];
-  },
-  "manga:enrichment": (value) => {
-    const [aniListId] = argsOfLength(value, 1);
-    return [asPositiveInt(aniListId)];
   },
   "playback:resume": (value) => {
     const [aniListId] = argsOfLength(value, 1);

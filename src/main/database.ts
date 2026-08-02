@@ -6,6 +6,10 @@ import type {
   SaveMangaReadingResumeInput,
   SavePlaybackResumeInput,
 } from "../shared/contracts";
+import {
+  isValidMangaReadingResumeInput,
+  isValidPlaybackResumeInput,
+} from "../shared/resume-validation";
 
 export interface AppDatabase {
   readonly ready: boolean;
@@ -158,7 +162,7 @@ export function openAppDatabase(path: string): AppDatabase {
         : undefined;
     },
     savePlaybackResume: (input) => {
-      if (!isValidPlaybackResume(input)) throw new Error("Invalid playback resume state.");
+      if (!isValidPlaybackResumeInput(input)) throw new Error("Invalid playback resume state.");
       writePlaybackResume.run({ ...input, updatedAt: new Date().toISOString() });
     },
     clearPlaybackResume: (aniListId) => {
@@ -181,7 +185,7 @@ export function openAppDatabase(path: string): AppDatabase {
         : undefined;
     },
     saveMangaReadingResume: (input) => {
-      if (!isValidMangaReadingResume(input)) {
+      if (!isValidMangaReadingResumeInput(input)) {
         throw new Error("Invalid manga reading resume state.");
       }
       writeMangaReadingResume.run({
@@ -215,33 +219,6 @@ interface MangaReadingResumeRow {
   chapter_number: number | null;
   progress: number;
   updated_at: string;
-}
-
-function isValidPlaybackResume(input: SavePlaybackResumeInput): boolean {
-  return (
-    Number.isInteger(input.aniListId) &&
-    input.aniListId > 0 &&
-    Number.isInteger(input.episode) &&
-    input.episode > 0 &&
-    Number.isFinite(input.positionSeconds) &&
-    input.positionSeconds >= 0 &&
-    Number.isFinite(input.durationSeconds) &&
-    input.durationSeconds >= 0 &&
-    input.positionSeconds <= Math.max(input.durationSeconds + 30, 30)
-  );
-}
-
-function isValidMangaReadingResume(input: SaveMangaReadingResumeInput): boolean {
-  return (
-    Number.isInteger(input.aniListId) &&
-    input.aniListId > 0 &&
-    /^[A-Za-z0-9_-]{1,160}$/.test(input.chapterId) &&
-    (input.chapterNumber === undefined ||
-      (Number.isFinite(input.chapterNumber) && input.chapterNumber >= 0)) &&
-    Number.isFinite(input.progress) &&
-    input.progress >= 0 &&
-    input.progress <= 1
-  );
 }
 
 function validateAniListId(aniListId: number): void {

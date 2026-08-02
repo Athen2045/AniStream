@@ -19,6 +19,7 @@ const [
   database,
   trackerDomain,
   ipcValidation,
+  catalogData,
 ] = await Promise.all([
   readFile("src/main/index.ts", "utf8"),
   readFile("src/main/anilist/client.ts", "utf8"),
@@ -38,8 +39,10 @@ const [
   readFile("src/main/database.ts", "utf8"),
   readFile("src/main/domains/tracker.ts", "utf8"),
   readFile("src/main/ipc-validation.ts", "utf8"),
+  readFile("src/renderer/src/catalog-data.ts", "utf8"),
 ]);
 const aniList = aniListClient + aniListQueries;
+const catalogSurface = catalog + catalogData;
 
 for (const [name, source, fragments] of [
   ["main process", main, ["const restorePromise = aniList.restore()", "registerTrustedIpcHandler"]],
@@ -77,7 +80,7 @@ for (const [name, source, fragments] of [
   ],
   [
     "catalog surfaces",
-    catalog,
+    catalogSurface,
     [
       "ContentCarousel",
       "Trending {mediaName}",

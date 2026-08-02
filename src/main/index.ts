@@ -6,6 +6,7 @@ import { MalClient } from "./mal";
 import { MangaDexClient } from "./mangadex";
 import { MangaBakaClient } from "./mangabaka";
 import { MangaUpdatesClient } from "./mangaupdates";
+import { MangaTitleModule } from "./manga-title";
 import { loadEnvironmentFile } from "./config";
 import { openAppDatabase, type AppDatabase } from "./database";
 import { startRendererServer, type RendererServer } from "./renderer-server";
@@ -15,6 +16,7 @@ import { registerAnimeDomain } from "./domains/anime";
 import { registerMangaDomain } from "./domains/manga";
 import { registerResumeDomain } from "./domains/resume";
 import type { AniListAuthState, AppInfo } from "../shared/contracts";
+import { ProtocolCallbackRouter } from "./protocol-callback-router";
 
 let database: AppDatabase | undefined;
 let mainWindow: BrowserWindow | undefined;
@@ -24,8 +26,9 @@ let mangaDex: MangaDexClient | undefined;
 let mal: MalClient | undefined;
 let mangaBaka: MangaBakaClient | undefined;
 let mangaUpdates: MangaUpdatesClient | undefined;
+let mangaTitle: MangaTitleModule | undefined;
 let rendererServer: RendererServer | undefined;
-let pendingProtocolUrl: string | undefined;
+const protocolCallbacks = new ProtocolCallbackRouter();
 
 function createWindow(rendererUrl: string): void {
   mainWindow = new BrowserWindow({
@@ -37,7 +40,7 @@ function createWindow(rendererUrl: string): void {
     minHeight: 640,
     show: false,
     titleBarStyle: "hiddenInset",
-    backgroundColor: "#090b10",
+    backgroundColor: "#080811",
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
@@ -77,10 +80,7 @@ function emitAniListState(state: AniListAuthState): void {
 }
 
 async function handleProtocolUrl(url: string): Promise<void> {
-  if (!aniList) {
-    pendingProtocolUrl = url;
-    return;
-  }
+  if (!aniList) return;
 
   await aniList.handleCallback(url);
   if (mainWindow) {
@@ -92,7 +92,7 @@ async function handleProtocolUrl(url: string): Promise<void> {
 
 app.on("open-url", (event, url) => {
   event.preventDefault();
-  void handleProtocolUrl(url);
+  protocolCallbacks.route(url);
 });
 
 app.whenReady().then(async () => {
@@ -112,6 +112,7 @@ app.whenReady().then(async () => {
     join(app.getPath("userData"), "anilist-session.bin"),
     emitAniListState,
   );
+  protocolCallbacks.attach(handleProtocolUrl);
   // Session restoration can include a one-time profile refresh for older session
   // files. Start it immediately, but do not hold the first BrowserWindow paint
   // behind that network request.
@@ -133,6 +134,12 @@ app.whenReady().then(async () => {
   // in parallel with the remaining synchronous setup here.
   createWindow(rendererUrl);
   database = await databasePromise;
+  mangaTitle = new MangaTitleModule({
+    mangaBaka,
+    mangaUpdates,
+    mangaDex,
+    resume: database,
+  });
 
   registerTrustedIpcHandler(trustedRendererOrigin, "app:get-info", (): AppInfo => ({
     version: app.getVersion(),
@@ -143,15 +150,9 @@ app.whenReady().then(async () => {
 
   registerTrackerDomain(trustedRendererOrigin, { aniList, database, authRestored: restorePromise });
   registerAnimeDomain(trustedRendererOrigin, { anikoto, mal });
-  registerMangaDomain(trustedRendererOrigin, { mangaDex, mangaBaka, mangaUpdates, aniList, mal });
+  registerMangaDomain(trustedRendererOrigin, { mangaDex, mangaTitle, aniList, mal });
   registerResumeDomain(trustedRendererOrigin, { database });
   void restorePromise.then(emitAniListState);
-
-  if (pendingProtocolUrl) {
-    const callbackUrl = pendingProtocolUrl;
-    pendingProtocolUrl = undefined;
-    void handleProtocolUrl(callbackUrl);
-  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(rendererUrl);

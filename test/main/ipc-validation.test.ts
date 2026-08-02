@@ -86,4 +86,32 @@ describe("IPC argument validation", () => {
       ipcArgValidators["mangadex:page"]([{ chapterId: "abc", page: 0, quality: "high" }]),
     ).toThrow(/malformed/);
   });
+
+  it("accepts fractional manga scroll checkpoints and rejects out-of-range progress", () => {
+    expect(
+      ipcArgValidators["manga:save-reading-resume"]([
+        { aniListId: 30_013, chapterId: "chapter_1188", chapterNumber: 1188, progress: 0.42 },
+      ]),
+    ).toEqual([
+      { aniListId: 30_013, chapterId: "chapter_1188", chapterNumber: 1188, progress: 0.42 },
+    ]);
+    expect(() =>
+      ipcArgValidators["manga:save-reading-resume"]([
+        { aniListId: 30_013, chapterId: "chapter_1188", progress: 1.01 },
+      ]),
+    ).toThrow(/malformed/);
+  });
+
+  it("rejects playback checkpoints that violate persistence invariants", () => {
+    expect(() =>
+      ipcArgValidators["playback:save-resume"]([
+        { aniListId: 1, episode: 0, positionSeconds: 0, durationSeconds: 24 },
+      ]),
+    ).toThrow(/malformed/);
+    expect(() =>
+      ipcArgValidators["playback:save-resume"]([
+        { aniListId: 1, episode: 1, positionSeconds: 120, durationSeconds: 24 },
+      ]),
+    ).toThrow(/malformed/);
+  });
 });

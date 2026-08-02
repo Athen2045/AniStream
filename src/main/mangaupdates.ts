@@ -1,6 +1,7 @@
 import type { MangaUpdatesEnrichment, MangaUpdatesGroup } from "../shared/contracts";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
+import { ProviderTransport } from "./provider-transport";
 
 const BASE_URL = "https://api.mangaupdates.com/v1/";
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -17,46 +18,75 @@ export class MangaUpdatesClient {
     maxEntries: 150,
     ttlMs: CACHE_TTL_MS,
   });
+  private readonly groupCache = createBoundedCache<MangaUpdatesGroup[]>({
+    maxEntries: 150,
+    ttlMs: CACHE_TTL_MS,
+  });
+  private readonly transport: ProviderTransport;
 
-  public constructor(private readonly fetcher: Fetcher = fetch) {}
+  public constructor(private readonly fetcher: Fetcher = fetch) {
+    this.transport = new ProviderTransport({
+      gate: this.requestGate,
+      fetcher: this.fetcher,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+      },
+    });
+  }
 
-  public async getSeries(seriesId: number): Promise<MangaUpdatesEnrichment> {
+  public async getSeries(seriesId: number, signal?: AbortSignal): Promise<MangaUpdatesEnrichment> {
     validateSeriesId(seriesId);
     const cacheKey = String(seriesId);
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
-    const value = await this.requestGate.run(cacheKey, async () => {
-      const response = await this.fetcher(
-        new URL(`series/${seriesId}`, BASE_URL),
-        requestOptions(),
-      );
-      if (response.status === 404)
-        return unavailable(seriesId, "MangaUpdates series was not found.");
-      this.handleProviderStatus(response.status, "MangaUpdates");
-      if (!response.ok) throw new Error(`MangaUpdates request failed (${response.status}).`);
-      return parseMangaUpdatesSeries(await response.json(), seriesId);
-    });
+    const value = await this.transport.requestParsed(
+      new URL(`series/${seriesId}`, BASE_URL),
+      {
+        dedupeKey: cacheKey,
+        signal,
+        onResponse: (response, gate) =>
+          this.handleProviderStatus(response.status, "MangaUpdates", gate),
+      },
+      async (response) => {
+        if (response.status === 404)
+          return unavailable(seriesId, "MangaUpdates series was not found.");
+        if (!response.ok) throw new Error(`MangaUpdates request failed (${response.status}).`);
+        return parseMangaUpdatesSeries(await response.json(), seriesId);
+      },
+    );
     this.cache.set(cacheKey, value);
     return value;
   }
 
-  public async getGroups(seriesId: number): Promise<MangaUpdatesGroup[]> {
+  public async getGroups(seriesId: number, signal?: AbortSignal): Promise<MangaUpdatesGroup[]> {
     validateSeriesId(seriesId);
-    return this.requestGate.run(`groups:${seriesId}`, async () => {
-      const response = await this.fetcher(
-        new URL(`series/${seriesId}/groups`, BASE_URL),
-        requestOptions(),
-      );
-      if (response.status === 404) return [];
-      this.handleProviderStatus(response.status, "MangaUpdates groups");
-      if (!response.ok) throw new Error(`MangaUpdates groups request failed (${response.status}).`);
-      return parseMangaUpdatesGroups(await response.json());
-    });
+    const cacheKey = `groups:${seriesId}`;
+    const cached = this.groupCache.get(cacheKey);
+    if (cached) return cached;
+    const groups = await this.transport.requestParsed(
+      new URL(`series/${seriesId}/groups`, BASE_URL),
+      {
+        dedupeKey: cacheKey,
+        signal,
+        onResponse: (response, gate) =>
+          this.handleProviderStatus(response.status, "MangaUpdates groups", gate),
+      },
+      async (response) => {
+        if (response.status === 404) return [];
+        if (!response.ok)
+          throw new Error(`MangaUpdates groups request failed (${response.status}).`);
+        return parseMangaUpdatesGroups(await response.json());
+      },
+    );
+    this.groupCache.set(cacheKey, groups);
+    return groups;
   }
 
-  private handleProviderStatus(status: number, provider: string): void {
+  private handleProviderStatus(status: number, provider: string, gate: RequestGate): void {
     if (status === 429 || status === 403 || status === 503) {
-      this.requestGate.reportRateLimited(5 * 60_000);
+      gate.reportRateLimited(5 * 60_000);
       throw new Error(`${provider} temporarily refused requests (${status}).`);
     }
   }
@@ -99,16 +129,6 @@ export function parseMangaUpdatesGroups(payload: unknown): MangaUpdatesGroup[] {
       return [{ id, name, url: readHttpsUrl(item.url) }];
     })
     .slice(0, 50);
-}
-
-function requestOptions(): RequestInit {
-  return {
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "AniStream/0.1.0 (personal macOS app)",
-    },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  };
 }
 
 function validateSeriesId(seriesId: number): void {

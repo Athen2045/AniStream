@@ -183,6 +183,15 @@ export function App(): React.JSX.Element {
     }
   }
 
+  async function cancelConnect(): Promise<void> {
+    setError(undefined);
+    try {
+      await window.anistream.cancelAniListLogin();
+    } catch (reason) {
+      setError(messageFrom(reason, "Unable to cancel AniList sign-in."));
+    }
+  }
+
   async function saveEntry(input: UpdateAniListEntryInput): Promise<void> {
     setError(undefined);
     await window.anistream.updateAniListEntry(input);
@@ -246,6 +255,11 @@ export function App(): React.JSX.Element {
           >
             {auth.status === "authorizing" ? "Finish in your browser…" : "Continue with AniList"}
           </button>
+          {auth.status === "authorizing" ? (
+            <button className="secondary-button" type="button" onClick={() => void cancelConnect()}>
+              Cancel sign-in
+            </button>
+          ) : null}
           <p className="privacy-note">
             The access token and cached profile are encrypted using macOS Keychain-backed storage
             and never exposed to the page UI.

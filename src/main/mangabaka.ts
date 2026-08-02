@@ -1,6 +1,7 @@
 import type { MangaEnrichment } from "../shared/contracts";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
+import { ProviderTransport } from "./provider-transport";
 
 const BASE_URL = "https://api.mangabaka.org";
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -18,6 +19,7 @@ export class MangaBakaClient {
     maxEntries: CACHE_MAX_ENTRIES,
     ttlMs: CACHE_TTL_MS,
   });
+  private readonly transport: ProviderTransport;
 
   public constructor(
     private readonly fetcher: Fetcher = fetch,
@@ -25,9 +27,20 @@ export class MangaBakaClient {
     // Real MangaBaka tokens start with "mb-"; other values are ignored rather
     // than sent, so a mispasted token name never leaks into request headers.
     private readonly accessToken = readConfiguredToken(),
-  ) {}
+  ) {
+    this.transport = new ProviderTransport({
+      gate: this.requestGate,
+      fetcher: this.fetcher,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+        ...(this.accessToken ? { "x-api-key": this.accessToken } : {}),
+      },
+    });
+  }
 
-  public async getEnrichment(aniListId: number): Promise<MangaEnrichment> {
+  public async getEnrichment(aniListId: number, signal?: AbortSignal): Promise<MangaEnrichment> {
     if (!Number.isInteger(aniListId) || aniListId <= 0) {
       throw new Error("Invalid AniList manga ID.");
     }
@@ -37,24 +50,22 @@ export class MangaBakaClient {
     url.searchParams.set("with_series", "true");
     url.searchParams.set("with_internal", "false");
     url.searchParams.set("with_source_response", "false");
-    const value = await this.requestGate.run(url.toString(), async () => {
-      const response = await this.fetcher(url, {
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "AniStream/0.1.0 (personal macOS app)",
-          // MangaBaka documents PATs as x-api-key credentials. OAuth bearer
-          // tokens use Authorization and are a separate future integration.
-          ...(this.accessToken ? { "x-api-key": this.accessToken } : {}),
+    const value = await this.transport.requestParsed(
+      url,
+      {
+        signal,
+        onResponse: (response, gate) => {
+          if (response.status === 429 || response.status === 403) {
+            gate.reportRateLimited(5 * 60_000);
+            throw new Error(`MangaBaka temporarily refused requests (${response.status}).`);
+          }
         },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-      if (response.status === 429 || response.status === 403) {
-        this.requestGate.reportRateLimited(5 * 60_000);
-        throw new Error(`MangaBaka temporarily refused requests (${response.status}).`);
-      }
-      if (!response.ok) throw new Error(`MangaBaka request failed (${response.status}).`);
-      return parseMangaBakaEnrichment(await response.json(), aniListId);
-    });
+      },
+      async (response) => {
+        if (!response.ok) throw new Error(`MangaBaka request failed (${response.status}).`);
+        return parseMangaBakaEnrichment(await response.json(), aniListId);
+      },
+    );
     this.cache.set(String(aniListId), value);
     return value;
   }

@@ -31,21 +31,58 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #f5f5f5;
-  background: #141414;
+  color: #f7f5ff;
+  background: #080811;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: #141414;
-  --panel: #181818;
-  --panel-raised: #232323;
-  --line: rgba(255, 255, 255, 0.13);
-  --muted: #a3a3a3;
-  --text: #f5f5f5;
-  --accent: #54b9c5;
-  --red: #e50914;
-  --red-hover: #f50723;
-  --cyan: #54b9c5;
-  --green: #46d369;
+  --ink: #080811;
+  --surface-base: #0d0f1f;
+  --surface-panel: #13162a;
+  --surface-raised: #1b2040;
+  --surface-hover: #252b4d;
+  --surface-input: #0b0d1b;
+  --surface-overlay: rgb(13 15 31 / 0.94);
+  --surface-glass: rgb(16 19 40 / 0.8);
+  --line-subtle: rgb(216 207 255 / 0.09);
+  --line: rgb(216 207 255 / 0.16);
+  --line-strong: rgb(216 207 255 / 0.34);
+  --text: #f7f5ff;
+  --text-secondary: #d1cde0;
+  --text-soft: #b6b1c8;
+  --muted: #9d99b2;
+  --muted-deep: #7d7a93;
+  --primary: #2463eb;
+  --primary-hover: #1f57d0;
+  --primary-deep: #183b9f;
+  --primary-soft: rgb(36 99 235 / 0.18);
+  --primary-glow: rgb(36 99 235 / 0.28);
+  --secondary-coral: #ff7a6e;
+  --secondary-coral-soft: rgb(255 122 110 / 0.15);
+  --secondary-amber: #ffc15c;
+  --secondary-amber-soft: rgb(255 193 92 / 0.12);
+  --highlight-lavender: #d8c7ff;
+  --highlight-soft: rgb(216 199 255 / 0.16);
+  --focus-ring: #d8c7ff;
+  --error: #ff7485;
+  --error-soft: rgb(255 72 96 / 0.14);
+  --error-line: rgb(255 116 133 / 0.38);
+  --error-surface: rgb(55 10 24 / 0.94);
+  --error-text: #ffb5c0;
+  --success: #5add91;
+  --warning: var(--secondary-amber);
+  --on-primary: #f7f5ff;
+  --on-secondary: #080811;
+  --shadow: rgb(3 3 11 / 0.58);
+  --shadow-deep: rgb(3 3 11 / 0.78);
+  --skeleton-base: #14182e;
+  --skeleton-shine: #20284a;
+  --panel: var(--surface-panel);
+  --panel-raised: var(--surface-raised);
+  --accent: var(--primary);
+  --app-ambience:
+    radial-gradient(ellipse 78% 36% at 82% -8%, rgb(36 99 235 / 0.14), transparent 68%),
+    radial-gradient(ellipse 58% 34% at 8% 16%, rgb(255 122 110 / 0.07), transparent 70%),
+    radial-gradient(ellipse 46% 24% at 18% 8%, rgb(255 193 92 / 0.035), transparent 72%), var(--ink);
 }
 
 * {
@@ -54,7 +91,7 @@
 
 html {
   background: var(--ink);
-  scrollbar-color: #4b4b4b var(--ink);
+  scrollbar-color: var(--surface-hover) var(--ink);
 }
 
 body {
@@ -62,7 +99,7 @@ body {
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
-  background: var(--ink);
+  background: var(--app-ambience);
 }
 
 button,
@@ -82,7 +119,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid white;
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -92,7 +129,7 @@ button {
 
 .app-shell {
   min-height: 100vh;
-  background: var(--ink);
+  background: transparent;
 }
 
 .app-navbar {
@@ -107,12 +144,7 @@ button {
   width: 100%;
   height: 68px;
   padding: 0 3.7vw 0 86px;
-  background: linear-gradient(
-    180deg,
-    rgba(10, 10, 10, 0.98),
-    rgba(10, 10, 10, 0.82) 72%,
-    transparent
-  );
+  background: linear-gradient(180deg, rgb(8 8 17 / 0.98), rgb(8 8 17 / 0.84) 72%, transparent);
   -webkit-app-region: drag;
 }
 
@@ -128,7 +160,7 @@ button {
   align-items: center;
   padding: 0;
   background: transparent;
-  color: #fff;
+  color: var(--text);
   cursor: pointer;
   font-size: 1.16rem;
   font-weight: 800;
@@ -140,9 +172,14 @@ button {
   width: 27px;
   height: 31px;
   place-items: center;
-  background: linear-gradient(145deg, #ff3340, #b20710);
+  background: linear-gradient(
+    145deg,
+    var(--primary),
+    var(--primary-deep) 64%,
+    var(--secondary-coral)
+  );
   clip-path: polygon(12% 0, 88% 0, 74% 100%, 26% 100%);
-  color: white;
+  color: var(--on-primary);
   font-family: Impact, sans-serif;
   font-size: 1rem;
 }
@@ -155,7 +192,7 @@ button {
 .nav-links button {
   padding: 9px 10px;
   background: transparent;
-  color: #b9b9b9;
+  color: var(--text-soft);
   cursor: pointer;
   font-size: 0.82rem;
   transition: color 150ms ease;
@@ -163,7 +200,7 @@ button {
 
 .nav-links button:hover,
 .nav-links button.active {
-  color: white;
+  color: var(--text);
 }
 
 .nav-links button.active {
@@ -184,11 +221,11 @@ button {
   border-radius: 50%;
   background: transparent;
   cursor: pointer;
-  color: #dedede;
+  color: var(--text-secondary);
 }
 
 .nav-account > button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--highlight-soft);
 }
 
 .avatar-button {
@@ -202,7 +239,7 @@ button {
 }
 
 .avatar-button.active {
-  border-color: var(--cyan);
+  border-color: var(--primary);
 }
 
 .avatar-button img {
@@ -224,17 +261,17 @@ button {
   align-items: center;
   height: 38px;
   padding: 0 11px;
-  border: 1px solid rgba(255, 255, 255, 0.34);
+  border: 1px solid var(--line-strong);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgb(8 8 17 / 0.76);
   transition:
     width 180ms ease,
     border-color 180ms ease;
 }
 
 .global-search form:focus-within {
-  border-color: white;
-  background: rgba(0, 0, 0, 0.94);
+  border-color: var(--focus-ring);
+  background: rgb(8 8 17 / 0.96);
 }
 
 .global-search input {
@@ -242,12 +279,12 @@ button {
   border: 0;
   outline: 0;
   background: transparent;
-  color: white;
+  color: var(--text);
   font-size: 0.82rem;
 }
 
 .global-search input::placeholder {
-  color: #9a9a9a;
+  color: var(--muted);
 }
 
 .global-search form button {
@@ -260,9 +297,9 @@ button {
 
 .global-search kbd {
   padding: 2px 5px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--line);
   border-radius: 4px;
-  color: #8a8a8a;
+  color: var(--muted);
   font-size: 0.62rem;
 }
 
@@ -274,8 +311,8 @@ button {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(20, 20, 20, 0.98);
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.62);
+  background: rgb(13 15 31 / 0.98);
+  box-shadow: 0 22px 70px var(--shadow);
 }
 
 .search-popover-label {
@@ -283,7 +320,7 @@ button {
   justify-content: space-between;
   padding: 11px 13px;
   border-bottom: 1px solid var(--line);
-  color: #9a9a9a;
+  color: var(--muted);
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -303,7 +340,7 @@ button {
 
 .search-popover > button:hover,
 .search-popover > button.active {
-  background: #2a2a2a;
+  background: var(--surface-hover);
 }
 
 .search-popover img {
@@ -329,7 +366,7 @@ button {
 
 .search-popover small,
 .search-popover > p {
-  color: #969696;
+  color: var(--muted);
   font-size: 0.68rem;
 }
 
@@ -344,7 +381,12 @@ button {
   height: 68px;
   margin: 0 12px;
   border-radius: 4px;
-  background: linear-gradient(110deg, #202020 20%, #2b2b2b 42%, #202020 64%);
+  background: linear-gradient(
+    110deg,
+    var(--skeleton-base) 20%,
+    var(--skeleton-shine) 42%,
+    var(--skeleton-base) 64%
+  );
   background-size: 240% 100%;
   animation: latest-update-shimmer 1.25s linear infinite;
 }
@@ -355,7 +397,7 @@ button {
 
 .catalog-page {
   min-height: 100vh;
-  background: var(--ink);
+  background: transparent;
 }
 
 .catalog-hero {
@@ -368,19 +410,24 @@ button {
 }
 
 .catalog-hero-skeleton {
-  background: linear-gradient(110deg, #181818 20%, #232323 42%, #181818 64%);
+  background: linear-gradient(
+    110deg,
+    var(--skeleton-base) 20%,
+    var(--skeleton-shine) 42%,
+    var(--skeleton-base) 64%
+  );
   background-size: 240% 100%;
   animation: latest-update-shimmer 1.6s linear infinite;
 }
 
 .catalog-hero-copy {
   width: min(620px, 55vw);
-  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.8);
+  text-shadow: 0 2px 14px var(--shadow-deep);
 }
 
 .catalog-kicker {
   margin: 0 0 11px;
-  color: var(--cyan);
+  color: var(--highlight-lavender);
   font-size: 0.69rem;
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -415,20 +462,20 @@ button {
   gap: 12px;
   align-items: center;
   margin-top: 22px;
-  color: #d2d2d2;
+  color: var(--text-secondary);
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: capitalize;
 }
 
 .match {
-  color: var(--green);
+  color: var(--success);
   font-weight: 800;
 }
 
 /* MAL community score cross-reference shown beside the AniList score. */
 .mal-score {
-  color: #7fb3ff;
+  color: var(--highlight-lavender);
   font-weight: 800;
   text-decoration: none;
 }
@@ -443,7 +490,7 @@ button {
   max-width: 610px;
   margin: 16px 0 0;
   overflow: hidden;
-  color: #e0e0e0;
+  color: var(--text-secondary);
   font-size: 1rem;
   line-height: 1.55;
   -webkit-box-orient: vertical;
@@ -471,21 +518,23 @@ button {
 }
 
 .play-action {
-  background: white;
-  color: #111;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .play-action:hover {
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--primary-hover);
 }
 
 .info-action {
-  background: rgba(109, 109, 110, 0.72);
-  color: white;
+  background: var(--surface-glass);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
 }
 
 .info-action:hover {
-  background: rgba(109, 109, 110, 0.48);
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
 .catalog-content {
@@ -514,7 +563,7 @@ button {
 }
 
 .rail-count {
-  color: #8a8a8a;
+  color: var(--muted);
   font-size: 0.7rem;
 }
 
@@ -539,7 +588,7 @@ button {
 
 .carousel-viewport:focus-visible {
   border-radius: 8px;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.86);
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
 }
 
 .carousel-track {
@@ -566,13 +615,13 @@ button {
 .carousel-edge-left {
   left: 0;
   justify-content: flex-start;
-  background: linear-gradient(90deg, rgba(10, 10, 10, 0.96), rgba(10, 10, 10, 0));
+  background: linear-gradient(90deg, rgb(8 8 17 / 0.96), rgb(8 8 17 / 0));
 }
 
 .carousel-edge-right {
   right: 0;
   justify-content: flex-end;
-  background: linear-gradient(270deg, rgba(10, 10, 10, 0.96), rgba(10, 10, 10, 0));
+  background: linear-gradient(270deg, rgb(8 8 17 / 0.96), rgb(8 8 17 / 0));
 }
 
 .carousel-edge:not(:disabled):hover,
@@ -590,9 +639,9 @@ button {
   width: 42px;
   height: 64px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border: 1px solid var(--line);
   border-radius: 7px;
-  background: rgba(12, 12, 12, 0.78);
+  background: var(--surface-glass);
   backdrop-filter: blur(8px);
   transition:
     background 160ms ease,
@@ -600,7 +649,7 @@ button {
 }
 
 .carousel-edge:hover > span {
-  background: rgba(24, 24, 24, 0.96);
+  background: var(--surface-raised);
   transform: scale(1.04);
 }
 
@@ -647,8 +696,8 @@ a.rail-card {
   align-items: center;
   padding: 3px 7px;
   border-radius: 4px;
-  background: rgba(229, 9, 20, 0.92);
-  color: white;
+  background: var(--secondary-coral);
+  color: var(--on-secondary);
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -656,7 +705,8 @@ a.rail-card {
 }
 
 .rail-badge--external {
-  background: rgba(0, 0, 0, 0.72);
+  background: rgb(8 8 17 / 0.82);
+  color: var(--text);
 }
 
 .rail-art-fallback {
@@ -664,8 +714,10 @@ a.rail-card {
   height: 100%;
   padding: 12px;
   place-items: center;
-  background: linear-gradient(135deg, rgba(229, 9, 20, 0.22), transparent), #23252d;
-  color: #c9ccd3;
+  background:
+    radial-gradient(circle at 18% 88%, var(--secondary-coral-soft), transparent 46%),
+    linear-gradient(135deg, var(--primary-soft), transparent 64%), var(--surface-raised);
+  color: var(--text-secondary);
   font-size: 0.78rem;
   font-weight: 700;
   text-align: center;
@@ -684,8 +736,8 @@ a.rail-card {
   height: var(--rail-art-height);
   overflow: hidden;
   border-radius: 6px;
-  background: #242424;
-  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.24);
+  background: var(--surface-raised);
+  box-shadow: 0 14px 35px rgb(3 3 11 / 0.32);
 }
 
 .rail-art img {
@@ -742,7 +794,7 @@ a.rail-card {
   width: 30px;
   height: 30px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--line-strong);
   border-radius: 50%;
   cursor: pointer;
   transition:
@@ -752,25 +804,26 @@ a.rail-card {
 }
 
 .rail-hover-play {
-  background: white;
-  color: #111;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .rail-hover-play:hover,
 .rail-hover-play:focus-visible {
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--primary-hover);
 }
 
 .rail-hover-secondary {
-  background: rgba(20, 20, 20, 0.72);
-  color: white;
+  background: var(--surface-glass);
+  color: var(--text);
   backdrop-filter: blur(6px);
 }
 
 .rail-hover-secondary:hover,
 .rail-hover-secondary:focus-visible {
-  background: rgba(50, 50, 50, 0.88);
-  border-color: rgba(255, 255, 255, 0.82);
+  background: var(--surface-hover);
+  border-color: var(--highlight-lavender);
 }
 
 .rail-hover-secondary:disabled {
@@ -790,14 +843,14 @@ a.rail-card {
   height: 3px;
   overflow: hidden;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--line-strong);
 }
 
 .rail-progress span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--red);
+  background: var(--primary);
   transition: width 320ms ease;
 }
 
@@ -810,7 +863,7 @@ a.rail-card {
 
 .rail-card > span:last-child {
   overflow: hidden;
-  color: #9a9a9a;
+  color: var(--muted);
   font-size: 0.68rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -849,8 +902,8 @@ a.rail-card {
 
 .latest-update-card:focus-visible .latest-update-art {
   box-shadow:
-    0 0 0 2px #f3f3f3,
-    0 14px 34px rgba(0, 0, 0, 0.36);
+    0 0 0 2px var(--focus-ring),
+    0 14px 34px rgb(3 3 11 / 0.4);
 }
 
 .latest-update-art {
@@ -859,8 +912,8 @@ a.rail-card {
   width: 100%;
   aspect-ratio: 0.72;
   border-radius: 7px;
-  background: #1b1d23;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  background: var(--surface-raised);
+  box-shadow: 0 14px 34px rgb(3 3 11 / 0.34);
 }
 
 .latest-update-art img {
@@ -885,9 +938,9 @@ a.rail-card {
   left: 8px;
   padding: 4px 7px;
   border-radius: 4px;
-  background: rgba(213, 7, 18, 0.94);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
-  color: #fff;
+  background: var(--secondary-coral);
+  box-shadow: 0 3px 10px rgb(3 3 11 / 0.42);
+  color: var(--on-secondary);
   font-size: 0.58rem;
   font-weight: 900;
   letter-spacing: 0.055em;
@@ -897,7 +950,7 @@ a.rail-card {
 .latest-update-meta {
   display: flex;
   justify-content: space-between;
-  color: #7f838c;
+  color: var(--muted);
   font-size: 0.64rem;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -919,8 +972,10 @@ a.rail-card {
   height: 100%;
   padding: 12px;
   place-items: center;
-  background: linear-gradient(145deg, rgba(229, 9, 20, 0.22), transparent 52%), #20232b;
-  color: #c7cad1;
+  background:
+    radial-gradient(circle at 12% 88%, var(--secondary-coral-soft), transparent 42%),
+    linear-gradient(145deg, var(--primary-soft), transparent 58%), var(--surface-raised);
+  color: var(--text-secondary);
   font-size: 0.73rem;
   font-weight: 750;
   text-align: center;
@@ -930,14 +985,19 @@ a.rail-card {
   display: block;
   aspect-ratio: 0.72;
   border-radius: 7px;
-  background: linear-gradient(110deg, #191b20 20%, #24272e 42%, #191b20 64%);
+  background: linear-gradient(
+    110deg,
+    var(--skeleton-base) 20%,
+    var(--skeleton-shine) 42%,
+    var(--skeleton-base) 64%
+  );
   background-size: 240% 100%;
   animation: latest-update-shimmer 1.25s linear infinite;
 }
 
 .latest-updates-error {
   margin: 0 0 14px;
-  color: #ff9da2;
+  color: var(--error);
   font-size: 0.72rem;
 }
 
@@ -957,7 +1017,12 @@ a.rail-card {
   flex: 0 0 var(--rail-card-width, 210px);
   aspect-ratio: 0.72;
   border-radius: 6px;
-  background: linear-gradient(110deg, #191b20 20%, #24272e 42%, #191b20 64%);
+  background: linear-gradient(
+    110deg,
+    var(--skeleton-base) 20%,
+    var(--skeleton-shine) 42%,
+    var(--skeleton-base) 64%
+  );
   background-size: 240% 100%;
   animation: latest-update-shimmer 1.25s linear infinite;
 }
@@ -977,10 +1042,10 @@ a.rail-card {
 
 .catalog-toolbar select {
   padding: 9px 34px 9px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
-  background: #111;
-  color: white;
+  background: var(--surface-input);
+  color: var(--text);
   font-size: 0.75rem;
 }
 
@@ -989,10 +1054,10 @@ a.rail-card {
   z-index: 2;
   right: 7px;
   top: 1px;
-  color: rgba(0, 0, 0, 0.34);
+  color: rgb(8 8 17 / 0.34);
   font-size: 4.4rem;
   font-weight: 950;
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.72);
+  -webkit-text-stroke: 1px var(--text-soft);
 }
 
 .shelf-copy {
@@ -1013,7 +1078,7 @@ a.rail-card {
 }
 
 .shelf-copy small {
-  color: #8f8f8f;
+  color: var(--muted);
   font-size: 0.65rem;
   text-transform: capitalize;
 }
@@ -1047,7 +1112,7 @@ a.rail-card {
   overflow: hidden;
   aspect-ratio: 0.71;
   border-radius: 5px;
-  background: #242424;
+  background: var(--surface-raised);
 }
 
 .anime-catalog .browse-art {
@@ -1088,9 +1153,9 @@ a.rail-card {
   width: 38px;
   height: 38px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: rgba(20, 20, 20, 0.8);
+  background: var(--surface-glass);
 }
 
 .browse-card > strong {
@@ -1099,14 +1164,14 @@ a.rail-card {
 
 .browse-card > span:last-child {
   overflow: hidden;
-  color: #9a9a9a;
+  color: var(--muted);
   font-size: 0.68rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .browse-card em {
-  color: var(--green);
+  color: var(--success);
   font-style: normal;
   font-weight: 800;
 }
@@ -1114,7 +1179,7 @@ a.rail-card {
 .catalog-loading {
   min-height: 140px;
   padding: 50px;
-  color: #8f8f8f;
+  color: var(--muted);
   text-align: center;
 }
 
@@ -1128,7 +1193,12 @@ a.rail-card {
   display: block;
   height: 14px;
   border-radius: 4px;
-  background: linear-gradient(110deg, #202020 20%, #2b2b2b 42%, #202020 64%);
+  background: linear-gradient(
+    110deg,
+    var(--skeleton-base) 20%,
+    var(--skeleton-shine) 42%,
+    var(--skeleton-base) 64%
+  );
   background-size: 240% 100%;
   animation: latest-update-shimmer 1.25s linear infinite;
 }
@@ -1156,7 +1226,7 @@ a.rail-card {
   border-radius: 5px;
   background: transparent;
   cursor: pointer;
-  color: #b4b4b4;
+  color: var(--text-soft);
   font-size: 0.74rem;
 }
 
@@ -1190,16 +1260,16 @@ a.rail-card {
 .pagination-indicator {
   position: absolute;
   inset: 0;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid var(--line-strong);
   border-radius: 5px;
-  background: #333;
+  background: var(--surface-hover);
 }
 
 .pagination-ellipsis {
   display: grid;
   height: 36px;
   place-items: center;
-  color: #8a8a8a;
+  color: var(--muted);
 }
 
 .detail-backdrop {
@@ -1208,7 +1278,7 @@ a.rail-card {
   inset: 0;
   overflow-y: auto;
   padding: 52px 8vw;
-  background: rgba(0, 0, 0, 0.76);
+  background: rgb(4 4 14 / 0.78);
   backdrop-filter: blur(8px);
 }
 
@@ -1218,7 +1288,7 @@ a.rail-card {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(4 4 14 / 0.62);
 }
 
 .detail-modal {
@@ -1228,7 +1298,7 @@ a.rail-card {
   overflow: hidden;
   border-radius: 10px;
   background: var(--panel);
-  box-shadow: 0 30px 110px rgba(0, 0, 0, 0.78);
+  box-shadow: 0 30px 110px var(--shadow-deep);
 }
 
 .detail-close {
@@ -1241,7 +1311,7 @@ a.rail-card {
   height: 38px;
   place-items: center;
   border-radius: 50%;
-  background: #181818;
+  background: var(--surface-panel);
   cursor: pointer;
 }
 
@@ -1289,7 +1359,7 @@ a.rail-card {
 }
 
 .detail-description {
-  color: #d2d2d2;
+  color: var(--text-secondary);
   font-size: 0.93rem;
   line-height: 1.65;
 }
@@ -1308,12 +1378,12 @@ a.rail-card {
 }
 
 .detail-overview dt {
-  color: #7f7f7f;
+  color: var(--muted);
 }
 
 .detail-overview dd {
   margin: 0;
-  color: #c9c9c9;
+  color: var(--text-secondary);
   text-transform: capitalize;
 }
 
@@ -1346,7 +1416,7 @@ a.rail-card {
 .detail-mini-grid .cover-image-fallback {
   width: 100%;
   border-radius: 5px;
-  background: #2a2a2a;
+  background: var(--surface-raised);
   object-fit: cover;
 }
 
@@ -1358,8 +1428,8 @@ a.rail-card {
 .people-row .person-image-fallback {
   display: grid;
   place-items: center;
-  color: #9aa0ad;
-  background: #20242c;
+  color: var(--muted);
+  background: var(--surface-raised);
 }
 
 .detail-mini-grid img,
@@ -1373,7 +1443,7 @@ a.rail-card {
   justify-content: center;
   padding: 6px;
   overflow: hidden;
-  color: #c9ccd3;
+  color: var(--text-secondary);
   font-size: 0.68rem;
   font-weight: 700;
   text-align: center;
@@ -1391,7 +1461,7 @@ a.rail-card {
 .people-row small,
 .detail-mini-grid span {
   overflow: hidden;
-  color: #838383;
+  color: var(--muted);
   font-size: 0.62rem;
   text-overflow: ellipsis;
   text-transform: capitalize;
@@ -1411,7 +1481,7 @@ a.rail-card {
   padding: 8px 11px;
   border: 1px solid var(--line);
   border-radius: 5px;
-  color: #c9c9c9;
+  color: var(--text-secondary);
   font-size: 0.7rem;
   text-decoration: none;
 }
@@ -1421,7 +1491,9 @@ a.rail-card {
   z-index: 2100;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle at 50% 118%, rgba(229, 9, 20, 0.16), transparent 42%), #090a0d;
+  background:
+    radial-gradient(ellipse at 76% 118%, var(--primary-glow), transparent 45%),
+    radial-gradient(ellipse at 24% 118%, var(--secondary-coral-soft), transparent 34%), var(--ink);
   will-change: transform;
 }
 
@@ -1432,8 +1504,8 @@ a.rail-card {
   align-items: center;
   min-height: 64px;
   padding: 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
-  background: #0d0f13;
+  border-bottom: 1px solid var(--line-subtle);
+  background: var(--surface-base);
 }
 
 .watch-header > div {
@@ -1454,7 +1526,7 @@ a.rail-card {
 }
 
 .watch-header span {
-  color: #8c9099;
+  color: var(--muted);
   font-size: 0.68rem;
 }
 
@@ -1464,7 +1536,7 @@ a.rail-card {
   width: 100%;
   aspect-ratio: 16 / 9;
   border-radius: 7px;
-  background: #000;
+  background: var(--ink);
 }
 
 .anistream-player video {
@@ -1479,20 +1551,19 @@ a.rail-card {
   display: grid;
   place-content: center;
   padding: 40px;
-  background:
-    radial-gradient(circle at 50% 30%, rgba(84, 185, 197, 0.13), transparent 36%), #08090b;
-  color: #8f949d;
+  background: radial-gradient(circle at 62% 22%, var(--primary-soft), transparent 38%), var(--ink);
+  color: var(--muted);
   text-align: center;
 }
 
 .player-unavailable svg {
   margin: 0 auto;
-  color: #50545c;
+  color: var(--muted-deep);
 }
 
 .player-unavailable h3 {
   margin: 16px 0 7px;
-  color: #e8e9eb;
+  color: var(--text);
 }
 
 .player-unavailable p {
@@ -1513,15 +1584,15 @@ a.rail-card {
   align-items: center;
   width: min(290px, 45%);
   padding: 13px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
-  background: rgba(22, 22, 24, 0.94);
+  background: var(--surface-overlay);
   cursor: pointer;
   text-align: left;
 }
 
 .next-preview span {
-  color: #969aa2;
+  color: var(--muted);
   font-size: 0.64rem;
   text-transform: uppercase;
 }
@@ -1558,7 +1629,7 @@ a.rail-card {
 }
 
 .netflix-episode-browser {
-  color: #fff;
+  color: var(--text);
 }
 
 .sr-only {
@@ -1599,11 +1670,11 @@ a.rail-card {
   width: 100%;
   height: 100%;
   padding: 0 46px 0 19px;
-  border: 1px solid rgba(255, 255, 255, 0.38);
+  border: 1px solid var(--line-strong);
   border-radius: 3px;
   appearance: none;
-  background: #242424;
-  color: #fff;
+  background: var(--surface-raised);
+  color: var(--text);
   cursor: pointer;
   font: inherit;
   font-size: 0.84rem;
@@ -1611,7 +1682,7 @@ a.rail-card {
 }
 
 .season-picker select:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -1628,18 +1699,18 @@ a.rail-card {
   align-items: center;
   min-height: 24px;
   margin-bottom: 13px;
-  color: #d2d2d2;
+  color: var(--text-secondary);
   font-size: 0.74rem;
 }
 
 .episode-browser-meta > * + *::before {
   margin-right: 7px;
-  color: #747474;
+  color: var(--muted-deep);
   content: "·";
 }
 
 .netflix-episode-list {
-  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  border-top: 1px solid var(--line);
 }
 
 .netflix-episode-list > button {
@@ -1652,10 +1723,10 @@ a.rail-card {
   width: 100%;
   min-height: 148px;
   padding: 24px 16px 24px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom: 1px solid var(--line);
   border-radius: 3px;
   background: transparent;
-  color: #fff;
+  color: var(--text);
   cursor: pointer;
   text-align: left;
   transition:
@@ -1665,7 +1736,7 @@ a.rail-card {
 
 .netflix-episode-list > button:hover,
 .netflix-episode-list > button:focus-visible {
-  background: #282828;
+  background: var(--surface-raised);
 }
 
 .netflix-episode-list > button:active {
@@ -1673,12 +1744,12 @@ a.rail-card {
 }
 
 .netflix-episode-list > button:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
 
 .netflix-episode-number {
-  color: #d2d2d2;
+  color: var(--text-secondary);
   font-size: 1.5rem;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -1692,7 +1763,9 @@ a.rail-card {
   aspect-ratio: 16 / 9;
   place-items: center;
   border-radius: 4px;
-  background: linear-gradient(145deg, rgba(229, 9, 20, 0.22), transparent 50%), #303030;
+  background:
+    radial-gradient(circle at 18% 88%, var(--secondary-coral-soft), transparent 44%),
+    linear-gradient(145deg, var(--primary-soft), transparent 58%), var(--surface-raised);
 }
 
 .netflix-episode-thumb img {
@@ -1711,7 +1784,7 @@ a.rail-card {
 .episode-thumb-fallback {
   max-width: 80%;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.58);
+  color: var(--text-soft);
   font-size: 0.67rem;
   font-weight: 750;
   text-align: center;
@@ -1726,9 +1799,9 @@ a.rail-card {
   width: 48px;
   height: 48px;
   place-items: center;
-  border: 2px solid rgba(255, 255, 255, 0.82);
+  border: 2px solid var(--highlight-lavender);
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgb(8 8 17 / 0.68);
   opacity: 0;
   transform: scale(0.84);
   transition:
@@ -1762,7 +1835,7 @@ a.rail-card {
   display: block;
   width: 100%;
   height: 100%;
-  background: #e50914;
+  background: var(--primary);
   transform-origin: left center;
 }
 
@@ -1790,7 +1863,7 @@ a.rail-card {
 
 .netflix-episode-title > span {
   flex: none;
-  color: #f1f1f1;
+  color: var(--text);
   font-size: 0.84rem;
   font-variant-numeric: tabular-nums;
 }
@@ -1800,7 +1873,7 @@ a.rail-card {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  color: #b3b3b3;
+  color: var(--text-soft);
   font-size: 0.76rem;
   line-height: 1.55;
 }
@@ -1814,7 +1887,7 @@ a.rail-card {
   padding: 20px 0;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-soft);
   cursor: pointer;
 }
 
@@ -1825,7 +1898,7 @@ a.rail-card {
   right: 0;
   left: 0;
   height: 1px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--line);
 }
 
 .episode-list-toggle svg {
@@ -1834,9 +1907,9 @@ a.rail-card {
   display: grid;
   padding: 7px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.26);
+  border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: #181818;
+  background: var(--surface-panel);
   transition:
     background 150ms ease,
     transform 220ms ease;
@@ -1844,8 +1917,8 @@ a.rail-card {
 
 .episode-list-toggle:hover svg,
 .episode-list-toggle:focus-visible svg {
-  background: #262626;
-  color: #fff;
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .episode-list-toggle svg.is-expanded {
@@ -1883,8 +1956,9 @@ a.rail-card {
   min-height: 44px;
   padding: 0 14px 0 8px;
   border-radius: 999px;
-  background: rgba(15, 15, 15, 0.72);
-  color: #fff;
+  background: var(--surface-glass);
+  box-shadow: inset 0 0 0 1px var(--line-subtle);
+  color: var(--text);
   cursor: pointer;
   font-size: 0.76rem;
   font-weight: 700;
@@ -1898,7 +1972,7 @@ a.rail-card {
 
 .watch-player-back:hover,
 .watch-player-back:focus-visible {
-  background: rgba(36, 36, 36, 0.92);
+  background: var(--surface-overlay);
   opacity: 1;
   transform: translateX(-2px);
 }
@@ -1924,7 +1998,7 @@ a.rail-card {
 }
 
 .watch-player-heading span {
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--text-soft);
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -1963,8 +2037,8 @@ a.rail-card {
   display: grid;
   gap: 13px;
   place-content: center;
-  background: #050505;
-  color: rgba(255, 255, 255, 0.78);
+  background: var(--ink);
+  color: var(--text-secondary);
   font-size: 0.78rem;
   text-align: center;
 }
@@ -1973,8 +2047,8 @@ a.rail-card {
   width: 28px;
   height: 28px;
   margin: 0 auto;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #e50914;
+  border: 2px solid var(--line);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: anikoto-spin 800ms linear infinite;
 }
@@ -1988,8 +2062,8 @@ a.rail-card {
   margin: 0;
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(15, 15, 15, 0.76);
-  color: rgba(255, 255, 255, 0.72);
+  background: var(--surface-glass);
+  color: var(--text-soft);
   font-size: 0.64rem;
   backdrop-filter: blur(12px);
 }
@@ -2011,7 +2085,9 @@ a.rail-card {
   height: 100%;
   aspect-ratio: auto;
   border-radius: 0;
-  background: radial-gradient(circle at 50% 35%, rgba(229, 9, 20, 0.12), transparent 32%), #070707;
+  background:
+    radial-gradient(circle at 68% 34%, var(--primary-soft), transparent 34%),
+    radial-gradient(circle at 30% 42%, var(--secondary-coral-soft), transparent 26%), var(--ink);
 }
 
 .watch-player-view .player-unavailable > p {
@@ -2034,14 +2110,14 @@ a.rail-card {
   gap: 8px;
   align-items: center;
   padding: 7px 9px 7px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.17);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(15, 15, 15, 0.72);
+  background: var(--surface-glass);
   backdrop-filter: blur(12px);
 }
 
 .watch-source-select span {
-  color: #a8a8a8;
+  color: var(--muted);
   font-size: 0.61rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -2052,7 +2128,7 @@ a.rail-card {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #fff;
+  color: var(--text);
   cursor: pointer;
   font-size: 0.68rem;
 }
@@ -2065,10 +2141,10 @@ a.rail-card {
   max-width: min(680px, 80vw);
   margin: 0;
   padding: 10px 14px;
-  border: 1px solid rgba(229, 9, 20, 0.48);
+  border: 1px solid var(--error-line);
   border-radius: 5px;
-  background: rgba(50, 6, 8, 0.9);
-  color: #fff;
+  background: var(--error-surface);
+  color: var(--error-text);
   font-size: 0.72rem;
   transform: translateX(-50%);
 }
@@ -2076,9 +2152,9 @@ a.rail-card {
 .manga-chapter-browser {
   margin: 0 0 36px;
   padding: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--line-subtle);
   border-radius: 9px;
-  background: #11151d;
+  background: var(--surface-base);
 }
 
 .chapter-browser-tabs {
@@ -2087,7 +2163,7 @@ a.rail-card {
   margin-bottom: 14px;
   padding: 3px;
   border-radius: 6px;
-  background: #1b202b;
+  background: var(--surface-raised);
 }
 
 .chapter-browser-tabs button {
@@ -2095,15 +2171,15 @@ a.rail-card {
   height: 31px;
   border-radius: 4px;
   background: transparent;
-  color: #777e8b;
+  color: var(--muted);
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 750;
 }
 
 .chapter-browser-tabs button.active {
-  background: rgba(84, 185, 197, 0.24);
-  color: #65c9d5;
+  background: var(--primary-soft);
+  color: var(--highlight-lavender);
 }
 
 .chapter-browser-tabs button:disabled {
@@ -2118,7 +2194,7 @@ a.rail-card {
   align-items: center;
   padding: 10px;
   border-radius: 6px 6px 0 0;
-  background: #171c26;
+  background: var(--surface-raised);
 }
 
 .chapter-browser-toolbar input {
@@ -2127,13 +2203,13 @@ a.rail-card {
   border: 1px solid transparent;
   border-radius: 5px;
   outline: 0;
-  background: #111621;
-  color: #e4e7eb;
+  background: var(--surface-input);
+  color: var(--text);
   font-size: 0.7rem;
 }
 
 .chapter-browser-toolbar input:focus {
-  border-color: rgba(84, 185, 197, 0.58);
+  border-color: var(--focus-ring);
 }
 
 .chapter-browser-toolbar span,
@@ -2141,8 +2217,8 @@ a.rail-card {
   height: 34px;
   padding: 0 10px;
   border-radius: 5px;
-  background: #202632;
-  color: #9ca3ae;
+  background: var(--surface-hover);
+  color: var(--text-soft);
   font-size: 0.64rem;
   font-weight: 700;
   line-height: 34px;
@@ -2150,8 +2226,8 @@ a.rail-card {
 }
 
 .chapter-browser-toolbar button {
-  background: #1f98cf;
-  color: white;
+  background: var(--primary);
+  color: var(--on-primary);
   cursor: pointer;
 }
 
@@ -2172,19 +2248,19 @@ a.rail-card {
   width: 100%;
   min-height: 52px;
   padding: 9px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
-  background: #151a23;
-  color: #c8cdd5;
+  border-top: 1px solid var(--line-subtle);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
 }
 
 .chapter-browser-list > button:hover {
-  background: #1a202b;
+  background: var(--surface-hover);
 }
 
 .chapter-language {
-  color: #65c9d5;
+  color: var(--highlight-lavender);
   font-size: 0.6rem;
   font-weight: 850;
   letter-spacing: 0.04em;
@@ -2198,26 +2274,31 @@ a.rail-card {
 }
 
 .chapter-browser-list strong small {
-  color: #7f8692;
+  color: var(--muted);
   font-size: inherit;
   font-weight: 500;
 }
 
 .chapter-browser-list > button > span:nth-last-child(2) {
-  color: #737985;
+  color: var(--muted-deep);
   font-size: 0.62rem;
   text-align: right;
 }
 
 .chapter-complete {
-  color: #42c980;
+  color: var(--success);
 }
 
 .chapter-row-skeleton {
   display: block;
   min-height: 52px;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
-  background: linear-gradient(110deg, #151a23 20%, #1e242f 42%, #151a23 64%);
+  border-top: 1px solid var(--line-subtle);
+  background: linear-gradient(
+    110deg,
+    var(--skeleton-base) 20%,
+    var(--skeleton-shine) 42%,
+    var(--skeleton-base) 64%
+  );
   background-size: 240% 100%;
   animation: latest-update-shimmer 1.25s linear infinite;
 }
@@ -2237,7 +2318,7 @@ a.rail-card {
   display: block;
   width: 100%;
   height: 100%;
-  background: #e50914;
+  background: var(--primary);
   transform-origin: left center;
 }
 
@@ -2249,8 +2330,11 @@ a.rail-card {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
-  color: #f4f5f7;
-  background: radial-gradient(circle at 50% -20%, rgba(31, 38, 55, 0.5), transparent 42%), #0b0e15;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 72% 32% at 76% -12%, var(--primary-soft), transparent 66%),
+    radial-gradient(ellipse 48% 22% at 18% 0%, var(--secondary-coral-soft), transparent 68%),
+    var(--ink);
 }
 
 .manga-scroll-progress {
@@ -2258,8 +2342,8 @@ a.rail-card {
   inset: 0 0 auto;
   z-index: 4;
   height: 2px;
-  background: var(--red);
-  box-shadow: 0 0 12px rgba(229, 9, 20, 0.72);
+  background: var(--primary);
+  box-shadow: 0 0 12px var(--primary-glow);
   transform-origin: 0 50%;
 }
 
@@ -2283,9 +2367,9 @@ a.rail-card {
 }
 
 .manga-reader-chapter-chip {
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  background: rgba(13, 16, 24, 0.82);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--line-subtle);
+  background: var(--surface-glass);
+  box-shadow: 0 10px 32px rgb(3 3 11 / 0.38);
   backdrop-filter: blur(18px);
 }
 
@@ -2297,10 +2381,10 @@ a.rail-card {
   gap: 8px;
   min-height: 42px;
   padding: 0 13px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 1px solid var(--line-subtle);
   border-radius: 999px;
-  color: rgba(255, 255, 255, 0.82);
-  background: rgba(13, 16, 24, 0.82);
+  color: var(--text-secondary);
+  background: var(--surface-glass);
   cursor: pointer;
   font: inherit;
   backdrop-filter: blur(18px);
@@ -2308,13 +2392,13 @@ a.rail-card {
 
 .manga-reader-header button:hover,
 .manga-reader-chapter-chip button:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(33, 39, 53, 0.94);
+  color: var(--text);
+  background: var(--surface-overlay);
 }
 
 .manga-reader-header button:focus-visible,
 .manga-reader-chapter-chip button:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -2324,7 +2408,7 @@ a.rail-card {
   padding: 7px 12px;
   border-radius: 10px;
   text-align: center;
-  background: rgba(13, 16, 24, 0.68);
+  background: var(--surface-glass);
   backdrop-filter: blur(16px);
 }
 
@@ -2356,7 +2440,7 @@ a.rail-card {
   min-height: 42px;
   padding: 0 16px;
   border-radius: 999px;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--text-secondary);
   font-size: 0.84rem;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -2421,11 +2505,11 @@ a.rail-card {
   background:
     linear-gradient(
       110deg,
-      rgba(255, 255, 255, 0.035) 8%,
-      rgba(255, 255, 255, 0.085) 18%,
-      rgba(255, 255, 255, 0.035) 33%
+      rgb(216 207 255 / 0.035) 8%,
+      rgb(216 207 255 / 0.085) 18%,
+      rgb(216 207 255 / 0.035) 33%
     ),
-    #121722;
+    var(--surface-panel);
   background-size: 220% 100%;
   animation: reader-shimmer 1.45s linear infinite;
 }
@@ -2437,7 +2521,7 @@ a.rail-card {
   min-height: min(76vh, 940px);
   padding: 40px;
   border: 0;
-  background: #121722;
+  background: var(--surface-panel);
   color: var(--muted);
   text-align: center;
 }
@@ -2460,14 +2544,16 @@ a.rail-card {
 .manga-reader-loading {
   display: grid;
   place-items: center;
-  background: radial-gradient(circle at 50% 42%, rgba(229, 9, 20, 0.12), transparent 30%), #080a0f;
+  background:
+    radial-gradient(circle at 62% 42%, var(--primary-soft), transparent 32%),
+    radial-gradient(circle at 38% 48%, var(--secondary-amber-soft), transparent 24%), var(--ink);
 }
 
 .reader-loading-spinner {
   width: 28px;
   height: 28px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: var(--red);
+  border: 2px solid var(--line);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: anikoto-spin 800ms linear infinite;
 }
@@ -2510,10 +2596,10 @@ a.rail-card {
   gap: 14px;
   min-height: 92px;
   padding: 18px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line-subtle);
   border-radius: 14px;
   color: var(--text);
-  background: #171c28;
+  background: var(--surface-panel);
   cursor: pointer;
   transition:
     border-color 160ms ease,
@@ -2522,13 +2608,13 @@ a.rail-card {
 }
 
 .manga-end-navigation > button:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.19);
-  background: #1d2331;
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
   transform: translateY(-2px);
 }
 
 .manga-end-navigation > button:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.88);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -2589,16 +2675,16 @@ a.rail-card {
   align-items: center;
   height: 34px;
   padding: 0 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: rgba(16, 16, 16, 0.74);
-  color: #d3d3d3;
+  background: var(--surface-glass);
+  color: var(--text-secondary);
   font-size: 0.7rem;
   backdrop-filter: blur(10px);
 }
 
 .detail-tracker-compact label svg {
-  color: #ffd166;
+  color: var(--warning);
 }
 
 .detail-tracker-compact input {
@@ -2606,17 +2692,17 @@ a.rail-card {
   border: 0;
   outline: 0;
   background: transparent;
-  color: white;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
 .detail-tracker-compact button {
   height: 34px;
   padding: 0 11px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--line);
   border-radius: 5px;
-  background: rgba(16, 16, 16, 0.74);
-  color: #dedede;
+  background: var(--surface-glass);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.68rem;
   font-weight: 700;
@@ -2625,8 +2711,8 @@ a.rail-card {
 
 .detail-tracker-compact button:hover,
 .detail-tracker-compact button:focus-visible {
-  border-color: rgba(255, 255, 255, 0.42);
-  background: rgba(40, 40, 40, 0.9);
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
 }
 
 .detail-tracker-compact button:disabled {
@@ -2636,7 +2722,7 @@ a.rail-card {
 
 .provider-note {
   margin: 13px 0 0;
-  color: #878787;
+  color: var(--muted);
   font-size: 0.75rem;
   line-height: 1.5;
 }
@@ -2648,8 +2734,10 @@ a.rail-card {
   place-items: center;
   padding: 48px;
   background:
-    radial-gradient(circle at 75% 0%, rgba(229, 9, 20, 0.2), transparent 36rem),
-    radial-gradient(circle at 10% 100%, rgba(84, 185, 197, 0.12), transparent 32rem), #090909;
+    radial-gradient(ellipse 72% 52% at 78% -8%, var(--primary-glow), transparent 68%),
+    radial-gradient(ellipse 56% 44% at 8% 102%, var(--secondary-coral-soft), transparent 68%),
+    radial-gradient(ellipse 38% 24% at 22% 94%, var(--secondary-amber-soft), transparent 72%),
+    var(--ink);
 }
 
 .login-card {
@@ -2657,8 +2745,8 @@ a.rail-card {
   padding: 52px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(24, 24, 24, 0.94);
-  box-shadow: 0 42px 120px rgba(0, 0, 0, 0.55);
+  background: var(--surface-overlay);
+  box-shadow: 0 42px 120px var(--shadow);
 }
 
 .brand-mark {
@@ -2667,7 +2755,12 @@ a.rail-card {
   height: 58px;
   margin-bottom: 32px;
   place-items: center;
-  background: linear-gradient(145deg, #f50723, #b20710);
+  background: linear-gradient(
+    145deg,
+    var(--primary),
+    var(--primary-deep) 64%,
+    var(--secondary-coral)
+  );
   clip-path: polygon(12% 0, 88% 0, 74% 100%, 26% 100%);
   font-family: Impact, sans-serif;
   font-size: 1.5rem;
@@ -2675,7 +2768,7 @@ a.rail-card {
 
 .eyebrow {
   margin: 0 0 9px;
-  color: var(--cyan);
+  color: var(--highlight-lavender);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.15em;
@@ -2692,7 +2785,7 @@ a.rail-card {
 
 .login-copy {
   margin: 27px 0;
-  color: #b0b0b0;
+  color: var(--text-soft);
   font-size: 1rem;
   line-height: 1.65;
 }
@@ -2700,7 +2793,8 @@ a.rail-card {
 .primary-button,
 .save-button {
   border-radius: 5px;
-  background: var(--red);
+  background: var(--primary);
+  color: var(--on-primary);
   cursor: pointer;
   font-weight: 800;
 }
@@ -2712,7 +2806,7 @@ a.rail-card {
 
 .primary-button:hover,
 .save-button:hover {
-  background: var(--red-hover);
+  background: var(--primary-hover);
 }
 
 .primary-button:disabled,
@@ -2724,7 +2818,7 @@ a.rail-card {
 
 .privacy-note {
   margin: 18px 0 0;
-  color: #8a8a8a;
+  color: var(--muted);
   font-size: 0.74rem;
   line-height: 1.55;
 }
@@ -2736,8 +2830,9 @@ a.rail-card {
   min-height: 520px;
   padding: 148px max(48px, calc((100vw - 1240px) / 2)) 42px;
   background:
-    radial-gradient(circle at 70% 20%, rgba(84, 185, 197, 0.15), transparent 30rem),
-    linear-gradient(180deg, #191919, #101010);
+    radial-gradient(ellipse 62% 48% at 74% 14%, var(--primary-soft), transparent 68%),
+    radial-gradient(ellipse 36% 30% at 22% 26%, var(--secondary-coral-soft), transparent 72%),
+    linear-gradient(180deg, var(--surface-panel), var(--ink));
   background-position: center;
   background-size: cover;
 }
@@ -2749,7 +2844,7 @@ a.rail-card {
   bottom: 0;
   left: 0;
   height: 42%;
-  background: linear-gradient(180deg, transparent 0%, rgba(20, 20, 20, 0.78) 58%, var(--ink) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgb(8 8 17 / 0.78) 58%, var(--ink) 100%);
   content: "";
   pointer-events: none;
 }
@@ -2766,9 +2861,9 @@ a.rail-card {
 .profile-avatar {
   width: 150px;
   height: 150px;
-  border: 3px solid rgba(255, 255, 255, 0.22);
+  border: 3px solid var(--line-strong);
   border-radius: 9px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 24px 60px rgb(3 3 11 / 0.5);
   object-fit: cover;
 }
 
@@ -2777,7 +2872,7 @@ a.rail-card {
   max-width: 660px;
   margin: 18px 0 0;
   overflow: hidden;
-  color: #c1c1c1;
+  color: var(--text-secondary);
   line-height: 1.6;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -2802,11 +2897,11 @@ a.rail-card {
   flex-direction: column;
   gap: 4px;
   padding: 17px;
-  background: rgba(16, 16, 16, 0.86);
+  background: rgb(13 15 31 / 0.9);
 }
 
 .profile-stats span {
-  color: #818181;
+  color: var(--muted);
   font-size: 0.68rem;
 }
 
@@ -2836,7 +2931,7 @@ a.rail-card {
   gap: 4px;
   padding: 4px;
   border-radius: 6px;
-  background: #222;
+  background: var(--surface-panel);
 }
 
 .media-tabs button,
@@ -2849,13 +2944,13 @@ a.rail-card {
   padding: 9px 16px;
   border-radius: 4px;
   background: transparent;
-  color: #8f8f8f;
+  color: var(--muted);
   font-weight: 700;
 }
 
 .media-tabs button.active {
-  background: #444;
-  color: white;
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .library-search {
@@ -2865,8 +2960,8 @@ a.rail-card {
   border: 1px solid var(--line);
   border-radius: 5px;
   outline: none;
-  background: #1b1b1b;
-  color: white;
+  background: var(--surface-panel);
+  color: var(--text);
 }
 
 .library-sort {
@@ -2874,8 +2969,8 @@ a.rail-card {
   padding: 10px 32px 10px 11px;
   border: 1px solid var(--line);
   border-radius: 5px;
-  background: #1b1b1b;
-  color: #d2d2d2;
+  background: var(--surface-panel);
+  color: var(--text-secondary);
   font-size: 0.74rem;
 }
 
@@ -2884,14 +2979,15 @@ a.rail-card {
 }
 
 .library-search:focus {
-  border-color: var(--cyan);
+  border-color: var(--focus-ring);
 }
 
 .add-title-button,
 .catalog-search button {
   padding: 11px 15px;
   border-radius: 5px;
-  background: var(--red);
+  background: var(--primary);
+  color: var(--on-primary);
   cursor: pointer;
   font-weight: 800;
 }
@@ -2901,7 +2997,7 @@ a.rail-card {
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #1a1a1a;
+  background: var(--surface-panel);
 }
 
 .catalog-search form {
@@ -2916,8 +3012,8 @@ a.rail-card {
   border: 1px solid var(--line);
   border-radius: 5px;
   outline: none;
-  background: #0f0f0f;
-  color: white;
+  background: var(--surface-input);
+  color: var(--text);
 }
 
 .catalog-results {
@@ -2935,7 +3031,7 @@ a.rail-card {
   min-width: 0;
   padding: 8px;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--line-subtle);
 }
 
 .catalog-results img,
@@ -2953,7 +3049,7 @@ a.rail-card {
 }
 
 .catalog-results span {
-  color: var(--cyan);
+  color: var(--highlight-lavender);
   font-size: 0.62rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -2982,7 +3078,7 @@ a.rail-card {
   right: 0;
   bottom: 8px;
   width: 56px;
-  background: linear-gradient(90deg, rgba(20, 20, 20, 0), var(--ink) 88%);
+  background: linear-gradient(90deg, rgb(8 8 17 / 0), var(--ink) 88%);
   content: "";
   pointer-events: none;
 }
@@ -2992,7 +3088,7 @@ a.rail-card {
   gap: 7px;
   padding: 2px 58px 8px 2px;
   overflow-x: auto;
-  scrollbar-color: #555 transparent;
+  scrollbar-color: var(--surface-hover) transparent;
   scrollbar-width: thin;
 }
 
@@ -3003,14 +3099,14 @@ a.rail-card {
   align-items: center;
   padding: 8px 12px;
   border-radius: 999px;
-  background: #202020;
-  color: #8f8f8f;
+  background: var(--surface-panel);
+  color: var(--muted);
   font-size: 0.75rem;
 }
 
 .group-tabs button.active {
-  background: white;
-  color: #111;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .group-tabs span {
@@ -3028,7 +3124,7 @@ a.rail-card {
 }
 
 .library-heading > span {
-  color: #8a8a8a;
+  color: var(--muted);
   font-size: 0.78rem;
 }
 
@@ -3040,9 +3136,9 @@ a.rail-card {
 
 .media-card {
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line-subtle);
   border-radius: 7px;
-  background: #1b1b1b;
+  background: var(--surface-panel);
   /* AniList libraries can run into the hundreds of entries; skip layout/paint work
      for off-screen cards until they scroll into view. */
   content-visibility: auto;
@@ -3053,7 +3149,7 @@ a.rail-card {
   position: relative;
   overflow: hidden;
   aspect-ratio: 0.7;
-  background: #252525;
+  background: var(--surface-raised);
 }
 
 .cover-wrap img {
@@ -3073,9 +3169,9 @@ a.rail-card {
   bottom: 11px;
   width: 42px;
   height: 42px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: rgba(20, 20, 20, 0.86);
+  background: var(--surface-glass);
   cursor: pointer;
   font-weight: 900;
 }
@@ -3086,7 +3182,7 @@ a.rail-card {
 
 .media-meta {
   margin: 0 0 6px;
-  color: var(--cyan);
+  color: var(--highlight-lavender);
   font-size: 0.64rem;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -3103,7 +3199,7 @@ a.rail-card {
 
 .progress-copy {
   margin: 7px 0 0;
-  color: #818181;
+  color: var(--muted);
   font-size: 0.7rem;
 }
 
@@ -3111,7 +3207,7 @@ a.rail-card {
   display: flex;
   justify-content: space-between;
   margin-top: 16px;
-  color: #9c9c9c;
+  color: var(--muted);
   font-size: 0.72rem;
 }
 
@@ -3120,7 +3216,7 @@ a.rail-card {
 .delete-button {
   border: 1px solid var(--line);
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.045);
+  background: rgb(216 207 255 / 0.045);
   cursor: pointer;
 }
 
@@ -3128,19 +3224,19 @@ a.rail-card {
   width: 100%;
   margin-top: 13px;
   padding: 8px;
-  color: #b0b0b0;
+  color: var(--text-soft);
   font-size: 0.72rem;
 }
 
 .quiet-button {
   padding: 8px 12px;
-  color: #bbb;
+  color: var(--text-soft);
   font-size: 0.75rem;
 }
 
 .quiet-button.danger,
 .delete-button {
-  color: #ff9ca3;
+  color: var(--error);
 }
 
 .entry-editor {
@@ -3154,7 +3250,7 @@ a.rail-card {
 .entry-editor label {
   display: grid;
   gap: 5px;
-  color: #858585;
+  color: var(--muted);
   font-size: 0.67rem;
 }
 
@@ -3166,8 +3262,8 @@ a.rail-card {
   border: 1px solid var(--line);
   border-radius: 4px;
   outline: none;
-  background: #0e0e0e;
-  color: #eee;
+  background: var(--surface-input);
+  color: var(--text);
   resize: vertical;
 }
 
@@ -3188,27 +3284,27 @@ a.rail-card {
   padding: 68px;
   border: 1px dashed var(--line);
   border-radius: 7px;
-  color: #8a8a8a;
+  color: var(--muted);
   text-align: center;
 }
 
 .empty-state h3 {
   margin: 0;
-  color: #ccc;
+  color: var(--text-secondary);
 }
 
 .error-banner {
   padding: 11px 13px;
-  border: 1px solid rgba(235, 57, 66, 0.35);
+  border: 1px solid var(--error-line);
   border-radius: 5px;
-  background: rgba(193, 17, 25, 0.14);
-  color: #ffadb2;
+  background: var(--error-soft);
+  color: var(--error-text);
   font-size: 0.78rem;
   line-height: 1.45;
 }
 
 .loading-screen {
-  color: #929292;
+  color: var(--muted);
 }
 
 .loading-screen > div,
@@ -3223,8 +3319,8 @@ a.rail-card {
 .loading-orbit {
   width: 52px;
   height: 52px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top-color: var(--red);
+  border: 3px solid var(--line-subtle);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 800ms linear infinite;
 }
@@ -3256,6 +3352,28 @@ a.rail-card {
 
   .latest-updates-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .carousel-edge > span,
+  .rail-hover-secondary,
+  .watch-player-back,
+  .anikoto-resume-note,
+  .watch-source-select,
+  .manga-reader-chapter-chip,
+  .manga-reader-header button,
+  .manga-reader-chapter-chip button,
+  .manga-reader-header > div,
+  .detail-tracker-compact label,
+  .detail-tracker-compact button {
+    background: var(--surface-raised);
+    backdrop-filter: none;
+  }
+
+  .detail-backdrop {
+    background: rgb(4 4 14 / 0.96);
+    backdrop-filter: none;
   }
 }
 

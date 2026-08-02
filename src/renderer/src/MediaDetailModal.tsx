@@ -114,29 +114,34 @@ export function MediaDetailModal({
   useEffect(() => {
     if (media.type !== "MANGA") return;
     let active = true;
-    void Promise.allSettled([
-      window.anistream.getMangaEnrichment(media.id),
-      window.anistream.getMangaDexReader({ aniListId: media.id, title: media.title }),
-      window.anistream.getMangaReadingResume(media.id),
-    ]).then(([enrichmentResult, readerResult, resumeResult]) => {
-      if (!active) return;
-      if (enrichmentResult.status === "fulfilled") {
-        setMangaEnrichment(enrichmentResult.value);
-      }
-      const savedResume = resumeResult.status === "fulfilled" ? resumeResult.value : undefined;
-      setMangaResume(savedResume);
-      if (readerResult.status === "fulfilled") {
-        setReaderSession(readerResult.value);
-        if (initialAction === "read" && !loading && !initialReadHandled.current) {
-          initialReadHandled.current = true;
-          setActiveChapter(
-            chooseChapterToRead(readerResult.value, detail?.listEntry?.progress ?? 0, savedResume),
-          );
+    const requestId = `manga-title:${media.id}:${crypto.randomUUID()}`;
+    void window.anistream
+      .getMangaTitleSnapshot({ aniListId: media.id, title: media.title }, requestId)
+      .then((snapshot) => {
+        if (!active) return;
+        setMangaEnrichment(snapshot.enrichment);
+        const savedResume = snapshot.resume;
+        setMangaResume(savedResume);
+        if (snapshot.reader) {
+          setReaderSession(snapshot.reader);
+          if (initialAction === "read" && !loading && !initialReadHandled.current) {
+            initialReadHandled.current = true;
+            setActiveChapter(
+              chooseChapterToRead(snapshot.reader, detail?.listEntry?.progress ?? 0, savedResume),
+            );
+          }
         }
-      }
-    });
+        const readerIssue = snapshot.issues.find((issue) => issue.source === "mangadex-reader");
+        if (readerIssue) setError(readerIssue.message);
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setError(reason instanceof Error ? reason.message : "Unable to load manga title data.");
+        }
+      });
     return () => {
       active = false;
+      void window.anistream.cancelRequest(requestId);
     };
   }, [detail?.listEntry?.progress, initialAction, loading, media.id, media.title, media.type]);
 
@@ -231,16 +236,29 @@ export function MediaDetailModal({
     setLoadingReader(true);
     setError(undefined);
     try {
-      const session =
-        readerSession ??
-        (await window.anistream.getMangaDexReader({
-          aniListId: resolved.id,
-          title: resolved.title,
-        }));
+      const snapshot = readerSession
+        ? undefined
+        : await window.anistream.getMangaTitleSnapshot(
+            {
+              aniListId: resolved.id,
+              title: resolved.title,
+            },
+            `manga-title:${resolved.id}:${crypto.randomUUID()}`,
+          );
+      const session = readerSession ?? snapshot?.reader;
+      if (!session) {
+        throw new Error(
+          snapshot?.issues.find((issue) => issue.source === "mangadex-reader")?.message ??
+            "MangaDex reader is unavailable.",
+        );
+      }
       setReaderSession(session);
       const savedResume =
-        mangaResume ?? (await window.anistream.getMangaReadingResume(resolved.id));
+        mangaResume ??
+        snapshot?.resume ??
+        (await window.anistream.getMangaReadingResume(resolved.id));
       setMangaResume(savedResume);
+      if (snapshot?.enrichment) setMangaEnrichment(snapshot.enrichment);
       const chapter = chooseChapterToRead(session, detail?.listEntry?.progress ?? 0, savedResume);
       setActiveChapter(chapter);
     } catch (reason) {

@@ -22,6 +22,10 @@ export function registerTrackerDomain(
     if (!aniList) throw new Error("AniList is not ready.");
     await aniList.startLogin();
   });
+  registerTrustedIpcHandler(trustedRendererOrigin, "anilist:cancel-login", () => {
+    if (!aniList) throw new Error("AniList is not ready.");
+    aniList.cancelLogin();
+  });
   registerTrustedIpcHandler(trustedRendererOrigin, "anilist:logout", async () => {
     if (!aniList) throw new Error("AniList is not ready.");
     await aniList.logout();

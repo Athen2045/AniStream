@@ -48,6 +48,7 @@ import {
 import { createRequestGate, type RequestGate } from "./request-queue";
 import { deleteSession, isMissingFileError, loadSession, saveSession } from "./session-store";
 import { parseAniListMangaKindHints, type AniListMangaKindHint } from "../manga-kind";
+import { AuthorizationTransaction } from "./authorization-transaction";
 import type {
   AniListListEntrySummary,
   AniListMedia,
@@ -76,11 +77,12 @@ const LATEST_UPDATE_PAGE_SIZE = 21;
 const MANGA_KIND_CACHE_TTL_MS = 24 * 60 * 60_000;
 // Used only when AniList's 429 response has no Retry-After header to honor.
 const DEFAULT_RATE_LIMIT_PAUSE_MS = 60_000;
+const AUTHORIZATION_TIMEOUT_MS = 5 * 60_000;
 
 export class AniListClient {
   private token?: string;
   private profile?: AniListProfile;
-  private authorizing = false;
+  private readonly authorization: AuthorizationTransaction;
   private readonly requestGate: RequestGate = createRequestGate({
     requestsPerMinute: REQUESTS_PER_MINUTE,
   });
@@ -112,7 +114,16 @@ export class AniListClient {
   public constructor(
     private readonly tokenPath: string,
     private readonly emitState: (state: AniListAuthState) => void,
-  ) {}
+  ) {
+    this.authorization = new AuthorizationTransaction({
+      timeoutMs: AUTHORIZATION_TIMEOUT_MS,
+      onTimeout: () =>
+        this.emitState({
+          status: "error",
+          message: "AniList sign-in timed out. Start it again when you are ready.",
+        }),
+    });
+  }
 
   public async restore(): Promise<AniListAuthState> {
     try {
@@ -141,7 +152,7 @@ export class AniListClient {
   }
 
   public getState(): AniListAuthState {
-    if (this.authorizing) return { status: "authorizing" };
+    if (this.authorization.active) return { status: "authorizing" };
     if (this.profile) return { status: "signed-in", profile: this.profile };
     return { status: "signed-out" };
   }
@@ -154,13 +165,13 @@ export class AniListClient {
     authorizeUrl.searchParams.set("redirect_uri", ANILIST_REDIRECT_URI);
     authorizeUrl.searchParams.set("response_type", "code");
 
-    this.authorizing = true;
+    this.authorization.begin();
     this.emitState({ status: "authorizing" });
 
     try {
       await shell.openExternal(authorizeUrl.toString());
     } catch (error) {
-      this.authorizing = false;
+      this.authorization.cancel();
       this.emitState({
         status: "error",
         message: "The AniList sign-in page could not be opened.",
@@ -170,24 +181,31 @@ export class AniListClient {
   }
 
   public async handleCallback(callbackUrl: string): Promise<void> {
-    if (!this.authorizing) return;
-
     try {
-      const url = new URL(callbackUrl);
-      if (url.protocol !== "anistream:" || url.hostname !== "auth" || url.pathname !== "/anilist") {
-        throw new Error("AniStream received an invalid AniList callback.");
-      }
+      const result = await this.authorization.handleCallback(async (signal) => {
+        const url = new URL(callbackUrl);
+        if (
+          url.protocol !== "anistream:" ||
+          url.hostname !== "auth" ||
+          url.pathname !== "/anilist"
+        ) {
+          throw new Error("AniStream received an invalid AniList callback.");
+        }
 
-      const code = url.searchParams.get("code");
-      if (!code) {
-        const reason = url.searchParams.get("error_description") ?? url.searchParams.get("error");
-        throw new Error(reason ?? "AniList did not return an authorization code.");
-      }
+        const code = url.searchParams.get("code");
+        if (!code) {
+          const reason = url.searchParams.get("error_description") ?? url.searchParams.get("error");
+          throw new Error(reason ?? "AniList did not return an authorization code.");
+        }
 
-      const token = await this.exchangeAuthorizationCode(code);
-      this.token = token;
-      this.profile = await this.fetchProfile();
-      await this.persistToken(token);
+        const token = await this.exchangeAuthorizationCode(code, signal);
+        this.token = token;
+        this.profile = await this.fetchProfile();
+        if (signal.aborted) throw new DOMException("AniList sign-in was cancelled.", "AbortError");
+        await this.persistToken(token);
+      });
+      if (!result.handled) return;
+      if (!this.profile) throw new Error("AniList profile loading did not complete.");
       this.emitState({ status: "signed-in", profile: this.profile });
     } catch (error) {
       await this.clearSession();
@@ -195,12 +213,18 @@ export class AniListClient {
         status: "error",
         message: error instanceof Error ? error.message : "AniList sign-in failed.",
       });
-    } finally {
-      this.authorizing = false;
     }
   }
 
+  public cancelLogin(): void {
+    if (!this.authorization.cancel()) return;
+    this.emitState(
+      this.profile ? { status: "signed-in", profile: this.profile } : { status: "signed-out" },
+    );
+  }
+
   public async logout(): Promise<void> {
+    this.authorization.cancel();
     await this.clearSession();
     this.emitState({ status: "signed-out" });
   }
@@ -412,7 +436,7 @@ export class AniListClient {
     return normalizeProfile(response.Viewer);
   }
 
-  private async exchangeAuthorizationCode(code: string): Promise<string> {
+  private async exchangeAuthorizationCode(code: string, signal: AbortSignal): Promise<string> {
     const clientSecret = await readClientSecretFromKeychain();
     if (!clientSecret) {
       throw new Error("The AniList client secret is missing from macOS Keychain.");
@@ -431,7 +455,7 @@ export class AniListClient {
         redirect_uri: ANILIST_REDIRECT_URI,
         code,
       }),
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
     });
 
     const payload = (await response.json()) as TokenResponse;
@@ -533,9 +557,9 @@ export class AniListClient {
   }
 
   private async clearSession(): Promise<void> {
+    this.authorization.cancel();
     this.token = undefined;
     this.profile = undefined;
-    this.authorizing = false;
     await deleteSession(this.tokenPath);
     this.invalidateViewerData();
   }

@@ -1,8 +1,7 @@
 import type { AniListClient } from "../anilist";
 import type { MalClient } from "../mal";
-import type { MangaBakaClient } from "../mangabaka";
 import type { MangaDexClient } from "../mangadex";
-import type { MangaUpdatesClient } from "../mangaupdates";
+import type { MangaTitleModule } from "../manga-title";
 import {
   classifyLatestMangaUpdates,
   needsMalKindCrossCheck,
@@ -13,8 +12,7 @@ import type { MangaPublicationKind } from "../../shared/contracts";
 
 export interface MangaDomainDeps {
   mangaDex: MangaDexClient | undefined;
-  mangaBaka: MangaBakaClient | undefined;
-  mangaUpdates: MangaUpdatesClient | undefined;
+  mangaTitle: MangaTitleModule | undefined;
   aniList: AniListClient | undefined;
   mal: MalClient | undefined;
 }
@@ -25,8 +23,13 @@ export interface MangaDomainDeps {
  */
 export function registerMangaDomain(
   trustedRendererOrigin: string,
-  { mangaDex, mangaBaka, mangaUpdates, aniList, mal }: MangaDomainDeps,
+  { mangaDex, mangaTitle, aniList, mal }: MangaDomainDeps,
 ): void {
+  const titleRequests = new Map<string, AbortController>();
+  registerTrustedIpcHandler(trustedRendererOrigin, "request:cancel", (_event, requestId) => {
+    titleRequests.get(requestId)?.abort();
+    titleRequests.delete(requestId);
+  });
   registerTrustedIpcHandler(trustedRendererOrigin, "mangadex:latest", async (_event, page) => {
     if (!mangaDex) throw new Error("MangaDex is not ready.");
     const updates = await mangaDex.getLatestUpdates(page);
@@ -72,37 +75,23 @@ export function registerMangaDomain(
       return mangaDex.getAvailability(media);
     },
   );
-  registerTrustedIpcHandler(trustedRendererOrigin, "mangadex:reader", async (_event, input) => {
-    if (!mangaDex) throw new Error("MangaDex is not ready.");
-    return mangaDex.getReader(input);
-  });
+  registerTrustedIpcHandler(
+    trustedRendererOrigin,
+    "manga:title-snapshot",
+    async (_event, input, requestId) => {
+      if (!mangaTitle) throw new Error("Manga title data is not ready.");
+      titleRequests.get(requestId)?.abort();
+      const controller = new AbortController();
+      titleRequests.set(requestId, controller);
+      try {
+        return await mangaTitle.load(input, controller.signal);
+      } finally {
+        if (titleRequests.get(requestId) === controller) titleRequests.delete(requestId);
+      }
+    },
+  );
   registerTrustedIpcHandler(trustedRendererOrigin, "mangadex:page", async (_event, input) => {
     if (!mangaDex) throw new Error("MangaDex is not ready.");
     return mangaDex.getPage(input);
   });
-  registerTrustedIpcHandler(
-    trustedRendererOrigin,
-    "manga:enrichment",
-    async (_event, aniListId) => {
-      if (!mangaBaka) throw new Error("MangaBaka is not ready.");
-      const enrichment = await mangaBaka.getEnrichment(aniListId);
-      if (enrichment.status !== "available" || !enrichment.mangaUpdatesId || !mangaUpdates) {
-        return enrichment;
-      }
-      const seriesId = Number(enrichment.mangaUpdatesId);
-      if (!Number.isInteger(seriesId) || seriesId <= 0) return enrichment;
-      try {
-        const [series, groups] = await Promise.all([
-          mangaUpdates.getSeries(seriesId),
-          mangaUpdates.getGroups(seriesId),
-        ]);
-        return {
-          ...enrichment,
-          mangaUpdates: { ...series, groups },
-        };
-      } catch {
-        return enrichment;
-      }
-    },
-  );
 }

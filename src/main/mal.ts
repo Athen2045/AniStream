@@ -7,6 +7,7 @@ import type {
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
 import { mangaKindFromMalMediaType } from "./manga-kind";
+import { ProviderTransport } from "./provider-transport";
 
 const MAL_API_URL = "https://api.myanimelist.net/v2";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -40,11 +41,22 @@ export class MalClient {
     maxEntries: 120,
     ttlMs: MEDIA_TYPE_CACHE_TTL_MS,
   });
+  private readonly transport: ProviderTransport;
 
   public constructor(
     private readonly clientId = process.env.ANISTREAM_MAL_CLIENT_ID?.trim(),
     private readonly fetcher: Fetcher = fetch,
-  ) {}
+  ) {
+    this.transport = new ProviderTransport({
+      gate: this.requestGate,
+      fetcher: this.fetcher,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+      },
+    });
+  }
 
   public get configured(): boolean {
     return Boolean(this.clientId);
@@ -114,22 +126,25 @@ export class MalClient {
   private async requestJson(url: URL, deduplicationKey: string): Promise<unknown> {
     if (!this.clientId) throw new Error("MyAnimeList is not configured.");
     const clientId = this.clientId;
-    return this.requestGate.run(deduplicationKey, async () => {
-      const response = await this.fetcher(url, {
-        headers: {
-          Accept: "application/json",
-          "X-MAL-CLIENT-ID": clientId,
-          "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+    return this.transport.requestParsed(
+      url,
+      {
+        dedupeKey: deduplicationKey,
+        headers: { "X-MAL-CLIENT-ID": clientId },
+        onResponse: (providerResponse, gate) => {
+          if (providerResponse.status === 429 || providerResponse.status === 403) {
+            gate.reportRateLimited(5 * 60_000);
+            throw new Error(
+              `MyAnimeList temporarily refused requests (${providerResponse.status}).`,
+            );
+          }
         },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-      if (response.status === 429 || response.status === 403) {
-        this.requestGate.reportRateLimited(5 * 60_000);
-        throw new Error(`MyAnimeList temporarily refused requests (${response.status}).`);
-      }
-      if (!response.ok) throw new Error(`MyAnimeList request failed (${response.status}).`);
-      return response.json() as Promise<unknown>;
-    });
+      },
+      (response) => {
+        if (!response.ok) throw new Error(`MyAnimeList request failed (${response.status}).`);
+        return response.json() as Promise<unknown>;
+      },
+    );
   }
 }
 

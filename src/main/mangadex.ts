@@ -12,6 +12,7 @@ import type {
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
 import { mangaKindFromOriginalLanguage } from "./manga-kind";
+import { mapSettledWithConcurrency, ProviderTransport } from "./provider-transport";
 
 const MANGADEX_API_URL = "https://api.mangadex.org";
 const DEFAULT_LANGUAGE = "en";
@@ -63,11 +64,22 @@ export class MangaDexClient {
     maxEntries: 20,
     ttlMs: LATEST_UPDATES_TTL_MS,
   });
+  private readonly transport: ProviderTransport;
 
   public constructor(
     private readonly translatedLanguage = process.env.MANGADEX_LANGUAGE?.trim() || DEFAULT_LANGUAGE,
     private readonly fetcher: Fetcher = fetch,
-  ) {}
+  ) {
+    this.transport = new ProviderTransport({
+      gate: this.requestGate,
+      fetcher: this.fetcher,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+      },
+    });
+  }
 
   public async getAvailability(
     media: MangaDexAvailabilityInput[],
@@ -131,7 +143,10 @@ export class MangaDexClient {
     return updates;
   }
 
-  public async getReader(input: MangaDexReaderInput): Promise<MangaDexReaderSession> {
+  public async getReader(
+    input: MangaDexReaderInput,
+    signal?: AbortSignal,
+  ): Promise<MangaDexReaderSession> {
     if (!Number.isInteger(input.aniListId) || input.aniListId <= 0 || !isSafeTitle(input.title)) {
       throw new Error("A valid AniList ID and manga title are required.");
     }
@@ -140,7 +155,7 @@ export class MangaDexClient {
     if (cached) return cached;
 
     try {
-      const mapping = await this.findMappedManga(input.aniListId, input.title);
+      const mapping = await this.findMappedManga(input.aniListId, input.title, signal);
       if (!mapping) {
         return this.rememberReader(cacheKey, {
           status: "unmapped",
@@ -150,14 +165,14 @@ export class MangaDexClient {
           message: "MangaDex has no exact AniList mapping for this title.",
         });
       }
-      let chapters = await this.getChapters(mapping.id, this.translatedLanguage);
+      let chapters = await this.getChapters(mapping.id, this.translatedLanguage, signal);
       let translatedLanguage: string = this.translatedLanguage;
       if (!chapters.length) {
         // Many licensed titles have zero chapters in the configured language (their
         // scanlations were taken down) while chapters in other languages remain fully
         // available on MangaDex. Retry across every language before reporting "no
         // chapters" so the reader doesn't hide chapters that actually exist.
-        chapters = await this.getChapters(mapping.id);
+        chapters = await this.getChapters(mapping.id, undefined, signal);
         if (chapters.length) translatedLanguage = "multi";
       }
       return this.rememberReader(cacheKey, {
@@ -309,11 +324,12 @@ export class MangaDexClient {
   private async findMappedManga(
     aniListId: number,
     title: string,
+    signal?: AbortSignal,
   ): Promise<ExactMangaDexMapping | undefined> {
     const searchUrl = new URL("/manga", MANGADEX_API_URL);
     searchUrl.searchParams.set("title", title);
     searchUrl.searchParams.set("limit", "10");
-    return findExactAniListManga(await this.requestJson(searchUrl), aniListId);
+    return findExactAniListManga(await this.requestJson(searchUrl, signal), aniListId);
   }
 
   /**
@@ -324,6 +340,7 @@ export class MangaDexClient {
   private async getChapters(
     mangaDexId: string,
     translatedLanguage?: string,
+    signal?: AbortSignal,
   ): Promise<MangaDexReaderChapter[]> {
     const chapters = new Map<string, MangaDexReaderChapter>();
     const fetchBatch = async (offset: number): Promise<unknown> => {
@@ -336,7 +353,7 @@ export class MangaDexClient {
       chaptersUrl.searchParams.set("order[chapter]", "asc");
       chaptersUrl.searchParams.set("limit", String(CHAPTER_PAGE_LIMIT));
       chaptersUrl.searchParams.set("offset", String(offset));
-      return this.requestJson(chaptersUrl);
+      return this.requestJson(chaptersUrl, signal);
     };
 
     const firstPayload = await fetchBatch(0);
@@ -350,8 +367,10 @@ export class MangaDexClient {
       for (let offset = firstBatchSize; offset < total; offset += CHAPTER_PAGE_LIMIT) {
         offsets.push(offset);
       }
-      const payloads = await Promise.all(offsets.map((offset) => fetchBatch(offset)));
-      for (const payload of payloads) {
+      const batches = await mapSettledWithConcurrency(offsets, 3, fetchBatch);
+      for (const batch of batches) {
+        if (batch.status !== "fulfilled") continue;
+        const payload = batch.value;
         for (const chapter of normalizeChapters(payload)) chapters.set(chapter.id, chapter);
       }
     } else {
@@ -380,38 +399,41 @@ export class MangaDexClient {
     return node;
   }
 
-  private async requestJson(url: URL): Promise<unknown> {
-    return this.requestGate.run(url.toString(), async () => {
-      const response = await this.fetcher(url, {
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+  private async requestJson(url: URL, signal?: AbortSignal): Promise<unknown> {
+    return this.transport.requestParsed(
+      url,
+      {
+        signal,
+        onResponse: (providerResponse, gate) => {
+          if (providerResponse.status === 429) {
+            gate.reportRateLimited(
+              parseRateLimitCooldownMs(
+                providerResponse.headers.get("x-ratelimit-retry-after"),
+                providerResponse.headers.get("retry-after"),
+              ),
+            );
+            throw new Error(
+              "MangaDex is rate-limiting requests. AniStream paused its request queue.",
+            );
+          }
+          if (providerResponse.status === 403) {
+            gate.reportRateLimited(FORBIDDEN_PAUSE_MS);
+            throw new Error(
+              "MangaDex temporarily refused requests. AniStream paused its request queue.",
+            );
+          }
         },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-      if (response.status === 429) {
-        this.requestGate.reportRateLimited(
-          parseRateLimitCooldownMs(
-            response.headers.get("x-ratelimit-retry-after"),
-            response.headers.get("retry-after"),
-          ),
-        );
-        throw new Error("MangaDex is rate-limiting requests. AniStream paused its request queue.");
-      }
-      if (response.status === 403) {
-        this.requestGate.reportRateLimited(FORBIDDEN_PAUSE_MS);
-        throw new Error(
-          "MangaDex temporarily refused requests. AniStream paused its request queue.",
-        );
-      }
-      if (!response.ok) {
-        throw new MangaDexRequestError(
-          response.status,
-          `MangaDex request failed (${response.status}).`,
-        );
-      }
-      return response.json() as Promise<unknown>;
-    });
+      },
+      (response) => {
+        if (!response.ok) {
+          throw new MangaDexRequestError(
+            response.status,
+            `MangaDex request failed (${response.status}).`,
+          );
+        }
+        return response.json() as Promise<unknown>;
+      },
+    );
   }
 
   private remember(key: string, value: MangaDexChapterAvailability): MangaDexChapterAvailability {

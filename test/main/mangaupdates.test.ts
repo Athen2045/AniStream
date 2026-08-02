@@ -54,6 +54,7 @@ describe("MangaUpdates exact-ID enrichment", () => {
     await client.getSeries(13);
     await client.getSeries(13);
     await client.getGroups(13);
+    await client.getGroups(13);
 
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("/v1/series/13");

@@ -9,6 +9,7 @@ import type {
 import { cleanDisplayText } from "../shared/text";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
+import { ProviderTransport } from "./provider-transport";
 
 const DEFAULT_API_BASE_URL = "https://anikotoapi.site";
 const MEGAPLAY_ORIGIN = "https://megaplay.buzz";
@@ -42,12 +43,23 @@ export class AnikotoClient {
     minIntervalMs: REQUEST_INTERVAL_MS,
   });
   private readonly apiBaseUrl: URL;
+  private readonly transport: ProviderTransport;
 
   public constructor(
     private readonly fetcher: typeof fetch = fetch,
     apiBaseUrl = process.env.ANISTREAM_ANIKOTO_API_URL ?? DEFAULT_API_BASE_URL,
   ) {
     this.apiBaseUrl = validateApiBaseUrl(apiBaseUrl);
+    this.transport = new ProviderTransport({
+      gate: this.requestGate,
+      fetcher: this.fetcher,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      redirect: "error",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "AniStream/0.1 (personal macOS application)",
+      },
+    });
   }
 
   public async getEpisodeCatalog(input: AnimeEpisodeCatalogInput): Promise<AnimeEpisodeCatalog> {
@@ -121,37 +133,24 @@ export class AnikotoClient {
   }
 
   private async requestJson(url: URL): Promise<unknown> {
-    return this.requestGate.run(url.toString(), async () => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-      try {
-        const response = await this.fetcher(url, {
-          headers: {
-            Accept: "application/json",
-            "User-Agent": "AniStream/0.1 (personal macOS application)",
-          },
-          redirect: "error",
-          signal: controller.signal,
-        });
-
-        if (response.status === 429) {
-          this.requestGate.reportRateLimited(
-            parseProviderCooldown(response, DEFAULT_RATE_LIMIT_COOLDOWN_MS),
+    return this.transport.requestJson(url, {
+      onResponse: (providerResponse, gate) => {
+        if (providerResponse.status === 429) {
+          gate.reportRateLimited(
+            parseProviderCooldown(providerResponse, DEFAULT_RATE_LIMIT_COOLDOWN_MS),
           );
           throw new Error("Anikoto rate limit reached. Try again after its cooldown.");
         }
-        if (response.status === 403) {
-          this.requestGate.reportRateLimited(FORBIDDEN_COOLDOWN_MS);
+        if (providerResponse.status === 403) {
+          gate.reportRateLimited(FORBIDDEN_COOLDOWN_MS);
           throw new Error(
             "Anikoto temporarily blocked this IP. AniStream paused provider requests.",
           );
         }
-        if (!response.ok) throw new Error(`Anikoto returned HTTP ${response.status}.`);
-
-        return await response.json();
-      } finally {
-        clearTimeout(timeout);
-      }
+        if (!providerResponse.ok) {
+          throw new Error(`Anikoto returned HTTP ${providerResponse.status}.`);
+        }
+      },
     });
   }
 }

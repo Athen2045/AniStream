@@ -1,5 +1,5 @@
 export interface RequestGate {
-  run<T>(dedupeKey: string | undefined, fn: () => Promise<T>): Promise<T>;
+  run<T>(dedupeKey: string | undefined, fn: () => Promise<T>, signal?: AbortSignal): Promise<T>;
   /** Pause every future request until `retryAfterMs` has elapsed (see API.md: "On 429, stop the
    * queue until Retry-After/reset; do not send speculative retries."). Safe to call repeatedly;
    * only ever extends the pause, never shortens it. */
@@ -30,16 +30,17 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
   let blockedUntil = 0;
   let lastStartAt = 0;
 
-  function acquireSlot(): Promise<void> {
-    queueTail = queueTail.then(async () => {
+  function acquireSlot(signal?: AbortSignal): Promise<void> {
+    const slot = queueTail.then(async () => {
       for (;;) {
+        throwIfAborted(signal);
         const now = Date.now();
         if (now < blockedUntil) {
-          await sleep(blockedUntil - now);
+          await sleep(blockedUntil - now, signal);
           continue;
         }
         if (minIntervalMs && now - lastStartAt < minIntervalMs) {
-          await sleep(minIntervalMs - (now - lastStartAt));
+          await sleep(minIntervalMs - (now - lastStartAt), signal);
           continue;
         }
         while (startTimestamps.length && now - startTimestamps[0] >= windowMs) {
@@ -51,21 +52,27 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
           return;
         }
         const waitMs = windowMs - (now - startTimestamps[0]) + 1;
-        await sleep(waitMs);
+        await sleep(waitMs, signal);
       }
     });
-    return queueTail;
+    queueTail = slot.then(
+      () => undefined,
+      () => undefined,
+    );
+    return slot;
   }
 
   return {
-    run<T>(dedupeKey: string | undefined, fn: () => Promise<T>): Promise<T> {
+    run<T>(dedupeKey: string | undefined, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+      if (signal?.aborted) return Promise.reject(abortError());
       if (dedupeKey) {
         const existing = inFlight.get(dedupeKey);
-        if (existing) return existing as Promise<T>;
+        if (existing) return raceWithAbort(existing as Promise<T>, signal);
       }
 
       const execution = (async () => {
-        await acquireSlot();
+        await acquireSlot(signal);
+        throwIfAborted(signal);
         return fn();
       })();
 
@@ -89,6 +96,46 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
   };
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = (): void => {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", onAbort);
+      reject(abortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortError();
+}
+
+function abortError(): DOMException {
+  return new DOMException("The request was cancelled.", "AbortError");
+}
+
+function raceWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => reject(abortError());
+    signal.addEventListener("abort", onAbort, { once: true });
+    void promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (reason: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(reason);
+      },
+    );
+  });
 }
