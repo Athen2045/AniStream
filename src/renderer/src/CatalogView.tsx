@@ -3,7 +3,6 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useMemo, useState } from "react";
 import type {
   AniListCatalogMedia,
-  AniListDashboard,
   AniListEntry,
   AniListMediaType,
   LatestMangaUpdate,
@@ -15,27 +14,24 @@ import { safeBackgroundUrl } from "./safe-css-url";
 import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
 import { useCatalogData } from "./useCatalogData";
+import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
 
 export function CatalogView({
   type,
   searchQuery,
-  dashboard,
-  libraryEntries,
+  access,
   onSelect,
   onPrimary,
-  onQuickAdd,
-  onQuickRemove,
 }: {
   type: AniListMediaType;
   searchQuery: string;
-  dashboard?: AniListDashboard;
-  libraryEntries: Map<number, AniListEntry>;
+  access: ViewerAccess;
   onSelect: (media: AniListCatalogMedia) => void;
   onPrimary: (media: AniListCatalogMedia) => void;
-  onQuickAdd: (media: AniListCatalogMedia) => Promise<void>;
-  onQuickRemove: (entry: AniListEntry) => Promise<void>;
 }): React.JSX.Element {
   const reducedMotion = useReducedMotion();
+  const personalized = hasPersonalizedAccess(access);
+  const dashboard = personalized ? access.dashboard : undefined;
   const continueCandidates = useMemo(() => {
     const groups = type === "ANIME" ? dashboard?.animeLists : dashboard?.mangaLists;
     return (groups ?? [])
@@ -74,7 +70,7 @@ export function CatalogView({
     type,
     searchQuery,
     availabilityMedia,
-    trackAvailabilityNow: Boolean(dashboard && !searchQuery),
+    trackAvailabilityNow: Boolean(personalized && !searchQuery),
   });
   const continueEntries = useMemo(
     () =>
@@ -126,7 +122,9 @@ export function CatalogView({
             </div>
             <p>
               {cleanDescription(hero.description) ||
-                `Discover ${hero.title} and keep your progress synced with AniList.`}
+                (personalized
+                  ? `Discover ${hero.title} and keep your progress synced with AniList.`
+                  : `Discover ${hero.title}, then watch or read without connecting an account.`)}
             </p>
             <div className="hero-actions">
               <button className="play-action" type="button" onClick={() => onPrimary(hero)}>
@@ -190,9 +188,11 @@ export function CatalogView({
                       <span className="round-action">
                         <Play size={16} fill="currentColor" />
                       </span>
-                      <span className="round-action">
-                        <Plus size={16} />
-                      </span>
+                      {personalized ? (
+                        <span className="round-action">
+                          <Plus size={16} />
+                        </span>
+                      ) : null}
                     </span>
                   </span>
                   <strong>{media.title}</strong>
@@ -218,15 +218,14 @@ export function CatalogView({
           </>
         ) : (
           <>
-            {continueEntries.length ? (
+            {personalized && continueEntries.length ? (
               <MediaRail
                 title={type === "ANIME" ? "Continue Watching" : "Continue Reading"}
                 eyebrow="From your AniList"
                 entries={continueEntries}
                 onSelect={onSelect}
                 onPrimary={onPrimary}
-                onQuickAdd={onQuickAdd}
-                onQuickRemove={onQuickRemove}
+                access={access}
               />
             ) : null}
 
@@ -252,14 +251,20 @@ export function CatalogView({
                         <img src={media.coverUrl} alt="" loading="lazy" decoding="async" />
                         <RailHoverActions
                           title={media.title}
-                          inLibrary={libraryEntries.has(media.id)}
                           onPlay={() => onPrimary(media)}
-                          onAdd={() => void onQuickAdd(media)}
-                          onRemove={() => {
-                            const entry = libraryEntries.get(media.id);
-                            if (entry) void onQuickRemove(entry);
-                          }}
                           onInfo={() => onSelect(media)}
+                          library={
+                            personalized
+                              ? {
+                                  inLibrary: access.libraryEntries.has(media.id),
+                                  onAdd: () => void access.addToLibrary(media),
+                                  onRemove: () => {
+                                    const entry = access.libraryEntries.get(media.id);
+                                    if (entry) void access.removeFromLibrary(entry);
+                                  },
+                                }
+                              : undefined
+                          }
                         />
                       </span>
                       <span className="shelf-copy">
@@ -480,8 +485,7 @@ function MediaRail({
   entries,
   onSelect,
   onPrimary,
-  onQuickAdd,
-  onQuickRemove,
+  access,
 }: {
   title: string;
   eyebrow: string;
@@ -489,9 +493,9 @@ function MediaRail({
   entries?: AniListEntry[];
   onSelect: (media: AniListCatalogMedia) => void;
   onPrimary?: (media: AniListCatalogMedia) => void;
-  onQuickAdd: (media: AniListCatalogMedia) => Promise<void>;
-  onQuickRemove: (entry: AniListEntry) => Promise<void>;
+  access: ViewerAccess;
 }): React.JSX.Element {
+  const personalized = hasPersonalizedAccess(access);
   const cards = items ?? entries?.map(toCatalogMedia) ?? [];
   return (
     <section className="media-rail" aria-label={title}>
@@ -517,13 +521,19 @@ function MediaRail({
                 <img src={media.coverUrl} alt="" loading="lazy" decoding="async" />
                 <RailHoverActions
                   title={media.title}
-                  inLibrary={Boolean(entry)}
                   onPlay={() => (onPrimary ? onPrimary(media) : onSelect(media))}
-                  onAdd={() => void onQuickAdd(media)}
-                  onRemove={() => {
-                    if (entry) void onQuickRemove(entry);
-                  }}
                   onInfo={() => onSelect(media)}
+                  library={
+                    personalized
+                      ? {
+                          inLibrary: Boolean(entry),
+                          onAdd: () => void access.addToLibrary(media),
+                          onRemove: () => {
+                            if (entry) void access.removeFromLibrary(entry);
+                          },
+                        }
+                      : undefined
+                  }
                 />
                 {entry ? (
                   <span className="rail-progress" aria-label={`${entry.progress} completed`}>

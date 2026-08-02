@@ -1,146 +1,234 @@
 # AniStream
 
-AniStream is a personal macOS desktop application that combines anime and manga discovery, list
-management, anime playback, manga reading, and tracker synchronization in one coherent library.
-AniList is the primary catalog and tracker, MangaDex supplies manga and chapter delivery, and
-Anikoto/MegaPlay supplies removable embedded anime playback.
+**Discover anime and manga, watch or read, and keep your progress in one desktop app.**
 
-## Feature scope
+AniStream is an early-preview media app for anime and manga fans. Browse trending titles, search
+both catalogs from one place, open episode and chapter lists, and continue from where you left off.
+An AniList account is optional.
 
-### Version 1
+> **Current release:** v0.1.1 for Apple Silicon Macs running macOS 12 or newer. The Windows and
+> Android versions are under development and are not available yet.
 
-- Unified anime and manga search backed by AniList.
-- Netflix-inspired anime and editorial manga browse pages with featured titles, catalog sorting,
-  keyboard-accessible unified search, detailed title modals, fluid discovery rails, and pagination.
-- AniList-driven Continue Watching/Reading and Trending rails, plus independently paged 21-title
-  Latest Anime/Manga grids.
-- Local SQLite library and progress state for one user on one Mac.
-- AniList browser OAuth, profile, complete anime/manga lists, and progress/score/status/notes synchronization.
-- MangaDex exact-ID mapping, chapter feeds, MangaDex@Home page delivery, and opt-in account
-  synchronization (account sync is still pending).
-- Fullscreen vertical long-strip manga reader with local chapter/scroll resume and previous/next
-  chapter navigation.
-- Replaceable Anikoto episode adapter with sub/dub playback through MegaPlay's documented embed.
-- Fullscreen episode playback with local progress checkpoints and AniList completion updates.
+## Download AniStream for macOS
 
-Currently implemented from this scope: durable AniList login, profile/list management, unified
-search, Anime/Manga navigation, paginated catalog search, expanding content carousels, AniList
-Continue/Trending rails, static paginated Latest Updates grids, Anikoto episode lookup, MegaPlay
-sub/dub embeds, Framer Motion fullscreen episode-list transitions, per-episode SQLite progress,
-direct-to-list anime/manga details, MangaDex archive paging and fullscreen long-strip reading,
-per-chapter SQLite resume, MangaBaka exact-ID enrichment, rich AniList title details, and AniList
-progress/rating/completion updates.
+1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.1.
+2. Under **Assets**, download the macOS DMG: `AniStream-0.1.1-arm64.dmg`.
+3. Open the DMG and drag **AniStream** into **Applications**.
+4. Open AniStream from the Applications folder.
 
-### Later
+AniStream v0.1.1 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
+launch, Control-click AniStream in Applications, choose **Open**, then confirm **Open**. You only
+need to do this once. Do not disable Gatekeeper globally.
 
-- Multiple video-source adapters and automatic fallback.
-- Optional AniDB enrichment and episode/ID mapping.
-- Downloads and richer offline behavior.
-- Advanced recommendations, activity feeds, and statistics.
-- Additional trackers or local-media/Plex/Jellyfin adapters.
-- Platforms other than Apple Silicon macOS.
+### Start using the app
 
-## Tech stack
+- Browse **Anime** and **Manga** without creating an account.
+- Use the search bar to find a title, then open its episode or chapter list.
+- AniStream stores playback and reading progress locally on your Mac.
+- Open **Profile** if you want to connect AniList and add your lists, ratings, and tracker progress.
 
-| Choice                       | Why                                                                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Electron                     | Mature macOS desktop shell with file, media, IPC, custom-protocol OAuth, and native-module support.                       |
-| React + TypeScript           | One typed language across the renderer, preload, and main process, with a productive solo-developer workflow.             |
-| electron-vite                | Fast development and a conventional main/preload/renderer build.                                                          |
-| SQLite via `better-sqlite3`  | Simple local persistence for one user without a database server.                                                          |
-| TanStack Query               | Planned request deduplication, caching, retries, and remote-state lifecycle management.                                   |
-| Framer Motion + Lucide       | Accessible iconography and reduced-motion-aware search, pagination, and fullscreen view transitions.                      |
-| Anikoto + MegaPlay embed     | Exact provider episode IDs when available and documented AniList-ID sub/dub embeds without extracting direct media URLs.  |
-| Plain CSS with design tokens | Keeps the desktop UI direct while sharing the inspected Netflix reference palette and AniStream-specific tracker accents. |
+AniList connection is optional. This preview does not package an OAuth client secret, so public
+release builds may require developer configuration before account syncing can be enabled. The rest
+of the app remains available while signed out.
 
-## Local setup
+### What is included
 
-Requirements:
+- One search experience for anime and manga.
+- Trending and latest-update discovery pages.
+- Detailed title information from AniList and supplemental metadata providers.
+- Episode browsing with sub/dub embedded anime playback.
+- MangaDex chapter lists and a fullscreen vertical reader.
+- Local episode, chapter, and scroll-position resume.
+- Optional AniList profile, list, score, progress, and completion syncing.
+
+> AniStream is an early personal project. Streaming and reading availability depends on external
+> providers and can change without notice. Only access media you are legally permitted to use in
+> your region.
+
+---
+
+# For developers
+
+AniStream is a macOS-first Electron application built as a portfolio-scale full-stack desktop
+system. It demonstrates secure process isolation, typed IPC, provider orchestration, local-first
+persistence, OAuth lifecycle management, resilient network behavior, and media-focused React UI
+engineering without introducing a separate cloud backend.
+
+## Engineering scope
+
+- **Desktop architecture:** Electron main, preload, and renderer processes with explicit ownership
+  boundaries.
+- **Type-safe integration:** strict TypeScript contracts shared across validated IPC channels.
+- **Security:** `contextIsolation`, Electron sandboxing, disabled renderer Node integration,
+  origin-validated IPC, runtime payload validation, denied child navigation, and Keychain-backed
+  credential storage.
+- **Local persistence:** SQLite stores playback checkpoints, manga reading progress, and the cached
+  AniList dashboard for one local user; provider adapters use bounded in-memory caches.
+- **Network resilience:** request throttling, in-flight deduplication, TTL caches, abort signals,
+  bounded retries, provider cooldowns, stale-response rejection, and degraded-mode orchestration.
+- **Media UX:** code-split anime and manga experiences, fullscreen view transitions, reduced-motion
+  support, keyboard navigation, paged discovery grids, viewport-lazy manga pages, and local resume.
+- **Quality gates:** strict type checking, ESLint, Prettier, fixture-based Vitest coverage, preload
+  packaging checks, OAuth contract checks, GitHub Actions, CodeQL, and dependency auditing.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI[React renderer] -->|Typed preload API| IPC[Validated Electron IPC]
+    IPC --> MAIN[Electron main process]
+    MAIN --> DOMAINS[Tracker, anime, manga, and resume domains]
+    DOMAINS --> DB[(SQLite)]
+    DOMAINS --> KEYCHAIN[macOS Keychain]
+    DOMAINS --> ANILIST[AniList GraphQL]
+    DOMAINS --> MANGA[MangaDex and enrichment APIs]
+    DOMAINS --> VIDEO[Anikoto and MegaPlay]
+```
+
+The renderer owns presentation and transient interaction state. The trusted main process owns
+credentials, persistence, provider traffic, throttling, caching, media-source resolution, and
+filesystem access. The preload exposes a narrow serializable API rather than raw Electron access.
+
+## Technology stack
+
+| Layer            | Technology                               | Role                                                                              |
+| ---------------- | ---------------------------------------- | --------------------------------------------------------------------------------- |
+| Desktop runtime  | Electron 43                              | macOS windowing, lifecycle, custom OAuth protocol, secure IPC, and packaging      |
+| UI               | React 19, Framer Motion, Lucide          | catalog, profile, detail, player, reader, accessible transitions, and iconography |
+| Language         | TypeScript 7                             | strict contracts across main, preload, shared, and renderer code                  |
+| Build            | electron-vite 5, Vite 7                  | development server and production bundles                                         |
+| Persistence      | SQLite with `better-sqlite3`             | local resume state, cached dashboard data, and bounded persistence                |
+| Styling          | Plain CSS and design tokens              | responsive cinematic UI without a component-framework dependency                  |
+| Testing          | Vitest, ESLint, Prettier                 | fixtures, unit/regression checks, static analysis, and formatting                 |
+| Packaging and CI | electron-builder, GitHub Actions, CodeQL | Apple Silicon DMG builds, release assets, verification, and security scans        |
+
+## Provider boundaries
+
+| Provider                   | Responsibility                                                         | Failure behavior                                                 |
+| -------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| AniList                    | Primary metadata, search, profile, lists, scores, and tracker progress | Signed-out discovery and local resume remain usable              |
+| MangaDex                   | Exact-ID manga mapping, chapter feeds, MangaDex@Home page delivery     | Manga details degrade without breaking anime or profile features |
+| Anikoto and MegaPlay       | Episode lookup and embedded sub/dub playback                           | Discovery and manga continue when playback is unavailable        |
+| MangaBaka and MangaUpdates | Exact-ID supplemental manga metadata                                   | Enrichment disappears; MangaDex remains the reader source        |
+| MyAnimeList                | Optional score cross-check and bounded catalog fallback                | AniList remains primary                                          |
+
+Provider response types stay inside their adapters. Renderer-facing code receives normalized domain
+contracts, and one provider failure does not invalidate unrelated data that loaded successfully.
+
+## Local development setup
+
+### Requirements
 
 - Apple Silicon Mac
-- macOS Monterey or newer
+- macOS 12 or newer
 - Node.js 22 or newer
 - npm
 
+### Install and run
+
 ```bash
-git clone <your-anistream-repository-url>
+git clone https://github.com/Athen2045/AniStream.git
 cd AniStream
-npm install --legacy-peer-deps
+npm ci --legacy-peer-deps
 cp .env.example .env
 npm run dev
 ```
 
-On the first AniList connection, macOS presents a hidden-input dialog for the OAuth client secret
-and saves it in Keychain. As a terminal fallback, `npm run configure:anilist` performs the same
-one-time setup. Neither path writes the secret to `.env` or the repository.
+Most public discovery and reading features work with the defaults in `.env.example`. Optional
+providers and account integrations can be configured separately.
 
-Useful checks:
+### Configure AniList for development
 
-```bash
-npm run typecheck
-npm run build
-npm run check:packaged-preload
-npm run check:anilist-oauth
-npm run check:product-slice
-```
+AniStream uses the registered callback `anistream://auth/anilist`. The OAuth client secret is never
+stored in `.env` or committed. On the first connection attempt, the trusted main process requests
+the secret through a hidden-input macOS dialog and saves it in Keychain.
 
-Create the Apple Silicon application and DMG:
+You can also configure it before launching:
 
 ```bash
-npm run package:mac
+npm run configure:anilist
 ```
 
-The current checkout is local and may not yet have a Git remote. Replace the clone URL above when the repository is published.
+### Environment variables
+
+| Variable                                     | Purpose                                                   | Required     |
+| -------------------------------------------- | --------------------------------------------------------- | ------------ |
+| `MANGADEX_LANGUAGE`                          | Preferred MangaDex chapter language; defaults to `en`     | No           |
+| `ANISTREAM_ANIKOTO_ENABLED`                  | Local kill switch for the Anikoto adapter                 | No           |
+| `ANISTREAM_ANIKOTO_API_URL`                  | Override for a verified Anikoto-compatible HTTPS endpoint | No           |
+| `ANISTREAM_MAL_CLIENT_ID`                    | MyAnimeList score and catalog fallback                    | No           |
+| `ANISTREAM_MANGABAKA_TOKEN`                  | MangaBaka PAT for higher API limits                       | No           |
+| `MANGADEX_CLIENT_ID` and related credentials | Reserved for planned opt-in MangaDex account sync         | Not used yet |
+| `PARSE_API_KEY` and Parse adapter values     | Reserved placeholders; no active adapter consumes them    | Not used yet |
+
+Keep secrets in the trusted process. Never expose them to renderer code or commit a populated
+`.env` file. Packaged development configuration can be read from
+`~/Library/Application Support/AniStream/.env`.
+
+## Development commands
+
+```bash
+npm run dev                  # Run Electron with the development renderer
+npm test                     # Run the Vitest suite
+npm run typecheck            # Check main and renderer TypeScript projects
+npm run lint                 # Run ESLint
+npm run format:check         # Check Prettier formatting
+npm run build                # Create production main, preload, and renderer bundles
+npm run check:product-slice  # Verify cross-process product contracts
+npm run check:anilist-oauth  # Verify the authorization-code implementation
+npm run package:mac          # Build the unsigned Apple Silicon app and DMG
+```
 
 ## Project structure
 
 ```text
 AniStream/
-├── assets/app-icon/    Source artwork used for the macOS application icon
-├── src/main/            Trusted Electron process, persistence, network adapters, IPC
-│   └── domains/          Per-domain IPC registration (tracker/anime/manga/resume)
-├── src/preload/         Narrow, typed bridge exposed to the renderer
-├── src/renderer/        React user interface
-├── src/shared/          Contracts safe to share across process seams
-└── electron.vite.config.ts
+├── assets/app-icon/          macOS application icon source
+├── build/                    electron-builder resources
+├── scripts/                  OAuth, packaging, and contract verification scripts
+├── src/main/                 trusted process, providers, persistence, and IPC
+│   ├── anilist/              OAuth, GraphQL client, normalization, queue, and session storage
+│   └── domains/              tracker, anime, manga, and resume orchestration
+├── src/preload/              narrow typed renderer bridge
+├── src/renderer/             React interface and media experiences
+├── src/shared/               serializable contracts and cross-process validation rules
+├── test/                     fixtures and Vitest regression coverage
+├── electron-builder.yml      Apple Silicon DMG configuration
+└── electron.vite.config.ts   main, preload, and renderer build configuration
 ```
 
-`API.md` (external integration contracts), `AGENTS.md` (agent operating instructions), `CONTEXT.md`
-(verified state/decision log), `docs/research/` (provider research), `docs/superpowers/`, and
-`spec/` are local coding-agent working notes, not published product docs. They're gitignored and
-stay on disk for local/agent context but aren't part of the tracked repository.
+Local `API.md`, `AGENTS.md`, `CONTEXT.md`, `docs/research/`, `docs/superpowers/`, and `spec/` files
+are development-agent working notes and are intentionally gitignored. `README.md` is the public
+project entry point.
 
-## Environment variables
+## Build and release v0.1.1
 
-| Variable                        | Service                     | Where to get it                                    | Required                                                        |
-| ------------------------------- | --------------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
-| `MANGADEX_CLIENT_ID`            | MangaDex personal client    | MangaDex Settings → API clients                    | Planned for opt-in account sync; not used by the public adapter |
-| `MANGADEX_CLIENT_SECRET`        | MangaDex personal client    | MangaDex API client settings                       | Planned for opt-in account sync; must move to Keychain          |
-| `MANGADEX_USERNAME`             | MangaDex personal client    | Your MangaDex account                              | Planned for opt-in account sync; must move to Keychain          |
-| `MANGADEX_PASSWORD`             | MangaDex personal client    | Your MangaDex account                              | Planned for opt-in account sync; must move to Keychain          |
-| `MANGADEX_LANGUAGE`             | MangaDex public API         | ISO 639-1 language code                            | Optional; defaults to `en` for chapter availability             |
-| `ANISTREAM_ANIKOTO_ENABLED`     | Anikoto/MegaPlay            | Set to `false`/`0`/`off` for the local kill switch | Optional; enabled by default                                    |
-| `ANISTREAM_ANIKOTO_API_URL`     | Anikoto catalog API         | Verified HTTPS-compatible deployment               | Optional; defaults to `https://anikotoapi.site`                 |
-| `ANISTREAM_MAL_CLIENT_ID`       | MyAnimeList public API      | MyAnimeList API client settings                    | Optional score/index fallback                                   |
-| `ANISTREAM_MANGABAKA_TOKEN`     | MangaBaka                   | MangaBaka personal access token                    | Optional; unauthenticated enrichment still works                |
-| `PARSE_API_KEY`                 | Parse episode-guide adapter | Parse dashboard → Settings → API Key               | Optional; required for episode-guide loading                    |
-| `PARSE_ANIME_SCRAPER_ID`        | Parse episode-guide adapter | Supplied/generated Parse scraper ID                | Optional; defaults to the configured anime scraper              |
-| `PARSE_ANIME_EPISODES_ENDPOINT` | Parse episode-guide adapter | Supplied/generated Parse endpoint name             | Optional; defaults to `get_show_episodes`                       |
+Build the unsigned DMG locally:
 
-Provider base URLs are application constants unless a development proxy is explicitly required. Secrets must never be exposed to renderer code or committed. The main process loads `.env` during development and `~/Library/Application Support/AniStream/.env` for a packaged personal install; shell variables take precedence. Parse keys remain main-process-only and should move to Keychain before treating the adapter as production-ready.
+```bash
+npm ci --legacy-peer-deps
+npm run package:mac
+```
 
-AniList OAuth is configured for this personal build with the public client ID and
-`anistream://auth/anilist` callback. The authorization-code flow reads its client secret from macOS
-Keychain after a one-time native prompt; the secret is never packaged or exposed to the renderer.
-The resulting access token is encrypted with Electron `safeStorage`, also backed by macOS Keychain.
+The output is `dist/AniStream-0.1.1-arm64.dmg`. The packaging workflow also runs automatically for
+tags matching `v*.*.*`, verifies the sandbox-safe CommonJS preload, uploads the DMG as a workflow
+artifact, and attaches it to the matching GitHub Release.
 
-## Status
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
 
-Durable AniList login, profile/list management, unified Anime/Manga browse and search, expanding
-Continue/Trending carousels, static 21-title Latest Updates grids, Anikoto episode catalogs, the
-fullscreen MegaPlay player flow, local playback progress, MangaDex chapter/page reading, MangaBaka
-enrichment, fullscreen long-strip reading, local chapter/scroll resume, rich title details,
-pagination, the origin- and argument-validated Electron IPC bridge (split into
-`src/main/domains/{tracker,anime,manga,resume}.ts`, with `src/main/index.ts` as the composition
-root), SQLite persistence, and the production build are implemented. `CONTEXT.md` (gitignored,
-present in a local checkout) carries the current verified runtime status and next steps.
+Tagging should happen only after the version bump and release changes are committed. Code signing
+and notarization remain pending until a valid Developer ID Application certificate is available.
+
+## Platform roadmap
+
+- **macOS on Apple Silicon:** active and available as the v0.1.1 preview.
+- **Windows:** under development; packaging and compatibility work are not part of this release.
+- **Android:** under development as a future companion application; no APK is published yet.
+- **MangaDex account sync:** planned as an opt-in Keychain-backed integration. Public MangaDex
+  reading remains independent.
+
+AniStream is an independent personal project and is not affiliated with AniList, MangaDex,
+MyAnimeList, MangaBaka, MangaUpdates, Anikoto, or MegaPlay.

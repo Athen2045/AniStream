@@ -248,6 +248,32 @@ button {
   object-fit: cover;
 }
 
+.nav-account > .session-button {
+  display: inline-flex;
+  width: auto;
+  min-width: 82px;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-glass);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 700;
+  backdrop-filter: blur(14px);
+}
+
+.nav-account > .session-button:hover,
+.nav-account > .session-button.active {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.nav-account > .session-button.active {
+  box-shadow: inset 0 -2px var(--primary);
+}
+
 .global-search {
   position: relative;
   justify-self: end;
@@ -2823,6 +2849,153 @@ a.rail-card {
   line-height: 1.55;
 }
 
+.profile-connect-page {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 108px 48px 56px;
+  overflow: hidden;
+}
+
+.profile-connect-page::before,
+.profile-connect-page::after {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  content: "";
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+.profile-connect-page::before {
+  top: -38vw;
+  left: 50%;
+  width: 76vw;
+  height: 76vw;
+  background: radial-gradient(circle, rgb(36 99 235 / 0.24), transparent 67%);
+  transform: translateX(-50%);
+}
+
+.profile-connect-page::after {
+  right: -18vw;
+  bottom: -36vw;
+  width: 62vw;
+  height: 62vw;
+  background: radial-gradient(circle, rgb(255 122 110 / 0.12), transparent 69%);
+}
+
+.profile-connect-panel {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: 500px;
+  padding: 46px 48px 38px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-overlay);
+  box-shadow: 0 34px 100px var(--shadow-deep);
+  text-align: center;
+  backdrop-filter: blur(24px);
+}
+
+.profile-connect-panel::before {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 148px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--highlight-lavender), transparent);
+  content: "";
+  opacity: 0.74;
+  transform: translateX(-50%);
+}
+
+.profile-connect-panel .brand-mark {
+  width: 42px;
+  height: 48px;
+  margin: 0 auto 24px;
+  font-size: 1.2rem;
+}
+
+.profile-connect-label {
+  margin: 0 0 8px;
+  color: var(--highlight-lavender);
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.profile-connect-panel h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 2.45rem);
+  letter-spacing: -0.055em;
+  line-height: 1.05;
+}
+
+.profile-connect-message {
+  display: grid;
+  min-height: 52px;
+  margin: 17px 0 23px;
+  place-items: center;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.profile-connect-panel .primary-button {
+  min-height: 48px;
+  border-radius: 7px;
+}
+
+.profile-connect-button-label {
+  display: inline-block;
+}
+
+.profile-connect-panel .secondary-button {
+  width: 100%;
+  margin-top: 9px;
+  padding: 12px 18px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.profile-connect-panel .secondary-button:hover,
+.profile-connect-panel .secondary-button:focus-visible {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.profile-connect-panel .privacy-note {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 20px;
+}
+
+.profile-connect-panel .privacy-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--success);
+}
+
+.profile-connect-panel .error-banner {
+  margin: 16px 0 0;
+  text-align: left;
+}
+
+.profile-route-transition {
+  min-height: 100vh;
+}
+
 .profile-hero {
   position: relative;
   isolation: isolate;
@@ -3353,6 +3526,11 @@ a.rail-card {
   .latest-updates-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
+
+  .profile-connect-page {
+    padding-right: 40px;
+    padding-left: 40px;
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -3363,6 +3541,7 @@ a.rail-card {
   .watch-source-select,
   .manga-reader-chapter-chip,
   .manga-reader-header button,
+  .profile-connect-panel,
   .manga-reader-chapter-chip button,
   .manga-reader-header > div,
   .detail-tracker-compact label,

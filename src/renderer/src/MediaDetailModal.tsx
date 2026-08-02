@@ -14,6 +14,7 @@ import { CoverImage } from "./CoverImage";
 import { safeBackgroundUrl } from "./safe-css-url";
 import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
+import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
 
 const AnimeWatchExperience = lazy(() =>
   import("./AnimeWatchExperience").then((module) => ({
@@ -30,13 +31,14 @@ export function MediaDetailModal({
   media,
   initialAction = "details",
   onClose,
-  onAdded,
+  access,
 }: {
   media: AniListCatalogMedia;
   initialAction?: "details" | "play" | "read";
   onClose: () => void;
-  onAdded: () => Promise<void>;
+  access: ViewerAccess;
 }): React.JSX.Element {
+  const personalized = hasPersonalizedAccess(access);
   const [detail, setDetail] = useState<AniListMediaDetail>();
   const reducedMotion = useReducedMotion();
   const [loading, setLoading] = useState(true);
@@ -146,17 +148,19 @@ export function MediaDetailModal({
   }, [detail?.listEntry?.progress, initialAction, loading, media.id, media.title, media.type]);
 
   const ensureListEntry = useCallback(async (): Promise<AniListMediaDetail> => {
+    if (!personalized) throw new Error("Connect AniList to manage this title in your list.");
     const current = detail ?? (await window.anistream.getAniListMediaDetail(media.id, media.type));
     if (current.listEntry) return current;
     const listEntry = await window.anistream.addAniListEntry(current.id);
     const updated: AniListMediaDetail = { ...current, listEntry };
     setDetail(updated);
-    await onAdded();
+    await access.refreshLibrary();
     return updated;
-  }, [detail, media.id, media.type, onAdded]);
+  }, [access, detail, media.id, media.type, personalized]);
 
   const markEpisodeWatched = useCallback(
     async (episodeNumber: number): Promise<void> => {
+      if (!personalized) return;
       if (lastMarkedEpisode.current === episodeNumber) return;
       lastMarkedEpisode.current = episodeNumber;
       setSavingTracker(true);
@@ -173,7 +177,7 @@ export function MediaDetailModal({
         });
         setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
         setRating(listEntry.score);
-        await onAdded();
+        await access.refreshLibrary();
       } catch (reason) {
         lastMarkedEpisode.current = undefined;
         setError(reason instanceof Error ? reason.message : "Unable to update AniList progress.");
@@ -181,10 +185,11 @@ export function MediaDetailModal({
         setSavingTracker(false);
       }
     },
-    [ensureListEntry, onAdded],
+    [access, ensureListEntry, personalized],
   );
 
   const markMediaCompleted = useCallback(async (): Promise<void> => {
+    if (!personalized) return;
     setSavingTracker(true);
     setError(undefined);
     try {
@@ -197,16 +202,17 @@ export function MediaDetailModal({
       });
       setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
       setRating(listEntry.score);
-      await onAdded();
+      await access.refreshLibrary();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to mark complete.");
     } finally {
       setSavingTracker(false);
     }
-  }, [ensureListEntry, onAdded]);
+  }, [access, ensureListEntry, personalized]);
 
   const markChapterRead = useCallback(
     async (chapter: MangaDexReaderChapter): Promise<void> => {
+      if (!personalized) return;
       if (chapter.number === undefined) return;
       setSavingTracker(true);
       try {
@@ -222,14 +228,14 @@ export function MediaDetailModal({
               : "CURRENT",
         });
         setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
-        await onAdded();
+        await access.refreshLibrary();
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "Unable to update manga progress.");
       } finally {
         setSavingTracker(false);
       }
     },
-    [ensureListEntry, onAdded],
+    [access, ensureListEntry, personalized],
   );
 
   const openPreferredChapter = useCallback(async (): Promise<void> => {
@@ -374,29 +380,31 @@ export function MediaDetailModal({
                 )}
                 {resolved.type === "ANIME" ? "Watch" : "Read"}
               </button>
-              <button
-                className="round-action detail-add"
-                type="button"
-                disabled={adding || Boolean(detail?.listEntry)}
-                aria-label={detail?.listEntry ? "Already in AniList" : "Add to AniList planning"}
-                onClick={() => {
-                  setAdding(true);
-                  void window.anistream
-                    .addAniListEntry(media.id)
-                    .then((listEntry) => {
-                      setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
-                      return onAdded();
-                    })
-                    .catch((reason: unknown) => {
-                      setError(reason instanceof Error ? reason.message : "Unable to add title.");
-                    })
-                    .finally(() => setAdding(false));
-                }}
-              >
-                {detail?.listEntry ? <Check size={19} /> : <Plus size={19} />}
-              </button>
+              {personalized ? (
+                <button
+                  className="round-action detail-add"
+                  type="button"
+                  disabled={adding || Boolean(detail?.listEntry)}
+                  aria-label={detail?.listEntry ? "Already in AniList" : "Add to AniList planning"}
+                  onClick={() => {
+                    setAdding(true);
+                    void window.anistream
+                      .addAniListEntry(media.id)
+                      .then((listEntry) => {
+                        setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
+                        return access.refreshLibrary();
+                      })
+                      .catch((reason: unknown) => {
+                        setError(reason instanceof Error ? reason.message : "Unable to add title.");
+                      })
+                      .finally(() => setAdding(false));
+                  }}
+                >
+                  {detail?.listEntry ? <Check size={19} /> : <Plus size={19} />}
+                </button>
+              ) : null}
             </div>
-            {detail ? (
+            {personalized && detail ? (
               <div className="detail-tracker-compact">
                 <label>
                   <Star size={15} />
@@ -427,7 +435,7 @@ export function MediaDetailModal({
                       })
                       .then((listEntry) => {
                         setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
-                        return onAdded();
+                        return access.refreshLibrary();
                       })
                       .catch((reason: unknown) =>
                         setError(

@@ -8,17 +8,17 @@ import { Info, Play, Plus, X } from "lucide-react";
  */
 export function RailHoverActions({
   title,
-  inLibrary,
+  library,
   onPlay,
-  onAdd,
-  onRemove,
   onInfo,
 }: {
   title: string;
-  inLibrary: boolean;
+  library?: {
+    inLibrary: boolean;
+    onAdd: () => void;
+    onRemove: () => void;
+  };
   onPlay: () => void;
-  onAdd: () => void;
-  onRemove: () => void;
   onInfo: () => void;
 }): React.JSX.Element {
   return (
@@ -34,30 +34,38 @@ export function RailHoverActions({
       >
         <Play size={15} fill="currentColor" />
       </button>
-      <button
-        type="button"
-        className="rail-hover-secondary"
-        aria-label={inLibrary ? `${title} is already in your list` : `Add ${title} to your list`}
-        disabled={inLibrary}
-        onClick={(event) => {
-          event.stopPropagation();
-          onAdd();
-        }}
-      >
-        <Plus size={14} />
-      </button>
-      <button
-        type="button"
-        className="rail-hover-secondary"
-        aria-label={inLibrary ? `Remove ${title} from your list` : `${title} is not in your list`}
-        disabled={!inLibrary}
-        onClick={(event) => {
-          event.stopPropagation();
-          onRemove();
-        }}
-      >
-        <X size={14} />
-      </button>
+      {library ? (
+        <>
+          <button
+            type="button"
+            className="rail-hover-secondary"
+            aria-label={
+              library.inLibrary ? `${title} is already in your list` : `Add ${title} to your list`
+            }
+            disabled={library.inLibrary}
+            onClick={(event) => {
+              event.stopPropagation();
+              library.onAdd();
+            }}
+          >
+            <Plus size={14} />
+          </button>
+          <button
+            type="button"
+            className="rail-hover-secondary"
+            aria-label={
+              library.inLibrary ? `Remove ${title} from your list` : `${title} is not in your list`
+            }
+            disabled={!library.inLibrary}
+            onClick={(event) => {
+              event.stopPropagation();
+              library.onRemove();
+            }}
+          >
+            <X size={14} />
+          </button>
+        </>
+      ) : null}
       <button
         type="button"
         className="rail-hover-secondary rail-hover-info"
