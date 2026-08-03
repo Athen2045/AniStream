@@ -24,7 +24,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "postinstall": "node node_modules/electron/install.js && electron-builder install-app-deps",
-    "package:mac": "npm run build && electron-builder --mac --arm64"
+    "package:mac": "npm run build && electron-builder --mac --arm64 --publish never"
   },
   "dependencies": {
     "better-sqlite3": "13.0.1",

@@ -43,6 +43,8 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Build unsigned Apple Silicon package
+        # electron-builder is build-only here. Publishing is intentionally owned by
+        # the dedicated GitHub Release step below, which receives github.token.
         run: npm run package:mac
         env:
           # No Developer ID Application certificate is installed for this personal
