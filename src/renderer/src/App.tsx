@@ -1,6 +1,7 @@
-import { RefreshCw, UserRound } from "lucide-react";
+import { LogOut, MoreHorizontal, Plus, RefreshCw, Search, UserRound, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
   AniListAuthState,
   AniListCatalogMedia,
@@ -484,34 +485,46 @@ function ProfileView({
   onLogout: () => Promise<void>;
 }): React.JSX.Element {
   const groups = mediaType === "ANIME" ? dashboard.animeLists : dashboard.mangaLists;
-  const groupTabsRef = useRef<HTMLDivElement>(null);
-  const [groupTabsOverflow, setGroupTabsOverflow] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const accountMenuRef = useRef<HTMLDetailsElement>(null);
+  const activeListName = activeGroupName ?? selectedGroup;
+  const profileTransition = reducedMotion
+    ? { duration: 0 }
+    : { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const };
+
+  const closeAccountMenu = useCallback((): void => {
+    accountMenuRef.current?.removeAttribute("open");
+  }, []);
 
   useEffect(() => {
-    const element = groupTabsRef.current;
-    if (!element) return;
-    const updateOverflow = (): void => {
-      setGroupTabsOverflow(element.scrollWidth - element.clientWidth > 1);
+    const closeOnOutsideClick = (event: PointerEvent): void => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) closeAccountMenu();
     };
-    updateOverflow();
-    const observer = new ResizeObserver(updateOverflow);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [groups]);
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [closeAccountMenu]);
 
   return (
     <>
-      <header
+      <motion.header
         className="profile-hero"
+        initial={reducedMotion ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={profileTransition}
         style={
           dashboard.profile.bannerUrl
             ? {
-                backgroundImage: `linear-gradient(90deg, #0b0d13 8%, rgba(11,13,19,.82) 50%, rgba(11,13,19,.35)), ${safeBackgroundUrl(dashboard.profile.bannerUrl)}`,
+                backgroundImage: `linear-gradient(90deg, rgb(8 8 17 / .96) 4%, rgb(8 8 17 / .76) 48%, rgb(8 8 17 / .36)), ${safeBackgroundUrl(dashboard.profile.bannerUrl)}`,
               }
             : undefined
         }
       >
-        <div className="profile-summary">
+        <motion.div
+          className="profile-summary"
+          initial={reducedMotion ? false : { opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={profileTransition}
+        >
           <img
             className="profile-avatar"
             src={dashboard.profile.avatarUrl}
@@ -519,156 +532,243 @@ function ProfileView({
             decoding="async"
           />
           <div>
-            <p className="eyebrow">AniList profile</p>
+            <p className="profile-kicker">AniList profile</p>
             <h1>{dashboard.profile.name}</h1>
             {dashboard.profile.about ? (
               <p className="profile-about">{stripMarkup(dashboard.profile.about)}</p>
             ) : null}
           </div>
-        </div>
-        <div className="profile-stats" aria-label="AniList statistics">
-          <ProfileStat value={dashboard.profile.animeCount} label="Anime" />
-          <ProfileStat value={dashboard.profile.episodesWatched} label="Episodes" />
-          <ProfileStat value={formatMinutes(dashboard.profile.minutesWatched)} label="Watch time" />
-          <ProfileStat value={dashboard.profile.mangaCount} label="Manga" />
-          <ProfileStat value={dashboard.profile.chaptersRead} label="Chapters" />
-          <ProfileStat value={dashboard.profile.volumesRead} label="Volumes" />
-        </div>
-      </header>
+        </motion.div>
 
-      <section className="library-shell">
-        <div className="profile-session-actions">
-          <button className="quiet-button" type="button" onClick={() => void onRefresh()}>
-            {syncing ? "Syncing…" : "Refresh AniList"}
-          </button>
-          <button className="quiet-button danger" type="button" onClick={() => void onLogout()}>
-            Log out
-          </button>
-        </div>
-        <div className="library-toolbar">
-          <div className="media-tabs" role="tablist" aria-label="Library type">
-            <button
-              className={mediaType === "ANIME" ? "active" : ""}
-              type="button"
-              onClick={() => onSwitchType("ANIME")}
-            >
-              Anime list
-            </button>
-            <button
-              className={mediaType === "MANGA" ? "active" : ""}
-              type="button"
-              onClick={() => onSwitchType("MANGA")}
-            >
-              Manga list
-            </button>
-          </div>
-          <select
-            className="library-sort"
-            value={librarySort}
-            onChange={(event) => onLibrarySort(event.target.value as LibrarySort)}
-            aria-label={`Sort ${mediaType === "ANIME" ? "anime" : "manga"} list`}
-          >
-            <option value="UPDATED_DESC">Latest updated</option>
-            <option value="TITLE_ASC">Title A–Z</option>
-            <option value="SCORE_DESC">Highest score</option>
-            <option value="PROGRESS_DESC">Most progress</option>
-          </select>
-          <input
-            className="library-search"
-            value={listQuery}
-            onChange={(event) => onListQuery(event.target.value)}
-            placeholder={`Filter ${mediaType === "ANIME" ? "anime" : "manga"}…`}
+        <motion.div
+          className="profile-stats"
+          aria-label="AniList statistics"
+          initial={reducedMotion ? false : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={reducedMotion ? { duration: 0 } : { ...profileTransition, delay: 0.06 }}
+        >
+          <ProfileStatGroup
+            label="Anime"
+            value={dashboard.profile.animeCount}
+            details={[
+              `${dashboard.profile.episodesWatched.toLocaleString()} episodes`,
+              `${formatMinutes(dashboard.profile.minutesWatched)} watched`,
+            ]}
           />
-          <button className="add-title-button" type="button" onClick={onToggleAdding}>
-            {adding ? "Close search" : "Add title"}
-          </button>
-        </div>
+          <ProfileStatGroup
+            label="Manga"
+            value={dashboard.profile.mangaCount}
+            details={[
+              `${dashboard.profile.chaptersRead.toLocaleString()} chapters`,
+              `${dashboard.profile.volumesRead.toLocaleString()} volumes`,
+            ]}
+          />
+        </motion.div>
 
-        {adding ? (
-          <section className="catalog-search">
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void onCatalogSearch();
+        <details className="profile-account-menu" ref={accountMenuRef}>
+          <summary aria-label="Profile options" title="Profile options">
+            <MoreHorizontal size={19} aria-hidden="true" />
+          </summary>
+          <div role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              disabled={syncing}
+              onClick={() => {
+                closeAccountMenu();
+                void onRefresh();
               }}
             >
-              <input
-                value={catalogQuery}
-                onChange={(event) => onCatalogQuery(event.target.value)}
-                placeholder={`Search AniList ${mediaType === "ANIME" ? "anime" : "manga"}…`}
-                autoFocus
-              />
-              <button type="submit" disabled={catalogSearching || catalogQuery.trim().length < 2}>
-                {catalogSearching ? "Searching…" : "Search AniList"}
-              </button>
-            </form>
-            <div className="catalog-results">
-              {catalogResults.map((media) => {
-                const added = libraryMediaIds.has(media.id);
-                return (
-                  <article key={media.id}>
-                    <CoverImage src={media.coverUrl} title={media.title} />
-                    <div>
-                      <span>{formatMediaFormat(media.format)}</span>
-                      <strong>{media.title}</strong>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={added || addingMediaId === media.id}
-                      onClick={() => void onAdd(media)}
-                    >
-                      {added ? "In list" : addingMediaId === media.id ? "Adding…" : "Add"}
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
+              <RefreshCw className={syncing ? "spinning" : ""} size={16} aria-hidden="true" />
+              {syncing ? "Refreshing" : "Refresh AniList"}
+            </button>
+            <button
+              className="danger"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeAccountMenu();
+                void onLogout();
+              }}
+            >
+              <LogOut size={16} aria-hidden="true" />
+              Log out
+            </button>
+          </div>
+        </details>
+      </motion.header>
 
-        <div className={`group-tabs-scroll${groupTabsOverflow ? " has-overflow" : ""}`}>
-          <div
-            className="group-tabs"
-            ref={groupTabsRef}
-            role="tablist"
-            aria-label="AniList groups"
-            onScroll={() => {
-              const element = groupTabsRef.current;
-              if (element) setGroupTabsOverflow(element.scrollWidth - element.clientWidth > 1);
-            }}
-          >
-            {groups.map((group) => (
+      <section className="library-shell">
+        <div className="library-toolbar">
+          <div className="library-primary-controls">
+            <div className="media-tabs" role="tablist" aria-label="Library type">
               <button
-                className={group.name === activeGroupName ? "active" : ""}
+                className={mediaType === "ANIME" ? "active" : ""}
                 type="button"
-                key={`${mediaType}-${group.name}`}
-                onClick={() => onSelectGroup(group.name)}
+                role="tab"
+                id="profile-anime-tab"
+                aria-controls="profile-library-results"
+                aria-selected={mediaType === "ANIME"}
+                onClick={() => onSwitchType("ANIME")}
               >
-                {group.name}
-                <span>{group.entries.length}</span>
+                {mediaType === "ANIME" ? (
+                  <motion.span
+                    className="media-tab-indicator"
+                    layoutId="profile-media-tab"
+                    transition={profileTransition}
+                  />
+                ) : null}
+                <span>Anime</span>
               </button>
-            ))}
+              <button
+                className={mediaType === "MANGA" ? "active" : ""}
+                type="button"
+                role="tab"
+                id="profile-manga-tab"
+                aria-controls="profile-library-results"
+                aria-selected={mediaType === "MANGA"}
+                onClick={() => onSwitchType("MANGA")}
+              >
+                {mediaType === "MANGA" ? (
+                  <motion.span
+                    className="media-tab-indicator"
+                    layoutId="profile-media-tab"
+                    transition={profileTransition}
+                  />
+                ) : null}
+                <span>Manga</span>
+              </button>
+            </div>
+
+            <label className="library-group-select">
+              <span>List</span>
+              <select
+                value={activeListName}
+                onChange={(event) => onSelectGroup(event.target.value)}
+              >
+                {groups.map((group) => (
+                  <option key={`${mediaType}-${group.name}`} value={group.name}>
+                    {group.name} ({group.entries.length})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="library-secondary-controls">
+            <label className="library-search">
+              <span className="sr-only">Filter this list</span>
+              <Search size={16} aria-hidden="true" />
+              <input
+                value={listQuery}
+                onChange={(event) => onListQuery(event.target.value)}
+                placeholder={`Filter ${mediaType === "ANIME" ? "anime" : "manga"}`}
+              />
+            </label>
+            <select
+              className="library-sort"
+              value={librarySort}
+              onChange={(event) => onLibrarySort(event.target.value as LibrarySort)}
+              aria-label={`Sort ${mediaType === "ANIME" ? "anime" : "manga"} list`}
+            >
+              <option value="UPDATED_DESC">Latest updated</option>
+              <option value="TITLE_ASC">Title A-Z</option>
+              <option value="SCORE_DESC">Highest score</option>
+              <option value="PROGRESS_DESC">Most progress</option>
+            </select>
+            <button className="add-title-button" type="button" onClick={onToggleAdding}>
+              {adding ? <X size={17} aria-hidden="true" /> : <Plus size={17} aria-hidden="true" />}
+              {adding ? "Close" : "Add title"}
+            </button>
           </div>
         </div>
+
+        <AnimatePresence initial={false}>
+          {adding ? (
+            <motion.section
+              className="catalog-search"
+              initial={reducedMotion ? false : { opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
+              transition={profileTransition}
+            >
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void onCatalogSearch();
+                }}
+              >
+                <input
+                  value={catalogQuery}
+                  onChange={(event) => onCatalogQuery(event.target.value)}
+                  placeholder={`Search AniList ${mediaType === "ANIME" ? "anime" : "manga"}…`}
+                  autoFocus
+                />
+                <button type="submit" disabled={catalogSearching || catalogQuery.trim().length < 2}>
+                  {catalogSearching ? "Searching…" : "Search AniList"}
+                </button>
+              </form>
+              <div className="catalog-results">
+                {catalogResults.map((media) => {
+                  const added = libraryMediaIds.has(media.id);
+                  return (
+                    <article key={media.id}>
+                      <CoverImage src={media.coverUrl} title={media.title} />
+                      <div>
+                        <span>{formatMediaFormat(media.format)}</span>
+                        <strong>{media.title}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={added || addingMediaId === media.id}
+                        onClick={() => void onAdd(media)}
+                      >
+                        {added ? "In list" : addingMediaId === media.id ? "Adding…" : "Add"}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </motion.section>
+          ) : null}
+        </AnimatePresence>
+
         {error ? <p className="error-banner">{error}</p> : null}
-        <div className="library-heading">
-          <div>
-            <p className="eyebrow">AniList library</p>
-            <h2>{activeGroupName ?? (selectedGroup || "No list")}</h2>
-          </div>
-          <span>{visibleEntries.length} titles</span>
-        </div>
-        <div className="media-grid">
-          {visibleEntries.map((entry) => (
-            <MediaCard entry={entry} key={entry.id} onSave={onSave} onDelete={onDelete} />
-          ))}
-        </div>
-        {!visibleEntries.length ? (
-          <div className="empty-state">
-            <h3>Nothing here yet</h3>
-            <p>{listQuery ? "Try another filter." : "This AniList group has no titles."}</p>
-          </div>
-        ) : null}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            className="library-results"
+            key={`${mediaType}-${activeListName}`}
+            id="profile-library-results"
+            role="tabpanel"
+            aria-labelledby={mediaType === "ANIME" ? "profile-anime-tab" : "profile-manga-tab"}
+            initial={reducedMotion ? false : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
+            transition={profileTransition}
+          >
+            <div className="library-heading">
+              <h2>{activeGroupName ?? (selectedGroup || "No list")}</h2>
+              <span aria-live="polite">{visibleEntries.length} titles</span>
+            </div>
+            <div className="media-grid">
+              {visibleEntries.map((entry) => (
+                <MediaCard
+                  entry={entry}
+                  key={entry.id}
+                  reducedMotion={Boolean(reducedMotion)}
+                  onSave={onSave}
+                  onDelete={onDelete}
+                />
+              ))}
+            </div>
+            {!visibleEntries.length ? (
+              <div className="empty-state">
+                <h3>Nothing here yet</h3>
+                <p>{listQuery ? "Try another filter." : "This AniList group has no titles."}</p>
+              </div>
+            ) : null}
+          </motion.div>
+        </AnimatePresence>
       </section>
     </>
   );
@@ -676,10 +776,12 @@ function ProfileView({
 
 function MediaCard({
   entry,
+  reducedMotion,
   onSave,
   onDelete,
 }: {
   entry: AniListEntry;
+  reducedMotion: boolean;
   onSave: (input: UpdateAniListEntryInput) => Promise<void>;
   onDelete: (entry: AniListEntry) => Promise<void>;
 }): React.JSX.Element {
@@ -688,8 +790,61 @@ function MediaCard({
   const [score, setScore] = useState(entry.score);
   const [notes, setNotes] = useState(entry.notes ?? "");
   const [editing, setEditing] = useState(false);
+  const [editorPresent, setEditorPresent] = useState(false);
   const [saving, setSaving] = useState(false);
+  const editorRef = useRef<HTMLElement>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
   const progressLabel = entry.media.type === "ANIME" ? "episodes watched" : "chapters read";
+  const totalProgress = entry.media.totalProgress;
+  const progressRatio = totalProgress ? Math.min(1, entry.progress / totalProgress) : 0;
+
+  const openEditor = useCallback((): void => {
+    setStatus(entry.status);
+    setProgress(entry.progress);
+    setScore(entry.score);
+    setNotes(entry.notes ?? "");
+    setEditorPresent(true);
+    setEditing(true);
+  }, [entry.notes, entry.progress, entry.score, entry.status]);
+
+  const closeEditor = useCallback((): void => {
+    setEditing(false);
+  }, []);
+
+  useEffect(() => {
+    if (!editing) return;
+    const editButton = editButtonRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleDialogKeys = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        closeEditor();
+        return;
+      }
+      if (event.key !== "Tab" || !editorRef.current) return;
+      const focusable = Array.from(
+        editorRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleDialogKeys);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleDialogKeys);
+      editButton?.focus();
+    };
+  }, [closeEditor, editing]);
 
   async function save(): Promise<void> {
     setSaving(true);
@@ -701,28 +856,161 @@ function MediaCard({
         score: Math.min(10, Math.max(0, score)),
         notes,
       });
-      setEditing(false);
+      closeEditor();
     } finally {
       setSaving(false);
     }
   }
 
+  const editor = (
+    <AnimatePresence onExitComplete={() => setEditorPresent(false)}>
+      {editing ? (
+        <motion.div
+          className="entry-editor-backdrop"
+          role="presentation"
+          initial={reducedMotion ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={reducedMotion ? undefined : { opacity: 0 }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 0.18 }}
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) closeEditor();
+          }}
+        >
+          <motion.section
+            ref={editorRef}
+            className="entry-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`entry-editor-title-${entry.id}`}
+            initial={reducedMotion ? false : { opacity: 0, y: 14, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reducedMotion ? undefined : { opacity: 0, y: 8, scale: 0.99 }}
+            transition={
+              reducedMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }
+            }
+          >
+            <header className="entry-editor-header">
+              <img src={entry.media.coverUrl} alt="" />
+              <div>
+                <span>{formatMediaFormat(entry.media.format)}</span>
+                <h2 id={`entry-editor-title-${entry.id}`}>{entry.media.title}</h2>
+              </div>
+              <button type="button" autoFocus aria-label="Close editor" onClick={closeEditor}>
+                <X size={18} aria-hidden="true" />
+              </button>
+            </header>
+            <div className="entry-editor-fields">
+              <label>
+                Status
+                <select
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value as AniListEntryStatus)}
+                >
+                  {ENTRY_STATUSES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="editor-row">
+                <label>
+                  Progress
+                  <input
+                    type="number"
+                    min="0"
+                    max={entry.media.totalProgress}
+                    value={progress}
+                    onChange={(event) => setProgress(Number(event.target.value))}
+                  />
+                </label>
+                <label>
+                  Score
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    value={score}
+                    onChange={(event) => setScore(Number(event.target.value))}
+                  />
+                </label>
+              </div>
+              <label>
+                Notes
+                <textarea
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  rows={4}
+                />
+              </label>
+            </div>
+            <footer className="editor-actions">
+              <button
+                className="delete-button"
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setSaving(true);
+                  void onDelete(entry)
+                    .then(closeEditor)
+                    .finally(() => setSaving(false));
+                }}
+              >
+                Remove
+              </button>
+              <button
+                className="save-button"
+                type="button"
+                disabled={saving}
+                onClick={() => void save()}
+              >
+                {saving ? "Saving…" : "Save changes"}
+              </button>
+            </footer>
+          </motion.section>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+
   return (
-    <article className="media-card">
+    <motion.article
+      className="media-card"
+      whileHover={reducedMotion ? undefined : { y: -3 }}
+      transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 360, damping: 28 }}
+    >
       <div className="cover-wrap">
-        <img src={entry.media.coverUrl} alt="" loading="lazy" />
-        {!isProgressComplete(status, progress, entry.media.totalProgress) ? (
+        <img
+          src={entry.media.coverUrl}
+          alt={`${entry.media.title} cover`}
+          loading="lazy"
+          decoding="async"
+        />
+        <button
+          ref={editButtonRef}
+          className="media-card-edit"
+          type="button"
+          disabled={saving}
+          aria-label={`Edit ${entry.media.title}`}
+          title="Edit entry"
+          onClick={openEditor}
+        >
+          <MoreHorizontal size={18} aria-hidden="true" />
+        </button>
+        {!isProgressComplete(entry.status, entry.progress, entry.media.totalProgress) ? (
           <button
             className="progress-button"
             type="button"
+            aria-label={`Increase progress for ${entry.media.title}`}
             disabled={saving}
             onClick={() => {
               const next = Math.min(
                 entry.media.totalProgress ?? Number.MAX_SAFE_INTEGER,
-                progress + 1,
+                entry.progress + 1,
               );
-              setProgress(next);
-              void onSave({ id: entry.id, progress: next });
+              setSaving(true);
+              void onSave({ id: entry.id, progress: next }).finally(() => setSaving(false));
             }}
           >
             +1
@@ -730,78 +1018,26 @@ function MediaCard({
         ) : null}
       </div>
       <div className="media-card-body">
-        <p className="media-meta">{formatMediaFormat(entry.media.format)}</p>
-        <h3 title={entry.media.title}>{entry.media.title}</h3>
-        <p className="progress-copy">
-          {progress}
-          {entry.media.totalProgress ? ` / ${entry.media.totalProgress}` : ""} {progressLabel}
-        </p>
-        <div className="score-row">
-          <span>{statusLabel(status)}</span>
-          <strong>{score ? `${score}/10` : "—"}</strong>
+        <div className="media-card-topline">
+          <p className="media-meta">{formatMediaFormat(entry.media.format)}</p>
+          <span>{entry.score ? `${entry.score}/10` : "Not rated"}</span>
         </div>
-        <button className="edit-button" type="button" onClick={() => setEditing((value) => !value)}>
-          {editing ? "Close editor" : "Edit entry"}
-        </button>
-        {editing ? (
-          <div className="entry-editor">
-            <label>
-              Status
-              <select
-                value={status}
-                onChange={(event) => setStatus(event.target.value as AniListEntryStatus)}
-              >
-                {ENTRY_STATUSES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="editor-row">
-              <label>
-                Progress
-                <input
-                  type="number"
-                  min="0"
-                  max={entry.media.totalProgress}
-                  value={progress}
-                  onChange={(event) => setProgress(Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Score
-                <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  step="0.5"
-                  value={score}
-                  onChange={(event) => setScore(Number(event.target.value))}
-                />
-              </label>
-            </div>
-            <label>
-              Notes
-              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} />
-            </label>
-            <div className="editor-actions">
-              <button
-                className="save-button"
-                type="button"
-                disabled={saving}
-                onClick={() => void save()}
-              >
-                {saving ? "Saving…" : "Save to AniList"}
-              </button>
-              <button className="delete-button" type="button" onClick={() => void onDelete(entry)}>
-                Remove
-              </button>
-            </div>
+        <h3 title={entry.media.title}>{entry.media.title}</h3>
+        <div className="media-card-footer">
+          <span>{statusLabel(entry.status)}</span>
+          <span>
+            {entry.progress}
+            {entry.media.totalProgress ? ` / ${entry.media.totalProgress}` : ""} {progressLabel}
+          </span>
+        </div>
+        {totalProgress ? (
+          <div className="media-card-progress" aria-hidden="true">
+            <span style={{ transform: `scaleX(${progressRatio})` }} />
           </div>
         ) : null}
       </div>
-    </article>
+      {editorPresent ? createPortal(editor, document.body) : null}
+    </motion.article>
   );
 }
 
@@ -816,17 +1052,26 @@ function emptyDashboard(
   };
 }
 
-function ProfileStat({
+function ProfileStatGroup({
   value,
   label,
+  details,
 }: {
-  value: number | string;
+  value: number;
   label: string;
+  details: string[];
 }): React.JSX.Element {
   return (
-    <div>
-      <strong>{value}</strong>
-      <span>{label}</span>
+    <div className="profile-stat-group">
+      <div>
+        <span>{label}</span>
+        <strong>{value.toLocaleString()}</strong>
+      </div>
+      <p>
+        {details.map((detail) => (
+          <span key={detail}>{detail}</span>
+        ))}
+      </p>
     </div>
   );
 }

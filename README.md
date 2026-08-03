@@ -6,17 +6,17 @@ AniStream is an early-preview media app for anime and manga fans. Browse trendin
 both catalogs from one place, open episode and chapter lists, and continue from where you left off.
 An AniList account is optional.
 
-> **Current release:** v0.1.1 for Apple Silicon Macs running macOS 12 or newer. The Windows and
+> **Current release:** v0.1.2 for Apple Silicon Macs running macOS 12 or newer. The Windows and
 > Android versions are under development and are not available yet.
 
 ## Download AniStream for macOS
 
-1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.1.
-2. Under **Assets**, download the macOS DMG: `AniStream-0.1.1-arm64.dmg`.
+1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.2.
+2. Under **Assets**, download the macOS DMG: `AniStream-0.1.2-arm64.dmg`.
 3. Open the DMG and drag **AniStream** into **Applications**.
 4. Open AniStream from the Applications folder.
 
-AniStream v0.1.1 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
+AniStream v0.1.2 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
 launch, Control-click AniStream in Applications, choose **Open**, then confirm **Open**. You only
 need to do this once. Do not disable Gatekeeper globally.
 
@@ -201,7 +201,7 @@ Local `API.md`, `AGENTS.md`, `CONTEXT.md`, `docs/research/`, `docs/superpowers/`
 are development-agent working notes and are intentionally gitignored. `README.md` is the public
 project entry point.
 
-## Build and release v0.1.1
+## Build and release v0.1.2
 
 Build the unsigned DMG locally:
 
@@ -210,13 +210,13 @@ npm ci --legacy-peer-deps
 npm run package:mac
 ```
 
-The output is `dist/AniStream-0.1.1-arm64.dmg`. The packaging workflow also runs automatically for
+The output is `dist/AniStream-0.1.2-arm64.dmg`. The packaging workflow also runs automatically for
 tags matching `v*.*.*`, verifies the sandbox-safe CommonJS preload, uploads the DMG as a workflow
 artifact, and attaches it to the matching GitHub Release.
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 Tagging should happen only after the version bump and release changes are committed. Code signing
@@ -224,7 +224,7 @@ and notarization remain pending until a valid Developer ID Application certifica
 
 ## Platform roadmap
 
-- **macOS on Apple Silicon:** active and available as the v0.1.1 preview.
+- **macOS on Apple Silicon:** active and available as the v0.1.2 preview.
 - **Windows:** under development; packaging and compatibility work are not part of this release.
 - **Android:** under development as a future companion application; no APK is published yet.
 - **MangaDex account sync:** planned as an opt-in Keychain-backed integration. Public MangaDex
