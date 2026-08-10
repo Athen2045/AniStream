@@ -21,6 +21,8 @@ const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 120_000;
 const FORBIDDEN_COOLDOWN_MS = 10 * 60 * 1_000;
 const MAX_EPISODES = 2_000;
 
+// TODO: Keep this adapter removable; playback must still fall back to AniList episode numbers.
+
 interface RecentSeries {
   id: number;
   aniListId: number;

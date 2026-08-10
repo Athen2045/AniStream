@@ -25,7 +25,7 @@ export function ProfileConnectView({
     ? "Checking this Mac for a saved AniList session."
     : authorizing
       ? "AniList is open in your browser. Approve AniStream there to finish connecting."
-      : "Connect AniList to bring in your lists, ratings, and Continue rows.";
+      : "Sign in to AniList in your browser to bring in your lists, ratings, and Continue rows.";
   const buttonLabel = restoring
     ? "Restoring session…"
     : authorizing
@@ -107,7 +107,8 @@ export function ProfileConnectView({
 
         <p className="privacy-note">
           <ShieldCheck size={15} aria-hidden="true" />
-          Secured by macOS Keychain and stored only on this Mac.
+          No AniList password or Developer API setup is required. Your connection stays on this
+          device.
         </p>
         {error ? (
           <p className="error-banner" role="alert">

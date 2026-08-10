@@ -14,6 +14,7 @@ const [
   mangaKind,
   anikoto,
   animeWatch,
+  animePlaybackSession,
   mediaDetail,
   mangaReader,
   database,
@@ -34,6 +35,7 @@ const [
   readFile("src/main/manga-kind.ts", "utf8"),
   readFile("src/main/anikoto.ts", "utf8"),
   readFile("src/renderer/src/AnimeWatchExperience.tsx", "utf8"),
+  readFile("src/renderer/src/anime-playback-session.ts", "utf8"),
   readFile("src/renderer/src/MediaDetailModal.tsx", "utf8"),
   readFile("src/renderer/src/MangaReaderFullscreen.tsx", "utf8"),
   readFile("src/main/database.ts", "utf8"),
@@ -103,7 +105,7 @@ for (const [name, source, fragments] of [
   ],
   [
     "anime player",
-    animeWatch,
+    animeWatch + animePlaybackSession,
     [
       "AnikotoEmbedPlayer",
       "requestFullscreen",
@@ -116,7 +118,7 @@ for (const [name, source, fragments] of [
   [
     "media detail",
     mediaDetail,
-    ["MangaChapterBrowser", "MangaReaderFullscreen", "autoPlayRequest", "chooseChapterToRead"],
+    ["MangaChapterBrowser", "MangaReaderFullscreen", "autoPlayRequest", "createMediaDetailSession"],
   ],
   [
     "manga reader",

@@ -2,13 +2,8 @@ import type { AniListClient } from "../anilist";
 import type { MalClient } from "../mal";
 import type { MangaDexClient } from "../mangadex";
 import type { MangaTitleModule } from "../manga-title";
-import {
-  classifyLatestMangaUpdates,
-  needsMalKindCrossCheck,
-  type AniListMangaKindHint,
-} from "../manga-kind";
+import { MangaLatestModule } from "../manga-latest";
 import { registerTrustedIpcHandler } from "../ipc";
-import type { MangaPublicationKind } from "../../shared/contracts";
 
 export interface MangaDomainDeps {
   mangaDex: MangaDexClient | undefined;
@@ -26,46 +21,13 @@ export function registerMangaDomain(
   { mangaDex, mangaTitle, aniList, mal }: MangaDomainDeps,
 ): void {
   const titleRequests = new Map<string, AbortController>();
+  const mangaLatest = new MangaLatestModule({ mangaDex, aniList, mal });
   registerTrustedIpcHandler(trustedRendererOrigin, "request:cancel", (_event, requestId) => {
     titleRequests.get(requestId)?.abort();
     titleRequests.delete(requestId);
   });
   registerTrustedIpcHandler(trustedRendererOrigin, "mangadex:latest", async (_event, page) => {
-    if (!mangaDex) throw new Error("MangaDex is not ready.");
-    const updates = await mangaDex.getLatestUpdates(page);
-    let aniListHints = new Map<number, AniListMangaKindHint>();
-    if (aniList) {
-      try {
-        aniListHints = await aniList.getMangaKindHints(
-          updates.items.flatMap((item) => (item.aniListId ? [item.aniListId] : [])),
-        );
-      } catch {
-        // Classification enrichment is best-effort; MangaDex language remains usable.
-      }
-    }
-
-    const malHints = new Map<number, MangaPublicationKind>();
-    if (mal?.configured) {
-      const malIds = [
-        ...new Set(
-          updates.items.flatMap((item) => {
-            const aniListHint = item.aniListId ? aniListHints.get(item.aniListId) : undefined;
-            const malId = item.malId ?? aniListHint?.malId;
-            return malId && needsMalKindCrossCheck(item, aniListHint) ? [malId] : [];
-          }),
-        ),
-      ].slice(0, 6);
-      await Promise.all(
-        malIds.map(async (malId) => {
-          const kind = await mal?.getMangaPublicationKind(malId);
-          if (kind) malHints.set(malId, kind);
-        }),
-      );
-    }
-    return {
-      ...updates,
-      items: classifyLatestMangaUpdates(updates.items, aniListHints, malHints),
-    };
+    return mangaLatest.load(page);
   });
   registerTrustedIpcHandler(
     trustedRendererOrigin,

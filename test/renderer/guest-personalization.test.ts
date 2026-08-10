@@ -87,6 +87,7 @@ const memberAccess: ViewerAccess = {
   dashboard,
   libraryEntries: new Map([[continuingEntry.media.id, continuingEntry]]),
   addToLibrary: vi.fn(),
+  updateEntry: vi.fn(),
   removeFromLibrary: vi.fn(),
   refreshLibrary: vi.fn(),
 };

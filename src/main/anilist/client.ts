@@ -9,12 +9,6 @@ import type {
 } from "../../shared/contracts";
 import { createBoundedCache } from "./cache";
 import {
-  deleteClientSecretFromKeychain,
-  ensureClientSecret,
-  isClientAuthenticationFailure,
-  readClientSecretFromKeychain,
-} from "./keychain";
-import {
   normalizeAiringUpdatesPage,
   normalizeCatalogPage,
   normalizeGroups,
@@ -42,7 +36,6 @@ import {
   type MediaDetailResponse,
   type SaveEntryResponse,
   type SearchResponse,
-  type TokenResponse,
   type ViewerResponse,
 } from "./queries";
 import { createRequestGate, type RequestGate } from "./request-queue";
@@ -58,11 +51,10 @@ import type {
   LatestUpdatesPage,
 } from "../../shared/contracts";
 
-const ANILIST_CLIENT_ID = "47053";
+const ANILIST_CLIENT_ID = "48271";
 const ANILIST_REDIRECT_URI = "anistream://auth/anilist";
 const ANILIST_GRAPHQL_URL = "https://graphql.anilist.co";
 const ANILIST_AUTHORIZE_URL = "https://anilist.co/api/v2/oauth/authorize";
-const ANILIST_TOKEN_URL = "https://anilist.co/api/v2/oauth/token";
 
 // AniList documents 90 req/min normally with a 30 req/min degraded-state warning (API.md).
 // The client stays conservative and starts at 25 req/min while that warning remains.
@@ -78,6 +70,8 @@ const MANGA_KIND_CACHE_TTL_MS = 24 * 60 * 60_000;
 // Used only when AniList's 429 response has no Retry-After header to honor.
 const DEFAULT_RATE_LIMIT_PAUSE_MS = 60_000;
 const AUTHORIZATION_TIMEOUT_MS = 5 * 60_000;
+
+// TODO: Move this public client ID into a small build-time config module if AniList changes it.
 
 export class AniListClient {
   private token?: string;
@@ -158,12 +152,11 @@ export class AniListClient {
   }
 
   public async startLogin(): Promise<void> {
-    await ensureClientSecret();
-
     const authorizeUrl = new URL(ANILIST_AUTHORIZE_URL);
     authorizeUrl.searchParams.set("client_id", ANILIST_CLIENT_ID);
-    authorizeUrl.searchParams.set("redirect_uri", ANILIST_REDIRECT_URI);
-    authorizeUrl.searchParams.set("response_type", "code");
+    // AniList's implicit-grant example intentionally sends no redirect_uri. The
+    // callback is selected from the redirect URL registered for this client.
+    authorizeUrl.searchParams.set("response_type", "token");
 
     this.authorization.begin();
     this.emitState({ status: "authorizing" });
@@ -174,7 +167,7 @@ export class AniListClient {
       this.authorization.cancel();
       this.emitState({
         status: "error",
-        message: "The AniList sign-in page could not be opened.",
+        message: error instanceof Error ? error.message : "AniList sign-in could not be started.",
       });
       throw error;
     }
@@ -184,21 +177,26 @@ export class AniListClient {
     try {
       const result = await this.authorization.handleCallback(async (signal) => {
         const url = new URL(callbackUrl);
+        const expectedCallback = new URL(ANILIST_REDIRECT_URI);
         if (
-          url.protocol !== "anistream:" ||
-          url.hostname !== "auth" ||
-          url.pathname !== "/anilist"
+          url.protocol !== expectedCallback.protocol ||
+          url.hostname !== expectedCallback.hostname ||
+          url.pathname !== expectedCallback.pathname
         ) {
           throw new Error("AniStream received an invalid AniList callback.");
         }
 
-        const code = url.searchParams.get("code");
-        if (!code) {
-          const reason = url.searchParams.get("error_description") ?? url.searchParams.get("error");
-          throw new Error(reason ?? "AniList did not return an authorization code.");
+        const params = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+        const token = params.get("access_token");
+        if (!token) {
+          const reason =
+            url.searchParams.get("error_description") ??
+            url.searchParams.get("error") ??
+            params.get("error_description") ??
+            params.get("error");
+          throw new Error(reason ?? "AniList did not return an access token.");
         }
 
-        const token = await this.exchangeAuthorizationCode(code, signal);
         this.token = token;
         this.profile = await this.fetchProfile();
         if (signal.aborted) throw new DOMException("AniList sign-in was cancelled.", "AbortError");
@@ -434,50 +432,6 @@ export class AniListClient {
   private async fetchProfile(): Promise<AniListProfile> {
     const response = await this.request<ViewerResponse>(VIEWER_QUERY, {}, "viewer");
     return normalizeProfile(response.Viewer);
-  }
-
-  private async exchangeAuthorizationCode(code: string, signal: AbortSignal): Promise<string> {
-    const clientSecret = await readClientSecretFromKeychain();
-    if (!clientSecret) {
-      throw new Error("The AniList client secret is missing from macOS Keychain.");
-    }
-
-    const response = await fetch(ANILIST_TOKEN_URL, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        grant_type: "authorization_code",
-        client_id: ANILIST_CLIENT_ID,
-        client_secret: clientSecret,
-        redirect_uri: ANILIST_REDIRECT_URI,
-        code,
-      }),
-      signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
-    });
-
-    const payload = (await response.json()) as TokenResponse;
-    if (!response.ok || typeof payload.access_token !== "string" || !payload.access_token) {
-      const providerMessage =
-        typeof payload.message === "string"
-          ? payload.message
-          : typeof payload.error === "string"
-            ? payload.error
-            : undefined;
-
-      if (response.status === 401 || isClientAuthenticationFailure(providerMessage)) {
-        await deleteClientSecretFromKeychain();
-        throw new Error(
-          "AniList rejected the saved client secret. Click Continue with AniList again and enter the current secret from AniList Developer Settings.",
-        );
-      }
-
-      throw new Error(providerMessage ?? `AniList token exchange failed (${response.status}).`);
-    }
-
-    return payload.access_token;
   }
 
   private async request<T = unknown>(

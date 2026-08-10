@@ -16,7 +16,7 @@ describe("ProfileConnectView", () => {
 
     expect(markup).toContain("Make AniStream yours");
     expect(markup).toContain("Continue with AniList");
-    expect(markup).toContain("macOS Keychain");
+    expect(markup).toContain("No AniList password or Developer API setup is required");
     expect(markup).not.toContain("Your watchlist, when you want it");
     expect(markup).not.toContain("profile-connect-capabilities");
   });

@@ -30,6 +30,21 @@ let mangaTitle: MangaTitleModule | undefined;
 let rendererServer: RendererServer | undefined;
 const protocolCallbacks = new ProtocolCallbackRouter();
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, commandLine) => {
+    const callbackUrl = commandLine.find((argument) => argument.startsWith("anistream://"));
+    if (callbackUrl) protocolCallbacks.route(callbackUrl);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 function createWindow(rendererUrl: string): void {
   mainWindow = new BrowserWindow({
     // Standard macOS app default: matches the 1440x900 logical resolution of MacBook
@@ -39,8 +54,18 @@ function createWindow(rendererUrl: string): void {
     minWidth: 960,
     minHeight: 640,
     show: false,
-    titleBarStyle: "hiddenInset",
-    backgroundColor: "#080811",
+    autoHideMenuBar: process.platform === "win32",
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    ...(process.platform === "win32"
+      ? {
+          titleBarOverlay: {
+            color: "#0d0f12",
+            symbolColor: "#f3f5f7",
+            height: 56,
+          },
+        }
+      : {}),
+    backgroundColor: "#0d0f12",
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
@@ -53,6 +78,8 @@ function createWindow(rendererUrl: string): void {
     },
   });
 
+  if (process.platform === "win32") mainWindow.setMenuBarVisibility(false);
+
   mainWindow.once("ready-to-show", () => mainWindow?.show());
   void mainWindow.loadURL(rendererUrl).catch((error: unknown) => {
     console.error("AniStream renderer failed to load.", error);
@@ -60,7 +87,10 @@ function createWindow(rendererUrl: string): void {
   });
 
   const trustedRendererOrigin = new URL(rendererUrl).origin;
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url, referrer }) => {
+    // MegaPlay embeds can request ad/pop-up windows. Keep the playback surface in-app and
+    // never hand provider-created windows to the user's external browser.
+    if (safeOrigin(referrer.url) === MEGAPLAY_ORIGIN) return { action: "deny" };
     if (isSafeExternalUrl(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
@@ -74,6 +104,8 @@ function createWindow(rendererUrl: string): void {
     mainWindow = undefined;
   });
 }
+
+const MEGAPLAY_ORIGIN = "https://megaplay.buzz";
 
 function emitAniListState(state: AniListAuthState): void {
   if (mainWindow) sendTypedIpcEvent(mainWindow.webContents, "anilist:auth-changed", state);
@@ -95,12 +127,16 @@ app.on("open-url", (event, url) => {
   protocolCallbacks.route(url);
 });
 
+const initialProtocolUrl = process.argv.find((argument) => argument.startsWith("anistream://"));
+if (initialProtocolUrl) protocolCallbacks.route(initialProtocolUrl);
+
 app.whenReady().then(async () => {
   loadEnvironmentFile(join(process.cwd(), ".env"));
   loadEnvironmentFile(join(app.getPath("userData"), ".env"));
   const rendererServerPromise = process.env.ELECTRON_RENDERER_URL
     ? Promise.resolve(undefined)
     : startRendererServer(join(__dirname, "../renderer"));
+  // Keep startup split into small promises: the renderer can paint while SQLite gets ready.
   // better-sqlite3 opens synchronously; deferring it onto a microtask (instead of
   // running it inline here) lets the renderer server's listen() call get scheduled
   // first, and keeps first paint from sitting behind the DB open. Only the DB-backed

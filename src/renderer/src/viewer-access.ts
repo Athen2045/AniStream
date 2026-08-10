@@ -1,4 +1,11 @@
-import type { AniListCatalogMedia, AniListDashboard, AniListEntry } from "../../shared/contracts";
+import type {
+  AniListCatalogMedia,
+  AniListDashboard,
+  AniListEntry,
+  AniListMedia,
+  AniListListEntrySummary,
+  UpdateAniListEntryInput,
+} from "../../shared/contracts";
 
 export type ViewerAccess =
   | { kind: "guest" }
@@ -6,7 +13,8 @@ export type ViewerAccess =
       kind: "member";
       dashboard: AniListDashboard;
       libraryEntries: ReadonlyMap<number, AniListEntry>;
-      addToLibrary(media: AniListCatalogMedia): Promise<void>;
+      addToLibrary(media: AniListMedia): Promise<AniListListEntrySummary>;
+      updateEntry(input: UpdateAniListEntryInput): Promise<AniListListEntrySummary>;
       removeFromLibrary(entry: AniListEntry): Promise<void>;
       refreshLibrary(): Promise<void>;
     };

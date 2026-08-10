@@ -7,16 +7,15 @@ import {
   useSpring,
 } from "framer-motion";
 import { BookOpen, ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore, type RefObject } from "react";
 import type {
   MangaDexReaderChapter,
   MangaDexReaderSession,
   MangaReadingResume,
 } from "../../shared/contracts";
+import { createMangaReaderSession } from "./manga-reader-session";
 
-const RESUME_SAVE_INTERVAL_MS = 8_000;
 const READ_COMPLETE_THRESHOLD = 0.9;
-const PAGE_LOAD_CONCURRENCY = 3;
 const PAGE_PREFETCH_MARGIN = "1800px 0px";
 
 export function MangaReaderFullscreen({
@@ -40,17 +39,27 @@ export function MangaReaderFullscreen({
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
-  const [pageUrls, setPageUrls] = useState<Array<string | undefined>>(() =>
-    Array.from({ length: chapter.pages }),
+  const readerSession = useMemo(
+    () =>
+      createMangaReaderSession({
+        aniListId,
+        chapterId: chapter.id,
+        chapterNumber: chapter.number,
+        pageCount: chapter.pages,
+        loadPage: (page) => window.anistream.getMangaDexPage({ chapterId: chapter.id, page }),
+        createObjectUrl: (page) =>
+          URL.createObjectURL(new Blob([page.imageBytes], { type: page.mimeType })),
+        revokeObjectUrl: (url) => URL.revokeObjectURL(url),
+        saveResume: (input) => window.anistream.saveMangaReadingResume(input),
+        onChapterRead: () => onChapterRead(chapter),
+      }),
+    [aniListId, chapter, onChapterRead],
   );
-  const [pageErrors, setPageErrors] = useState<Record<number, string>>({});
-  const pageUrlsRef = useRef(pageUrls);
-  const queuedPages = useRef<number[]>([]);
-  const requestedPages = useRef(new Set<number>());
-  const activePageLoads = useRef(0);
-  const readerActive = useRef(true);
-  const lastSavedAt = useRef(0);
-  const markedRead = useRef(false);
+  const readerSnapshot = useSyncExternalStore(
+    readerSession.subscribe,
+    readerSession.getSnapshot,
+    readerSession.getSnapshot,
+  );
   const restoredResume = useRef(false);
 
   const chapterIndex = session.chapters.findIndex((item) => item.id === chapter.id);
@@ -72,120 +81,21 @@ export function MangaReaderFullscreen({
     mass: 0.22,
   });
 
-  const persistProgress = useCallback(
-    (progress: number, force = false): void => {
-      const now = Date.now();
-      if (!force && now - lastSavedAt.current < RESUME_SAVE_INTERVAL_MS) return;
-      lastSavedAt.current = now;
-      void window.anistream.saveMangaReadingResume({
-        aniListId,
-        chapterId: chapter.id,
-        chapterNumber: chapter.number,
-        progress: Math.min(1, Math.max(0, progress)),
-      });
-    },
-    [aniListId, chapter.id, chapter.number],
-  );
-
   useMotionValueEvent(scrollYProgress, "change", (progress) => {
-    persistProgress(progress);
-    if (progress >= READ_COMPLETE_THRESHOLD && !markedRead.current) {
-      markedRead.current = true;
-      void onChapterRead(chapter);
-    }
+    readerSession.markProgress(progress);
   });
 
-  useEffect(
-    () => () => {
-      persistProgress(scrollYProgress.get(), true);
-    },
-    [persistProgress, scrollYProgress],
-  );
-
-  const requestPage = useCallback(
-    (page: number): void => {
-      if (
-        page < 0 ||
-        page >= chapter.pages ||
-        pageUrlsRef.current[page] ||
-        requestedPages.current.has(page)
-      ) {
-        return;
-      }
-      requestedPages.current.add(page);
-      queuedPages.current.push(page);
-
-      const pump = (): void => {
-        while (
-          readerActive.current &&
-          activePageLoads.current < PAGE_LOAD_CONCURRENCY &&
-          queuedPages.current.length
-        ) {
-          const nextPage = queuedPages.current.shift();
-          if (nextPage === undefined) return;
-          activePageLoads.current += 1;
-          void window.anistream
-            .getMangaDexPage({ chapterId: chapter.id, page: nextPage })
-            .then((result) => {
-              if (!readerActive.current) return;
-              const objectUrl = URL.createObjectURL(
-                new Blob([result.imageBytes], { type: result.mimeType }),
-              );
-              setPageUrls((current) => {
-                const next = [...current];
-                const previous = next[nextPage];
-                if (previous) URL.revokeObjectURL(previous);
-                next[nextPage] = objectUrl;
-                pageUrlsRef.current = next;
-                return next;
-              });
-              setPageErrors((current) => {
-                if (!(nextPage in current)) return current;
-                const next = { ...current };
-                delete next[nextPage];
-                return next;
-              });
-            })
-            .catch((reason: unknown) => {
-              if (!readerActive.current) return;
-              requestedPages.current.delete(nextPage);
-              setPageErrors((current) => ({
-                ...current,
-                [nextPage]:
-                  reason instanceof Error ? reason.message : `Unable to load page ${nextPage + 1}.`,
-              }));
-            })
-            .finally(() => {
-              activePageLoads.current -= 1;
-              pump();
-            });
-        }
-      };
-
-      pump();
-    },
-    [chapter.id, chapter.pages],
-  );
-
   useEffect(() => {
-    readerActive.current = true;
-    requestPage(0);
-    requestPage(1);
+    readerSession.requestPage(0);
+    readerSession.requestPage(1);
     if (resume?.chapterId === chapter.id && resume.progress > 0) {
       const resumePage = Math.floor(resume.progress * Math.max(0, chapter.pages - 1));
-      for (let page = resumePage - 2; page <= resumePage + 2; page += 1) requestPage(page);
-    }
-
-    const requestedPagesSet = requestedPages.current;
-    return () => {
-      readerActive.current = false;
-      queuedPages.current = [];
-      for (const objectUrl of pageUrlsRef.current) {
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      for (let page = resumePage - 2; page <= resumePage + 2; page += 1) {
+        readerSession.requestPage(page);
       }
-      requestedPagesSet.clear();
-    };
-  }, [chapter.id, chapter.pages, requestPage, resume]);
+    }
+    return () => readerSession.dispose();
+  }, [chapter.id, chapter.pages, readerSession, resume]);
 
   useEffect(() => {
     if (
@@ -290,15 +200,15 @@ export function MangaReaderFullscreen({
             exit={{ opacity: 0 }}
             transition={{ duration: reducedMotion ? 0 : 0.18 }}
           >
-            {pageUrls.map((url, index) => (
+            {readerSnapshot.pageUrls.map((url, index) => (
               <LazyMangaPage
                 key={`${chapter.id}:${index}`}
                 index={index}
                 url={url}
-                error={pageErrors[index]}
+                error={readerSnapshot.pageErrors[index]}
                 containerRef={containerRef}
                 alt={`${title}, chapter ${formatChapterNumber(chapter)}, page ${index + 1}`}
-                onNearViewport={requestPage}
+                onNearViewport={readerSession.requestPage}
               />
             ))}
           </motion.div>

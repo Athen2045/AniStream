@@ -31,38 +31,38 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #f7f5ff;
-  background: #080811;
+  color: #f3f5f7;
+  background: #0d0f12;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: #080811;
-  --surface-base: #0d0f1f;
-  --surface-panel: #13162a;
-  --surface-raised: #1b2040;
-  --surface-hover: #252b4d;
-  --surface-input: #0b0d1b;
-  --surface-overlay: rgb(13 15 31 / 0.94);
-  --surface-glass: rgb(16 19 40 / 0.8);
-  --line-subtle: rgb(216 207 255 / 0.09);
-  --line: rgb(216 207 255 / 0.16);
-  --line-strong: rgb(216 207 255 / 0.34);
-  --text: #f7f5ff;
-  --text-secondary: #d1cde0;
-  --text-soft: #b6b1c8;
-  --muted: #9d99b2;
-  --muted-deep: #7d7a93;
-  --primary: #2463eb;
-  --primary-hover: #1f57d0;
-  --primary-deep: #183b9f;
-  --primary-soft: rgb(36 99 235 / 0.18);
-  --primary-glow: rgb(36 99 235 / 0.28);
+  --ink: #0d0f12;
+  --surface-base: #111417;
+  --surface-panel: #171a1f;
+  --surface-raised: #20252b;
+  --surface-hover: #2b323a;
+  --surface-input: #0b0d10;
+  --surface-overlay: rgb(13 15 18 / 0.95);
+  --surface-glass: rgb(17 20 24 / 0.84);
+  --line-subtle: rgb(225 231 239 / 0.08);
+  --line: rgb(225 231 239 / 0.15);
+  --line-strong: rgb(225 231 239 / 0.3);
+  --text: #f3f5f7;
+  --text-secondary: #c7cdd5;
+  --text-soft: #a4acb7;
+  --muted: #7f8995;
+  --muted-deep: #5f6976;
+  --primary: #4c7dff;
+  --primary-hover: #6690ff;
+  --primary-deep: #3157b8;
+  --primary-soft: rgb(76 125 255 / 0.16);
+  --primary-glow: rgb(76 125 255 / 0.24);
   --secondary-coral: #ff7a6e;
   --secondary-coral-soft: rgb(255 122 110 / 0.15);
   --secondary-amber: #ffc15c;
   --secondary-amber-soft: rgb(255 193 92 / 0.12);
-  --highlight-lavender: #d8c7ff;
-  --highlight-soft: rgb(216 199 255 / 0.16);
-  --focus-ring: #d8c7ff;
+  --highlight-lavender: #a891ff;
+  --highlight-soft: rgb(168 145 255 / 0.16);
+  --focus-ring: #a891ff;
   --error: #ff7485;
   --error-soft: rgb(255 72 96 / 0.14);
   --error-line: rgb(255 116 133 / 0.38);
@@ -70,19 +70,19 @@
   --error-text: #ffb5c0;
   --success: #5add91;
   --warning: var(--secondary-amber);
-  --on-primary: #f7f5ff;
-  --on-secondary: #080811;
-  --shadow: rgb(3 3 11 / 0.58);
-  --shadow-deep: rgb(3 3 11 / 0.78);
-  --skeleton-base: #14182e;
-  --skeleton-shine: #20284a;
+  --on-primary: #ffffff;
+  --on-secondary: #0d0f12;
+  --shadow: rgb(0 0 0 / 0.34);
+  --shadow-deep: rgb(0 0 0 / 0.68);
+  --skeleton-base: #171a1f;
+  --skeleton-shine: #272d35;
   --panel: var(--surface-panel);
   --panel-raised: var(--surface-raised);
   --accent: var(--primary);
   --app-ambience:
-    radial-gradient(ellipse 78% 36% at 82% -8%, rgb(36 99 235 / 0.14), transparent 68%),
-    radial-gradient(ellipse 58% 34% at 8% 16%, rgb(255 122 110 / 0.07), transparent 70%),
-    radial-gradient(ellipse 46% 24% at 18% 8%, rgb(255 193 92 / 0.035), transparent 72%), var(--ink);
+    radial-gradient(ellipse 78% 36% at 82% -8%, rgb(76 125 255 / 0.11), transparent 68%),
+    radial-gradient(ellipse 58% 34% at 8% 16%, rgb(168 145 255 / 0.05), transparent 70%),
+    radial-gradient(ellipse 46% 24% at 18% 8%, rgb(57 217 138 / 0.025), transparent 72%), var(--ink);
 }
 
 * {
@@ -132,6 +132,69 @@ button {
   background: transparent;
 }
 
+html[data-platform="win32"] body {
+  background:
+    radial-gradient(ellipse 70% 42% at 82% 2%, rgb(76 125 255 / 0.1), transparent 68%),
+    radial-gradient(ellipse 46% 34% at 8% 22%, rgb(168 145 255 / 0.04), transparent 72%), var(--ink);
+  padding: 8px;
+}
+
+html[data-platform="win32"] .app-shell {
+  min-height: calc(100vh - 16px);
+  overflow: hidden;
+  border: 1px solid rgb(225 231 239 / 0.12);
+  border-radius: 16px;
+  background: var(--ink);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 0.32);
+}
+
+html[data-platform="win32"] .app-navbar {
+  top: 8px;
+  right: 8px;
+  left: 8px;
+  width: auto;
+  border: 0;
+  border-radius: 15px 15px 0 0;
+  background: linear-gradient(180deg, rgb(13 15 18 / 0.98), rgb(13 15 18 / 0.78) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.04);
+  padding-right: 138px;
+  padding-left: 24px;
+}
+
+html[data-platform="win32"] .catalog-content,
+html[data-platform="win32"] .profile-content {
+  background: linear-gradient(180deg, rgb(13 15 31 / 0.16), transparent 22rem);
+}
+
+html[data-platform="win32"] .catalog-hero::after,
+html[data-platform="win32"] .profile-hero::after {
+  background:
+    linear-gradient(180deg, transparent 42%, var(--ink) 100%),
+    linear-gradient(90deg, rgb(8 8 17 / 0.5), transparent 58%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-platform="win32"] .catalog-hero-copy {
+    animation: win32-surface-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  html[data-platform="win32"] .catalog-content > section {
+    animation: win32-surface-in 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes win32-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .app-navbar {
   position: fixed;
   z-index: 100;
@@ -139,12 +202,14 @@ button {
   left: 0;
   display: grid;
   grid-template-columns: auto auto minmax(260px, 1fr) auto;
-  gap: 28px;
+  gap: 18px;
   align-items: center;
   width: 100%;
-  height: 68px;
+  height: 56px;
   padding: 0 3.7vw 0 86px;
-  background: linear-gradient(180deg, rgb(8 8 17 / 0.98), rgb(8 8 17 / 0.84) 72%, transparent);
+  border-bottom: 0;
+  background: linear-gradient(180deg, rgb(13 15 18 / 0.98), rgb(13 15 18 / 0.82) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.04);
   -webkit-app-region: drag;
 }
 
@@ -204,6 +269,11 @@ button {
 }
 
 .nav-links button.active {
+  border-radius: 4px;
+  background: var(--surface-raised);
+}
+
+.nav-links button.active {
   font-weight: 700;
 }
 
@@ -235,7 +305,7 @@ button {
 
 /* Scoped to beat .nav-account > button's higher specificity without !important. */
 .nav-account > .avatar-button {
-  border-radius: 8px;
+  border-radius: 50%;
 }
 
 .avatar-button.active {
@@ -288,8 +358,8 @@ button {
   height: 38px;
   padding: 0 11px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: rgb(8 8 17 / 0.76);
+  border-radius: 5px;
+  background: var(--surface-input);
   transition:
     width 180ms ease,
     border-color 180ms ease;
@@ -297,7 +367,7 @@ button {
 
 .global-search form:focus-within {
   border-color: var(--focus-ring);
-  background: rgb(8 8 17 / 0.96);
+  background: var(--surface-base);
 }
 
 .global-search input {
@@ -337,7 +407,7 @@ button {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgb(13 15 31 / 0.98);
+  background: rgb(36 16 13 / 0.98);
   box-shadow: 0 22px 70px var(--shadow);
 }
 
@@ -427,12 +497,44 @@ button {
 }
 
 .catalog-hero {
+  position: relative;
+  isolation: isolate;
   display: flex;
-  min-height: 650px;
+  height: min(56.25vw, 780px);
+  min-height: 560px;
   align-items: flex-end;
   padding: 150px 5vw 105px;
-  background-position: center 20%;
-  background-size: cover;
+  overflow: hidden;
+  background: var(--surface-base);
+}
+
+.catalog-hero::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgb(20 20 20 / 0.98) 5%,
+      rgb(20 20 20 / 0.88) 42%,
+      rgb(20 20 20 / 0.18) 76%
+    ),
+    linear-gradient(0deg, var(--ink) 0%, transparent 48%);
+  content: "";
+  pointer-events: none;
+}
+
+.catalog-hero-art {
+  position: absolute;
+  z-index: -2;
+  inset: -5% 0;
+  width: 100%;
+  height: 110%;
+  object-fit: cover;
+  object-position: center 20%;
+  filter: saturate(0.94) contrast(1.02);
+  transform-origin: center center;
+  will-change: transform;
 }
 
 .catalog-hero-skeleton {
@@ -447,6 +549,8 @@ button {
 }
 
 .catalog-hero-copy {
+  position: relative;
+  z-index: 1;
   width: min(620px, 55vw);
   text-shadow: 0 2px 14px var(--shadow-deep);
 }
@@ -566,9 +670,28 @@ button {
 .catalog-content {
   position: relative;
   z-index: 2;
-  width: min(1500px, 90vw);
-  margin: -38px auto 0;
+  width: min(1560px, 94vw);
+  margin: -26px auto 0;
   padding-bottom: 90px;
+}
+
+.catalog-scroll-progress {
+  position: fixed;
+  z-index: 40;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--highlight-lavender);
+  pointer-events: none;
+  transform-origin: 0 50%;
+  box-shadow: 0 0 14px rgb(216 199 255 / 0.38);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalog-scroll-progress {
+    transition: none;
+  }
 }
 
 .media-rail {
@@ -606,6 +729,7 @@ button {
   scroll-behavior: smooth;
   scroll-padding-inline: 2px;
   scroll-snap-type: x mandatory;
+  overscroll-behavior-inline: contain;
 }
 
 .carousel-viewport::-webkit-scrollbar {
@@ -831,7 +955,12 @@ a.rail-card {
 
 .rail-hover-play {
   border-color: var(--primary);
-  background: var(--primary);
+  background: linear-gradient(
+    145deg,
+    var(--primary),
+    var(--primary-deep) 64%,
+    var(--secondary-coral)
+  );
   color: var(--on-primary);
 }
 
@@ -2781,12 +2910,7 @@ a.rail-card {
   height: 58px;
   margin-bottom: 32px;
   place-items: center;
-  background: linear-gradient(
-    145deg,
-    var(--primary),
-    var(--primary-deep) 64%,
-    var(--secondary-coral)
-  );
+  background: var(--primary);
   clip-path: polygon(12% 0, 88% 0, 74% 100%, 26% 100%);
   font-family: Impact, sans-serif;
   font-size: 1.5rem;
@@ -2996,6 +3120,10 @@ a.rail-card {
   min-height: 100vh;
 }
 
+.route-view {
+  min-height: 100vh;
+}
+
 .profile-hero {
   position: relative;
   isolation: isolate;
@@ -3036,12 +3164,25 @@ a.rail-card {
   min-width: 0;
 }
 
+.profile-avatar-frame {
+  display: grid;
+  width: 112px;
+  height: 112px;
+  padding: 4px;
+  place-items: center;
+  border: 1px solid rgb(168 145 255 / 0.5);
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgb(76 125 255 / 0.5), rgb(168 145 255 / 0.22));
+  box-shadow:
+    0 20px 48px rgb(3 3 11 / 0.42),
+    0 0 0 6px rgb(168 145 255 / 0.07);
+}
+
 .profile-avatar {
-  width: 104px;
-  height: 104px;
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
-  box-shadow: 0 20px 48px rgb(3 3 11 / 0.42);
+  width: 100%;
+  height: 100%;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
   object-fit: cover;
 }
 
@@ -3085,7 +3226,7 @@ a.rail-card {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgb(13 15 31 / 0.76);
+  background: rgb(36 16 13 / 0.76);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
   backdrop-filter: blur(18px) saturate(130%);
 }
@@ -3220,8 +3361,11 @@ a.rail-card {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 30px;
-  padding: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 12px;
   background: linear-gradient(180deg, var(--ink) 74%, rgb(8 8 17 / 0));
+  box-shadow: 0 12px 36px rgb(0 0 0 / 0.16);
 }
 
 .library-primary-controls,
@@ -3444,6 +3588,15 @@ a.rail-card {
   letter-spacing: -0.04em;
 }
 
+.library-heading-kicker {
+  margin: 0 0 4px;
+  color: var(--highlight-lavender);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .library-heading > span {
   color: var(--muted);
   font-size: 0.78rem;
@@ -3459,13 +3612,24 @@ a.rail-card {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--line-subtle);
-  border-radius: 11px;
+  border-radius: 10px;
   background: var(--surface-panel);
-  box-shadow: 0 12px 28px rgb(3 3 11 / 0.12);
+  box-shadow: none;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
   /* AniList libraries can run into the hundreds of entries; skip layout/paint work
      for off-screen cards until they scroll into view. */
   content-visibility: auto;
   contain-intrinsic-size: 190px 350px;
+}
+
+.media-card:hover,
+.media-card:focus-within {
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+  box-shadow: 0 14px 30px rgb(0 0 0 / 0.2);
 }
 
 .cover-wrap {
@@ -3479,7 +3643,8 @@ a.rail-card {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 220ms ease;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
 .media-card:hover .cover-wrap img {

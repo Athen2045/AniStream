@@ -1,11 +1,18 @@
 import { BookOpen, Check, ExternalLink, Play, Plus, Star, UserRound, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type {
   AniListCatalogMedia,
   AniListMediaDetail,
-  MalScore,
-  MangaEnrichment,
   MangaDexReaderChapter,
   MangaDexReaderSession,
   MangaReadingResume,
@@ -15,6 +22,7 @@ import { safeBackgroundUrl } from "./safe-css-url";
 import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
 import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
+import { createMediaDetailSession } from "./media-detail-session";
 
 const AnimeWatchExperience = lazy(() =>
   import("./AnimeWatchExperience").then((module) => ({
@@ -39,68 +47,48 @@ export function MediaDetailModal({
   access: ViewerAccess;
 }): React.JSX.Element {
   const personalized = hasPersonalizedAccess(access);
-  const [detail, setDetail] = useState<AniListMediaDetail>();
+  const detailSession = useMemo(
+    () =>
+      createMediaDetailSession({
+        media,
+        access,
+        bridge: typeof window === "undefined" ? undefined : window.anistream,
+      }),
+    [access, media],
+  );
+  const detailSnapshot = useSyncExternalStore(
+    detailSession.subscribe,
+    detailSession.getSnapshot,
+    detailSession.getSnapshot,
+  );
+  const detail = detailSnapshot.detail;
   const reducedMotion = useReducedMotion();
-  const [loading, setLoading] = useState(true);
+  const loading = detailSnapshot.loading;
   const [adding, setAdding] = useState(false);
   const [autoPlayRequest, setAutoPlayRequest] = useState(0);
-  const [readerSession, setReaderSession] = useState<MangaDexReaderSession>();
+  const readerSession = detailSnapshot.readerSession;
   const [activeChapter, setActiveChapter] = useState<MangaDexReaderChapter>();
-  const [mangaResume, setMangaResume] = useState<MangaReadingResume>();
-  const [mangaEnrichment, setMangaEnrichment] = useState<MangaEnrichment>();
-  const [loadingReader, setLoadingReader] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [savingTracker, setSavingTracker] = useState(false);
-  const [malScore, setMalScore] = useState<MalScore>();
-  const lastMarkedEpisode = useRef<number | undefined>(undefined);
+  const mangaResume = detailSnapshot.mangaResume;
+  const mangaEnrichment = detailSnapshot.mangaEnrichment;
+  const loadingReader = detailSnapshot.loadingReader;
+  const [rating, setRating] = useState<number>();
+  const savingTracker = detailSnapshot.savingTracker;
+  const malScore = detailSnapshot.malScore;
   const initialPlayHandled = useRef(false);
   const initialReadHandled = useRef(false);
   const modalRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const [error, setError] = useState<string>();
+  const error = detailSnapshot.error;
 
   useEffect(() => {
-    let active = true;
-    void window.anistream
-      .getAniListMediaDetail(media.id, media.type)
-      .then((result) => {
-        if (active) {
-          setDetail(result);
-          setRating(result.listEntry?.score ?? 0);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Unable to load details.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [media.id, media.type]);
+    void detailSession.load();
+    return () => detailSession.dispose();
+  }, [detailSession]);
 
   const resolved = detail ?? media;
-  const malId = resolved.malId;
 
   // MAL score cross-reference via AniList's own idMal mapping. Optional enrichment:
   // failures and unconfigured clients resolve to "no score", never an error state.
-  useEffect(() => {
-    if (!malId) return;
-    let active = true;
-    void window.anistream
-      .getMalScore(media.type, malId)
-      .then((score) => {
-        if (active) setMalScore(score);
-      })
-      .catch(() => {
-        if (active) setMalScore(undefined);
-      });
-    return () => {
-      active = false;
-    };
-  }, [malId, media.type]);
-
   const watchedEpisodes = detail?.listEntry?.progress ?? 0;
   const initialEpisode =
     resolved.totalProgress && watchedEpisodes >= resolved.totalProgress
@@ -114,176 +102,40 @@ export function MediaDetailModal({
   }, [initialAction, loading]);
 
   useEffect(() => {
-    if (media.type !== "MANGA") return;
-    let active = true;
-    const requestId = `manga-title:${media.id}:${crypto.randomUUID()}`;
-    void window.anistream
-      .getMangaTitleSnapshot({ aniListId: media.id, title: media.title }, requestId)
-      .then((snapshot) => {
-        if (!active) return;
-        setMangaEnrichment(snapshot.enrichment);
-        const savedResume = snapshot.resume;
-        setMangaResume(savedResume);
-        if (snapshot.reader) {
-          setReaderSession(snapshot.reader);
-          if (initialAction === "read" && !loading && !initialReadHandled.current) {
-            initialReadHandled.current = true;
-            setActiveChapter(
-              chooseChapterToRead(snapshot.reader, detail?.listEntry?.progress ?? 0, savedResume),
-            );
-          }
-        }
-        const readerIssue = snapshot.issues.find((issue) => issue.source === "mangadex-reader");
-        if (readerIssue) setError(readerIssue.message);
-      })
-      .catch((reason: unknown) => {
-        if (active) {
-          setError(reason instanceof Error ? reason.message : "Unable to load manga title data.");
-        }
-      });
-    return () => {
-      active = false;
-      void window.anistream.cancelRequest(requestId);
-    };
-  }, [detail?.listEntry?.progress, initialAction, loading, media.id, media.title, media.type]);
-
-  const ensureListEntry = useCallback(async (): Promise<AniListMediaDetail> => {
-    if (!personalized) throw new Error("Connect AniList to manage this title in your list.");
-    const current = detail ?? (await window.anistream.getAniListMediaDetail(media.id, media.type));
-    if (current.listEntry) return current;
-    const listEntry = await window.anistream.addAniListEntry(current.id);
-    const updated: AniListMediaDetail = { ...current, listEntry };
-    setDetail(updated);
-    await access.refreshLibrary();
-    return updated;
-  }, [access, detail, media.id, media.type, personalized]);
+    if (initialAction === "read" && !loading && readerSession && !initialReadHandled.current) {
+      initialReadHandled.current = true;
+      void detailSession.openReader().then(setActiveChapter);
+    }
+  }, [detailSession, initialAction, loading, readerSession]);
 
   const markEpisodeWatched = useCallback(
-    async (episodeNumber: number): Promise<void> => {
-      if (!personalized) return;
-      if (lastMarkedEpisode.current === episodeNumber) return;
-      lastMarkedEpisode.current = episodeNumber;
-      setSavingTracker(true);
-      setError(undefined);
-      try {
-        const current = await ensureListEntry();
-        if (!current.listEntry) throw new Error("AniList did not return the new list entry.");
-        const nextProgress = Math.max(current.listEntry.progress, episodeNumber);
-        const completed = Boolean(current.totalProgress && nextProgress >= current.totalProgress);
-        const listEntry = await window.anistream.updateAniListEntry({
-          id: current.listEntry.id,
-          progress: nextProgress,
-          status: completed ? "COMPLETED" : "CURRENT",
-        });
-        setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
-        setRating(listEntry.score);
-        await access.refreshLibrary();
-      } catch (reason) {
-        lastMarkedEpisode.current = undefined;
-        setError(reason instanceof Error ? reason.message : "Unable to update AniList progress.");
-      } finally {
-        setSavingTracker(false);
-      }
-    },
-    [access, ensureListEntry, personalized],
+    (episodeNumber: number): Promise<void> => detailSession.markEpisodeWatched(episodeNumber),
+    [detailSession],
   );
 
-  const markMediaCompleted = useCallback(async (): Promise<void> => {
-    if (!personalized) return;
-    setSavingTracker(true);
-    setError(undefined);
-    try {
-      const current = await ensureListEntry();
-      if (!current.listEntry) throw new Error("AniList entry was not created.");
-      const listEntry = await window.anistream.updateAniListEntry({
-        id: current.listEntry.id,
-        status: "COMPLETED",
-        progress: current.totalProgress ?? current.listEntry.progress,
-      });
-      setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
-      setRating(listEntry.score);
-      await access.refreshLibrary();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to mark complete.");
-    } finally {
-      setSavingTracker(false);
-    }
-  }, [access, ensureListEntry, personalized]);
+  const markMediaCompleted = useCallback(
+    (): Promise<void> => detailSession.markMediaCompleted().catch(() => undefined),
+    [detailSession],
+  );
 
   const markChapterRead = useCallback(
-    async (chapter: MangaDexReaderChapter): Promise<void> => {
-      if (!personalized) return;
-      if (chapter.number === undefined) return;
-      setSavingTracker(true);
-      try {
-        const current = await ensureListEntry();
-        if (!current.listEntry) throw new Error("AniList entry was not created.");
-        const nextProgress = Math.max(current.listEntry.progress, Math.floor(chapter.number));
-        const listEntry = await window.anistream.updateAniListEntry({
-          id: current.listEntry.id,
-          progress: nextProgress,
-          status:
-            current.totalProgress && nextProgress >= current.totalProgress
-              ? "COMPLETED"
-              : "CURRENT",
-        });
-        setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
-        await access.refreshLibrary();
-      } catch (reason) {
-        setError(reason instanceof Error ? reason.message : "Unable to update manga progress.");
-      } finally {
-        setSavingTracker(false);
-      }
-    },
-    [access, ensureListEntry, personalized],
+    (chapter: MangaDexReaderChapter): Promise<void> =>
+      detailSession.markChapterRead(chapter).catch(() => undefined),
+    [detailSession],
   );
 
   const openPreferredChapter = useCallback(async (): Promise<void> => {
-    setLoadingReader(true);
-    setError(undefined);
-    try {
-      const snapshot = readerSession
-        ? undefined
-        : await window.anistream.getMangaTitleSnapshot(
-            {
-              aniListId: resolved.id,
-              title: resolved.title,
-            },
-            `manga-title:${resolved.id}:${crypto.randomUUID()}`,
-          );
-      const session = readerSession ?? snapshot?.reader;
-      if (!session) {
-        throw new Error(
-          snapshot?.issues.find((issue) => issue.source === "mangadex-reader")?.message ??
-            "MangaDex reader is unavailable.",
-        );
-      }
-      setReaderSession(session);
-      const savedResume =
-        mangaResume ??
-        snapshot?.resume ??
-        (await window.anistream.getMangaReadingResume(resolved.id));
-      setMangaResume(savedResume);
-      if (snapshot?.enrichment) setMangaEnrichment(snapshot.enrichment);
-      const chapter = chooseChapterToRead(session, detail?.listEntry?.progress ?? 0, savedResume);
-      setActiveChapter(chapter);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to open MangaDex reader.");
-    } finally {
-      setLoadingReader(false);
-    }
-  }, [detail, mangaResume, readerSession, resolved.id, resolved.title]);
+    const chapter = await detailSession.openReader();
+    if (chapter) setActiveChapter(chapter);
+  }, [detailSession]);
 
   const closeReader = useCallback((): void => {
     setActiveChapter(undefined);
-    void window.anistream
-      .getMangaReadingResume(resolved.id)
-      .then(setMangaResume)
-      .catch(() => undefined);
+    void detailSession.refreshResume();
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
     }
-  }, [resolved.id]);
+  }, [detailSession]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent): void => {
@@ -388,15 +240,9 @@ export function MediaDetailModal({
                   aria-label={detail?.listEntry ? "Already in AniList" : "Add to AniList planning"}
                   onClick={() => {
                     setAdding(true);
-                    void window.anistream
-                      .addAniListEntry(media.id)
-                      .then((listEntry) => {
-                        setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
-                        return access.refreshLibrary();
-                      })
-                      .catch((reason: unknown) => {
-                        setError(reason instanceof Error ? reason.message : "Unable to add title.");
-                      })
+                    void detailSession
+                      .addTitle()
+                      .catch(() => undefined)
                       .finally(() => setAdding(false));
                   }}
                 >
@@ -415,7 +261,7 @@ export function MediaDetailModal({
                     min="0"
                     max="10"
                     step="0.5"
-                    value={rating}
+                    value={rating ?? detail.listEntry?.score ?? 0}
                     onChange={(event) => setRating(Number(event.target.value))}
                   />
                   <span>/ 10</span>
@@ -423,27 +269,11 @@ export function MediaDetailModal({
                 <button
                   type="button"
                   disabled={savingTracker}
-                  onClick={() => {
-                    setSavingTracker(true);
-                    void ensureListEntry()
-                      .then((current) => {
-                        if (!current.listEntry) throw new Error("AniList entry was not created.");
-                        return window.anistream.updateAniListEntry({
-                          id: current.listEntry.id,
-                          score: Math.min(10, Math.max(0, rating)),
-                        });
-                      })
-                      .then((listEntry) => {
-                        setDetail((previous) => (previous ? { ...previous, listEntry } : previous));
-                        return access.refreshLibrary();
-                      })
-                      .catch((reason: unknown) =>
-                        setError(
-                          reason instanceof Error ? reason.message : "Unable to save rating.",
-                        ),
-                      )
-                      .finally(() => setSavingTracker(false));
-                  }}
+                  onClick={() =>
+                    void detailSession
+                      .saveRating(rating ?? detail.listEntry?.score ?? 0)
+                      .catch(() => undefined)
+                  }
                 >
                   Save rating
                 </button>
@@ -656,7 +486,6 @@ export function MediaDetailModal({
               resume={mangaResume?.chapterId === activeChapter.id ? mangaResume : undefined}
               onClose={closeReader}
               onChapterChange={(chapter) => {
-                setMangaResume(undefined);
                 setActiveChapter(chapter);
               }}
               onChapterRead={markChapterRead}
@@ -837,33 +666,4 @@ function relativeDate(value?: string): string {
   if (days < 35) return `${Math.floor(days / 7)}w ago`;
   if (days < 365) return `${Math.floor(days / 30)}mo ago`;
   return `${Math.floor(days / 365)}y ago`;
-}
-
-function chooseChapterToRead(
-  session: MangaDexReaderSession,
-  aniListProgress: number,
-  resume?: MangaReadingResume,
-): MangaDexReaderChapter | undefined {
-  if (!session.chapters.length) return undefined;
-
-  if (resume) {
-    const savedIndex = session.chapters.findIndex((chapter) => chapter.id === resume.chapterId);
-    if (savedIndex >= 0) {
-      if (resume.progress >= 0.9 && savedIndex + 1 < session.chapters.length) {
-        return session.chapters[savedIndex + 1];
-      }
-      return session.chapters[savedIndex];
-    }
-  }
-
-  if (aniListProgress > 0) {
-    const nextChapter = session.chapters.find(
-      (chapter) =>
-        chapter.number !== undefined &&
-        Math.floor(chapter.number) >= Math.floor(aniListProgress) + 1,
-    );
-    if (nextChapter) return nextChapter;
-  }
-
-  return session.chapters[0];
 }

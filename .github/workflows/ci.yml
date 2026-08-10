@@ -60,5 +60,32 @@ jobs:
       - name: Verify product-slice contracts (session ordering, browse/detail IPC, provider types)
         run: npm run check:product-slice
 
-      - name: Verify AniList authorization-code OAuth flow
+      - name: Verify AniList implicit OAuth flow
         run: npm run check:anilist-oauth
+
+  verify-windows:
+    name: Verify Windows source and packaging prerequisites
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Verify Windows-compatible source
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run format:check
+          npm test
+          npm run build
+          npm run check:product-slice
+          npm run check:anilist-oauth

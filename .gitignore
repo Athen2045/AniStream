@@ -2,6 +2,11 @@ node_modules/
 out/
 dist/
 .env
+*.dmg
+*.exe
+*.blockmap
+*.asar
+*.sqlite-journal
 *.log
 .DS_Store
 coverage/
@@ -9,6 +14,12 @@ coverage/
 *.sqlite-shm
 *.sqlite-wal
 *.tsbuildinfo
+.pnpm-store/
+.npm/
+.eslintcache
+.cache/
+.idea/
+.vscode/
 
 # Local coding-agent working notes: verified-state/decision logs, external-integration
 # notes, agent operating instructions, provider research/audits, and CI specs written

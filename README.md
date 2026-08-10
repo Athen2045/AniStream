@@ -6,8 +6,8 @@ AniStream is an early-preview media app for anime and manga fans. Browse trendin
 both catalogs from one place, open episode and chapter lists, and continue from where you left off.
 An AniList account is optional.
 
-> **Current release:** v0.1.2 for Apple Silicon Macs running macOS 12 or newer. The Windows and
-> Android versions are under development and are not available yet.
+> **Current release:** v0.1.2 for Apple Silicon Macs running macOS 12 or newer, with an unsigned
+> Windows x64 installer built by GitHub Actions. Android remains under development.
 
 ## Download AniStream for macOS
 
@@ -27,9 +27,20 @@ need to do this once. Do not disable Gatekeeper globally.
 - AniStream stores playback and reading progress locally on your Mac.
 - Open **Profile** if you want to connect AniList and add your lists, ratings, and tracker progress.
 
-AniList connection is optional. This preview does not package an OAuth client secret, so public
-release builds may require developer configuration before account syncing can be enabled. The rest
-of the app remains available while signed out.
+AniList connection is optional. Users sign in and approve AniStream in the AniList browser flow;
+no Developer Settings client or secret is required. The rest of the app remains available while
+signed out.
+
+## Download AniStream for Windows
+
+1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.2.
+2. Under **Assets**, download `AniStream Setup 0.1.2.exe`.
+3. Run the installer and choose an installation folder.
+4. Launch AniStream from the Start menu or desktop shortcut.
+
+The Windows installer is currently unsigned, so SmartScreen may show a warning. Select **More
+info**, confirm the unsigned release status, and choose **Run anyway** only when you downloaded
+the installer from the project release page. Signing and SmartScreen reputation remain pending.
 
 ### What is included
 
@@ -49,7 +60,7 @@ of the app remains available while signed out.
 
 # For developers
 
-AniStream is a macOS-first Electron application built as a portfolio-scale full-stack desktop
+AniStream is a cross-platform Electron application built as a portfolio-scale full-stack desktop
 system. It demonstrates secure process isolation, typed IPC, provider orchestration, local-first
 persistence, OAuth lifecycle management, resilient network behavior, and media-focused React UI
 engineering without introducing a separate cloud backend.
@@ -60,8 +71,8 @@ engineering without introducing a separate cloud backend.
   boundaries.
 - **Type-safe integration:** strict TypeScript contracts shared across validated IPC channels.
 - **Security:** `contextIsolation`, Electron sandboxing, disabled renderer Node integration,
-  origin-validated IPC, runtime payload validation, denied child navigation, and Keychain-backed
-  credential storage.
+  origin-validated IPC, runtime payload validation, denied child navigation, and encrypted local
+  credential storage through Electron `safeStorage`.
 - **Local persistence:** SQLite stores playback checkpoints, manga reading progress, and the cached
   AniList dashboard for one local user; provider adapters use bounded in-memory caches.
 - **Network resilience:** request throttling, in-flight deduplication, TTL caches, abort signals,
@@ -79,7 +90,7 @@ flowchart LR
     IPC --> MAIN[Electron main process]
     MAIN --> DOMAINS[Tracker, anime, manga, and resume domains]
     DOMAINS --> DB[(SQLite)]
-    DOMAINS --> KEYCHAIN[macOS Keychain]
+    DOMAINS --> KEYCHAIN[OS credential store]
     DOMAINS --> ANILIST[AniList GraphQL]
     DOMAINS --> MANGA[MangaDex and enrichment APIs]
     DOMAINS --> VIDEO[Anikoto and MegaPlay]
@@ -91,16 +102,16 @@ filesystem access. The preload exposes a narrow serializable API rather than raw
 
 ## Technology stack
 
-| Layer            | Technology                               | Role                                                                              |
-| ---------------- | ---------------------------------------- | --------------------------------------------------------------------------------- |
-| Desktop runtime  | Electron 43                              | macOS windowing, lifecycle, custom OAuth protocol, secure IPC, and packaging      |
-| UI               | React 19, Framer Motion, Lucide          | catalog, profile, detail, player, reader, accessible transitions, and iconography |
-| Language         | TypeScript 7                             | strict contracts across main, preload, shared, and renderer code                  |
-| Build            | electron-vite 5, Vite 7                  | development server and production bundles                                         |
-| Persistence      | SQLite with `better-sqlite3`             | local resume state, cached dashboard data, and bounded persistence                |
-| Styling          | Plain CSS and design tokens              | responsive cinematic UI without a component-framework dependency                  |
-| Testing          | Vitest, ESLint, Prettier                 | fixtures, unit/regression checks, static analysis, and formatting                 |
-| Packaging and CI | electron-builder, GitHub Actions, CodeQL | Apple Silicon DMG builds, release assets, verification, and security scans        |
+| Layer            | Technology                               | Role                                                                                                 |
+| ---------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Desktop runtime  | Electron 43                              | macOS windowing, lifecycle, custom OAuth protocol, secure IPC, and packaging                         |
+| UI               | React 19, Framer Motion, Lucide          | catalog, profile, detail, player, reader, accessible transitions, and iconography                    |
+| Language         | TypeScript 7                             | strict contracts across main, preload, shared, and renderer code                                     |
+| Build            | electron-vite 5, Vite 7                  | development server and production bundles                                                            |
+| Persistence      | SQLite with `better-sqlite3`             | local resume state, cached dashboard data, and bounded persistence                                   |
+| Styling          | Plain CSS and design tokens              | responsive cinematic UI without a component-framework dependency                                     |
+| Testing          | Vitest, ESLint, Prettier                 | fixtures, unit/regression checks, static analysis, and formatting                                    |
+| Packaging and CI | electron-builder, GitHub Actions, CodeQL | Apple Silicon DMG and Windows x64 installer builds, release assets, verification, and security scans |
 
 ## Provider boundaries
 
@@ -119,8 +130,8 @@ contracts, and one provider failure does not invalidate unrelated data that load
 
 ### Requirements
 
-- Apple Silicon Mac
-- macOS 12 or newer
+- Apple Silicon Mac for the macOS package, or Windows x64 for the Windows package
+- macOS 12 or newer for the Mac app
 - Node.js 22 or newer
 - npm
 
@@ -139,15 +150,12 @@ providers and account integrations can be configured separately.
 
 ### Configure AniList for development
 
-AniStream uses the registered callback `anistream://auth/anilist`. The OAuth client secret is never
-stored in `.env` or committed. On the first connection attempt, the trusted main process requests
-the secret through a hidden-input macOS dialog and saves it in Keychain.
-
-You can also configure it before launching:
-
-```bash
-npm run configure:anilist
-```
+AniStream uses AniList's implicit OAuth grant with the registered callback
+`anistream://auth/anilist`. Users only sign in to AniList and approve AniStream in the browser;
+they never need to create an AniList Developer application or provide a client secret. The access
+token returned in the callback is encrypted with Electron `safeStorage` and stored only on this
+device. The Windows installer registers `anistream://` and routes the callback back to the existing
+AniStream instance.
 
 ### Environment variables
 
@@ -175,8 +183,9 @@ npm run lint                 # Run ESLint
 npm run format:check         # Check Prettier formatting
 npm run build                # Create production main, preload, and renderer bundles
 npm run check:product-slice  # Verify cross-process product contracts
-npm run check:anilist-oauth  # Verify the authorization-code implementation
+npm run check:anilist-oauth  # Verify the implicit OAuth implementation
 npm run package:mac          # Build the unsigned Apple Silicon app and DMG
+npm run package:win          # Build the unsigned Windows x64 NSIS installer
 ```
 
 ## Project structure
@@ -201,6 +210,9 @@ Local `API.md`, `AGENTS.md`, `CONTEXT.md`, `docs/research/`, `docs/superpowers/`
 are development-agent working notes and are intentionally gitignored. `README.md` is the public
 project entry point.
 
+`electron-builder.yml` configures both the unsigned Apple Silicon DMG and the unsigned Windows x64
+NSIS installer.
+
 ## Build and release v0.1.2
 
 Build the unsigned DMG locally:
@@ -210,9 +222,23 @@ npm ci --legacy-peer-deps
 npm run package:mac
 ```
 
-The output is `dist/AniStream-0.1.2-arm64.dmg`. The packaging workflow also runs automatically for
-tags matching `v*.*.*`, verifies the sandbox-safe CommonJS preload, uploads the DMG as a workflow
-artifact, and attaches it to the matching GitHub Release.
+Windows packaging can be prepared from a Windows checkout with Visual Studio C++ tools,
+the Windows SDK, Node.js, and Git installed:
+
+```bash
+npm run package:win
+```
+
+The Windows output is `dist/AniStream Setup 0.1.2.exe`. The macOS output is
+`dist/AniStream-0.1.2-arm64.dmg`. Both packaging workflows run for tags matching `v*.*.*` and
+manual dispatch. Each workflow verifies the sandbox-safe CommonJS preload, uploads an artifact, and
+attaches its package to the matching GitHub Release. The Windows workflow also verifies install,
+launch, and uninstall in an isolated temporary profile. Both packages remain unsigned until a
+signing provider is configured.
+
+For a signed Windows build, provide the electron-builder signing variables through CI secrets
+(`CSC_LINK` and `CSC_KEY_PASSWORD`) and remove `CSC_IDENTITY_AUTO_DISCOVERY=false` from the signed
+release job. Do not commit certificates, passwords, or Azure Artifact Signing tokens.
 
 ```bash
 git tag v0.1.2
@@ -225,7 +251,9 @@ and notarization remain pending until a valid Developer ID Application certifica
 ## Platform roadmap
 
 - **macOS on Apple Silicon:** active and available as the v0.1.2 preview.
-- **Windows:** under development; packaging and compatibility work are not part of this release.
+- **Windows:** x64 NSIS packaging, native SQLite rebuilds, secretless AniList OAuth, CI checks, and
+  installer lifecycle validation are implemented; signing and SmartScreen reputation remain
+  pending.
 - **Android:** under development as a future companion application; no APK is published yet.
 - **MangaDex account sync:** planned as an opt-in Keychain-backed integration. Public MangaDex
   reading remains independent.

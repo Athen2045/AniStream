@@ -38,6 +38,7 @@ describe("viewer access", () => {
       dashboard,
       libraryEntries: new Map(),
       addToLibrary: vi.fn(),
+      updateEntry: vi.fn(),
       removeFromLibrary: vi.fn(),
       refreshLibrary: vi.fn(),
     };
@@ -55,6 +56,7 @@ describe("viewer access", () => {
       dashboard,
       libraryEntries: new Map(),
       addToLibrary: vi.fn(),
+      updateEntry: vi.fn(),
       removeFromLibrary: vi.fn(),
       refreshLibrary: vi.fn(),
     };

@@ -8,14 +8,23 @@ files:
   - package.json
 asarUnpack:
   - node_modules/better-sqlite3/**
+protocols:
+  - name: AniStream OAuth callback
+    schemes:
+      - anistream
 mac:
   category: public.app-category.entertainment
   icon: assets/app-icon/AniStream-1024.png
-  protocols:
-    - name: AniStream OAuth callback
-      schemes:
-        - anistream
   target:
     - target: dmg
       arch:
         - arm64
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/app-icon/AniStream-1024.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

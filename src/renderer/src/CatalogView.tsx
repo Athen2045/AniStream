@@ -1,6 +1,6 @@
 import { BookOpen, ExternalLink, Info, Play, Plus } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { motion, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
+import { useMemo, useRef, useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListEntry,
@@ -10,7 +10,6 @@ import type {
 import { ContentCarousel } from "./ContentCarousel";
 import { Pagination } from "./Pagination";
 import { RailHoverActions } from "./RailHoverActions";
-import { safeBackgroundUrl } from "./safe-css-url";
 import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
 import { useCatalogData } from "./useCatalogData";
@@ -30,6 +29,14 @@ export function CatalogView({
   onPrimary: (media: AniListCatalogMedia) => void;
 }): React.JSX.Element {
   const reducedMotion = useReducedMotion();
+  const pageRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll();
+  const smoothScrollProgress = useSpring(scrollYProgress, {
+    stiffness: 120,
+    damping: 28,
+    mass: 0.22,
+  });
+  const heroParallaxY = useTransform(scrollYProgress, [0, 0.2], [0, 72]);
   const personalized = hasPersonalizedAccess(access);
   const dashboard = personalized ? access.dashboard : undefined;
   const continueCandidates = useMemo(() => {
@@ -88,19 +95,35 @@ export function CatalogView({
   const mediaName = type === "ANIME" ? "anime" : "manga";
   const searchItems = searchResults?.items ?? [];
 
+  // The hero image gets the early paint; everything below it stays lazy to protect scrolling.
   return (
-    <section className={`catalog-page ${type === "MANGA" ? "manga-catalog" : "anime-catalog"}`}>
+    <section
+      ref={pageRef}
+      className={`catalog-page ${type === "MANGA" ? "manga-catalog" : "anime-catalog"}`}
+    >
+      <motion.div
+        className="catalog-scroll-progress"
+        style={{ scaleX: reducedMotion ? scrollYProgress : smoothScrollProgress }}
+        aria-hidden="true"
+      />
       {hero ? (
         <motion.header
           key={`${type}:${searchQuery}:${hero.id}`}
           className="catalog-hero"
-          style={{
-            backgroundImage: `linear-gradient(90deg, #141414 5%, rgba(20,20,20,.88) 42%, rgba(20,20,20,.18) 76%), linear-gradient(0deg, #141414 0%, transparent 45%), ${safeBackgroundUrl(hero.bannerUrl ?? hero.coverUrl)}`,
-          }}
           initial={reducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: reducedMotion ? 0 : 0.35, ease: "easeOut" }}
         >
+          <motion.img
+            className="catalog-hero-art"
+            src={hero.bannerUrl ?? hero.coverUrl}
+            alt=""
+            aria-hidden="true"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            style={{ y: reducedMotion ? 0 : heroParallaxY }}
+          />
           <div className="catalog-hero-copy">
             <p className="catalog-kicker">
               {searchQuery

@@ -1,9 +1,17 @@
 import { LogOut, MoreHorizontal, Plus, RefreshCw, Search, UserRound, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { createPortal } from "react-dom";
 import type {
-  AniListAuthState,
   AniListCatalogMedia,
   AniListDashboard,
   AniListEntry,
@@ -19,7 +27,8 @@ import { ProfileConnectView } from "./ProfileConnectView";
 import { safeBackgroundUrl } from "./safe-css-url";
 import { formatMediaLabel } from "./format-label";
 import { isProgressComplete } from "../../shared/progress";
-import { mediaDetailInstanceKey, type ViewerAccess } from "./viewer-access";
+import { mediaDetailInstanceKey } from "./viewer-access";
+import { createViewerSession } from "./viewer-session";
 
 // Only needed once a title is opened, never on initial launch -- load it as its own
 // chunk instead of paying its parse/compile cost during startup.
@@ -40,8 +49,19 @@ type LibrarySort = "UPDATED_DESC" | "TITLE_ASC" | "SCORE_DESC" | "PROGRESS_DESC"
 
 export function App(): React.JSX.Element {
   const reducedMotion = useReducedMotion();
-  const [auth, setAuth] = useState<AniListAuthState>({ status: "signed-out" });
-  const [dashboard, setDashboard] = useState<AniListDashboard>();
+  const viewerSession = useMemo(() => createViewerSession(window.anistream), []);
+  const viewerSnapshot = useSyncExternalStore(
+    viewerSession.subscribe,
+    viewerSession.getSnapshot,
+    viewerSession.getSnapshot,
+  );
+  const auth = viewerSnapshot.auth;
+  const viewerAccess = viewerSnapshot.access;
+  const dashboard = viewerAccess.kind === "member" ? viewerAccess.dashboard : undefined;
+  const authRestoring = viewerSnapshot.restoring;
+  const syncing = viewerSnapshot.syncing;
+  const [localError, setLocalError] = useState<string>();
+  const error = viewerSnapshot.error ?? localError;
   const [view, setView] = useState<"ANIME" | "MANGA" | "PROFILE">("ANIME");
   const [browseQuery, setBrowseQuery] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<AniListCatalogMedia>();
@@ -55,67 +75,11 @@ export function App(): React.JSX.Element {
   const [catalogResults, setCatalogResults] = useState<AniListMedia[]>([]);
   const [catalogSearching, setCatalogSearching] = useState(false);
   const [addingMediaId, setAddingMediaId] = useState<number>();
-  const [authRestoring, setAuthRestoring] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState<string>();
-
-  const loadDashboard = useCallback(async (): Promise<void> => {
-    setSyncing(true);
-    setError(undefined);
-    try {
-      const next = await window.anistream.getAniListDashboard();
-      setDashboard(next);
-      setSelectedGroup((current) => current || next.animeLists[0]?.name || "");
-    } catch (reason) {
-      setError(
-        messageFrom(
-          reason,
-          "Unable to refresh your AniList lists. Your saved login remains active.",
-        ),
-      );
-    } finally {
-      setSyncing(false);
-    }
-  }, []);
 
   useEffect(() => {
-    let mounted = true;
-    const applyAuthState = (state: AniListAuthState): void => {
-      if (!mounted) return;
-      setAuth(state);
-      setAuthRestoring(false);
-      setError(state.status === "error" ? state.message : undefined);
-      if (state.status === "signed-in") {
-        setDashboard((current) => current ?? emptyDashboard(state));
-        void window.anistream
-          .getCachedAniListDashboard()
-          .then((cached) => {
-            if (!mounted || !cached || cached.profile.id !== state.profile.id) return;
-            setDashboard(cached);
-            setSelectedGroup((current) => current || cached.animeLists[0]?.name || "");
-          })
-          .catch(() => undefined)
-          .finally(() => {
-            if (mounted) void loadDashboard();
-          });
-      } else if (state.status === "signed-out") {
-        setDashboard(undefined);
-      }
-    };
-
-    void window.anistream
-      .getAniListAuthState()
-      .then(applyAuthState)
-      .catch((reason: unknown) => {
-        setError(messageFrom(reason, "Unable to read the saved AniList session."));
-        setAuthRestoring(false);
-      });
-    const unsubscribe = window.anistream.onAniListAuthChanged(applyAuthState);
-    return () => {
-      mounted = false;
-      unsubscribe();
-    };
-  }, [loadDashboard]);
+    void viewerSession.restore();
+    return () => viewerSession.dispose();
+  }, [viewerSession]);
 
   useEffect(() => {
     const focusSearch = (event: KeyboardEvent): void => {
@@ -158,14 +122,6 @@ export function App(): React.JSX.Element {
   }, [dashboard]);
   // Keyed by media id (not list-entry id) so catalog/rail cards can look up whether a
   // given title is already on the list, and if so, its real list-entry id for removal.
-  const libraryEntries = useMemo(() => {
-    const map = new Map<number, AniListEntry>();
-    for (const list of [...(dashboard?.animeLists ?? []), ...(dashboard?.mangaLists ?? [])]) {
-      for (const entry of list.entries) map.set(entry.media.id, entry);
-    }
-    return map;
-  }, [dashboard]);
-
   function switchMediaType(type: AniListMediaType): void {
     setMediaType(type);
     setListQuery("");
@@ -175,47 +131,31 @@ export function App(): React.JSX.Element {
   }
 
   async function connect(): Promise<void> {
-    setError(undefined);
-    try {
-      await window.anistream.startAniListLogin();
-    } catch (reason) {
-      setError(messageFrom(reason, "Unable to start AniList sign-in."));
-    }
+    await viewerSession.connect();
   }
 
   async function cancelConnect(): Promise<void> {
-    setError(undefined);
-    try {
-      await window.anistream.cancelAniListLogin();
-    } catch (reason) {
-      setError(messageFrom(reason, "Unable to cancel AniList sign-in."));
-    }
+    await viewerSession.cancelConnect();
   }
 
   async function saveEntry(input: UpdateAniListEntryInput): Promise<void> {
-    setError(undefined);
-    await window.anistream.updateAniListEntry(input);
-    await loadDashboard();
+    const access = viewerSession.getSnapshot().access;
+    if (access.kind === "member") await access.updateEntry(input);
   }
 
   async function deleteEntry(entry: AniListEntry): Promise<void> {
     if (!window.confirm(`Remove “${entry.media.title}” from your AniList?`)) return;
-    await window.anistream.deleteAniListEntry(entry.id);
-    await loadDashboard();
-  }
-
-  async function quickAddToLibrary(media: AniListCatalogMedia): Promise<void> {
-    await window.anistream.addAniListEntry(media.id);
-    await loadDashboard();
+    const access = viewerSession.getSnapshot().access;
+    if (access.kind === "member") await access.removeFromLibrary(entry);
   }
 
   async function searchCatalog(): Promise<void> {
     setCatalogSearching(true);
-    setError(undefined);
+    setLocalError(undefined);
     try {
       setCatalogResults(await window.anistream.searchAniList(catalogQuery, mediaType));
     } catch (reason) {
-      setError(messageFrom(reason, "AniList search failed."));
+      setLocalError(messageFrom(reason, "AniList search failed."));
     } finally {
       setCatalogSearching(false);
     }
@@ -224,8 +164,9 @@ export function App(): React.JSX.Element {
   async function addMedia(media: AniListMedia): Promise<void> {
     setAddingMediaId(media.id);
     try {
-      await window.anistream.addAniListEntry(media.id);
-      await loadDashboard();
+      const access = viewerSession.getSnapshot().access;
+      if (access.kind !== "member") throw new Error("Connect AniList to manage your library.");
+      await access.addToLibrary(media);
       setAdding(false);
       setCatalogQuery("");
       setCatalogResults([]);
@@ -233,18 +174,6 @@ export function App(): React.JSX.Element {
       setAddingMediaId(undefined);
     }
   }
-
-  const viewerAccess: ViewerAccess =
-    auth.status === "signed-in" && dashboard
-      ? {
-          kind: "member",
-          dashboard,
-          libraryEntries,
-          addToLibrary: quickAddToLibrary,
-          removeFromLibrary: deleteEntry,
-          refreshLibrary: loadDashboard,
-        }
-      : { kind: "guest" };
 
   return (
     <main className="app-shell">
@@ -281,7 +210,7 @@ export function App(): React.JSX.Element {
               <button
                 type="button"
                 aria-label="Refresh AniList"
-                onClick={() => void loadDashboard()}
+                onClick={() => void viewerSession.refresh()}
               >
                 <RefreshCw size={17} className={syncing ? "spinning" : ""} />
               </button>
@@ -312,79 +241,86 @@ export function App(): React.JSX.Element {
         </div>
       </nav>
 
-      {view === "ANIME" || view === "MANGA" ? (
-        <CatalogView
-          type={view}
-          searchQuery={browseQuery}
-          access={viewerAccess}
-          onSelect={(media) => openMedia(media, "details")}
-          onPrimary={(media) => openMedia(media, view === "ANIME" ? "play" : "read")}
-        />
-      ) : (
-        <AnimatePresence mode="wait" initial={false}>
-          {viewerAccess.kind === "member" ? (
-            <motion.div
-              className="profile-route-transition"
-              key={`profile-member-${viewerAccess.dashboard.profile.id}`}
-              initial={reducedMotion ? false : { opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reducedMotion ? undefined : { opacity: 0, y: -10 }}
-              transition={
-                reducedMotion ? { duration: 0 } : { duration: 0.34, ease: [0.22, 1, 0.36, 1] }
-              }
-            >
-              <ProfileView
-                dashboard={viewerAccess.dashboard}
-                mediaType={mediaType}
-                selectedGroup={selectedGroup}
-                activeGroupName={activeGroup?.name}
-                visibleEntries={visibleEntries}
-                listQuery={listQuery}
-                librarySort={librarySort}
-                adding={adding}
-                catalogQuery={catalogQuery}
-                catalogResults={catalogResults}
-                catalogSearching={catalogSearching}
-                addingMediaId={addingMediaId}
-                libraryMediaIds={libraryMediaIds}
-                syncing={syncing}
-                error={error}
-                onSwitchType={switchMediaType}
-                onSelectGroup={setSelectedGroup}
-                onListQuery={setListQuery}
-                onLibrarySort={setLibrarySort}
-                onToggleAdding={() => setAdding((value) => !value)}
-                onCatalogQuery={setCatalogQuery}
-                onCatalogSearch={searchCatalog}
-                onAdd={addMedia}
-                onSave={saveEntry}
-                onDelete={deleteEntry}
-                onRefresh={loadDashboard}
-                onLogout={async () => window.anistream.logoutAniList()}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              className="profile-route-transition"
-              key="profile-connect"
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reducedMotion ? undefined : { opacity: 0, y: -12, scale: 0.99 }}
-              transition={
-                reducedMotion ? { duration: 0 } : { duration: 0.26, ease: [0.4, 0, 1, 1] }
-              }
-            >
-              <ProfileConnectView
-                auth={auth}
-                restoring={authRestoring}
-                error={error}
-                onConnect={connect}
-                onCancel={cancelConnect}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
+      <AnimatePresence mode="wait" initial={false}>
+        {view === "ANIME" || view === "MANGA" ? (
+          <motion.div
+            className="route-view"
+            key={`catalog-${view}`}
+            initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
+            transition={
+              reducedMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }
+            }
+          >
+            <CatalogView
+              type={view}
+              searchQuery={browseQuery}
+              access={viewerAccess}
+              onSelect={(media) => openMedia(media, "details")}
+              onPrimary={(media) => openMedia(media, view === "ANIME" ? "play" : "read")}
+            />
+          </motion.div>
+        ) : viewerAccess.kind === "member" ? (
+          <motion.div
+            className="profile-route-transition"
+            key={`profile-member-${viewerAccess.dashboard.profile.id}`}
+            initial={reducedMotion ? false : { opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reducedMotion ? undefined : { opacity: 0, y: -10 }}
+            transition={
+              reducedMotion ? { duration: 0 } : { duration: 0.34, ease: [0.22, 1, 0.36, 1] }
+            }
+          >
+            <ProfileView
+              dashboard={viewerAccess.dashboard}
+              mediaType={mediaType}
+              selectedGroup={selectedGroup}
+              activeGroupName={activeGroup?.name}
+              visibleEntries={visibleEntries}
+              listQuery={listQuery}
+              librarySort={librarySort}
+              adding={adding}
+              catalogQuery={catalogQuery}
+              catalogResults={catalogResults}
+              catalogSearching={catalogSearching}
+              addingMediaId={addingMediaId}
+              libraryMediaIds={libraryMediaIds}
+              syncing={syncing}
+              error={error}
+              onSwitchType={switchMediaType}
+              onSelectGroup={setSelectedGroup}
+              onListQuery={setListQuery}
+              onLibrarySort={setLibrarySort}
+              onToggleAdding={() => setAdding((value) => !value)}
+              onCatalogQuery={setCatalogQuery}
+              onCatalogSearch={searchCatalog}
+              onAdd={addMedia}
+              onSave={saveEntry}
+              onDelete={deleteEntry}
+              onRefresh={() => viewerSession.refresh()}
+              onLogout={() => viewerSession.logout()}
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            className="profile-route-transition"
+            key="profile-connect"
+            initial={false}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reducedMotion ? undefined : { opacity: 0, y: -12, scale: 0.99 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: 0.26, ease: [0.4, 0, 1, 1] }}
+          >
+            <ProfileConnectView
+              auth={auth}
+              restoring={authRestoring}
+              error={error}
+              onConnect={connect}
+              onCancel={cancelConnect}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Suspense
         fallback={
@@ -525,13 +461,15 @@ function ProfileView({
           animate={{ opacity: 1, y: 0 }}
           transition={profileTransition}
         >
-          <img
-            className="profile-avatar"
-            src={dashboard.profile.avatarUrl}
-            alt={`${dashboard.profile.name}'s avatar`}
-            decoding="async"
-          />
-          <div>
+          <div className="profile-avatar-frame">
+            <img
+              className="profile-avatar"
+              src={dashboard.profile.avatarUrl}
+              alt={`${dashboard.profile.name}'s avatar`}
+              decoding="async"
+            />
+          </div>
+          <div className="profile-summary-copy">
             <p className="profile-kicker">AniList profile</p>
             <h1>{dashboard.profile.name}</h1>
             {dashboard.profile.about ? (
@@ -747,7 +685,10 @@ function ProfileView({
             transition={profileTransition}
           >
             <div className="library-heading">
-              <h2>{activeGroupName ?? (selectedGroup || "No list")}</h2>
+              <div>
+                <p className="library-heading-kicker">Your library</p>
+                <h2>{activeGroupName ?? (selectedGroup || "No list")}</h2>
+              </div>
               <span aria-live="polite">{visibleEntries.length} titles</span>
             </div>
             <div className="media-grid">
@@ -977,8 +918,12 @@ function MediaCard({
   return (
     <motion.article
       className="media-card"
-      whileHover={reducedMotion ? undefined : { y: -3 }}
-      transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 360, damping: 28 }}
+      whileHover={
+        reducedMotion
+          ? undefined
+          : { y: -3, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }
+      }
+      transition={reducedMotion ? { duration: 0 } : { duration: 0.18, ease: "easeOut" }}
     >
       <div className="cover-wrap">
         <img
@@ -1039,17 +984,6 @@ function MediaCard({
       {editorPresent ? createPortal(editor, document.body) : null}
     </motion.article>
   );
-}
-
-function emptyDashboard(
-  state: Extract<AniListAuthState, { status: "signed-in" }>,
-): AniListDashboard {
-  return {
-    profile: state.profile,
-    animeLists: [],
-    mangaLists: [],
-    fetchedAt: new Date().toISOString(),
-  };
 }
 
 function ProfileStatGroup({

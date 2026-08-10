@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, ChevronLeft, Play, SkipForward } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type {
   AniListCatalogMedia,
   AniListMediaDetail,
@@ -11,11 +11,10 @@ import type {
   AnimeProviderSeason,
   PlaybackResume,
 } from "../../shared/contracts";
-import { parseMegaPlayEvent } from "../../shared/megaplay-events";
+import { createAnimePlaybackSession } from "./anime-playback-session";
 import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
 
-const MEGAPLAY_ORIGIN = "https://megaplay.buzz";
 const EPISODES_PAGE_SIZE = 10;
 
 type WatchView = "episodes" | "player";
@@ -556,105 +555,42 @@ function AnikotoEmbedPlayer({
   onRetry: () => void;
 }): React.JSX.Element {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const markedRef = useRef(false);
-  const completedRef = useRef(false);
-  const lastSavedAt = useRef(0);
-  const latestProgress = useRef<{ currentTime: number; duration: number } | undefined>(undefined);
-  const loadedRef = useRef(false);
-  const [loaded, setLoaded] = useState(false);
-  const [hasProgressed, setHasProgressed] = useState(false);
-  const [loadTimedOut, setLoadTimedOut] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const [ended, setEnded] = useState(false);
-
-  const reportError = useCallback(
-    (message: string): void => {
-      setHasError(true);
-      onError(message);
-    },
-    [onError],
-  );
-
-  // Mount-scoped timeout: this whole component remounts (via its parent `key`, which
-  // includes episode number, source id, and a retry counter) whenever a new episode/source
-  // is selected or the user retries, so a plain-mount effect is equivalent to keying on
-  // those values directly.
-  useEffect(() => {
-    loadedRef.current = false;
-    const timer = setTimeout(() => {
-      if (!loadedRef.current) setLoadTimedOut(true);
-    }, 15_000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const saveResume = useCallback(
-    (currentTime: number, duration: number, force = false): void => {
-      const now = Date.now();
-      if (!force && now - lastSavedAt.current < 10_000) return;
-      lastSavedAt.current = now;
-      void window.anistream.savePlaybackResume({
-        aniListId: mediaId,
+  const session = useMemo(
+    () =>
+      createAnimePlaybackSession({
+        mediaId,
         episode: episode.number,
-        positionSeconds: Math.max(0, currentTime),
-        durationSeconds: duration,
-      });
-    },
-    [episode.number, mediaId],
+        saveResume: (input) => window.anistream.savePlaybackResume(input),
+        clearResume: (aniListId) => window.anistream.clearPlaybackResume(aniListId),
+        onWatched,
+      }),
+    [episode.number, mediaId, onWatched],
+  );
+  const sessionState = useSyncExternalStore(
+    session.subscribe,
+    session.getSnapshot,
+    session.getSnapshot,
   );
 
-  useEffect(
-    () => () => {
-      const progress = latestProgress.current;
-      if (progress) saveResume(progress.currentTime, progress.duration, true);
-    },
-    [saveResume],
-  );
+  useEffect(() => () => session.dispose(), [session]);
+
+  useEffect(() => {
+    if (sessionState.errorMessage) onError(sessionState.errorMessage);
+  }, [onError, sessionState.errorMessage]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<unknown>): void => {
-      if (event.origin !== MEGAPLAY_ORIGIN || event.source !== iframeRef.current?.contentWindow) {
-        return;
-      }
-
-      const message = parseMegaPlayEvent(event.data);
-      if (!message) return;
-
-      if (message.kind === "progress") {
-        setHasProgressed(true);
-        const ratio = message.percent ?? (message.currentTime / message.duration) * 100;
-        if (!markedRef.current && ratio >= 90) {
-          markedRef.current = true;
-          completedRef.current = true;
-          latestProgress.current = undefined;
-          void window.anistream.clearPlaybackResume(mediaId);
-          void onWatched(episode.number);
-        } else if (!completedRef.current) {
-          latestProgress.current = {
-            currentTime: message.currentTime,
-            duration: message.duration,
-          };
-          saveResume(message.currentTime, message.duration);
-        }
-        return;
-      }
-
-      if (message.kind === "complete") {
-        const shouldMark = !markedRef.current;
-        markedRef.current = true;
-        completedRef.current = true;
-        latestProgress.current = undefined;
-        setEnded(true);
-        void window.anistream.clearPlaybackResume(mediaId);
-        if (shouldMark) void onWatched(episode.number);
-        return;
-      }
-
-      reportError(message.message ?? "The Anikoto player reported a playback error.");
+      session.handleMessage(
+        event.data,
+        event.origin,
+        event.source,
+        iframeRef.current?.contentWindow ?? null,
+      );
     };
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [episode.number, mediaId, onWatched, reportError, saveResume]);
+  }, [session]);
 
   return (
     <div className="anistream-player anikoto-player">
@@ -666,13 +602,10 @@ function AnikotoEmbedPlayer({
         allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
-        onLoad={() => {
-          loadedRef.current = true;
-          setLoaded(true);
-        }}
+        onLoad={() => session.markLoaded()}
       />
 
-      {loadTimedOut ? (
+      {sessionState.loadTimedOut ? (
         <div className="anikoto-player-loading anikoto-player-error" role="alert">
           <strong>The Anikoto player didn&apos;t respond in time.</strong>
           <p>The embed may be slow, blocked, or unavailable.</p>
@@ -680,7 +613,9 @@ function AnikotoEmbedPlayer({
             Retry
           </button>
         </div>
-      ) : !hasError && !ended && !(loaded && hasProgressed) ? (
+      ) : !sessionState.hasError &&
+        !sessionState.ended &&
+        !(sessionState.loaded && sessionState.hasProgressed) ? (
         <div className="anikoto-player-loading" role="status">
           <span className="spinner" />
           <strong>Loading Anikoto player…</strong>
@@ -693,7 +628,7 @@ function AnikotoEmbedPlayer({
         </p>
       ) : null}
 
-      {ended && nextEpisode ? (
+      {sessionState.ended && nextEpisode ? (
         <button className="next-preview" type="button" onClick={() => onNext(nextEpisode)}>
           <span>Next episode</span>
           <strong>
