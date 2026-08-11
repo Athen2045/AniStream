@@ -250,6 +250,24 @@ git push origin v0.1.3
 Tagging should happen only after the version bump and release changes are committed. Code signing
 and notarization remain pending until a valid Developer ID Application certificate is available.
 
+## Staged release workflow
+
+New work is tested on `develop` before it reaches protected `main`:
+
+1. Push the feature work to `develop`.
+2. Download the **Develop Windows preview** artifact from GitHub Actions.
+3. Install and manually test the preview installer.
+4. Open a pull request from `develop` to `main` and wait for required checks/review.
+5. Bump `package.json` and `package-lock.json`, add `docs/releases/vX.Y.Z.md`, and merge into `main`.
+6. Manually run **Promote production release** with the exact package version.
+7. Approve the protected `production` environment after reviewing the built artifacts.
+
+The promotion workflow builds macOS and Windows packages from one validated `main` commit, then
+creates the version tag and GitHub Release from those exact artifacts. It refuses reused tags,
+missing release notes, version mismatches, and versions that are not newer than the latest tag.
+See [the staged release guide](docs/how-to/staged-releases.md) for the one-time GitHub branch and
+environment settings.
+
 ## Platform roadmap
 
 - **macOS on Apple Silicon:** active and available as the v0.1.3 preview.

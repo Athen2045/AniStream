@@ -1,0 +1,178 @@
+name: Promote production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version from package.json, for example 0.1.4"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate main release candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      commit_sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - name: Check out protected main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check version and release notes
+        run: npm run check:release-version -- "${{ inputs.version }}"
+
+      - name: Run release checks
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run format:check
+          npm test
+          npm run build
+          npm run check:product-slice
+          npm run check:anilist-oauth
+          npm audit --omit=dev
+
+      - name: Record exact main commit
+        id: commit
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Build Windows release artifact
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out validated main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build unsigned Windows installer
+        run: npm run package:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify Windows artifact
+        shell: pwsh
+        run: |
+          npm run check:anilist-oauth
+          npm run check:packaged-preload -- dist/win-unpacked/resources/app.asar
+          $version = node -p "require('./package.json').version"
+          npm run check:win-installer -- "dist/AniStream Setup $version.exe"
+
+      - name: Upload Windows release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AniStream-release-win-x64-${{ inputs.version }}
+          path: |
+            dist/AniStream Setup *.exe
+            dist/AniStream Setup *.exe.blockmap
+          retention-days: 30
+          if-no-files-found: error
+
+  macos:
+    name: Build macOS release artifact
+    needs: validate
+    runs-on: macos-14
+    timeout-minutes: 35
+    steps:
+      - name: Check out validated main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build unsigned Apple Silicon DMG
+        run: npm run package:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify macOS artifact
+        run: >
+          npm run check:packaged-preload --
+          dist/mac-arm64/AniStream.app/Contents/Resources/app.asar
+
+      - name: Upload macOS release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AniStream-release-mac-arm64-${{ inputs.version }}
+          path: dist/*.dmg
+          retention-days: 30
+          if-no-files-found: error
+
+  publish:
+    name: Publish approved GitHub release
+    needs: [validate, windows, macos]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      # This job is the only place allowed to create the tag or mutate a release.
+      - name: Check out validated release notes
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit_sha }}
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AniStream-release-win-x64-${{ inputs.version }}
+          path: dist
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AniStream-release-mac-arm64-${{ inputs.version }}
+          path: dist
+
+      - name: Create tag and GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          token: ${{ github.token }}
+          tag_name: v${{ inputs.version }}
+          target_commitish: ${{ needs.validate.outputs.commit_sha }}
+          body_path: docs/releases/v${{ inputs.version }}.md
+          files: |
+            dist/AniStream Setup *.exe
+            dist/AniStream Setup *.exe.blockmap
+            dist/*.dmg
+          fail_on_unmatched_files: true

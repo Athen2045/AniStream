@@ -1,0 +1,74 @@
+name: Develop Windows preview
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: develop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Build and verify Windows development installer
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out development branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Cache Electron and electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run development checks
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run format:check
+          npm test
+          npm run build
+          npm run check:product-slice
+          npm run check:anilist-oauth
+
+      - name: Build Windows preview installer
+        run: npm run package:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify preview installer
+        shell: pwsh
+        run: |
+          npm run check:packaged-preload -- dist/win-unpacked/resources/app.asar
+          $version = node -p "require('./package.json').version"
+          npm run check:win-installer -- "dist/AniStream Setup $version.exe"
+
+      - name: Upload development installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AniStream-dev-win-x64-${{ github.sha }}
+          path: |
+            dist/AniStream Setup *.exe
+            dist/AniStream Setup *.exe.blockmap
+          retention-days: 14
+          if-no-files-found: error
