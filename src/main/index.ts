@@ -63,6 +63,8 @@ function createWindow(rendererUrl: string): void {
             symbolColor: "#f3f5f7",
             height: 56,
           },
+          roundedCorners: true,
+          backgroundMaterial: "none",
         }
       : {}),
     backgroundColor: "#0d0f12",

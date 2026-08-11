@@ -450,7 +450,7 @@ function ProfileView({
         style={
           dashboard.profile.bannerUrl
             ? {
-                backgroundImage: `linear-gradient(90deg, rgb(8 8 17 / .96) 4%, rgb(8 8 17 / .76) 48%, rgb(8 8 17 / .36)), ${safeBackgroundUrl(dashboard.profile.bannerUrl)}`,
+                backgroundImage: `linear-gradient(90deg, rgb(13 15 18 / .96) 4%, rgb(13 15 18 / .76) 48%, rgb(13 15 18 / .36)), ${safeBackgroundUrl(dashboard.profile.bannerUrl)}`,
               }
             : undefined
         }
