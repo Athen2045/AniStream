@@ -20,6 +20,7 @@ coverage/
 .cache/
 .idea/
 .vscode/
+prototypes/
 
 # Local coding-agent working notes: verified-state/decision logs, external-integration
 # notes, agent operating instructions, provider research/audits, and CI specs written

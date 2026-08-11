@@ -6,6 +6,9 @@ AniStream is an early-preview media app for anime and manga fans. Browse trendin
 both catalogs from one place, open episode and chapter lists, and continue from where you left off.
 An AniList account is optional.
 
+<img width="1920" height="1140" alt="AniStream-home" src="https://github.com/user-attachments/assets/b112ed9d-dbca-40c8-8b12-b65c484a8f14" />
+
+
 > **Current release:** v0.1.3 for Apple Silicon Macs running macOS 12 or newer, with an unsigned
 > Windows x64 installer built by GitHub Actions. Android remains under development.
 
