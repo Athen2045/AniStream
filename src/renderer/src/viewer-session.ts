@@ -245,6 +245,9 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
     },
 
     async logout() {
+      const previousAuth = auth;
+      const previousDashboard = dashboard;
+      const previousSyncing = syncing;
       generation += 1;
       auth = { status: "signed-out" };
       dashboard = undefined;
@@ -254,6 +257,12 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
       try {
         await bridge.logoutAniList();
       } catch (reason) {
+        // Keep the local view aligned with the main process. The token may still
+        // exist when IPC deletion fails, so do not pretend logout completed.
+        generation += 1;
+        auth = previousAuth;
+        dashboard = previousDashboard;
+        syncing = previousSyncing;
         error = messageFrom(reason, "Unable to log out of AniList.");
         notify();
       }

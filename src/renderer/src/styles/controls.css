@@ -1,0 +1,368 @@
+/* Modern control pass: purposeful hierarchy, consistent touch targets, and quiet feedback. */
+:root {
+  --control-height: 42px;
+  --control-radius: 10px;
+  --control-radius-small: 8px;
+  --control-shadow: 0 10px 26px rgb(0 0 0 / 0.18);
+  --control-shadow-primary: 0 10px 24px rgb(76 125 255 / 0.2);
+}
+
+button:not(:disabled) {
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    border-color 180ms var(--ease-out, ease),
+    color 180ms var(--ease-out, ease),
+    box-shadow 180ms var(--ease-out, ease),
+    transform 180ms var(--ease-out, ease),
+    opacity 180ms var(--ease-out, ease);
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+.wordmark {
+  min-height: 38px;
+  padding: 4px 9px 4px 4px;
+  border-radius: var(--control-radius);
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    transform 180ms var(--ease-out, ease);
+}
+
+.wordmark:hover {
+  background: rgb(255 255 255 / 0.07);
+  transform: translateY(-1px);
+}
+
+.wordmark span {
+  border-radius: 5px;
+}
+
+.nav-links {
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 11px;
+  background: rgb(17 20 24 / 0.72);
+}
+
+.nav-links button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    color 180ms var(--ease-out, ease),
+    transform 180ms var(--ease-out, ease);
+}
+
+.nav-links button:hover {
+  background: rgb(255 255 255 / 0.06);
+  transform: none;
+}
+
+.nav-links button.active {
+  background: var(--surface-raised);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.08),
+    0 3px 12px rgb(0 0 0 / 0.16);
+}
+
+.global-search form {
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: 11px;
+  background: rgb(11 13 16 / 0.78);
+  box-shadow: inset 0 1px rgb(255 255 255 / 0.03);
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    border-color 180ms var(--ease-out, ease),
+    box-shadow 180ms var(--ease-out, ease);
+}
+
+.global-search form:focus-within {
+  border-color: var(--focus-ring);
+  background: var(--surface-base);
+  box-shadow:
+    0 0 0 3px var(--highlight-soft),
+    var(--control-shadow);
+}
+
+.session-button,
+.avatar-button {
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    border-color 180ms var(--ease-out, ease),
+    box-shadow 180ms var(--ease-out, ease),
+    transform 180ms var(--ease-out, ease);
+}
+
+.session-button:hover,
+.avatar-button:hover {
+  transform: translateY(-1px);
+}
+
+.session-button.active {
+  box-shadow:
+    inset 0 -2px var(--primary),
+    0 5px 16px rgb(0 0 0 / 0.16);
+}
+
+.hero-actions,
+.detail-actions {
+  gap: 9px;
+}
+
+.play-action,
+.info-action,
+.primary-button,
+.secondary-button,
+.save-button,
+.delete-button,
+.add-title-button,
+.catalog-search button {
+  min-height: var(--control-height);
+  border-radius: var(--control-radius);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    border-color 180ms var(--ease-out, ease),
+    box-shadow 180ms var(--ease-out, ease),
+    color 180ms var(--ease-out, ease),
+    transform 180ms var(--ease-out, ease),
+    opacity 180ms var(--ease-out, ease);
+}
+
+.play-action,
+.primary-button,
+.save-button,
+.add-title-button,
+.catalog-search button {
+  box-shadow: var(--control-shadow-primary);
+}
+
+.play-action:hover,
+.primary-button:hover,
+.save-button:hover,
+.add-title-button:hover,
+.catalog-search button:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 13px 28px rgb(76 125 255 / 0.27);
+  transform: translateY(-2px);
+}
+
+.info-action,
+.secondary-button {
+  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 0.07);
+  box-shadow: inset 0 1px rgb(255 255 255 / 0.04);
+}
+
+.info-action:hover,
+.secondary-button:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+  box-shadow: var(--control-shadow);
+  transform: translateY(-2px);
+}
+
+.round-action,
+.rail-hover-play,
+.rail-hover-secondary,
+.carousel-edge > span {
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    border-color 180ms var(--ease-out, ease),
+    box-shadow 180ms var(--ease-out, ease),
+    transform 180ms var(--ease-out, ease),
+    color 180ms var(--ease-out, ease);
+}
+
+.round-action {
+  border-color: var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface-glass);
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.2);
+  cursor: pointer;
+}
+
+.round-action:hover,
+.rail-hover-secondary:hover,
+.carousel-edge:hover > span {
+  border-color: var(--focus-ring);
+  background: var(--surface-hover);
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.22);
+  transform: translateY(-2px) scale(1.035);
+}
+
+.rail-hover-play:hover {
+  box-shadow: 0 8px 18px rgb(76 125 255 / 0.3);
+  transform: translateY(-2px) scale(1.035);
+}
+
+.carousel-edge {
+  width: 74px;
+  transition: opacity 180ms var(--ease-out, ease);
+}
+
+.carousel-edge > span {
+  border-radius: 11px;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.22);
+}
+
+.pagination > button,
+.pagination ol button {
+  min-width: 38px;
+  height: 38px;
+  border-radius: var(--control-radius-small);
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    border-color 180ms var(--ease-out, ease),
+    color 180ms var(--ease-out, ease),
+    transform 180ms var(--ease-out, ease);
+}
+
+.pagination > button:hover:not(:disabled),
+.pagination ol button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.pagination-indicator {
+  border-radius: var(--control-radius-small);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.07),
+    0 5px 14px rgb(0 0 0 / 0.16);
+}
+
+.detail-close,
+.manga-reader-close {
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.08);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.18);
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    border-color 180ms var(--ease-out, ease),
+    transform 180ms var(--ease-out, ease);
+}
+
+.detail-close:hover,
+.manga-reader-close:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+  transform: rotate(4deg) scale(1.04);
+}
+
+.media-tabs {
+  border-radius: 11px;
+  background: rgb(23 26 31 / 0.78);
+  box-shadow: inset 0 1px rgb(255 255 255 / 0.03);
+}
+
+.media-tabs button,
+.media-tab-indicator {
+  border-radius: 8px;
+}
+
+.media-tabs button {
+  min-height: 36px;
+  padding-inline: 14px;
+}
+
+.library-group-select select,
+.library-sort,
+.library-search {
+  min-height: var(--control-height);
+  border-radius: var(--control-radius-small);
+  background: rgb(23 26 31 / 0.78);
+  transition:
+    background-color 180ms var(--ease-out, ease),
+    border-color 180ms var(--ease-out, ease),
+    box-shadow 180ms var(--ease-out, ease);
+}
+
+.library-search:focus-within,
+.library-group-select select:focus-visible,
+.library-sort:focus-visible {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px var(--highlight-soft);
+}
+
+.add-title-button,
+.catalog-search button {
+  min-height: var(--control-height);
+  padding: 0 15px;
+}
+
+.delete-button:hover {
+  border-color: var(--error-line);
+  background: var(--error-soft);
+  color: var(--error-text);
+  transform: translateY(-2px);
+}
+
+button:disabled,
+select:disabled,
+input:disabled {
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .carousel-edge > span,
+  .rail-hover-secondary,
+  .watch-player-back,
+  .anikoto-resume-note,
+  .watch-source-select,
+  .manga-reader-chapter-chip,
+  .manga-reader-header button,
+  .profile-connect-panel,
+  .profile-stats,
+  .profile-account-menu summary,
+  .profile-account-menu > div,
+  .media-card-edit,
+  .entry-editor-backdrop,
+  .entry-editor,
+  .manga-reader-chapter-chip button,
+  .manga-reader-header > div,
+  .detail-tracker-compact label,
+  .detail-tracker-compact button {
+    background: var(--surface-raised);
+    backdrop-filter: none;
+  }
+
+  .detail-backdrop {
+    background: rgb(4 4 14 / 0.96);
+    backdrop-filter: none;
+  }
+
+  .entry-editor-backdrop {
+    background: rgb(4 4 14 / 0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .media-card:hover .cover-wrap img {
+    transform: none;
+  }
+
+  .catalog-content > section,
+  .media-rail .rail-card,
+  .latest-update-card,
+  .browse-card {
+    animation: none !important;
+  }
+}

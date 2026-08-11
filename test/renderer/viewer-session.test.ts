@@ -126,4 +126,31 @@ describe("ViewerSessionModule", () => {
     expect(session.getSnapshot().auth.status).toBe("signed-out");
     session.dispose();
   });
+
+  it("restores access when the main process cannot complete logout", async () => {
+    const auth: AniListAuthState = {
+      status: "signed-in",
+      profile: dashboard(1).profile,
+    };
+    const logoutAniList = vi.fn(async () => {
+      throw new Error("Keychain unavailable");
+    });
+    const session = createViewerSession(
+      bridge({
+        getAniListAuthState: vi.fn(async () => auth),
+        getCachedAniListDashboard: vi.fn(async () => dashboard(1)),
+        getAniListDashboard: vi.fn(async () => dashboard(1)),
+        logoutAniList,
+      }),
+    );
+
+    await session.restore();
+    await session.logout();
+
+    expect(session.getSnapshot().access.kind).toBe("member");
+    expect(session.getSnapshot().auth).toEqual(auth);
+    expect(session.getSnapshot().error).toBe("Keychain unavailable");
+    expect(logoutAniList).toHaveBeenCalledTimes(1);
+    session.dispose();
+  });
 });

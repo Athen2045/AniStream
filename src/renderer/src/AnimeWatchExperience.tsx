@@ -14,6 +14,7 @@ import type {
 import { createAnimePlaybackSession } from "./anime-playback-session";
 import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
+import { motionTransition } from "./motion";
 
 const EPISODES_PAGE_SIZE = 10;
 
@@ -385,7 +386,7 @@ export function AnimeWatchExperience({
             initial={{ y: "100%" }}
             animate={{ y: "0%" }}
             exit={{ y: "-100%" }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            transition={motionTransition(reducedMotion, "emphasis")}
             onAnimationComplete={() => {
               if (transitionCommitted.current) return;
               transitionCommitted.current = true;

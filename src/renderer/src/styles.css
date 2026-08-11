@@ -1,3 +1,4 @@
+/* Core layout, surfaces, media views, profile, reader, and responsive rules. */
 @font-face {
   font-family: "Lato";
   font-style: normal;
@@ -74,6 +75,12 @@
   --on-secondary: #0d0f12;
   --shadow: rgb(0 0 0 / 0.34);
   --shadow-deep: rgb(0 0 0 / 0.68);
+  --motion-fast: 160ms;
+  --motion-standard: 240ms;
+  --motion-emphasis: 360ms;
+  --motion-entrance: 480ms;
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: var(--motion-ease);
   --skeleton-base: #171a1f;
   --skeleton-shine: #272d35;
   --panel: var(--surface-panel);
@@ -161,8 +168,7 @@ html[data-platform="win32"] .app-navbar {
   padding-left: 24px;
 }
 
-html[data-platform="win32"] .catalog-content,
-html[data-platform="win32"] .profile-content {
+html[data-platform="win32"] .catalog-content {
   background: linear-gradient(180deg, rgb(13 15 31 / 0.16), transparent 22rem);
 }
 
@@ -170,20 +176,10 @@ html[data-platform="win32"] .catalog-hero::after,
 html[data-platform="win32"] .profile-hero::after {
   background:
     linear-gradient(180deg, transparent 42%, var(--ink) 100%),
-    linear-gradient(90deg, rgb(8 8 17 / 0.5), transparent 58%);
+    linear-gradient(90deg, rgb(13 15 18 / 0.5), transparent 58%);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  html[data-platform="win32"] .catalog-hero-copy {
-    animation: win32-surface-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  html[data-platform="win32"] .catalog-content > section {
-    animation: win32-surface-in 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-}
-
-@keyframes win32-surface-in {
+@keyframes catalog-surface-in {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -260,7 +256,7 @@ html[data-platform="win32"] .profile-hero::after {
   color: var(--text-soft);
   cursor: pointer;
   font-size: 0.82rem;
-  transition: color 150ms ease;
+  transition: color var(--motion-fast) var(--motion-ease);
 }
 
 .nav-links button:hover,
@@ -361,8 +357,8 @@ html[data-platform="win32"] .profile-hero::after {
   border-radius: 5px;
   background: var(--surface-input);
   transition:
-    width 180ms ease,
-    border-color 180ms ease;
+    width var(--motion-standard) var(--motion-ease),
+    border-color var(--motion-standard) var(--motion-ease);
 }
 
 .global-search form:focus-within {
@@ -407,7 +403,7 @@ html[data-platform="win32"] .profile-hero::after {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgb(36 16 13 / 0.98);
+  background: var(--surface-overlay);
   box-shadow: 0 22px 70px var(--shadow);
 }
 
@@ -535,6 +531,15 @@ html[data-platform="win32"] .profile-hero::after {
   filter: saturate(0.94) contrast(1.02);
   transform-origin: center center;
   will-change: transform;
+}
+
+.catalog-hero-art-fallback {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  background:
+    radial-gradient(circle at 78% 28%, rgb(76 126 255 / 0.22), transparent 34%),
+    linear-gradient(135deg, var(--surface-elevated), var(--surface-base));
 }
 
 .catalog-hero-skeleton {
@@ -675,6 +680,63 @@ html[data-platform="win32"] .profile-hero::after {
   padding-bottom: 90px;
 }
 
+/* One restrained arrival rhythm: the hero leads, then sections and card groups follow. */
+@media (prefers-reduced-motion: no-preference) {
+  .catalog-content > section {
+    animation: catalog-surface-in var(--motion-entrance) var(--motion-ease) both;
+  }
+
+  .catalog-content > section:nth-child(n + 2) {
+    animation-delay: 80ms;
+  }
+
+  .catalog-content > section:nth-child(n + 3) {
+    animation-delay: 140ms;
+  }
+
+  .media-rail .rail-card,
+  .latest-update-card,
+  .browse-card {
+    animation: catalog-item-in var(--motion-emphasis) var(--motion-ease) both;
+  }
+
+  .media-rail .rail-card:nth-child(1),
+  .latest-update-card:nth-child(1),
+  .browse-card:nth-child(1) {
+    animation-delay: 40ms;
+  }
+
+  .media-rail .rail-card:nth-child(2),
+  .latest-update-card:nth-child(2),
+  .browse-card:nth-child(2) {
+    animation-delay: 75ms;
+  }
+
+  .media-rail .rail-card:nth-child(3),
+  .latest-update-card:nth-child(3),
+  .browse-card:nth-child(3) {
+    animation-delay: 110ms;
+  }
+
+  .media-rail .rail-card:nth-child(n + 4),
+  .latest-update-card:nth-child(n + 4),
+  .browse-card:nth-child(n + 4) {
+    animation-delay: 145ms;
+  }
+}
+
+@keyframes catalog-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .catalog-scroll-progress {
   position: fixed;
   z-index: 40;
@@ -759,19 +821,19 @@ html[data-platform="win32"] .profile-hero::after {
   padding: 0;
   opacity: 0;
   cursor: pointer;
-  transition: opacity 180ms ease;
+  transition: opacity var(--motion-fast) var(--motion-ease);
 }
 
 .carousel-edge-left {
   left: 0;
   justify-content: flex-start;
-  background: linear-gradient(90deg, rgb(8 8 17 / 0.96), rgb(8 8 17 / 0));
+  background: linear-gradient(90deg, rgb(13 15 18 / 0.96), rgb(13 15 18 / 0));
 }
 
 .carousel-edge-right {
   right: 0;
   justify-content: flex-end;
-  background: linear-gradient(270deg, rgb(8 8 17 / 0.96), rgb(8 8 17 / 0));
+  background: linear-gradient(270deg, rgb(13 15 18 / 0.96), rgb(13 15 18 / 0));
 }
 
 .carousel-edge:not(:disabled):hover,
@@ -794,8 +856,8 @@ html[data-platform="win32"] .profile-hero::after {
   background: var(--surface-glass);
   backdrop-filter: blur(8px);
   transition:
-    background 160ms ease,
-    transform 160ms ease;
+    background var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
 }
 
 .carousel-edge:hover > span {
@@ -805,13 +867,11 @@ html[data-platform="win32"] .profile-hero::after {
 
 .anime-catalog .media-rail {
   --rail-card-width: clamp(210px, 17.5vw, 272px);
-  --rail-card-expanded: clamp(294px, 23.5vw, 366px);
   --rail-art-height: clamp(122px, 10vw, 154px);
 }
 
 .manga-catalog .media-rail {
   --rail-card-width: clamp(156px, 12.6vw, 194px);
-  --rail-card-expanded: clamp(218px, 17.5vw, 270px);
   --rail-art-height: clamp(222px, 18vw, 278px);
 }
 
@@ -826,8 +886,8 @@ html[data-platform="win32"] .profile-hero::after {
   scroll-snap-align: start;
   text-align: left;
   transition:
-    flex-basis 260ms cubic-bezier(0.2, 0.75, 0.25, 1),
-    transform 220ms ease;
+    transform var(--motion-standard) var(--motion-ease),
+    opacity var(--motion-standard) ease;
 }
 
 /* Latest-manga cards without an AniList mapping render as external links. */
@@ -855,7 +915,7 @@ a.rail-card {
 }
 
 .rail-badge--external {
-  background: rgb(8 8 17 / 0.82);
+  background: rgb(13 15 18 / 0.82);
   color: var(--text);
 }
 
@@ -877,8 +937,7 @@ a.rail-card {
 .rail-card:focus-visible,
 .rail-card:has(:focus-visible) {
   z-index: 3;
-  flex-basis: var(--rail-card-expanded);
-  transform: translateY(-4px) scale(1.015);
+  transform: translateY(-4px) scale(1.012);
 }
 
 .rail-art {
@@ -895,8 +954,8 @@ a.rail-card {
   height: 100%;
   object-fit: cover;
   transition:
-    transform 260ms ease,
-    filter 260ms ease;
+    transform var(--motion-emphasis) var(--motion-ease),
+    filter var(--motion-emphasis) var(--motion-ease);
 }
 
 .rail-card:hover .rail-art img,
@@ -929,7 +988,7 @@ a.rail-card {
   gap: 6px;
   align-items: center;
   opacity: 0;
-  transition: opacity 180ms ease;
+  transition: opacity var(--motion-fast) var(--motion-ease);
 }
 
 .rail-card:hover .rail-hover-actions,
@@ -948,9 +1007,9 @@ a.rail-card {
   border-radius: 50%;
   cursor: pointer;
   transition:
-    background-color 150ms ease,
-    border-color 150ms ease,
-    opacity 150ms ease;
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    opacity var(--motion-fast) var(--motion-ease);
 }
 
 .rail-hover-play {
@@ -1003,10 +1062,13 @@ a.rail-card {
 
 .rail-progress span {
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: inherit;
   background: var(--primary);
-  transition: width 320ms ease;
+  transform: scaleX(var(--progress, 0));
+  transform-origin: left center;
+  transition: transform var(--motion-standard) var(--motion-ease);
 }
 
 .rail-card strong {
@@ -1032,6 +1094,11 @@ a.rail-card {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 26px 14px;
+  transition: opacity var(--motion-standard) var(--motion-ease);
+}
+
+.latest-updates-section[aria-busy="true"] .latest-updates-grid {
+  opacity: 0.68;
 }
 
 .latest-update-card {
@@ -1045,7 +1112,9 @@ a.rail-card {
   cursor: pointer;
   text-align: left;
   text-decoration: none;
-  transition: transform 180ms ease;
+  transition:
+    transform var(--motion-standard) var(--motion-ease),
+    opacity var(--motion-standard) ease;
   content-visibility: auto;
   contain-intrinsic-size: 220px 330px;
 }
@@ -1076,8 +1145,8 @@ a.rail-card {
   height: 100%;
   object-fit: cover;
   transition:
-    filter 180ms ease,
-    transform 220ms ease;
+    filter var(--motion-standard) var(--motion-ease),
+    transform var(--motion-standard) var(--motion-ease);
 }
 
 .latest-update-card:hover .latest-update-art img,
@@ -1150,6 +1219,10 @@ a.rail-card {
   animation: latest-update-shimmer 1.25s linear infinite;
 }
 
+.latest-updates-section[aria-busy="true"] .latest-update-card {
+  pointer-events: none;
+}
+
 .latest-updates-error {
   margin: 0 0 14px;
   color: var(--error);
@@ -1209,7 +1282,7 @@ a.rail-card {
   z-index: 2;
   right: 7px;
   top: 1px;
-  color: rgb(8 8 17 / 0.34);
+  color: rgb(13 15 18 / 0.34);
   font-size: 4.4rem;
   font-weight: 950;
   -webkit-text-stroke: 1px var(--text-soft);
@@ -1242,7 +1315,7 @@ a.rail-card {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 28px 14px;
-  transition: opacity 150ms ease;
+  transition: opacity var(--motion-fast) var(--motion-ease);
 }
 
 .browse-grid.is-loading {
@@ -1279,8 +1352,8 @@ a.rail-card {
   height: 100%;
   object-fit: cover;
   transition:
-    transform 240ms ease,
-    filter 240ms ease;
+    transform var(--motion-standard) var(--motion-ease),
+    filter var(--motion-standard) var(--motion-ease);
 }
 
 .browse-card:hover .browse-art > img {
@@ -1296,7 +1369,7 @@ a.rail-card {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 180ms ease;
+  transition: opacity var(--motion-fast) var(--motion-ease);
 }
 
 .browse-card:hover .browse-hover {
@@ -1929,7 +2002,7 @@ a.rail-card {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform var(--motion-emphasis) var(--motion-ease);
 }
 
 .netflix-episode-list > button:hover .netflix-episode-thumb img {
@@ -1956,12 +2029,12 @@ a.rail-card {
   place-items: center;
   border: 2px solid var(--highlight-lavender);
   border-radius: 50%;
-  background: rgb(8 8 17 / 0.68);
+  background: rgb(13 15 18 / 0.68);
   opacity: 0;
   transform: scale(0.84);
   transition:
-    opacity 180ms ease,
-    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-standard) var(--motion-ease);
 }
 
 .netflix-episode-list > button:hover .episode-play,
@@ -3150,7 +3223,7 @@ a.rail-card {
   bottom: 0;
   left: 0;
   height: 68%;
-  background: linear-gradient(180deg, transparent 0%, rgb(8 8 17 / 0.58) 42%, var(--ink) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgb(13 15 18 / 0.58) 42%, var(--ink) 100%);
   content: "";
   pointer-events: none;
 }
@@ -3227,7 +3300,7 @@ a.rail-card {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgb(36 16 13 / 0.76);
+  background: var(--surface-glass);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
   backdrop-filter: blur(18px) saturate(130%);
 }
@@ -3365,7 +3438,7 @@ a.rail-card {
   padding: 12px 14px;
   border: 1px solid var(--line-subtle);
   border-radius: 12px;
-  background: linear-gradient(180deg, var(--ink) 74%, rgb(8 8 17 / 0));
+  background: linear-gradient(180deg, var(--ink) 74%, rgb(13 15 18 / 0));
   box-shadow: 0 12px 36px rgb(0 0 0 / 0.16);
 }
 
@@ -3617,9 +3690,9 @@ a.rail-card {
   background: var(--surface-panel);
   box-shadow: none;
   transition:
-    border-color 180ms ease,
-    background-color 180ms ease,
-    box-shadow 180ms ease;
+    border-color var(--motion-standard) var(--motion-ease),
+    background-color var(--motion-standard) var(--motion-ease),
+    box-shadow var(--motion-standard) var(--motion-ease);
   /* AniList libraries can run into the hundreds of entries; skip layout/paint work
      for off-screen cards until they scroll into view. */
   content-visibility: auto;
@@ -3644,7 +3717,7 @@ a.rail-card {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--motion-standard) var(--motion-ease);
   will-change: transform;
 }
 
@@ -3663,15 +3736,15 @@ a.rail-card {
   place-items: center;
   border: 1px solid var(--line-strong);
   border-radius: 9px;
-  background: rgb(8 8 17 / 0.72);
+  background: rgb(13 15 18 / 0.72);
   color: var(--text);
   cursor: pointer;
   opacity: 0;
   transform: translateY(-4px);
   transition:
-    opacity 160ms ease,
-    transform 160ms ease,
-    background-color 160ms ease;
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease);
   backdrop-filter: blur(12px);
 }
 
@@ -4015,53 +4088,5 @@ a.rail-card {
 
   .library-group-select select {
     width: 220px;
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .carousel-edge > span,
-  .rail-hover-secondary,
-  .watch-player-back,
-  .anikoto-resume-note,
-  .watch-source-select,
-  .manga-reader-chapter-chip,
-  .manga-reader-header button,
-  .profile-connect-panel,
-  .profile-stats,
-  .profile-account-menu summary,
-  .profile-account-menu > div,
-  .media-card-edit,
-  .entry-editor-backdrop,
-  .entry-editor,
-  .manga-reader-chapter-chip button,
-  .manga-reader-header > div,
-  .detail-tracker-compact label,
-  .detail-tracker-compact button {
-    background: var(--surface-raised);
-    backdrop-filter: none;
-  }
-
-  .detail-backdrop {
-    background: rgb(4 4 14 / 0.96);
-    backdrop-filter: none;
-  }
-
-  .entry-editor-backdrop {
-    background: rgb(4 4 14 / 0.96);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
-
-  .media-card:hover .cover-wrap img {
-    transform: none;
   }
 }

@@ -1,5 +1,6 @@
-// Approved direction A: native scroll snapping, edge-reveal navigation, and real
-// flex-width expansion so a focused title pushes its neighbors instead of covering them.
+// Keep the rail predictable: native snapping plus a small action reveal is calmer than
+// making every card push its neighbours around while the pointer moves quickly.
+// TODO: Revisit a richer hover preview only after measuring it on low-power Windows laptops.
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useReducedMotion } from "framer-motion";
 import { Children, useCallback, useEffect, useRef, useState } from "react";

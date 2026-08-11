@@ -14,6 +14,7 @@ import type {
   MangaReadingResume,
 } from "../../shared/contracts";
 import { createMangaReaderSession } from "./manga-reader-session";
+import { motionTransition } from "./motion";
 
 const READ_COMPLETE_THRESHOLD = 0.9;
 const PAGE_PREFETCH_MARGIN = "1800px 0px";
@@ -142,7 +143,7 @@ export function MangaReaderFullscreen({
       initial={reducedMotion ? false : { opacity: 0, y: "4%" }}
       animate={{ opacity: 1, y: "0%" }}
       exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: "4%" }}
-      transition={{ duration: reducedMotion ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+      transition={motionTransition(reducedMotion, "emphasis")}
       onMouseDown={(event) => event.stopPropagation()}
     >
       <motion.div
@@ -198,7 +199,7 @@ export function MangaReaderFullscreen({
             initial={reducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: reducedMotion ? 0 : 0.18 }}
+            transition={motionTransition(reducedMotion, "fast")}
           >
             {readerSnapshot.pageUrls.map((url, index) => (
               <LazyMangaPage

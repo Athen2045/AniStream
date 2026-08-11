@@ -1,6 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { AniListAuthState } from "../../shared/contracts";
+import { motionTransition } from "./motion";
 
 export function ProfileConnectView({
   auth,
@@ -18,9 +19,7 @@ export function ProfileConnectView({
   const reducedMotion = useReducedMotion();
   const authorizing = auth.status === "authorizing";
   const connectionState = restoring ? "restoring" : authorizing ? "authorizing" : "ready";
-  const transition = reducedMotion
-    ? { duration: 0 }
-    : { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const };
+  const transition = motionTransition(reducedMotion, "emphasis");
   const message = restoring
     ? "Checking this Mac for a saved AniList session."
     : authorizing
@@ -38,7 +37,7 @@ export function ProfileConnectView({
         className="profile-connect-panel"
         initial={reducedMotion ? false : { opacity: 0, y: 24, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={reducedMotion ? { duration: 0 } : { duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+        transition={motionTransition(reducedMotion, "entrance")}
         aria-busy={restoring || authorizing}
       >
         <p className="sr-only" role="status" aria-live="polite">

@@ -72,6 +72,7 @@ const DEFAULT_RATE_LIMIT_PAUSE_MS = 60_000;
 const AUTHORIZATION_TIMEOUT_MS = 5 * 60_000;
 
 // TODO: Move this public client ID into a small build-time config module if AniList changes it.
+// Warning: this is the public OAuth client ID. Never put a client secret or access token beside it.
 
 export class AniListClient {
   private token?: string;

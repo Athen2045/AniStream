@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useId, useMemo } from "react";
+import { motionTransition } from "./motion";
 
 const ELLIPSIS = "ellipsis" as const;
 type PageItem = number | typeof ELLIPSIS;
@@ -66,7 +67,10 @@ export function Pagination({
               key={item}
               initial={reducedMotion ? false : { opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: reducedMotion ? 0 : 0.18, delay: index * 0.025 }}
+              transition={{
+                ...motionTransition(reducedMotion, "fast"),
+                delay: reducedMotion ? 0 : Math.min(index, 4) * 0.02,
+              }}
             >
               <button
                 type="button"
@@ -78,7 +82,7 @@ export function Pagination({
                   <motion.span
                     className="pagination-indicator"
                     layoutId={`pagination-${id}`}
-                    transition={{ type: "spring", duration: 0.25, bounce: 0.05 }}
+                    transition={motionTransition(reducedMotion, "standard")}
                   />
                 ) : null}
                 <span>{item}</span>

@@ -14,6 +14,7 @@ import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
 import { useCatalogData } from "./useCatalogData";
 import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
+import { motionTransition } from "./motion";
 
 export function CatalogView({
   type,
@@ -92,8 +93,14 @@ export function CatalogView({
   );
 
   const hero = searchQuery ? searchResults?.items[0] : trending[0];
+  const [heroImageState, setHeroImageState] = useState<{ id: number; source?: string }>({ id: 0 });
   const mediaName = type === "ANIME" ? "anime" : "manga";
   const searchItems = searchResults?.items ?? [];
+  const heroImageSource = hero
+    ? heroImageState.id === hero.id
+      ? heroImageState.source
+      : (hero.bannerUrl ?? hero.coverUrl)
+    : undefined;
 
   // The hero image gets the early paint; everything below it stays lazy to protect scrolling.
   return (
@@ -112,18 +119,33 @@ export function CatalogView({
           className="catalog-hero"
           initial={reducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: reducedMotion ? 0 : 0.35, ease: "easeOut" }}
+          transition={motionTransition(reducedMotion, "entrance")}
         >
-          <motion.img
-            className="catalog-hero-art"
-            src={hero.bannerUrl ?? hero.coverUrl}
-            alt=""
-            aria-hidden="true"
-            loading="eager"
-            fetchPriority="high"
-            decoding="async"
-            style={{ y: reducedMotion ? 0 : heroParallaxY }}
-          />
+          {heroImageSource ? (
+            <motion.img
+              className="catalog-hero-art"
+              src={heroImageSource}
+              alt=""
+              aria-hidden="true"
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              onError={() => {
+                // Banners are nicer, but a stale CDN URL should never leave the hero empty.
+                // Warning: do not retry the same URL here; broken provider URLs can otherwise loop.
+                setHeroImageState({
+                  id: hero.id,
+                  source:
+                    heroImageSource === hero.bannerUrl && hero.coverUrl !== hero.bannerUrl
+                      ? hero.coverUrl
+                      : undefined,
+                });
+              }}
+              style={{ y: reducedMotion ? 0 : heroParallaxY }}
+            />
+          ) : (
+            <div className="catalog-hero-art-fallback" aria-hidden="true" />
+          )}
           <div className="catalog-hero-copy">
             <p className="catalog-kicker">
               {searchQuery
@@ -353,7 +375,7 @@ export function CatalogView({
                 </div>
                 {latestError ? <p className="latest-updates-error">{latestError}</p> : null}
                 <div className="latest-updates-grid">
-                  {latestLoading
+                  {latestLoading && !latestAnime.length
                     ? Array.from({ length: 21 }, (_, index) => (
                         <span
                           className="latest-update-skeleton"
@@ -363,7 +385,7 @@ export function CatalogView({
                       ))
                     : latestAnime.map((update) => (
                         <button
-                          className="latest-update-card"
+                          className={`latest-update-card${latestLoading ? " is-refreshing" : ""}`}
                           type="button"
                           key={update.media.id}
                           onClick={() => onSelect(update.media)}
@@ -414,7 +436,7 @@ export function CatalogView({
                 </div>
                 {latestError ? <p className="latest-updates-error">{latestError}</p> : null}
                 <div className="latest-updates-grid">
-                  {latestLoading
+                  {latestLoading && !latestManga.length
                     ? Array.from({ length: 21 }, (_, index) => (
                         <span
                           className="latest-update-skeleton"
@@ -425,7 +447,7 @@ export function CatalogView({
                     : latestManga.map((update) =>
                         update.aniListId ? (
                           <button
-                            className="latest-update-card"
+                            className={`latest-update-card${latestLoading ? " is-refreshing" : ""}`}
                             type="button"
                             key={update.mangaDexId}
                             onClick={() => onSelect(toMangaCatalogMedia(update))}
@@ -434,7 +456,7 @@ export function CatalogView({
                           </button>
                         ) : (
                           <a
-                            className="latest-update-card"
+                            className={`latest-update-card${latestLoading ? " is-refreshing" : ""}`}
                             key={update.mangaDexId}
                             href={update.mangaDexUrl}
                             target="_blank"
@@ -560,7 +582,9 @@ function MediaRail({
                 />
                 {entry ? (
                   <span className="rail-progress" aria-label={`${entry.progress} completed`}>
-                    <span style={{ width: `${progressPercent(entry)}%` }} />
+                    <span
+                      style={{ "--progress": progressPercent(entry) / 100 } as React.CSSProperties}
+                    />
                   </span>
                 ) : null}
               </span>

@@ -6,17 +6,17 @@ AniStream is an early-preview media app for anime and manga fans. Browse trendin
 both catalogs from one place, open episode and chapter lists, and continue from where you left off.
 An AniList account is optional.
 
-> **Current release:** v0.1.2 for Apple Silicon Macs running macOS 12 or newer, with an unsigned
+> **Current release:** v0.1.3 for Apple Silicon Macs running macOS 12 or newer, with an unsigned
 > Windows x64 installer built by GitHub Actions. Android remains under development.
 
 ## Download AniStream for macOS
 
-1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.2.
-2. Under **Assets**, download the macOS DMG: `AniStream-0.1.2-arm64.dmg`.
+1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.3.
+2. Under **Assets**, download the macOS DMG: `AniStream-0.1.3-arm64.dmg`.
 3. Open the DMG and drag **AniStream** into **Applications**.
 4. Open AniStream from the Applications folder.
 
-AniStream v0.1.2 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
+AniStream v0.1.3 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
 launch, Control-click AniStream in Applications, choose **Open**, then confirm **Open**. You only
 need to do this once. Do not disable Gatekeeper globally.
 
@@ -33,8 +33,8 @@ signed out.
 
 ## Download AniStream for Windows
 
-1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.2.
-2. Under **Assets**, download `AniStream Setup 0.1.2.exe`.
+1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.3.
+2. Under **Assets**, download `AniStream Setup 0.1.3.exe`.
 3. Run the installer and choose an installation folder.
 4. Launch AniStream from the Start menu or desktop shortcut.
 
@@ -213,7 +213,7 @@ project entry point.
 `electron-builder.yml` configures both the unsigned Apple Silicon DMG and the unsigned Windows x64
 NSIS installer.
 
-## Build and release v0.1.2
+## Build and release v0.1.3
 
 Build the unsigned DMG locally:
 
@@ -229,8 +229,8 @@ the Windows SDK, Node.js, and Git installed:
 npm run package:win
 ```
 
-The Windows output is `dist/AniStream Setup 0.1.2.exe`. The macOS output is
-`dist/AniStream-0.1.2-arm64.dmg`. Both packaging workflows run for tags matching `v*.*.*` and
+The Windows output is `dist/AniStream Setup 0.1.3.exe`. The macOS output is
+`dist/AniStream-0.1.3-arm64.dmg`. Both packaging workflows run for tags matching `v*.*.*` and
 manual dispatch. Each workflow verifies the sandbox-safe CommonJS preload, uploads an artifact, and
 attaches its package to the matching GitHub Release. The Windows workflow also verifies install,
 launch, and uninstall in an isolated temporary profile. Both packages remain unsigned until a
@@ -241,8 +241,8 @@ For a signed Windows build, provide the electron-builder signing variables throu
 release job. Do not commit certificates, passwords, or Azure Artifact Signing tokens.
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.1.3
+git push origin v0.1.3
 ```
 
 Tagging should happen only after the version bump and release changes are committed. Code signing
@@ -250,13 +250,18 @@ and notarization remain pending until a valid Developer ID Application certifica
 
 ## Platform roadmap
 
-- **macOS on Apple Silicon:** active and available as the v0.1.2 preview.
+- **macOS on Apple Silicon:** active and available as the v0.1.3 preview.
 - **Windows:** x64 NSIS packaging, native SQLite rebuilds, secretless AniList OAuth, CI checks, and
   installer lifecycle validation are implemented; signing and SmartScreen reputation remain
   pending.
 - **Android:** under development as a future companion application; no APK is published yet.
 - **MangaDex account sync:** planned as an opt-in Keychain-backed integration. Public MangaDex
   reading remains independent.
+
+## Bugs and development ideas
+
+See [ISSUES.md](ISSUES.md) for bug-report details, current opportunities, and the contributor
+checklist. Security-sensitive reports should not include credentials or private library data.
 
 AniStream is an independent personal project and is not affiliated with AniList, MangaDex,
 MyAnimeList, MangaBaka, MangaUpdates, Anikoto, or MegaPlay.

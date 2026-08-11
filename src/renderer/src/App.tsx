@@ -29,6 +29,7 @@ import { formatMediaLabel } from "./format-label";
 import { isProgressComplete } from "../../shared/progress";
 import { mediaDetailInstanceKey } from "./viewer-access";
 import { createViewerSession } from "./viewer-session";
+import { motionTransition, profileRouteVariants, routeVariants } from "./motion";
 
 // Only needed once a title is opened, never on initial launch -- load it as its own
 // chunk instead of paying its parse/compile cost during startup.
@@ -246,12 +247,11 @@ export function App(): React.JSX.Element {
           <motion.div
             className="route-view"
             key={`catalog-${view}`}
-            initial={reducedMotion ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reducedMotion ? undefined : { opacity: 0, y: -6 }}
-            transition={
-              reducedMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }
-            }
+            variants={routeVariants}
+            initial={reducedMotion ? false : "initial"}
+            animate="animate"
+            exit={reducedMotion ? undefined : "exit"}
+            transition={motionTransition(reducedMotion)}
           >
             <CatalogView
               type={view}
@@ -265,12 +265,11 @@ export function App(): React.JSX.Element {
           <motion.div
             className="profile-route-transition"
             key={`profile-member-${viewerAccess.dashboard.profile.id}`}
-            initial={reducedMotion ? false : { opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reducedMotion ? undefined : { opacity: 0, y: -10 }}
-            transition={
-              reducedMotion ? { duration: 0 } : { duration: 0.34, ease: [0.22, 1, 0.36, 1] }
-            }
+            variants={profileRouteVariants}
+            initial={reducedMotion ? false : "initial"}
+            animate="animate"
+            exit={reducedMotion ? undefined : "exit"}
+            transition={motionTransition(reducedMotion, "emphasis")}
           >
             <ProfileView
               dashboard={viewerAccess.dashboard}
@@ -309,7 +308,7 @@ export function App(): React.JSX.Element {
             initial={false}
             animate={{ opacity: 1, y: 0 }}
             exit={reducedMotion ? undefined : { opacity: 0, y: -12, scale: 0.99 }}
-            transition={reducedMotion ? { duration: 0 } : { duration: 0.26, ease: [0.4, 0, 1, 1] }}
+            transition={motionTransition(reducedMotion, "standard")}
           >
             <ProfileConnectView
               auth={auth}
@@ -424,9 +423,7 @@ function ProfileView({
   const reducedMotion = useReducedMotion();
   const accountMenuRef = useRef<HTMLDetailsElement>(null);
   const activeListName = activeGroupName ?? selectedGroup;
-  const profileTransition = reducedMotion
-    ? { duration: 0 }
-    : { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const };
+  const profileTransition = motionTransition(reducedMotion, "emphasis");
 
   const closeAccountMenu = useCallback((): void => {
     accountMenuRef.current?.removeAttribute("open");
@@ -483,7 +480,7 @@ function ProfileView({
           aria-label="AniList statistics"
           initial={reducedMotion ? false : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={reducedMotion ? { duration: 0 } : { ...profileTransition, delay: 0.06 }}
+          transition={{ ...profileTransition, delay: reducedMotion ? 0 : 0.06 }}
         >
           <ProfileStatGroup
             label="Anime"
@@ -812,7 +809,7 @@ function MediaCard({
           initial={reducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={reducedMotion ? undefined : { opacity: 0 }}
-          transition={reducedMotion ? { duration: 0 } : { duration: 0.18 }}
+          transition={motionTransition(reducedMotion, "fast")}
           onMouseDown={(event) => {
             if (event.currentTarget === event.target) closeEditor();
           }}
@@ -826,9 +823,7 @@ function MediaCard({
             initial={reducedMotion ? false : { opacity: 0, y: 14, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reducedMotion ? undefined : { opacity: 0, y: 8, scale: 0.99 }}
-            transition={
-              reducedMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }
-            }
+            transition={motionTransition(reducedMotion)}
           >
             <header className="entry-editor-header">
               <img src={entry.media.coverUrl} alt="" />
@@ -919,11 +914,9 @@ function MediaCard({
     <motion.article
       className="media-card"
       whileHover={
-        reducedMotion
-          ? undefined
-          : { y: -3, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }
+        reducedMotion ? undefined : { y: -3, transition: motionTransition(reducedMotion, "fast") }
       }
-      transition={reducedMotion ? { duration: 0 } : { duration: 0.18, ease: "easeOut" }}
+      transition={motionTransition(reducedMotion, "fast")}
     >
       <div className="cover-wrap">
         <img

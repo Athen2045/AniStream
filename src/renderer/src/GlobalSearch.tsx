@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import type { AniListCatalogMedia } from "../../shared/contracts";
 import { formatMediaLabel } from "./format-label";
+import { motionTransition } from "./motion";
 
 export function GlobalSearch({
   onSelect,
@@ -117,7 +118,7 @@ export function GlobalSearch({
             initial={reducedMotion ? false : { opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: reducedMotion ? 0 : 0.16 }}
+            transition={motionTransition(reducedMotion, "fast")}
           >
             <div className="search-popover-label">
               <span>{loading ? "Searching AniList…" : "Search results"}</span>

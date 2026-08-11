@@ -23,6 +23,7 @@ import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
 import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
 import { createMediaDetailSession } from "./media-detail-session";
+import { motionTransition } from "./motion";
 
 const AnimeWatchExperience = lazy(() =>
   import("./AnimeWatchExperience").then((module) => ({
@@ -180,7 +181,7 @@ export function MediaDetailModal({
       initial={reducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: reducedMotion ? 0 : 0.2 }}
+      transition={motionTransition(reducedMotion, "fast")}
     >
       <motion.article
         className="detail-modal"
@@ -192,7 +193,7 @@ export function MediaDetailModal({
         initial={reducedMotion ? false : { opacity: 0, y: 28, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.99 }}
-        transition={{ duration: reducedMotion ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+        transition={motionTransition(reducedMotion, "emphasis")}
       >
         <button
           className="detail-close"
