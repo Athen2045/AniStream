@@ -48,7 +48,6 @@ jobs:
           npm run format:check
           npm test
           npm run check:product-slice
-          npm run check:anilist-oauth
 
       - name: Build unsigned Windows installer
         run: npm run package:win
@@ -57,7 +56,9 @@ jobs:
 
       - name: Verify packaged preload
         shell: pwsh
-        run: npm run check:packaged-preload -- dist/win-unpacked/resources/app.asar
+        run: |
+          npm run check:anilist-oauth
+          npm run check:packaged-preload -- dist/win-unpacked/resources/app.asar
 
       - name: Verify installer lifecycle
         shell: pwsh
