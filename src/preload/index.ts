@@ -73,11 +73,9 @@ const bridge: AniStreamBridge = {
   getMangaReadingResume: (aniListId) => invoke("manga:reading-resume", aniListId),
   saveMangaReadingResume: (input) => invoke("manga:save-reading-resume", input),
   clearMangaReadingResume: (aniListId) => invoke("manga:clear-reading-resume", aniListId),
-  getForYouPreview: () => invoke("recommendations:get-for-you-preview"),
   getForYou: (type) => invoke("discovery:for-you", type),
   recordDiscoveryFeedback: (input) => invoke("discovery:feedback", input),
   recordDiscoveryImpressions: (input) => invoke("discovery:impressions", input),
-  recordRecommendationInteraction: (event) => invoke("recommendations:record-interaction", event),
   onAniListAuthChanged: (callback: (state: AniListAuthState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AniListAuthState): void => {
       callback(state);

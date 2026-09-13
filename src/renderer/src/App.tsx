@@ -22,6 +22,7 @@ import { SearchView } from "./SearchView";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import { useSmoothDocumentScroll } from "./useSmoothDocumentScroll";
 import { ReadinessScreen } from "./ReadinessScreen";
+import appIcon from "./assets/app-icon.png";
 import {
   createReadinessSession,
   type ReadinessSession,
@@ -272,8 +273,14 @@ function AppContent(): React.JSX.Element {
           aria-hidden={activeReadiness ? true : undefined}
         >
           <nav className="app-navbar">
-            <button className="wordmark" type="button" onClick={() => openCatalog("ANIME")}>
-              <span>A</span>AniStream
+            <button
+              className="wordmark"
+              type="button"
+              aria-label="AniStream home"
+              onClick={() => openCatalog("ANIME")}
+            >
+              <img className="wordmark-logo" src={appIcon} alt="" aria-hidden="true" />
+              <span className="wordmark-name">Stream</span>
             </button>
             <div className="nav-links" aria-label="Main navigation">
               <button

@@ -2,8 +2,16 @@ name: Package macOS build
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches:
+      - develop
+    paths:
+      - ".github/workflows/package-mac.yml"
+      - "assets/app-icon/**"
+      - "electron-builder.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/verify-branding-assets.mjs"
+      - "scripts/verify-mac-package.mjs"
   workflow_dispatch: {}
 
 permissions:
@@ -27,6 +35,9 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+
+      - name: Verify native and renderer branding assets
+        run: npm run check:branding
 
       - name: Cache Electron and electron-builder downloads
         uses: actions/cache@v4

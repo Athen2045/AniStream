@@ -6,7 +6,25 @@ AniStream is an early-preview media app for anime and manga fans. Browse trendin
 both catalogs from one place, open episode and chapter lists, and continue from where you left off.
 An AniList account is optional.
 
-<img width="1920" height="1140" alt="AniStream-home" src="https://github.com/user-attachments/assets/b112ed9d-dbca-40c8-8b12-b65c484a8f14" />
+<img width="1800" height="1126" alt="AniStream Home" src="docs/images/home.png" />
+
+## Interface tour
+
+The home view keeps discovery in one place, with a featured title followed by Continue Watching,
+Trending, and personalized rails.
+
+### Manga discovery
+
+<img width="1800" height="1126" alt="AniStream Manga discovery" src="docs/images/manga.png" />
+
+The Manga view combines trending titles with recommendations and keeps chapter discovery close to
+the reader flow.
+
+### Profile and library
+
+<img width="1800" height="1126" alt="AniStream Profile and library" src="docs/images/profile.png" />
+
+The profile view brings AniList statistics, library filters, and local progress into one workspace.
 
 > **Current release:** v0.1.4. Official unsigned packages are produced from one validated `main`
 > commit: an Apple Silicon DMG for macOS 12 or newer and a Windows x64 installer. Android remains
@@ -198,6 +216,7 @@ npm run format:check         # Check Prettier formatting
 npm run build                # Create production main, preload, and renderer bundles
 npm run check:product-slice  # Verify cross-process product contracts
 npm run check:anilist-oauth  # Verify the implicit OAuth implementation
+npm run check:branding       # Verify the navbar PNG and native Windows/macOS icons
 npm run check:packaged-build  # Compare a packaged ASAR with the fresh build
 npm run package:mac          # Build the unsigned Apple Silicon app and DMG
 npm run package:win          # Build the unsigned Windows x64 NSIS installer
@@ -207,7 +226,7 @@ npm run package:win          # Build the unsigned Windows x64 NSIS installer
 
 ```text
 AniStream/
-├── assets/app-icon/          macOS application icon source
+├── assets/app-icon/          native Windows .ico, macOS .icns, and PNG icon sizes
 ├── build/                    electron-builder resources
 ├── scripts/                  OAuth, packaging, and contract verification scripts
 ├── src/main/                 trusted process, providers, persistence, and IPC
@@ -245,8 +264,9 @@ npm run package:win
 ```
 
 The Windows output is `dist/AniStream Setup 0.1.4.exe`. The macOS output is
-`dist/AniStream-0.1.4-arm64.dmg`. The platform workflows build, validate, and upload preview
-artifacts for tag or manual runs. The **Promote production release** workflow
+`dist/AniStream-0.1.4-arm64.dmg`. The platform workflows build, validate, and upload preview artifacts
+without publishing. The macOS job also runs on `develop` when packaging or icon inputs change. The
+**Promote production release** workflow
 is the official path: it validates `main`, builds both packages from the same commit, verifies each
 package, waits for production approval, then creates the tag and GitHub Release. The Windows job
 also verifies install, launch, and uninstall in an isolated temporary profile. Both packages remain

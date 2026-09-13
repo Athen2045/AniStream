@@ -34,7 +34,6 @@ import type {
   SavePlaybackResumeInput,
   UpdateAniListEntryInput,
 } from "./contracts";
-import type { RecommendationEvent, RecommendationResult } from "./recommendations";
 import type { ReaderSettings } from "./reader-settings";
 import type { UpdateStatus } from "./update-check";
 import type { RestorePreview, RestoreSummary } from "./local-backup";
@@ -131,13 +130,11 @@ export interface IpcInvokeChannelMap {
     result: void;
   };
   "manga:clear-reading-resume": { args: [aniListId: number]; result: void };
-  "recommendations:get-for-you-preview": { args: []; result: RecommendationResult[] };
   "discovery:for-you": { args: [type: AniListMediaType]; result: DiscoveryFeed };
   "reader:settings": { args: []; result: ReaderSettings };
   "reader:save-settings": { args: [input: ReaderSettings]; result: ReaderSettings };
   "discovery:feedback": { args: [input: DiscoveryFeedback]; result: void };
   "discovery:impressions": { args: [input: DiscoveryImpressionInput]; result: void };
-  "recommendations:record-interaction": { args: [event: RecommendationEvent]; result: void };
 }
 
 export interface IpcEventChannelMap {

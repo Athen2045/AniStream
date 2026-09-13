@@ -7,7 +7,6 @@ const [
   mangaDex,
   preload,
   contracts,
-  providers,
   renderer,
   catalog,
   catalogStyles,
@@ -30,7 +29,6 @@ const [
   readFile("src/main/mangadex.ts", "utf8"),
   readFile("src/preload/index.ts", "utf8"),
   readFile("src/shared/contracts.ts", "utf8"),
-  readFile("src/shared/providers.ts", "utf8"),
   readFile("src/renderer/src/App.tsx", "utf8"),
   readFile("src/renderer/src/CatalogView.tsx", "utf8"),
   readFile("src/renderer/src/styles.css", "utf8"),
@@ -72,11 +70,6 @@ for (const [name, source, fragments] of [
     "shared contracts",
     contracts,
     ["AniListCatalogPage", "AniListMediaDetail", "BrowseAniListInput"],
-  ],
-  [
-    "provider contracts",
-    providers,
-    ["AnimeTitleMapping", "AnimeSeason", "AnimeEpisode", "AnimeHoster", "AnimeVideoVariant"],
   ],
   ["renderer", renderer, ["CatalogView", "GlobalSearch", "MediaDetailModal"]],
   [
@@ -173,5 +166,5 @@ if (mediaDetail.includes("Keep your progress current")) {
 }
 
 console.log(
-  "Verified durable session, catalog/detail IPC, static Latest grids, MangaDex classification/reader resume, Framer Motion transitions, Anikoto playback, and provider contracts.",
+  "Verified durable session, catalog/detail IPC, static Latest grids, MangaDex classification/reader resume, Framer Motion transitions, and Anikoto playback.",
 );

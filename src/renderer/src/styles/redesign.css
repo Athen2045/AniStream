@@ -51,15 +51,27 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   font-size: 18px;
   letter-spacing: -0.5px;
 }
-.wordmark > span {
-  color: var(--success);
+.wordmark-logo {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 7px;
+  object-fit: cover;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+}
+.wordmark > span.wordmark-name {
+  display: inline;
+  width: auto;
+  height: auto;
+  color: var(--text);
   background: transparent;
   box-shadow: none;
-  font-size: 28px;
   clip-path: none;
   font-family: inherit;
-  font-weight: 800;
-  font-style: italic;
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
 }
 .nav-links {
   border: 0;
