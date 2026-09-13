@@ -35,6 +35,9 @@ jobs:
           node-version: "22"
           cache: "npm"
 
+      - name: Verify native and renderer branding assets
+        run: npm run check:branding
+
       - name: Install dependencies
         run: npm ci
 

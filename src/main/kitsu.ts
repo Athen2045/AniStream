@@ -70,9 +70,6 @@ export class KitsuClient {
       },
     );
     const artwork = parseKitsuHeroArtwork(payload, input);
-    if (artwork) {
-      console.info(`[Kitsu hero preview] ${input.type} ${input.aniListId} → ${artwork.imageUrl}`);
-    }
     this.heroCache.set(cacheKey, artwork);
     return artwork;
   }

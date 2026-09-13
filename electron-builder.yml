@@ -14,7 +14,7 @@ protocols:
       - anistream
 mac:
   category: public.app-category.entertainment
-  icon: assets/app-icon/AniStream-1024.png
+  icon: assets/app-icon/AniStream.icns
   target:
     - target: dmg
       arch:
@@ -24,7 +24,7 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: assets/app-icon/AniStream-1024.png
+  icon: assets/app-icon/AniStream.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

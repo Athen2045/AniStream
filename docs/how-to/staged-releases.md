@@ -59,8 +59,10 @@ The workflow then:
 Do not approve a production run until the development installer has been tested. Passing automation
 is necessary, but it does not replace a short manual smoke test of the changed user experience.
 
-The platform package workflows are build/verify/upload jobs; they do not publish releases. This
-prevents duplicate asset uploads when the production workflow creates the tag. For Apple Silicon
-candidates, the Mac package job runs `npm run check:mac-package` before uploading. Follow
+The platform package workflows are build/verify/upload jobs and do not run again when the production
+workflow creates the release tag. They can be dispatched manually; the Mac job also runs on `develop`
+when packaging or icon inputs change. Neither workflow publishes releases, which avoids duplicate
+release builds and asset uploads. For Apple Silicon candidates, the Mac package job runs
+`npm run check:mac-package` before uploading. Follow
 [Verify an Apple Silicon release candidate](verify-mac-release.md) for the exact package checks,
 native interaction matrix, and separate signing/notarization verification.

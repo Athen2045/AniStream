@@ -14,6 +14,7 @@
     "build": "npm run typecheck && electron-vite build",
     "check:packaged-preload": "node scripts/verify-packaged-preload.mjs",
     "check:packaged-build": "node scripts/verify-packaged-build.mjs",
+    "check:branding": "node scripts/verify-branding-assets.mjs",
     "check:mac-package": "node scripts/verify-mac-package.mjs",
     "check:win-installer": "node scripts/verify-windows-installer.mjs",
     "check:anilist-oauth": "node scripts/verify-anilist-oauth.mjs",

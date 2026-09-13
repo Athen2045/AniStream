@@ -198,6 +198,7 @@ npm run format:check         # Check Prettier formatting
 npm run build                # Create production main, preload, and renderer bundles
 npm run check:product-slice  # Verify cross-process product contracts
 npm run check:anilist-oauth  # Verify the implicit OAuth implementation
+npm run check:branding       # Verify the navbar PNG and native Windows/macOS icons
 npm run check:packaged-build  # Compare a packaged ASAR with the fresh build
 npm run package:mac          # Build the unsigned Apple Silicon app and DMG
 npm run package:win          # Build the unsigned Windows x64 NSIS installer
@@ -207,7 +208,7 @@ npm run package:win          # Build the unsigned Windows x64 NSIS installer
 
 ```text
 AniStream/
-├── assets/app-icon/          macOS application icon source
+├── assets/app-icon/          native Windows .ico, macOS .icns, and PNG icon sizes
 ├── build/                    electron-builder resources
 ├── scripts/                  OAuth, packaging, and contract verification scripts
 ├── src/main/                 trusted process, providers, persistence, and IPC
@@ -245,8 +246,9 @@ npm run package:win
 ```
 
 The Windows output is `dist/AniStream Setup 0.1.4.exe`. The macOS output is
-`dist/AniStream-0.1.4-arm64.dmg`. The platform workflows build, validate, and upload preview
-artifacts for tag or manual runs. The **Promote production release** workflow
+`dist/AniStream-0.1.4-arm64.dmg`. The platform workflows build, validate, and upload preview artifacts
+without publishing. The macOS job also runs on `develop` when packaging or icon inputs change. The
+**Promote production release** workflow
 is the official path: it validates `main`, builds both packages from the same commit, verifies each
 package, waits for production approval, then creates the tag and GitHub Release. The Windows job
 also verifies install, launch, and uninstall in an isolated temporary profile. Both packages remain
