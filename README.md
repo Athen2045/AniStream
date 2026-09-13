@@ -6,7 +6,25 @@ AniStream is an early-preview media app for anime and manga fans. Browse trendin
 both catalogs from one place, open episode and chapter lists, and continue from where you left off.
 An AniList account is optional.
 
-<img width="1920" height="1140" alt="AniStream-home" src="https://github.com/user-attachments/assets/b112ed9d-dbca-40c8-8b12-b65c484a8f14" />
+<img width="1800" height="1126" alt="AniStream Home" src="docs/images/home.png" />
+
+## Interface tour
+
+The home view keeps discovery in one place, with a featured title followed by Continue Watching,
+Trending, and personalized rails.
+
+### Manga discovery
+
+<img width="1800" height="1126" alt="AniStream Manga discovery" src="docs/images/manga.png" />
+
+The Manga view combines trending titles with recommendations and keeps chapter discovery close to
+the reader flow.
+
+### Profile and library
+
+<img width="1800" height="1126" alt="AniStream Profile and library" src="docs/images/profile.png" />
+
+The profile view brings AniList statistics, library filters, and local progress into one workspace.
 
 > **Current release:** v0.1.4. Official unsigned packages are produced from one validated `main`
 > commit: an Apple Silicon DMG for macOS 12 or newer and a Windows x64 installer. Android remains

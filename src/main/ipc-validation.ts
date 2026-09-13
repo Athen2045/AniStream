@@ -21,7 +21,6 @@ import {
   isValidMangaReadingResumeInput,
   isValidPlaybackResumeInput,
 } from "../shared/resume-validation";
-import type { RecommendationEvent } from "../shared/recommendations";
 
 export type IpcArgValidator<Channel extends IpcInvokeChannel> = (
   args: unknown[],
@@ -286,33 +285,6 @@ function noArgs(value: unknown[]): [] {
   return [];
 }
 
-function recommendationEvent(value: unknown): RecommendationEvent {
-  const input = asRecord(value);
-  const eventType = asString(input.eventType);
-  const source = asString(input.source);
-  const validEventTypes = new Set([
-    "explored",
-    "searched-and-opened",
-    "started",
-    "progressed",
-    "completed",
-    "rated",
-    "skipped",
-    "dismissed",
-    "saved",
-  ]);
-  const validSources = new Set(["detail", "search", "player", "reader", "profile"]);
-  if (!validEventTypes.has(eventType) || !validSources.has(source)) fail();
-  return {
-    anilistId: asPositiveInt(input.anilistId),
-    mediaType: asMediaType(input.mediaType),
-    occurredAt: asPositiveInt(input.occurredAt),
-    eventType: eventType as RecommendationEvent["eventType"],
-    source: source as RecommendationEvent["source"],
-    value: asOptionalNonNegativeNumber(input.value),
-  };
-}
-
 export const ipcArgValidators: IpcArgValidatorMap = {
   "backup:export": noArgs,
   "backup:prepare": noArgs,
@@ -469,7 +441,6 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     const [aniListId] = argsOfLength(value, 1);
     return [asPositiveInt(aniListId)];
   },
-  "recommendations:get-for-you-preview": noArgs,
   "discovery:for-you": (value) => {
     const [type] = argsOfLength(value, 1);
     return [asMediaType(type)];
@@ -499,9 +470,5 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     )
       fail();
     return [{ requestId, anilistIds: (input.anilistIds as unknown[]).map(asPositiveInt) }];
-  },
-  "recommendations:record-interaction": (value) => {
-    const [event] = argsOfLength(value, 1);
-    return [recommendationEvent(event)];
   },
 };

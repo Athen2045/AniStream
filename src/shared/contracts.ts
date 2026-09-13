@@ -1,4 +1,3 @@
-import type { RecommendationEvent, RecommendationResult } from "./recommendations";
 import type { ReaderSettings } from "./reader-settings";
 import type { RestorePreview, RestoreSummary } from "./local-backup";
 import type { PersonalAiringUpdate, ReleaseAcknowledgement } from "./personal-library";
@@ -519,7 +518,5 @@ export interface AniStreamBridge {
   getMangaReadingResume(aniListId: number): Promise<MangaReadingResume | undefined>;
   saveMangaReadingResume(input: SaveMangaReadingResumeInput): Promise<void>;
   clearMangaReadingResume(aniListId: number): Promise<void>;
-  getForYouPreview(): Promise<RecommendationResult[]>;
-  recordRecommendationInteraction(event: RecommendationEvent): Promise<void>;
   onAniListAuthChanged(callback: (state: AniListAuthState) => void): () => void;
 }
