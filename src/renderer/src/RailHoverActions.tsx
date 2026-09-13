@@ -1,4 +1,4 @@
-import { Info, Play, Plus, X } from "lucide-react";
+import { BookOpen, Info, Play, Plus, Check } from "lucide-react";
 
 /**
  * Netflix-style hover row: play, add-to-list, remove-from-list, and info. Rendered as
@@ -8,15 +8,17 @@ import { Info, Play, Plus, X } from "lucide-react";
  */
 export function RailHoverActions({
   title,
+  primaryLabel = "Watch",
   library,
   onPlay,
   onInfo,
 }: {
   title: string;
+  primaryLabel?: "Play" | "Watch" | "Read";
   library?: {
     inLibrary: boolean;
-    onAdd: () => void;
-    onRemove: () => void;
+    busy?: boolean;
+    onManage: () => void;
   };
   onPlay: () => void;
   onInfo: () => void;
@@ -26,50 +28,37 @@ export function RailHoverActions({
       <button
         type="button"
         className="rail-hover-play"
-        aria-label={`Play ${title}`}
+        aria-label={`${primaryLabel} ${title}`}
+        title={`${primaryLabel} ${title}`}
         onClick={(event) => {
           event.stopPropagation();
           onPlay();
         }}
       >
-        <Play size={15} fill="currentColor" />
+        {primaryLabel === "Read" ? <BookOpen size={15} /> : <Play size={15} fill="currentColor" />}
       </button>
       {library ? (
-        <>
-          <button
-            type="button"
-            className="rail-hover-secondary"
-            aria-label={
-              library.inLibrary ? `${title} is already in your list` : `Add ${title} to your list`
-            }
-            disabled={library.inLibrary}
-            onClick={(event) => {
-              event.stopPropagation();
-              library.onAdd();
-            }}
-          >
-            <Plus size={14} />
-          </button>
-          <button
-            type="button"
-            className="rail-hover-secondary"
-            aria-label={
-              library.inLibrary ? `Remove ${title} from your list` : `${title} is not in your list`
-            }
-            disabled={!library.inLibrary}
-            onClick={(event) => {
-              event.stopPropagation();
-              library.onRemove();
-            }}
-          >
-            <X size={14} />
-          </button>
-        </>
+        <button
+          type="button"
+          className="rail-hover-secondary"
+          title={library.inLibrary ? "Edit library entry" : "Add to Planning"}
+          aria-label={
+            library.inLibrary ? `Edit ${title} in your library` : `Add ${title} to your list`
+          }
+          disabled={library.busy}
+          onClick={(event) => {
+            event.stopPropagation();
+            library.onManage();
+          }}
+        >
+          {library.inLibrary ? <Check size={16} /> : <Plus size={16} />}
+        </button>
       ) : null}
       <button
         type="button"
         className="rail-hover-secondary rail-hover-info"
         aria-label={`More info for ${title}`}
+        title="Title details"
         onClick={(event) => {
           event.stopPropagation();
           onInfo();

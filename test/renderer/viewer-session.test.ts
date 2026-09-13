@@ -34,6 +34,7 @@ function bridge(overrides: Partial<ViewerSessionBridge> = {}): ViewerSessionBrid
   return {
     getAniListAuthState: vi.fn(async () => signedOut),
     onAniListAuthChanged: vi.fn(() => () => undefined),
+    onActivityChanged: vi.fn(() => () => undefined),
     startAniListLogin: vi.fn(async () => undefined),
     cancelAniListLogin: vi.fn(async () => undefined),
     logoutAniList: vi.fn(async () => undefined),
@@ -63,6 +64,89 @@ function bridge(overrides: Partial<ViewerSessionBridge> = {}): ViewerSessionBrid
 }
 
 describe("ViewerSessionModule", () => {
+  it("restores subscriptions after StrictMode cleanup and ignores an older auth result", async () => {
+    let resolveOld!: (state: AniListAuthState) => void;
+    const oldAuth = new Promise<AniListAuthState>((resolve) => {
+      resolveOld = resolve;
+    });
+    const api = bridge({
+      getAniListAuthState: vi
+        .fn()
+        .mockReturnValueOnce(oldAuth)
+        .mockResolvedValue({ status: "signed-in", profile: dashboard(2).profile }),
+      getAniListDashboard: async () => dashboard(2),
+    });
+    const session = createViewerSession(api);
+    const oldRestore = session.restore();
+    session.dispose();
+    session.activate();
+    await session.restore();
+    resolveOld({ status: "signed-out" });
+    await oldRestore;
+    expect(session.getSnapshot().access.kind).toBe("member");
+    expect(api.onAniListAuthChanged).toHaveBeenCalledTimes(2);
+    expect(api.onActivityChanged).toHaveBeenCalledTimes(2);
+    session.dispose();
+  });
+  it("refreshes completed background sync only for a connected viewer and unsubscribes on exit", async () => {
+    let changed: (() => void) | undefined;
+    const unsubscribe = vi.fn();
+    const getAniListDashboard = vi.fn(async () => dashboard(1));
+    const session = createViewerSession(
+      bridge({
+        getAniListAuthState: async () => ({ status: "signed-in", profile: dashboard(1).profile }),
+        getAniListDashboard,
+        onActivityChanged: (callback) => {
+          changed = callback;
+          return unsubscribe;
+        },
+      }),
+    );
+    await session.restore();
+    changed?.();
+    await Promise.resolve();
+    expect(getAniListDashboard).toHaveBeenCalledTimes(2);
+    await session.logout();
+    changed?.();
+    expect(getAniListDashboard).toHaveBeenCalledTimes(2);
+    session.dispose();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+  it("keeps viewer access stable while only refresh status changes", async () => {
+    const initial = dashboard(1);
+    const refreshed = initial;
+    let resolveRefresh!: (value: AniListDashboard) => void;
+    const getAniListDashboard = vi
+      .fn<() => Promise<AniListDashboard>>()
+      .mockResolvedValueOnce(initial)
+      .mockImplementationOnce(
+        () => new Promise<AniListDashboard>((resolve) => (resolveRefresh = resolve)),
+      );
+    const session = createViewerSession(
+      bridge({
+        getAniListAuthState: async () => ({ status: "signed-in", profile: initial.profile }),
+        getCachedAniListDashboard: async () => initial,
+        getAniListDashboard,
+      }),
+    );
+    await session.restore();
+    const originalAccess = session.getSnapshot().access;
+    const refreshSnapshots: ReturnType<typeof session.getSnapshot>[] = [];
+    const unsubscribe = session.subscribe(() => refreshSnapshots.push(session.getSnapshot()));
+
+    const refresh = session.refresh();
+    expect(refreshSnapshots[0]?.syncing).toBe(true);
+    expect(refreshSnapshots[0]?.access).toBe(originalAccess);
+    refreshed.fetchedAt = "2026-09-13T00:00:00.000Z";
+    resolveRefresh(refreshed);
+    await refresh;
+
+    expect(refreshSnapshots[1]?.access).not.toBe(originalAccess);
+    expect(refreshSnapshots[2]?.syncing).toBe(false);
+    expect(refreshSnapshots[2]?.access).toBe(refreshSnapshots[1]?.access);
+    unsubscribe();
+    session.dispose();
+  });
   it("restores signed-out state as guest access", async () => {
     const session = createViewerSession(bridge());
 
@@ -70,6 +154,69 @@ describe("ViewerSessionModule", () => {
 
     expect(session.getSnapshot().auth).toEqual({ status: "signed-out" });
     expect(session.getSnapshot().access.kind).toBe("guest");
+    session.dispose();
+  });
+
+  it("explains profile outages without exposing GraphQL or IPC internals", async () => {
+    const session = createViewerSession(
+      bridge({
+        getAniListAuthState: async () => ({
+          status: "signed-in",
+          profile: dashboard(1).profile,
+        }),
+        getAniListDashboard: async () => {
+          throw new Error(
+            "Error invoking remote method 'anilist:dashboard': malformed GraphQL response",
+          );
+        },
+      }),
+    );
+
+    await session.restore();
+
+    expect(session.getSnapshot().error).toBe(
+      "AniList returned incomplete data. Try again shortly.",
+    );
+    expect(session.getSnapshot().access.kind).toBe("member");
+    session.dispose();
+  });
+
+  it("states that cached profile data remains available when a refresh fails", async () => {
+    const cached = dashboard(1);
+    const session = createViewerSession(
+      bridge({
+        getAniListAuthState: async () => ({ status: "signed-in", profile: cached.profile }),
+        getCachedAniListDashboard: async () => cached,
+        getAniListDashboard: async () => {
+          throw new Error("HTTP 503");
+        },
+      }),
+    );
+
+    await session.restore();
+
+    expect(session.getSnapshot().error).toContain("previous library data remain available");
+    expect(session.getSnapshot().hasVerifiedDashboard).toBe(true);
+    session.dispose();
+  });
+
+  it("gives a reconnect path when the saved AniList session cannot be read", async () => {
+    const session = createViewerSession(
+      bridge({
+        getAniListAuthState: async () => {
+          throw new Error(
+            "Error invoking remote method 'anilist:auth-state': encrypted payload 17",
+          );
+        },
+      }),
+    );
+
+    await session.restore();
+
+    expect(session.getSnapshot().error).toBe(
+      "The saved AniList connection could not be restored. Connect AniList again from Profile.",
+    );
+    expect(session.getSnapshot().error).not.toContain("payload");
     session.dispose();
   });
 
@@ -90,6 +237,7 @@ describe("ViewerSessionModule", () => {
     await session.restore();
 
     expect(session.getSnapshot().access.kind).toBe("member");
+    expect(session.getSnapshot().hasVerifiedDashboard).toBe(true);
     if (session.getSnapshot().access.kind !== "member") throw new Error("Expected member access");
     expect(session.getSnapshot().access.dashboard.profile.id).toBe(1);
     expect(getAniListDashboard).toHaveBeenCalledTimes(1);

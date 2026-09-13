@@ -8,6 +8,9 @@ import type {
   UpdateAniListEntryInput,
 } from "../../shared/contracts";
 import { createBoundedCache } from "./cache";
+import { loadPersonalAiring } from "./personal-airing";
+import { loadRecommendationSeeds } from "./recommendation-seeds";
+import type { PersonalAiringUpdate } from "../../shared/personal-library";
 import {
   normalizeAiringUpdatesPage,
   normalizeCatalogPage,
@@ -59,6 +62,8 @@ const ANILIST_AUTHORIZE_URL = "https://anilist.co/api/v2/oauth/authorize";
 // AniList documents 90 req/min normally with a 30 req/min degraded-state warning (API.md).
 // The client stays conservative and starts at 25 req/min while that warning remains.
 const REQUESTS_PER_MINUTE = 25;
+const DEFAULT_REQUEST_MIN_INTERVAL_MS = 350;
+const MAX_REQUEST_MIN_INTERVAL_MS = 10_000;
 const BROWSE_CACHE_TTL_MS = 2 * 60_000;
 const SEARCH_CACHE_TTL_MS = 2 * 60_000;
 const DASHBOARD_CACHE_TTL_MS = 30_000;
@@ -69,17 +74,45 @@ const LATEST_UPDATE_PAGE_SIZE = 21;
 const MANGA_KIND_CACHE_TTL_MS = 24 * 60 * 60_000;
 // Used only when AniList's 429 response has no Retry-After header to honor.
 const DEFAULT_RATE_LIMIT_PAUSE_MS = 60_000;
+const MAX_RATE_LIMIT_PAUSE_MS = 10 * 60_000;
 const AUTHORIZATION_TIMEOUT_MS = 5 * 60_000;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 // TODO: Move this public client ID into a small build-time config module if AniList changes it.
 // Warning: this is the public OAuth client ID. Never put a client secret or access token beside it.
 
 export class AniListClient {
+  public getRecommendationSeeds(ids: number[], signal?: AbortSignal): Promise<AniListMedia[]> {
+    return loadRecommendationSeeds(
+      (query, variables) =>
+        this.publicRequest(query, variables, `recommendation-seeds:${ids.join(",")}`, signal),
+      ids,
+    );
+  }
+  private readonly personalAiringCache = createBoundedCache<PersonalAiringUpdate[]>({
+    maxEntries: 8,
+    ttlMs: AIRING_CACHE_TTL_MS,
+  });
+  public async getPersonalAnimeUpdates(ids: number[]): Promise<PersonalAiringUpdate[]> {
+    const normalized = [...new Set(ids)].sort((a, b) => a - b).slice(0, 24);
+    const key = normalized.join(",");
+    const cached = this.personalAiringCache.get(key);
+    if (cached) return cached;
+    const result = await loadPersonalAiring(
+      (query, variables) => this.publicRequest(query, variables, `personal-airing:${key}`),
+      normalized,
+    );
+    this.personalAiringCache.set(key, result);
+    return result;
+  }
   private token?: string;
   private profile?: AniListProfile;
   private readonly authorization: AuthorizationTransaction;
   private readonly requestGate: RequestGate = createRequestGate({
     requestsPerMinute: REQUESTS_PER_MINUTE,
+    // AniList documents a separate burst limiter without publishing its threshold.
+    // Space starts conservatively; keep this main-process policy locally configurable.
+    minIntervalMs: parseAniListMinIntervalMs(process.env.ANISTREAM_ANILIST_MIN_INTERVAL_MS),
   });
   private readonly browseCache = createBoundedCache<AniListCatalogPage>({
     maxEntries: 40,
@@ -297,7 +330,10 @@ export class AniListClient {
     return results;
   }
 
-  public async browseMedia(input: BrowseAniListInput): Promise<AniListCatalogPage> {
+  public async browseMedia(
+    input: BrowseAniListInput,
+    signal?: AbortSignal,
+  ): Promise<AniListCatalogPage> {
     if (input.type !== "ANIME" && input.type !== "MANGA") {
       throw new Error("Invalid media type.");
     }
@@ -345,6 +381,7 @@ export class AniListClient {
         sort: [sort],
       },
       cacheKey,
+      signal,
     );
     const page = normalizeCatalogPage(response.Page, input.type);
     this.browseCache.set(cacheKey, page);
@@ -397,7 +434,11 @@ export class AniListClient {
     return hints;
   }
 
-  public async getMediaDetail(id: number, type: AniListMediaType): Promise<AniListMediaDetail> {
+  public async getMediaDetail(
+    id: number,
+    type: AniListMediaType,
+    fresh = false,
+  ): Promise<AniListMediaDetail> {
     if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid AniList media.");
     if (type !== "ANIME" && type !== "MANGA") throw new Error("Invalid media type.");
 
@@ -405,12 +446,12 @@ export class AniListClient {
     // can be cached safely for this single-user app.
     const cacheKey = `detail:${this.profile?.id ?? "public"}:${type}:${id}`;
     const cached = this.detailCache.get(cacheKey);
-    if (cached) return cached;
+    if (cached && !fresh) return cached;
 
     const response = await this.publicRequest<MediaDetailResponse>(
       MEDIA_DETAIL_QUERY,
       { id, type },
-      cacheKey,
+      fresh ? undefined : cacheKey,
     );
     const detail = normalizeMediaDetail(response.Media, type);
     this.detailCache.set(cacheKey, detail);
@@ -442,44 +483,55 @@ export class AniListClient {
   ): Promise<T> {
     if (!this.token) throw new Error("Connect your AniList account first.");
     const token = this.token;
+    const deadline = requestDeadline();
 
-    return this.requestGate.run(dedupeKey, async () => {
-      const response = await fetch(ANILIST_GRAPHQL_URL, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query, variables }),
-        signal: AbortSignal.timeout(20_000),
-      });
+    return this.requestGate.run(
+      dedupeKey,
+      async () => {
+        const response = await fetch(ANILIST_GRAPHQL_URL, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query, variables }),
+          signal: deadline,
+        });
 
-      return this.parseGraphQlResponse<T>(response);
-    });
+        return this.parseGraphQlResponse<T>(response);
+      },
+      deadline,
+    );
   }
 
   private async publicRequest<T = unknown>(
     query: string,
     variables: Record<string, unknown> = {},
     dedupeKey?: string,
+    signal?: AbortSignal,
   ): Promise<T> {
     const headers: Record<string, string> = {
       Accept: "application/json",
       "Content-Type": "application/json",
     };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
+    const deadline = requestDeadline(signal);
 
-    return this.requestGate.run(dedupeKey, async () => {
-      const response = await fetch(ANILIST_GRAPHQL_URL, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ query, variables }),
-        signal: AbortSignal.timeout(20_000),
-      });
+    return this.requestGate.run(
+      dedupeKey,
+      async () => {
+        const response = await fetch(ANILIST_GRAPHQL_URL, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ query, variables }),
+          signal: deadline,
+        });
 
-      return this.parseGraphQlResponse<T>(response);
-    });
+        return this.parseGraphQlResponse<T>(response);
+      },
+      deadline,
+    );
   }
 
   /**
@@ -490,10 +542,25 @@ export class AniListClient {
    */
   private async parseGraphQlResponse<T>(response: Response): Promise<T> {
     if (response.status === 429) {
-      const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
+      const retryAfterMs = Math.min(
+        MAX_RATE_LIMIT_PAUSE_MS,
+        Math.max(
+          parseRetryAfterMs(response.headers.get("retry-after")),
+          parseRateLimitResetMs(response.headers.get("x-ratelimit-reset")) ?? 0,
+        ),
+      );
       this.requestGate.reportRateLimited(retryAfterMs);
       throw new Error(
         "AniList is rate-limiting requests right now. AniStream will pause new requests briefly — please try again shortly.",
+      );
+    }
+
+    const remainingHeader = response.headers.get("x-ratelimit-remaining");
+    const remaining = remainingHeader === null ? undefined : Number(remainingHeader);
+    if (remaining !== undefined && Number.isFinite(remaining) && remaining <= 0) {
+      this.requestGate.reportRateLimited(
+        parseRateLimitResetMs(response.headers.get("x-ratelimit-reset")) ??
+          DEFAULT_RATE_LIMIT_PAUSE_MS,
       );
     }
 
@@ -530,6 +597,11 @@ function asRecord(value: unknown, message: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function requestDeadline(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
 /** Retry-After is either delta-seconds ("30") or an HTTP-date; falls back conservatively. */
 export function parseRetryAfterMs(header: string | null): number {
   if (!header) return DEFAULT_RATE_LIMIT_PAUSE_MS;
@@ -541,4 +613,26 @@ export function parseRetryAfterMs(header: string | null): number {
   if (Number.isFinite(dateMs)) return Math.max(0, dateMs - Date.now());
 
   return DEFAULT_RATE_LIMIT_PAUSE_MS;
+}
+
+/** AniList's X-RateLimit-Reset is a Unix timestamp in seconds. */
+export function parseRateLimitResetMs(
+  header: string | null,
+  nowMs = Date.now(),
+): number | undefined {
+  if (!header) return undefined;
+  const resetSeconds = Number(header);
+  if (!Number.isFinite(resetSeconds) || resetSeconds <= 0) return undefined;
+  const delay = resetSeconds * 1000 - nowMs;
+  if (delay <= 0) return undefined;
+  return Math.min(delay, MAX_RATE_LIMIT_PAUSE_MS);
+}
+
+export function parseAniListMinIntervalMs(value: string | undefined): number {
+  if (!value) return DEFAULT_REQUEST_MIN_INTERVAL_MS;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 100 || parsed > MAX_REQUEST_MIN_INTERVAL_MS) {
+    return DEFAULT_REQUEST_MIN_INTERVAL_MS;
+  }
+  return Math.floor(parsed);
 }

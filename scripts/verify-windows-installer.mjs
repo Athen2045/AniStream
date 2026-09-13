@@ -1,4 +1,5 @@
 import { access, mkdtemp, rm } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -7,7 +8,8 @@ if (process.platform !== "win32") {
   throw new Error("The Windows installer check must run on Windows.");
 }
 
-const installerPath = resolve(process.argv[2] ?? "dist/AniStream Setup 0.1.2.exe");
+const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
+const installerPath = resolve(process.argv[2] ?? `dist/AniStream Setup ${packageVersion}.exe`);
 await access(installerPath);
 
 const workspace = await mkdtemp(join(tmpdir(), "anistream-installer-"));

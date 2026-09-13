@@ -9,6 +9,7 @@ import type {
   MangaDexAvailabilityInput,
   MangaDexChapterAvailability,
 } from "../../shared/contracts";
+import { friendlyRemoteError } from "./remote-error";
 
 const TRENDING_LIMIT = 20;
 const AVAILABILITY_CLOCK_INTERVAL_MS = 5 * 60_000;
@@ -198,7 +199,11 @@ export function createCatalogDataModule(
         trendingByType[type] = [];
         publish({
           trending: [],
-          error: errorMessage(reason, "AniList browse failed."),
+          error: friendlyRemoteError(reason, {
+            provider: "AniList",
+            operation: "trending titles",
+            fallback: "Trending titles are unavailable right now. Try again shortly.",
+          }),
         });
         loadFallback(type);
       })
@@ -231,7 +236,14 @@ export function createCatalogDataModule(
           isCurrentView(type, searchQuery) &&
           snapshot.page === page
         ) {
-          publish({ error: errorMessage(reason, "AniList search failed.") });
+          publish({
+            error: friendlyRemoteError(reason, {
+              provider: "AniList",
+              operation: "search results",
+              retained: Boolean(snapshot.searchResults?.items.length),
+              fallback: "Search is unavailable right now. Try again shortly.",
+            }),
+          });
         }
       })
       .finally(() => {
@@ -282,7 +294,16 @@ export function createCatalogDataModule(
           snapshot.latestPage === latestPage
         ) {
           publish({
-            latestError: errorMessage(reason, `Latest ${type.toLowerCase()} failed.`),
+            latestError: friendlyRemoteError(reason, {
+              provider: type === "ANIME" ? "AniList" : "MangaDex",
+              operation: `latest ${type.toLowerCase()} updates`,
+              retained: Boolean(
+                type === "ANIME"
+                  ? latestByType.ANIME.anime.length
+                  : latestByType.MANGA.manga.length,
+              ),
+              fallback: `Latest ${type.toLowerCase()} updates are unavailable right now. Try again shortly.`,
+            }),
           });
         }
       })
@@ -448,8 +469,4 @@ export function createCatalogDataModule(
       listeners.clear();
     },
   };
-}
-
-function errorMessage(reason: unknown, fallback: string): string {
-  return reason instanceof Error ? reason.message : fallback;
 }

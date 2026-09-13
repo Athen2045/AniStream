@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   MangaDexClient,
   findExactAniListMapping,
@@ -9,6 +9,32 @@ import {
 } from "../../src/main/mangadex";
 
 describe("MangaDex normalization", () => {
+  it("lets a foreground title enter the shared gate before a whole availability batch", async () => {
+    vi.useFakeTimers();
+    try {
+      const started = Date.now();
+      let foregroundDelay: number | undefined;
+      const client = new MangaDexClient("en", async (input) => {
+        const url = new URL(String(input));
+        if (url.searchParams.get("title") === "Foreground") foregroundDelay = Date.now() - started;
+        return Response.json({ data: [] });
+      });
+      const entries = Array.from({ length: 30 }, (_, index) => ({
+        aniListId: index + 1,
+        title: `Background ${index + 1}`,
+      }));
+      const availability = client.getAvailability(entries);
+      const foreground = client.getReader({ aniListId: 100, title: "Foreground" });
+      await vi.runAllTimersAsync();
+      expect((await availability).map((item) => item.aniListId)).toEqual(
+        entries.map((item) => item.aniListId),
+      );
+      expect((await foreground).status).toBe("unmapped");
+      expect(foregroundDelay).toBeLessThanOrEqual(1001);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("maps only a result with the exact AniList external ID", () => {
     const payload = {
       data: [
@@ -66,7 +92,13 @@ describe("MangaDex normalization", () => {
               translatedLanguage: "en",
               publishAt: "2026-01-01T00:00:00+00:00",
             },
-            relationships: [{ type: "scanlation_group", attributes: { name: "Sample Group" } }],
+            relationships: [
+              {
+                id: "sample-group",
+                type: "scanlation_group",
+                attributes: { name: "Sample Group" },
+              },
+            ],
           },
           { id: "invalid", attributes: { pages: 0, translatedLanguage: "en" } },
           {
@@ -89,6 +121,7 @@ describe("MangaDex normalization", () => {
         translatedLanguage: "en",
         publishedAt: "2026-01-01T00:00:00+00:00",
         groupName: "Sample Group",
+        groups: [{ id: "sample-group", name: "Sample Group" }],
       },
     ]);
   });
@@ -169,6 +202,28 @@ describe("MangaDex normalization", () => {
     ]);
   });
 
+  it("uses the selected quality filenames and keeps original/data-saver caches separate", async () => {
+    const requested: string[] = [];
+    const client = new MangaDexClient("en", (async (input: string | URL | Request) => {
+      const url = String(input);
+      requested.push(url);
+      if (url.includes("/at-home/server/"))
+        return Response.json({
+          baseUrl: "https://uploads.mangadex.org",
+          chapter: { hash: "hash", data: ["original.png"], dataSaver: ["small.jpg"] },
+        });
+      return new Response(new Uint8Array([1, 2]), { headers: { "content-type": "image/jpeg" } });
+    }) as typeof fetch);
+    await client.getPage({ chapterId: "chapter-quality", page: 0, quality: "data-saver" });
+    await client.getPage({ chapterId: "chapter-quality", page: 0, quality: "data" });
+    await client.getPage({ chapterId: "chapter-quality", page: 0, quality: "data-saver" });
+    expect(requested).toEqual([
+      "https://api.mangadex.org/at-home/server/chapter-quality",
+      "https://uploads.mangadex.org/data-saver/hash/small.jpg",
+      "https://uploads.mangadex.org/data/hash/original.png",
+    ]);
+  });
+
   it("reports an unavailable external chapter instead of leaking a raw at-home 404", async () => {
     const client = new MangaDexClient(
       "en",
@@ -180,21 +235,21 @@ describe("MangaDex normalization", () => {
     );
   });
 
-  it("falls back across every language when the configured language has zero chapters", async () => {
+  it("reports an empty chosen language without silently falling back across languages", async () => {
     const responses = [
-      Response.json({
-        data: [{ id: "manga-1", attributes: { links: { al: "500" }, status: "ongoing" } }],
-      }),
-      Response.json({ data: [], total: 0 }),
       Response.json({
         data: [
           {
-            id: "chapter-es",
-            attributes: { chapter: "1", pages: 20, translatedLanguage: "es" },
+            id: "manga-1",
+            attributes: {
+              links: { al: "500" },
+              status: "ongoing",
+              availableTranslatedLanguages: ["en", "es"],
+            },
           },
         ],
-        total: 1,
       }),
+      Response.json({ data: [], total: 0 }),
     ];
     const requestedUrls: string[] = [];
     const fetcher = async (input: string | URL | Request): Promise<Response> => {
@@ -205,18 +260,59 @@ describe("MangaDex normalization", () => {
     };
     const client = new MangaDexClient("en", fetcher as typeof fetch);
 
-    const session = await client.getReader({ aniListId: 500, title: "Sample Manga" });
+    const session = await client.getReader({
+      aniListId: 500,
+      title: "Sample Manga",
+      translatedLanguage: "en",
+    });
 
     expect(session.status).toBe("available");
-    expect(session.translatedLanguage).toBe("multi");
-    expect(session.chapters).toEqual([
-      expect.objectContaining({ id: "chapter-es", number: 1, translatedLanguage: "es" }),
-    ]);
+    expect(session.translatedLanguage).toBe("en");
+    expect(session.availableLanguages).toEqual(["en", "es"]);
+    expect(session.chapters).toEqual([]);
+    expect(session.message).toMatch(/chosen language/i);
     expect(requestedUrls[1]).toContain("translatedLanguage%5B%5D=en");
-    expect(requestedUrls[2]).not.toContain("translatedLanguage%5B%5D");
+    expect(requestedUrls).toHaveLength(2);
   });
 
-  it("does not filter the aggregate availability check to a single language", async () => {
+  it("rejects off-language chapter rows from a chosen-language response", async () => {
+    const responses = [
+      Response.json({
+        data: [
+          {
+            id: "manga-language-boundary",
+            attributes: {
+              links: { al: "501" },
+              status: "ongoing",
+              availableTranslatedLanguages: ["en", "es"],
+            },
+          },
+        ],
+      }),
+      Response.json({
+        data: [
+          {
+            id: "chapter-es",
+            attributes: { chapter: "1", pages: 20, translatedLanguage: "es" },
+            relationships: [],
+          },
+        ],
+        total: 1,
+      }),
+    ];
+    const client = new MangaDexClient(
+      "en",
+      (async () =>
+        responses.shift() ?? new Response("unexpected", { status: 500 })) as typeof fetch,
+    );
+
+    const session = await client.getReader({ aniListId: 501, title: "Language Boundary" });
+
+    expect(session.translatedLanguage).toBe("en");
+    expect(session.chapters).toEqual([]);
+  });
+
+  it("filters aggregate availability to the chosen language", async () => {
     const responses = [
       Response.json({
         data: [{ id: "manga-2", attributes: { links: { al: "700" }, status: "ongoing" } }],
@@ -237,6 +333,68 @@ describe("MangaDex normalization", () => {
     ]);
 
     expect(availability).toMatchObject({ status: "available", latestChapter: 3 });
-    expect(requestedUrls[1]).not.toContain("translatedLanguage");
+    expect(requestedUrls[1]).toContain("translatedLanguage%5B%5D=en");
+  });
+
+  it("preserves exact scanlation group IDs and names for release selection", () => {
+    expect(
+      normalizeChapters({
+        data: [
+          {
+            id: "chapter-one",
+            attributes: { chapter: "1", pages: 20, translatedLanguage: "en" },
+            relationships: [
+              { id: "group-a", type: "scanlation_group", attributes: { name: "Group A" } },
+              { id: "group-b", type: "scanlation_group", attributes: { name: "Group B" } },
+            ],
+          },
+        ],
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        id: "chapter-one",
+        groups: [
+          { id: "group-a", name: "Group A" },
+          { id: "group-b", name: "Group B" },
+        ],
+      }),
+    ]);
+  });
+
+  it("keeps successful archive batches and reports an incomplete chapter archive", async () => {
+    const firstBatch = Array.from({ length: 100 }, (_, index) => ({
+      id: `chapter-${index + 1}`,
+      attributes: {
+        chapter: String(index + 1),
+        pages: 20,
+        translatedLanguage: "en",
+      },
+      relationships: [],
+    }));
+    let request = 0;
+    const client = new MangaDexClient("en", (async () => {
+      request += 1;
+      if (request === 1) {
+        return Response.json({
+          data: [
+            {
+              id: "manga-archive",
+              attributes: {
+                links: { al: "900" },
+                status: "ongoing",
+                availableTranslatedLanguages: ["en"],
+              },
+            },
+          ],
+        });
+      }
+      if (request === 2) return Response.json({ data: firstBatch, total: 101 });
+      throw new Error("later archive batch failed");
+    }) as typeof fetch);
+
+    const session = await client.getReader({ aniListId: 900, title: "Archive" });
+
+    expect(session.chapters).toHaveLength(100);
+    expect(session.archiveStatus).toBe("partial");
   });
 });

@@ -2,9 +2,29 @@ import { describe, expect, it } from "vitest";
 import { ipcArgValidators } from "../../src/main/ipc-validation";
 
 describe("IPC argument validation", () => {
+  it("bounds production recommendation feedback and impressions", () => {
+    expect(ipcArgValidators["discovery:for-you"](["ANIME"])).toEqual(["ANIME"]);
+    expect(() =>
+      ipcArgValidators["discovery:feedback"]([
+        { requestId: "valid-id", anilistId: 1, action: "started" },
+      ]),
+    ).toThrow();
+    expect(() =>
+      ipcArgValidators["discovery:impressions"]([
+        { requestId: "valid-id", anilistIds: Array(11).fill(1) },
+      ]),
+    ).toThrow();
+    expect(() =>
+      ipcArgValidators["discovery:feedback"]([
+        { requestId: "../bad", anilistId: 1, action: "dismiss" },
+      ]),
+    ).toThrow();
+  });
   it("rejects the wrong argument count for a no-arg channel", () => {
     expect(() => ipcArgValidators["app:get-info"]([])).not.toThrow();
     expect(() => ipcArgValidators["app:get-info"](["unexpected"])).toThrow(/malformed/);
+    expect(() => ipcArgValidators["anime:provider-readiness"]([])).not.toThrow();
+    expect(() => ipcArgValidators["anime:provider-readiness"](["unexpected"])).toThrow(/malformed/);
   });
 
   it("rejects positional args with the wrong primitive type or value", () => {
@@ -84,6 +104,19 @@ describe("IPC argument validation", () => {
   it("rejects an out-of-enum quality on a MangaDex page request", () => {
     expect(() =>
       ipcArgValidators["mangadex:page"]([{ chapterId: "abc", page: 0, quality: "high" }]),
+    ).toThrow(/malformed/);
+  });
+
+  it("validates explicit MangaDex language and group preferences", () => {
+    expect(
+      ipcArgValidators["manga:save-reader-preferences"]([
+        { aniListId: 30_013, translatedLanguage: "pt-br", preferredGroupId: "group-uuid" },
+      ]),
+    ).toEqual([{ aniListId: 30_013, translatedLanguage: "pt-br", preferredGroupId: "group-uuid" }]);
+    expect(() =>
+      ipcArgValidators["manga:save-reader-preferences"]([
+        { aniListId: 30_013, translatedLanguage: "all" },
+      ]),
     ).toThrow(/malformed/);
   });
 

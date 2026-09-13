@@ -79,6 +79,7 @@ vi.mock("../../src/renderer/src/useCatalogData", () => ({
 }));
 
 import { CatalogView } from "../../src/renderer/src/CatalogView";
+import { PersonalLibraryProvider } from "../../src/renderer/src/PersonalLibraryProvider";
 import { MediaDetailModal } from "../../src/renderer/src/MediaDetailModal";
 
 const guestAccess: ViewerAccess = { kind: "guest" };
@@ -93,15 +94,28 @@ const memberAccess: ViewerAccess = {
 };
 
 function renderCatalog(access: ViewerAccess): string {
-  return renderToStaticMarkup(
-    React.createElement(CatalogView, {
-      type: "ANIME",
-      searchQuery: "",
-      access,
-      onSelect: vi.fn(),
-      onPrimary: vi.fn(),
-    }),
-  );
+  // Server rendering does not run effects or invoke the bridge.
+  vi.stubGlobal("window", {
+    anistream: {},
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+  try {
+    return renderToStaticMarkup(
+      React.createElement(PersonalLibraryProvider, {
+        access,
+        children: React.createElement(CatalogView, {
+          type: "ANIME",
+          searchQuery: "",
+          access,
+          onSelect: vi.fn(),
+          onPrimary: vi.fn(),
+        }),
+      }),
+    );
+  } finally {
+    vi.unstubAllGlobals();
+  }
 }
 
 describe("guest personalization boundary", () => {

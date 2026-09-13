@@ -64,7 +64,7 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
 
   return {
     run<T>(dedupeKey: string | undefined, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-      if (signal?.aborted) return Promise.reject(abortError());
+      if (signal?.aborted) return Promise.reject(abortReason(signal));
       if (dedupeKey) {
         const existing = inFlight.get(dedupeKey);
         if (existing) return raceWithAbort(existing as Promise<T>, signal);
@@ -98,7 +98,7 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
-  if (signal.aborted) return Promise.reject(abortError());
+  if (signal.aborted) return Promise.reject(abortReason(signal));
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       signal.removeEventListener("abort", onAbort);
@@ -107,25 +107,29 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     const onAbort = (): void => {
       clearTimeout(timeout);
       signal.removeEventListener("abort", onAbort);
-      reject(abortError());
+      reject(abortReason(signal));
     };
     signal.addEventListener("abort", onAbort, { once: true });
   });
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
-  if (signal?.aborted) throw abortError();
+  if (signal?.aborted) throw abortReason(signal);
 }
 
 function abortError(): DOMException {
   return new DOMException("The request was cancelled.", "AbortError");
 }
 
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason instanceof Error ? signal.reason : abortError();
+}
+
 function raceWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(abortError());
+  if (signal.aborted) return Promise.reject(abortReason(signal));
   return new Promise((resolve, reject) => {
-    const onAbort = (): void => reject(abortError());
+    const onAbort = (): void => reject(abortReason(signal));
     signal.addEventListener("abort", onAbort, { once: true });
     void promise.then(
       (value) => {

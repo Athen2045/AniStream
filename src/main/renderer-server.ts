@@ -175,6 +175,8 @@ function contentType(filePath: string): string {
       return "font/woff";
     case ".woff2":
       return "font/woff2";
+    case ".ttf":
+      return "font/ttf";
     default:
       return "application/octet-stream";
   }

@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { windowChromeOptions } from "./window-chrome";
 import { app, BrowserWindow, dialog, session, shell } from "electron";
 import { AniListClient } from "./anilist";
 import { AnikotoClient } from "./anikoto";
@@ -6,6 +7,7 @@ import { MalClient } from "./mal";
 import { MangaDexClient } from "./mangadex";
 import { MangaBakaClient } from "./mangabaka";
 import { MangaUpdatesClient } from "./mangaupdates";
+import { KitsuClient } from "./kitsu";
 import { MangaTitleModule } from "./manga-title";
 import { loadEnvironmentFile } from "./config";
 import { openAppDatabase, type AppDatabase } from "./database";
@@ -14,12 +16,27 @@ import { registerTrustedIpcHandler, sendTypedIpcEvent } from "./ipc";
 import { registerTrackerDomain } from "./domains/tracker";
 import { registerAnimeDomain } from "./domains/anime";
 import { registerMangaDomain } from "./domains/manga";
+import { registerKitsuDevelopmentDomain } from "./domains/kitsu";
 import { registerResumeDomain } from "./domains/resume";
+import { registerActivityDomain } from "./domains/activity";
+import { registerBackupDomain } from "./domains/backup";
+import { registerPersonalDomain } from "./domains/personal";
+import { registerDiscoveryDomain } from "./domains/discovery";
 import type { AniListAuthState, AppInfo } from "../shared/contracts";
 import { ProtocolCallbackRouter } from "./protocol-callback-router";
+import { protocolRegistrationArgs } from "./protocol-registration";
+import { UpdateChecker } from "./update-check";
+import { UpdateLaunch } from "./update-launch";
+import { updateTarget } from "./update-release";
+import { trackUpdateWindowHealth } from "./update-window-health";
+import { startDevTiming } from "./dev-performance";
+
+const finishStartupTiming = startDevTiming("startup:ready-to-show");
 
 let database: AppDatabase | undefined;
 let mainWindow: BrowserWindow | undefined;
+let disposeActivity: (() => void) | undefined;
+let disposeDiscovery: (() => void) | undefined;
 let aniList: AniListClient | undefined;
 let anikoto: AnikotoClient | undefined;
 let mangaDex: MangaDexClient | undefined;
@@ -27,7 +44,10 @@ let mal: MalClient | undefined;
 let mangaBaka: MangaBakaClient | undefined;
 let mangaUpdates: MangaUpdatesClient | undefined;
 let mangaTitle: MangaTitleModule | undefined;
+let kitsu: KitsuClient | undefined;
 let rendererServer: RendererServer | undefined;
+let updateChecker: UpdateChecker | undefined;
+let updateLaunch: UpdateLaunch | undefined;
 const protocolCallbacks = new ProtocolCallbackRouter();
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -55,19 +75,8 @@ function createWindow(rendererUrl: string): void {
     minHeight: 640,
     show: false,
     autoHideMenuBar: process.platform === "win32",
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
-    ...(process.platform === "win32"
-      ? {
-          titleBarOverlay: {
-            color: "#0d0f12",
-            symbolColor: "#f3f5f7",
-            height: 56,
-          },
-          roundedCorners: true,
-          backgroundMaterial: "none",
-        }
-      : {}),
-    backgroundColor: "#0d0f12",
+    ...windowChromeOptions(process.platform),
+    backgroundColor: "#0a0909",
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
@@ -82,7 +91,12 @@ function createWindow(rendererUrl: string): void {
 
   if (process.platform === "win32") mainWindow.setMenuBarVisibility(false);
 
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  if (updateLaunch) trackUpdateWindowHealth(mainWindow, updateLaunch);
+
+  mainWindow.once("ready-to-show", () => {
+    finishStartupTiming();
+    mainWindow?.show();
+  });
   void mainWindow.loadURL(rendererUrl).catch((error: unknown) => {
     console.error("AniStream renderer failed to load.", error);
     mainWindow?.show();
@@ -157,8 +171,19 @@ void app
     mal = new MalClient();
     mangaBaka = new MangaBakaClient();
     mangaUpdates = new MangaUpdatesClient();
+    if (!app.isPackaged) kitsu = new KitsuClient();
     if (isAnikotoEnabled()) anikoto = new AnikotoClient();
-    app.setAsDefaultProtocolClient("anistream");
+    const [protocolExecutable, protocolArgs] = protocolRegistrationArgs({
+      platform: process.platform,
+      packaged: app.isPackaged,
+      execPath: process.execPath,
+      entryPath: process.argv[1] ?? join(__dirname, "index.js"),
+    });
+    if (protocolExecutable && protocolArgs) {
+      app.setAsDefaultProtocolClient("anistream", protocolExecutable, protocolArgs);
+    } else {
+      app.setAsDefaultProtocolClient("anistream");
+    }
     rendererServer = await rendererServerPromise;
     const rendererUrl = process.env.ELECTRON_RENDERER_URL ?? rendererServer?.url;
     if (!rendererUrl) throw new Error("AniStream's renderer origin is unavailable.");
@@ -166,11 +191,28 @@ void app
     configureSessionPermissions(trustedRendererOrigin);
 
     database = await databasePromise;
+    const target = updateTarget(app.isPackaged, process.platform, process.arch);
+    updateLaunch = new UpdateLaunch(database.updateLaunch, app.getVersion(), target !== undefined);
+    updateChecker = new UpdateChecker({
+      currentVersion: app.getVersion(),
+      target,
+      recovery: updateLaunch.recovery,
+      onChange: (state) => {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed())
+          sendTypedIpcEvent(mainWindow.webContents, "app:update-status-changed", state);
+      },
+    });
+    const checker = updateChecker;
+    registerTrustedIpcHandler(trustedRendererOrigin, "app:update-status", () =>
+      checker.getStatus(),
+    );
+    registerTrustedIpcHandler(trustedRendererOrigin, "app:check-updates", () => checker.check());
     mangaTitle = new MangaTitleModule({
       mangaBaka,
       mangaUpdates,
       mangaDex,
       resume: database,
+      preferences: database,
     });
 
     registerTrustedIpcHandler(trustedRendererOrigin, "app:get-info", (): AppInfo => ({
@@ -183,16 +225,34 @@ void app
     registerTrackerDomain(trustedRendererOrigin, {
       aniList,
       database,
-      authRestored: restorePromise,
     });
     registerAnimeDomain(trustedRendererOrigin, { anikoto, mal });
-    registerMangaDomain(trustedRendererOrigin, { mangaDex, mangaTitle, aniList, mal });
+    registerMangaDomain(trustedRendererOrigin, {
+      readerSettings: database,
+      mangaDex,
+      mangaTitle,
+      aniList,
+      mal,
+      preferences: database,
+    });
     registerResumeDomain(trustedRendererOrigin, { database });
+    disposeActivity = registerActivityDomain(trustedRendererOrigin, database, aniList, () => {
+      if (mainWindow && !mainWindow.isDestroyed())
+        sendTypedIpcEvent(mainWindow.webContents, "activity:changed", undefined);
+    });
+    registerPersonalDomain(trustedRendererOrigin, database, aniList);
+    registerBackupDomain(trustedRendererOrigin, database.backup, () => {
+      if (mainWindow && !mainWindow.isDestroyed())
+        sendTypedIpcEvent(mainWindow.webContents, "activity:changed", undefined);
+    });
+    if (kitsu) registerKitsuDevelopmentDomain(trustedRendererOrigin, kitsu);
+    disposeDiscovery = registerDiscoveryDomain(trustedRendererOrigin, database, aniList);
 
     // Register every IPC handler before the renderer can invoke the preload bridge.
     // The database still opens off the initial event-loop tick, but a slow disk or
     // migration can no longer expose a half-initialized window.
     createWindow(rendererUrl);
+    void checker.check();
     void restorePromise.then(emitAniListState);
 
     app.on("activate", () => {
@@ -219,6 +279,10 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  updateChecker?.dispose();
+  updateLaunch?.dispose();
+  disposeDiscovery?.();
+  disposeActivity?.();
   database?.close();
   void rendererServer?.close();
 });

@@ -1,6 +1,6 @@
 {
   "name": "anistream",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Personal anime and manga discovery, playback, reading, and tracker sync for macOS and Windows",
   "author": "Athen2045",
@@ -13,6 +13,8 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "check:packaged-preload": "node scripts/verify-packaged-preload.mjs",
+    "check:packaged-build": "node scripts/verify-packaged-build.mjs",
+    "check:mac-package": "node scripts/verify-mac-package.mjs",
     "check:win-installer": "node scripts/verify-windows-installer.mjs",
     "check:anilist-oauth": "node scripts/verify-anilist-oauth.mjs",
     "check:product-slice": "node scripts/verify-product-slice.mjs",

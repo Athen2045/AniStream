@@ -41,9 +41,10 @@ The workflow then:
 1. Validates the version and release notes.
 2. Runs the complete source checks and production build.
 3. Builds Windows and macOS packages from the same `main` commit.
-4. Verifies both packaged outputs.
+4. Verifies both packaged outputs, including host native binaries and the Windows installer lifecycle.
 5. Pauses at the protected `production` environment for approval.
-6. Creates `vX.Y.Z` and publishes the release from the already-built artifacts.
+6. Creates `vX.Y.Z` and publishes the release from the already-built artifacts. The exact installer
+   filenames are what the in-app update checker uses to identify compatible releases.
 
 ## Repository settings to configure once
 
@@ -57,3 +58,9 @@ The workflow then:
 
 Do not approve a production run until the development installer has been tested. Passing automation
 is necessary, but it does not replace a short manual smoke test of the changed user experience.
+
+The platform package workflows are build/verify/upload jobs; they do not publish releases. This
+prevents duplicate asset uploads when the production workflow creates the tag. For Apple Silicon
+candidates, the Mac package job runs `npm run check:mac-package` before uploading. Follow
+[Verify an Apple Silicon release candidate](verify-mac-release.md) for the exact package checks,
+native interaction matrix, and separate signing/notarization verification.

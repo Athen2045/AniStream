@@ -86,6 +86,7 @@ jobs:
         shell: pwsh
         run: |
           npm run check:anilist-oauth
+          npm run check:packaged-build -- dist/win-unpacked/resources/app.asar
           npm run check:packaged-preload -- dist/win-unpacked/resources/app.asar
           $version = node -p "require('./package.json').version"
           npm run check:win-installer -- "dist/AniStream Setup $version.exe"
@@ -126,9 +127,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Verify macOS artifact
-        run: >
-          npm run check:packaged-preload --
-          dist/mac-arm64/AniStream.app/Contents/Resources/app.asar
+        run: npm run check:mac-package
 
       - name: Upload macOS release artifact
         uses: actions/upload-artifact@v4

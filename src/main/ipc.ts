@@ -6,6 +6,7 @@ import type {
   IpcInvokeResult,
 } from "../shared/ipc";
 import { ipcArgValidators } from "./ipc-validation";
+import { startDevTiming } from "./dev-performance";
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -23,10 +24,18 @@ export function registerTrustedIpcHandler<Channel extends IpcInvokeChannel>(
     ...args: IpcInvokeArgs<Channel>
   ) => MaybePromise<IpcInvokeResult<Channel>>,
 ): void {
-  ipcMain.handle(channel, (event, ...args: unknown[]) => {
+  ipcMain.handle(channel, async (event, ...args: unknown[]) => {
     assertTrustedIpcSender(event, trustedRendererOrigin);
     const validatedArgs = ipcArgValidators[channel](args) as IpcInvokeArgs<Channel>;
-    return handler(event, ...validatedArgs);
+    const finish = startDevTiming(channel);
+    try {
+      const result = await handler(event, ...validatedArgs);
+      finish();
+      return result;
+    } catch (error) {
+      finish("error");
+      throw error;
+    }
   });
 }
 

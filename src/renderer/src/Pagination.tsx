@@ -1,7 +1,8 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useId, useMemo } from "react";
 import { motionTransition } from "./motion";
+import { useAppReducedMotion } from "./useAppReducedMotion";
 
 const ELLIPSIS = "ellipsis" as const;
 type PageItem = number | typeof ELLIPSIS;
@@ -41,7 +42,7 @@ export function Pagination({
   hasNextPage: boolean;
   onPageChange: (page: number) => void;
 }): React.JSX.Element {
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = useAppReducedMotion();
   const id = useId();
   const items = useMemo(() => buildPageRange(page, Math.max(page, totalPages)), [page, totalPages]);
 

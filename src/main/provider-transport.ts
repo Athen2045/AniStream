@@ -28,7 +28,9 @@ export class ProviderTransport {
 
   public request(url: URL, request: ProviderRequestOptions = {}): Promise<Response> {
     const { dedupeKey = url.toString(), signal } = request;
-    return this.options.gate.run(dedupeKey, () => this.dispatch(url, request), signal ?? undefined);
+    return this.runWithDeadline(dedupeKey, signal, (deadline) =>
+      this.dispatch(url, { ...request, signal: deadline }),
+    );
   }
 
   public requestJson(url: URL, request: ProviderRequestOptions = {}): Promise<unknown> {
@@ -41,31 +43,43 @@ export class ProviderTransport {
     parse: (response: Response) => Promise<T>,
   ): Promise<T> {
     const { dedupeKey = url.toString(), signal } = request;
-    return this.options.gate.run(
-      dedupeKey,
-      async () => parse(await this.dispatch(url, request)),
-      signal ?? undefined,
+    return this.runWithDeadline(dedupeKey, signal, async (deadline) =>
+      parse(await this.dispatch(url, { ...request, signal: deadline })),
     );
+  }
+
+  private runWithDeadline<T>(
+    dedupeKey: string | undefined,
+    callerSignal: AbortSignal | null | undefined,
+    dispatch: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const timeout = new AbortController();
+    const timeoutId = setTimeout(
+      () => timeout.abort(new DOMException("Provider request timed out.", "TimeoutError")),
+      this.options.timeoutMs,
+    );
+    const combined = combineAbortSignals(callerSignal, timeout.signal);
+    const request = this.options.gate.run(
+      dedupeKey,
+      () => dispatch(combined.signal),
+      combined.signal,
+    );
+    return request.finally(() => {
+      clearTimeout(timeoutId);
+      combined.dispose();
+    });
   }
 
   private async dispatch(url: URL, request: ProviderRequestOptions): Promise<Response> {
     const { dedupeKey: _dedupeKey, onResponse, signal, ...init } = request;
-    const timeout = new AbortController();
-    const timeoutId = setTimeout(() => timeout.abort(), this.options.timeoutMs);
-    const combined = combineAbortSignals(signal, timeout.signal);
-    try {
-      const response = await this.fetcher(url, {
-        ...init,
-        headers: mergeHeaders(this.options.headers, init.headers),
-        redirect: init.redirect ?? this.options.redirect,
-        signal: combined.signal,
-      });
-      await onResponse?.(response, this.options.gate);
-      return response;
-    } finally {
-      clearTimeout(timeoutId);
-      combined.dispose();
-    }
+    const response = await this.fetcher(url, {
+      ...init,
+      headers: mergeHeaders(this.options.headers, init.headers),
+      redirect: init.redirect ?? this.options.redirect,
+      signal,
+    });
+    await onResponse?.(response, this.options.gate);
+    return response;
   }
 }
 
@@ -105,14 +119,28 @@ function combineAbortSignals(
   timeout: AbortSignal,
 ): { signal: AbortSignal; dispose: () => void } {
   const controller = new AbortController();
-  const abort = (): void => controller.abort();
   const signals = caller ? [caller, timeout] : [timeout];
+  const listeners: Array<{ signal: AbortSignal; abort: () => void }> = [];
   for (const signal of signals) {
-    if (signal.aborted) controller.abort();
-    else signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) {
+      controller.abort(abortReason(signal));
+      continue;
+    }
+    // Electron's hybrid EventTarget dispatch can clear event.currentTarget before a
+    // listener runs. Capture the signal directly instead of trusting the Event object.
+    const abort = (): void => controller.abort(abortReason(signal));
+    listeners.push({ signal, abort });
+    signal.addEventListener("abort", abort, { once: true });
   }
   return {
     signal: controller.signal,
-    dispose: () => signals.forEach((signal) => signal.removeEventListener("abort", abort)),
+    dispose: () =>
+      listeners.forEach(({ signal, abort }) => signal.removeEventListener("abort", abort)),
   };
+}
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("The request was cancelled.", "AbortError");
 }

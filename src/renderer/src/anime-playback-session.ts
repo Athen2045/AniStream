@@ -1,5 +1,6 @@
 import type { SavePlaybackResumeInput } from "../../shared/contracts";
 import { parseMegaPlayEvent } from "../../shared/megaplay-events";
+import { friendlyPlaybackError } from "./remote-error";
 
 const MEGAPLAY_ORIGIN = "https://megaplay.buzz";
 const RESUME_SAVE_INTERVAL_MS = 10_000;
@@ -13,6 +14,7 @@ export interface AnimePlaybackSessionSnapshot {
   hasError: boolean;
   errorMessage?: string;
   ended: boolean;
+  persistenceError?: string;
 }
 
 export interface AnimePlaybackSessionOptions {
@@ -26,9 +28,11 @@ export interface AnimePlaybackSessionOptions {
 }
 
 export interface AnimePlaybackSession {
+  activate(): void;
   getSnapshot(): AnimePlaybackSessionSnapshot;
   subscribe(listener: () => void): () => void;
   markLoaded(): void;
+  retryPersistence(): void;
   handleMessage(
     data: unknown,
     origin: string,
@@ -36,6 +40,20 @@ export interface AnimePlaybackSession {
     expectedSource: MessageEventSource | null,
   ): void;
   dispose(): void;
+}
+
+export function chooseInitialAnimeEpisode(input: {
+  requestedEpisode: number;
+  savedEpisode?: number;
+  completedProgress: number;
+  totalEpisodes?: number;
+}): number {
+  const progressTarget = Math.max(1, input.requestedEpisode, input.completedProgress + 1);
+  const selected =
+    input.savedEpisode !== undefined && input.savedEpisode >= progressTarget
+      ? input.savedEpisode
+      : progressTarget;
+  return input.totalEpisodes ? Math.min(input.totalEpisodes, selected) : selected;
 }
 
 export function createAnimePlaybackSession(
@@ -53,11 +71,16 @@ export function createAnimePlaybackSession(
   let latestProgress: { currentTime: number; duration: number } | undefined;
   let lastSavedAt = 0;
   let completed = false;
+  let completionRequested = false;
+  let completing = false;
   let disposed = false;
 
-  const timer = setTimeout(() => {
-    if (!disposed && !snapshot.loaded) updateSnapshot({ loadTimedOut: true });
-  }, options.loadTimeoutMs ?? PLAYER_LOAD_TIMEOUT_MS);
+  const startLoadTimer = () =>
+    setTimeout(() => {
+      if (!disposed && !snapshot.hasProgressed && !snapshot.ended)
+        updateSnapshot({ loadTimedOut: true });
+    }, options.loadTimeoutMs ?? PLAYER_LOAD_TIMEOUT_MS);
+  let timer = startLoadTimer();
 
   const updateSnapshot = (changes: Partial<AnimePlaybackSessionSnapshot>): void => {
     snapshot = { ...snapshot, ...changes };
@@ -65,7 +88,7 @@ export function createAnimePlaybackSession(
   };
 
   const persistLatest = (force: boolean): void => {
-    if (!latestProgress) return;
+    if (!latestProgress || completionRequested) return;
     const timestamp = now();
     if (!force && timestamp - lastSavedAt < RESUME_SAVE_INTERVAL_MS) return;
     lastSavedAt = timestamp;
@@ -75,18 +98,51 @@ export function createAnimePlaybackSession(
       positionSeconds: Math.max(0, latestProgress.currentTime),
       durationSeconds: latestProgress.duration,
     };
-    void Promise.resolve(options.saveResume(input)).catch(() => undefined);
+    try {
+      void Promise.resolve(options.saveResume(input)).then(
+        () => updateSnapshot({ persistenceError: undefined }),
+        (reason: unknown) =>
+          updateSnapshot({
+            persistenceError:
+              reason instanceof Error ? reason.message : "Unable to save local progress.",
+          }),
+      );
+    } catch (reason) {
+      updateSnapshot({
+        persistenceError:
+          reason instanceof Error ? reason.message : "Unable to save local progress.",
+      });
+    }
   };
 
   const markWatched = (): void => {
-    if (completed) return;
-    completed = true;
-    latestProgress = undefined;
-    void Promise.resolve(options.clearResume(options.mediaId)).catch(() => undefined);
-    void Promise.resolve(options.onWatched(options.episode)).catch(() => undefined);
+    if (completed || completing) return;
+    completionRequested = true;
+    completing = true;
+    void (async () => {
+      try {
+        await options.onWatched(options.episode);
+        await options.clearResume(options.mediaId);
+        completed = true;
+        latestProgress = undefined;
+        updateSnapshot({ persistenceError: undefined });
+      } catch (reason) {
+        updateSnapshot({
+          persistenceError:
+            reason instanceof Error ? reason.message : "Unable to save local completion.",
+        });
+      } finally {
+        completing = false;
+      }
+    })();
   };
 
   return {
+    activate() {
+      if (!disposed) return;
+      disposed = false;
+      timer = startLoadTimer();
+    },
     getSnapshot: () => snapshot,
 
     subscribe(listener) {
@@ -96,6 +152,11 @@ export function createAnimePlaybackSession(
 
     markLoaded() {
       if (!disposed) updateSnapshot({ loaded: true });
+    },
+
+    retryPersistence() {
+      if (completionRequested) markWatched();
+      else persistLatest(true);
     },
 
     handleMessage(data, origin, source, expectedSource) {
@@ -112,7 +173,13 @@ export function createAnimePlaybackSession(
       if (!message) return;
 
       if (message.kind === "progress") {
-        updateSnapshot({ hasProgressed: true });
+        updateSnapshot({
+          loaded: true,
+          hasProgressed: true,
+          loadTimedOut: false,
+          hasError: false,
+          errorMessage: undefined,
+        });
         const ratio = message.percent ?? (message.currentTime / message.duration) * 100;
         if (ratio >= COMPLETE_PERCENT) {
           markWatched();
@@ -129,14 +196,20 @@ export function createAnimePlaybackSession(
       }
 
       if (message.kind === "complete") {
-        updateSnapshot({ ended: true });
+        updateSnapshot({
+          loaded: true,
+          ended: true,
+          loadTimedOut: false,
+          hasError: false,
+          errorMessage: undefined,
+        });
         markWatched();
         return;
       }
 
       updateSnapshot({
         hasError: true,
-        errorMessage: message.message ?? "The Anikoto player reported a playback error.",
+        errorMessage: friendlyPlaybackError(message.message),
       });
     },
 

@@ -102,6 +102,48 @@ describe("Anikoto response normalization", () => {
 });
 
 describe("Anikoto client", () => {
+  it("checks readiness through the cached recent index", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ ok: true, data: [] }));
+    const client = new AnikotoClient(fetcher as typeof fetch);
+
+    await expect(client.checkReadiness()).resolves.toMatchObject({
+      provider: "anikoto",
+      status: "ready",
+    });
+    await expect(client.checkReadiness()).resolves.toMatchObject({ status: "ready" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports malformed readiness data without retrying", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, data: null }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, data: [] }));
+    const client = new AnikotoClient(fetcher as typeof fetch);
+
+    await expect(client.checkReadiness()).resolves.toMatchObject({
+      provider: "anikoto",
+      status: "unavailable",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await expect(client.checkReadiness()).resolves.toMatchObject({ status: "ready" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("distinguishes offline and rate-limited readiness failures", async () => {
+    const offline = new AnikotoClient(
+      vi.fn(async () => {
+        throw new TypeError("fetch failed: ENOTFOUND");
+      }) as unknown as typeof fetch,
+    );
+    const limited = new AnikotoClient(
+      vi.fn(async () => jsonResponse({ ok: false }, 429, { "Retry-After": "0" })) as typeof fetch,
+    );
+
+    await expect(offline.checkReadiness()).resolves.toMatchObject({ status: "offline" });
+    await expect(limited.checkReadiness()).resolves.toMatchObject({ status: "rate-limited" });
+  });
+
   it("loads recent mapping then the exact series", async () => {
     const fetcher = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
@@ -161,7 +203,12 @@ describe("Anikoto client", () => {
       client.getEpisodeCatalog(input),
     ]);
 
-    expect(first).toEqual(second);
+    // Each caller normalizes the shared provider response independently.
+    const { checkedAt: firstCheckedAt, ...firstCatalog } = first;
+    const { checkedAt: secondCheckedAt, ...secondCatalog } = second;
+    expect(firstCatalog).toEqual(secondCatalog);
+    expect(new Date(firstCheckedAt).toISOString()).toBe(firstCheckedAt);
+    expect(new Date(secondCheckedAt).toISOString()).toBe(secondCheckedAt);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 

@@ -8,6 +8,7 @@ import type {
   MangaDexReaderInput,
   MangaDexReaderPage,
   MangaDexReaderSession,
+  MangaDexScanlationGroup,
 } from "../shared/contracts";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
@@ -27,6 +28,9 @@ const LATEST_UPDATES_TTL_MS = 5 * 60_000;
 const LATEST_UPDATES_LIMIT = 21;
 const CHAPTER_PAGE_LIMIT = 100;
 const MAX_READER_CHAPTERS = 2_000;
+// Application scheduling policy, not a provider quota. Keep optional library checks
+// from placing all 30 titles ahead of interactive reader requests in the shared gate.
+const AVAILABILITY_CONCURRENCY = 4;
 
 type Fetcher = typeof fetch;
 
@@ -57,6 +61,8 @@ export class MangaDexClient {
   });
   private readonly pageCache = createBoundedCache<MangaDexReaderPage>({
     maxEntries: PAGE_CACHE_MAX_ENTRIES,
+    maxBytes: 32 * 1024 * 1024,
+    sizeOf: (page) => page.imageBytes.byteLength,
     ttlMs: AT_HOME_CACHE_TTL_MS,
   });
   private readonly pageInFlight = new Map<string, Promise<MangaDexReaderPage>>();
@@ -95,7 +101,15 @@ export class MangaDexClient {
         unique.set(item.aniListId, { ...item, title: item.title.trim() });
       }
     }
-    return Promise.all([...unique.values()].map((item) => this.resolveAvailability(item)));
+    const results = await mapSettledWithConcurrency(
+      [...unique.values()],
+      AVAILABILITY_CONCURRENCY,
+      (item) => this.resolveAvailability(item),
+    );
+    return results.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
+    });
   }
 
   public async getLatestUpdates(page: number): Promise<LatestUpdatesPage<LatestMangaUpdate>> {
@@ -150,7 +164,11 @@ export class MangaDexClient {
     if (!Number.isInteger(input.aniListId) || input.aniListId <= 0 || !isSafeTitle(input.title)) {
       throw new Error("A valid AniList ID and manga title are required.");
     }
-    const cacheKey = `${input.aniListId}:${this.translatedLanguage}`;
+    const translatedLanguage = normalizeLanguage(
+      input.translatedLanguage ?? this.translatedLanguage,
+    );
+    const preferredGroupId = isSafeId(input.preferredGroupId) ? input.preferredGroupId : undefined;
+    const cacheKey = `${input.aniListId}:${translatedLanguage}:${preferredGroupId ?? "any"}`;
     const cached = this.chapterCache.get(cacheKey);
     if (cached) return cached;
 
@@ -160,37 +178,41 @@ export class MangaDexClient {
         return this.rememberReader(cacheKey, {
           status: "unmapped",
           aniListId: input.aniListId,
-          translatedLanguage: this.translatedLanguage,
+          translatedLanguage,
+          availableLanguages: [],
+          availableGroups: [],
+          preferredGroupId,
+          archiveStatus: "complete",
           chapters: [],
           message: "MangaDex has no exact AniList mapping for this title.",
         });
       }
-      let chapters = await this.getChapters(mapping.id, this.translatedLanguage, signal);
-      let translatedLanguage: string = this.translatedLanguage;
-      if (!chapters.length) {
-        // Many licensed titles have zero chapters in the configured language (their
-        // scanlations were taken down) while chapters in other languages remain fully
-        // available on MangaDex. Retry across every language before reporting "no
-        // chapters" so the reader doesn't hide chapters that actually exist.
-        chapters = await this.getChapters(mapping.id, undefined, signal);
-        if (chapters.length) translatedLanguage = "multi";
-      }
+      const archive = await this.getChapters(mapping.id, translatedLanguage, signal);
+      const availableGroups = collectScanlationGroups(archive.chapters);
       return this.rememberReader(cacheKey, {
         status: "available",
         aniListId: input.aniListId,
         mangaDexId: mapping.id,
         publicationStatus: mapping.publicationStatus,
         translatedLanguage,
-        chapters,
-        message: chapters.length
+        availableLanguages: mapping.availableLanguages,
+        availableGroups,
+        preferredGroupId,
+        archiveStatus: archive.complete ? "complete" : "partial",
+        chapters: archive.chapters,
+        message: archive.chapters.length
           ? undefined
-          : "No chapters are currently available on MangaDex in any language.",
+          : `No readable chapters are currently available in the chosen language (${translatedLanguage.toLocaleUpperCase()}).`,
       });
     } catch (error) {
       return {
         status: "unavailable",
         aniListId: input.aniListId,
-        translatedLanguage: this.translatedLanguage,
+        translatedLanguage,
+        availableLanguages: [],
+        availableGroups: [],
+        preferredGroupId,
+        archiveStatus: "partial",
         chapters: [],
         message: error instanceof Error ? error.message : "MangaDex is unavailable.",
       };
@@ -279,7 +301,10 @@ export class MangaDexClient {
   private async resolveAvailability(
     item: MangaDexAvailabilityInput,
   ): Promise<MangaDexChapterAvailability> {
-    const cacheKey = `${item.aniListId}:${this.translatedLanguage}`;
+    const translatedLanguage = normalizeLanguage(
+      item.translatedLanguage ?? this.translatedLanguage,
+    );
+    const cacheKey = `${item.aniListId}:${translatedLanguage}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
@@ -290,23 +315,20 @@ export class MangaDexClient {
         return this.remember(cacheKey, {
           aniListId: item.aniListId,
           status: "unmapped",
-          translatedLanguage: this.translatedLanguage,
+          translatedLanguage,
           checkedAt,
           message: "No exact AniList ID mapping was found in MangaDex.",
         });
       }
 
-      // Deliberately no translatedLanguage filter here: whether a manga is "available"
-      // (and what its latest chapter is) should reflect MangaDex as a whole, not just
-      // the configured reading language -- otherwise a title with only, say, Spanish
-      // chapters reports as having none at all.
       const aggregateUrl = new URL(`/manga/${mapping.id}/aggregate`, MANGADEX_API_URL);
+      aggregateUrl.searchParams.append("translatedLanguage[]", translatedLanguage);
       const aggregate = await this.requestJson(aggregateUrl);
       return this.remember(cacheKey, {
         aniListId: item.aniListId,
         mangaDexId: mapping.id,
         status: "available",
-        translatedLanguage: this.translatedLanguage,
+        translatedLanguage,
         latestChapter: findLatestNumericChapter(aggregate),
         checkedAt,
       });
@@ -314,7 +336,7 @@ export class MangaDexClient {
       return {
         aniListId: item.aniListId,
         status: "unavailable",
-        translatedLanguage: this.translatedLanguage,
+        translatedLanguage,
         checkedAt,
         message: error instanceof Error ? error.message : "MangaDex is unavailable.",
       };
@@ -332,23 +354,22 @@ export class MangaDexClient {
     return findExactAniListManga(await this.requestJson(searchUrl, signal), aniListId);
   }
 
-  /**
-   * `translatedLanguage` filters to one language when given; omitting it (the
-   * cross-language fallback in `getReader`) returns chapters in every language
-   * MangaDex has for this title.
-   */
   private async getChapters(
     mangaDexId: string,
-    translatedLanguage?: string,
+    translatedLanguage: string,
     signal?: AbortSignal,
-  ): Promise<MangaDexReaderChapter[]> {
+  ): Promise<{ chapters: MangaDexReaderChapter[]; complete: boolean }> {
     const chapters = new Map<string, MangaDexReaderChapter>();
+    let complete = true;
+    const addBatch = (payload: unknown): void => {
+      for (const chapter of normalizeChapters(payload)) {
+        if (chapter.translatedLanguage === translatedLanguage) chapters.set(chapter.id, chapter);
+      }
+    };
     const fetchBatch = async (offset: number): Promise<unknown> => {
       const chaptersUrl = new URL("/chapter", MANGADEX_API_URL);
       chaptersUrl.searchParams.set("manga", mangaDexId);
-      if (translatedLanguage) {
-        chaptersUrl.searchParams.append("translatedLanguage[]", translatedLanguage);
-      }
+      chaptersUrl.searchParams.append("translatedLanguage[]", translatedLanguage);
       chaptersUrl.searchParams.append("includes[]", "scanlation_group");
       chaptersUrl.searchParams.set("order[chapter]", "asc");
       chaptersUrl.searchParams.set("limit", String(CHAPTER_PAGE_LIMIT));
@@ -357,36 +378,48 @@ export class MangaDexClient {
     };
 
     const firstPayload = await fetchBatch(0);
-    for (const chapter of normalizeChapters(firstPayload)) chapters.set(chapter.id, chapter);
+    addBatch(firstPayload);
     const firstBatchSize = readCollectionSize(firstPayload);
     const reportedTotal = readCollectionTotal(firstPayload);
 
     if (reportedTotal !== undefined) {
       const total = Math.min(reportedTotal, MAX_READER_CHAPTERS);
+      if (reportedTotal > MAX_READER_CHAPTERS) complete = false;
       const offsets: number[] = [];
       for (let offset = firstBatchSize; offset < total; offset += CHAPTER_PAGE_LIMIT) {
         offsets.push(offset);
       }
       const batches = await mapSettledWithConcurrency(offsets, 3, fetchBatch);
       for (const batch of batches) {
-        if (batch.status !== "fulfilled") continue;
+        if (batch.status !== "fulfilled") {
+          complete = false;
+          continue;
+        }
         const payload = batch.value;
-        for (const chapter of normalizeChapters(payload)) chapters.set(chapter.id, chapter);
+        addBatch(payload);
       }
     } else {
       let offset = firstBatchSize;
       let batchSize = firstBatchSize;
       while (batchSize === CHAPTER_PAGE_LIMIT && offset < MAX_READER_CHAPTERS) {
-        const payload = await fetchBatch(offset);
-        for (const chapter of normalizeChapters(payload)) chapters.set(chapter.id, chapter);
+        let payload: unknown;
+        try {
+          payload = await fetchBatch(offset);
+        } catch {
+          complete = false;
+          break;
+        }
+        addBatch(payload);
         batchSize = readCollectionSize(payload);
         offset += batchSize;
       }
+      if (batchSize === CHAPTER_PAGE_LIMIT && offset >= MAX_READER_CHAPTERS) complete = false;
     }
 
-    return [...chapters.values()].sort(
-      (left, right) => (left.number ?? Infinity) - (right.number ?? Infinity),
-    );
+    return {
+      chapters: [...chapters.values()].sort(compareChapterReleases),
+      complete,
+    };
   }
 
   private async getAtHomeNode(chapterId: string): Promise<AtHomeNode> {
@@ -457,6 +490,7 @@ interface AtHomeNode {
 interface ExactMangaDexMapping {
   id: string;
   publicationStatus?: "ongoing" | "completed" | "hiatus" | "cancelled";
+  availableLanguages: string[];
 }
 
 class MangaDexRequestError extends Error {
@@ -481,20 +515,21 @@ export function normalizeChapters(payload: unknown): MangaDexReaderChapter[] {
       }
       const pages = typeof attributes.pages === "number" ? attributes.pages : 0;
       if (!Number.isInteger(pages) || pages <= 0) return undefined;
-      const groupName = findGroupName(item.relationships);
+      const groups = findScanlationGroups(item.relationships);
       return {
         id: item.id,
         number: parseChapterNumber(attributes.chapter),
         volume: typeof attributes.volume === "string" ? attributes.volume : undefined,
         title: typeof attributes.title === "string" ? attributes.title : undefined,
         translatedLanguage: attributes.translatedLanguage,
-        groupName,
+        groups,
+        groupName: groups[0]?.name,
         publishedAt: typeof attributes.publishAt === "string" ? attributes.publishAt : undefined,
         pages,
       };
     })
     .filter((chapter): chapter is MangaDexReaderChapter => Boolean(chapter));
-  return chapters.sort((left, right) => (left.number ?? Infinity) - (right.number ?? Infinity));
+  return chapters.sort(compareChapterReleases);
 }
 
 export function normalizeAtHomeNode(payload: unknown): AtHomeNode {
@@ -670,6 +705,7 @@ function findExactAniListManga(
     matches.set(candidate.id, {
       id: candidate.id,
       publicationStatus: readPublicationStatus(attributes.status),
+      availableLanguages: readAvailableLanguages(attributes.availableTranslatedLanguages),
     });
   }
   return matches.size === 1 ? [...matches.values()][0] : undefined;
@@ -745,13 +781,65 @@ function parseChapterNumber(value: unknown): number | undefined {
   return Number.isFinite(number) ? number : undefined;
 }
 
-function findGroupName(relationships: unknown): string | undefined {
-  if (!Array.isArray(relationships)) return undefined;
+function findScanlationGroups(relationships: unknown): MangaDexScanlationGroup[] {
+  if (!Array.isArray(relationships)) return [];
+  const groups = new Map<string, MangaDexScanlationGroup>();
   for (const relationship of relationships) {
-    if (!isRecord(relationship) || relationship.type !== "scanlation_group") continue;
+    if (
+      !isRecord(relationship) ||
+      relationship.type !== "scanlation_group" ||
+      !isSafeId(relationship.id)
+    ) {
+      continue;
+    }
     if (!isRecord(relationship.attributes)) continue;
     const name = relationship.attributes.name;
-    if (typeof name === "string" && name.trim()) return name.trim();
+    if (typeof name === "string" && name.trim()) {
+      groups.set(relationship.id, { id: relationship.id, name: name.trim() });
+    }
   }
-  return undefined;
+  return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function collectScanlationGroups(
+  chapters: readonly MangaDexReaderChapter[],
+): MangaDexScanlationGroup[] {
+  const groups = new Map<string, MangaDexScanlationGroup>();
+  for (const chapter of chapters) {
+    for (const group of chapter.groups) groups.set(group.id, group);
+  }
+  return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function readAvailableLanguages(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.toLocaleLowerCase())
+        .filter(isLanguage),
+    ),
+  ].sort();
+}
+
+function normalizeLanguage(value: string): string {
+  const language = value.trim().toLocaleLowerCase();
+  if (!isLanguage(language)) throw new Error("Invalid MangaDex translation language.");
+  return language;
+}
+
+function isLanguage(value: string): boolean {
+  return /^[a-z]{2}(?:-[a-z]{2,4})?$/.test(value);
+}
+
+function compareChapterReleases(left: MangaDexReaderChapter, right: MangaDexReaderChapter): number {
+  const number = (left.number ?? Infinity) - (right.number ?? Infinity);
+  if (number) return number;
+  const volume = (left.volume ?? "").localeCompare(right.volume ?? "", undefined, {
+    numeric: true,
+  });
+  if (volume) return volume;
+  const published = (right.publishedAt ?? "").localeCompare(left.publishedAt ?? "");
+  return published || left.id.localeCompare(right.id);
 }

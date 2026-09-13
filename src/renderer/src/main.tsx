@@ -4,6 +4,8 @@ import { App } from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
 import "./styles.css";
 import "./styles/controls.css";
+import "./styles/notifications.css";
+import "./styles/redesign.css";
 
 document.documentElement.dataset.platform = navigator.userAgent.includes("Windows")
   ? "win32"

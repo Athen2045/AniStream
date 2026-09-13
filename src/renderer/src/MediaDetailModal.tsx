@@ -1,15 +1,15 @@
 import { BookOpen, Check, ExternalLink, Play, Plus, Star, UserRound, X } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   lazy,
   Suspense,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import { useAppReducedMotion } from "./useAppReducedMotion";
 import type {
   AniListCatalogMedia,
   AniListMediaDetail,
@@ -24,6 +24,7 @@ import { decodeHtmlEntities } from "../../shared/text";
 import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
 import { createMediaDetailSession } from "./media-detail-session";
 import { motionTransition } from "./motion";
+import { friendlyRemoteError } from "./remote-error";
 
 const AnimeWatchExperience = lazy(() =>
   import("./AnimeWatchExperience").then((module) => ({
@@ -39,33 +40,39 @@ const MangaReaderFullscreen = lazy(() =>
 export function MediaDetailModal({
   media,
   initialAction = "details",
+  initialUnit,
   onClose,
+  onNavigate,
   access,
+  onLibrary,
 }: {
   media: AniListCatalogMedia;
   initialAction?: "details" | "play" | "read";
+  initialUnit?: number;
   onClose: () => void;
+  onNavigate?: (media: AniListCatalogMedia) => void;
   access: ViewerAccess;
+  onLibrary?: (media: AniListCatalogMedia) => Promise<void>;
 }): React.JSX.Element {
   const personalized = hasPersonalizedAccess(access);
-  const detailSession = useMemo(
-    () =>
-      createMediaDetailSession({
-        media,
-        access,
-        bridge: typeof window === "undefined" ? undefined : window.anistream,
-      }),
-    [access, media],
+  const [detailSession] = useState(() =>
+    createMediaDetailSession({
+      media,
+      access,
+      bridge: typeof window === "undefined" ? undefined : window.anistream,
+    }),
   );
+  useEffect(() => detailSession.updateAccess(access), [access, detailSession]);
   const detailSnapshot = useSyncExternalStore(
     detailSession.subscribe,
     detailSession.getSnapshot,
     detailSession.getSnapshot,
   );
   const detail = detailSnapshot.detail;
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = useAppReducedMotion();
   const loading = detailSnapshot.loading;
   const [adding, setAdding] = useState(false);
+  const [libraryError, setLibraryError] = useState<string>();
   const [autoPlayRequest, setAutoPlayRequest] = useState(0);
   const readerSession = detailSnapshot.readerSession;
   const [activeChapter, setActiveChapter] = useState<MangaDexReaderChapter>();
@@ -82,6 +89,7 @@ export function MediaDetailModal({
   const error = detailSnapshot.error;
 
   useEffect(() => {
+    detailSession.activate();
     void detailSession.load();
     return () => detailSession.dispose();
   }, [detailSession]);
@@ -90,11 +98,16 @@ export function MediaDetailModal({
 
   // MAL score cross-reference via AniList's own idMal mapping. Optional enrichment:
   // failures and unconfigured clients resolve to "no score", never an error state.
-  const watchedEpisodes = detail?.listEntry?.progress ?? 0;
-  const initialEpisode =
+  const libraryProgress =
+    access.kind === "member" ? (access.libraryEntries.get(media.id)?.progress ?? 0) : 0;
+  const watchedEpisodes = Math.max(detail?.listEntry?.progress ?? 0, libraryProgress);
+  const progressEpisode =
     resolved.totalProgress && watchedEpisodes >= resolved.totalProgress
       ? resolved.totalProgress
       : Math.max(1, watchedEpisodes + 1);
+  const initialEpisode = resolved.totalProgress
+    ? Math.min(resolved.totalProgress, Math.max(1, initialUnit ?? progressEpisode))
+    : Math.max(1, initialUnit ?? progressEpisode);
 
   useEffect(() => {
     if (initialAction !== "play" || loading || initialPlayHandled.current) return;
@@ -120,8 +133,7 @@ export function MediaDetailModal({
   );
 
   const markChapterRead = useCallback(
-    (chapter: MangaDexReaderChapter): Promise<void> =>
-      detailSession.markChapterRead(chapter).catch(() => undefined),
+    (chapter: MangaDexReaderChapter): Promise<void> => detailSession.markChapterRead(chapter),
     [detailSession],
   );
 
@@ -130,17 +142,33 @@ export function MediaDetailModal({
     if (chapter) setActiveChapter(chapter);
   }, [detailSession]);
 
+  const changeMangaPreferences = useCallback(
+    (translatedLanguage: string, preferredGroupId?: string): void => {
+      void detailSession
+        .setMangaReaderPreferences({
+          aniListId: media.id,
+          translatedLanguage,
+          preferredGroupId,
+        })
+        .catch(() => undefined);
+    },
+    [detailSession, media.id],
+  );
+
   const closeReader = useCallback((): void => {
     setActiveChapter(undefined);
     void detailSession.refreshResume();
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => undefined);
-    }
   }, [detailSession]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === "Escape" && !document.fullscreenElement && !activeChapter) onClose();
+      if (
+        event.key === "Escape" &&
+        !document.fullscreenElement &&
+        !activeChapter &&
+        !document.querySelector(".watch-player-view")
+      )
+        onClose();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
@@ -149,12 +177,27 @@ export function MediaDetailModal({
   // Focus management for the dialog: move focus in on open, and keep Tab from
   // leaking out to the catalog page behind the backdrop while it's open.
   useEffect(() => {
-    closeButtonRef.current?.focus();
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus({ preventScroll: true });
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
+        previousFocus.focus({ preventScroll: true });
+    };
   }, []);
 
   useEffect(() => {
     const trapFocus = (event: KeyboardEvent): void => {
-      if (event.key !== "Tab" || !modalRef.current) return;
+      if (
+        event.key !== "Tab" ||
+        !modalRef.current ||
+        activeChapter ||
+        document.querySelector(".watch-player-view") ||
+        document.querySelector(".entry-editor")
+      )
+        return;
       const focusable = modalRef.current.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       );
@@ -171,7 +214,7 @@ export function MediaDetailModal({
     };
     window.addEventListener("keydown", trapFocus);
     return () => window.removeEventListener("keydown", trapFocus);
-  }, []);
+  }, [activeChapter]);
 
   return (
     <motion.div
@@ -218,7 +261,6 @@ export function MediaDetailModal({
                 className="play-action"
                 type="button"
                 onClick={() => {
-                  void document.documentElement.requestFullscreen().catch(() => undefined);
                   if (resolved.type === "ANIME") {
                     setAutoPlayRequest((request) => request + 1);
                   } else {
@@ -233,21 +275,42 @@ export function MediaDetailModal({
                 )}
                 {resolved.type === "ANIME" ? "Watch" : "Read"}
               </button>
-              {personalized ? (
+              {personalized || onLibrary ? (
                 <button
                   className="round-action detail-add"
                   type="button"
-                  disabled={adding || Boolean(detail?.listEntry)}
-                  aria-label={detail?.listEntry ? "Already in AniList" : "Add to AniList planning"}
+                  disabled={adding}
+                  aria-label={
+                    personalized && access.libraryEntries.has(media.id)
+                      ? "Edit library entry"
+                      : "Add to AniList planning"
+                  }
+                  title={
+                    personalized && access.libraryEntries.has(media.id)
+                      ? "Edit library entry"
+                      : "Add to Planning"
+                  }
                   onClick={() => {
                     setAdding(true);
-                    void detailSession
-                      .addTitle()
-                      .catch(() => undefined)
+                    setLibraryError(undefined);
+                    void (onLibrary ? onLibrary(resolved) : detailSession.addTitle())
+                      .catch((reason: unknown) =>
+                        setLibraryError(
+                          friendlyRemoteError(reason, {
+                            provider: "AniList",
+                            operation: "library changes",
+                            fallback: "Your library could not be updated. Try again.",
+                          }),
+                        ),
+                      )
                       .finally(() => setAdding(false));
                   }}
                 >
-                  {detail?.listEntry ? <Check size={19} /> : <Plus size={19} />}
+                  {personalized && access.libraryEntries.has(media.id) ? (
+                    <Check size={19} />
+                  ) : (
+                    <Plus size={19} />
+                  )}
                 </button>
               ) : null}
             </div>
@@ -298,7 +361,11 @@ export function MediaDetailModal({
               <span className="detail-skeleton-line short" />
             </div>
           ) : null}
-          {error ? <p className="error-banner">{error}</p> : null}
+          {error || libraryError ? (
+            <p className="error-banner" role="alert">
+              {libraryError ?? error}
+            </p>
+          ) : null}
 
           {resolved.type === "ANIME" ? (
             <Suspense fallback={<p className="catalog-loading">Loading episode browser…</p>}>
@@ -307,6 +374,7 @@ export function MediaDetailModal({
                 initialEpisode={initialEpisode}
                 autoPlayRequest={autoPlayRequest}
                 onEpisodeWatched={markEpisodeWatched}
+                onNavigate={onNavigate}
               />
             </Suspense>
           ) : null}
@@ -317,8 +385,10 @@ export function MediaDetailModal({
               currentProgress={detail?.listEntry?.progress ?? 0}
               resume={mangaResume}
               loading={loadingReader}
+              loadError={detailSnapshot.error}
+              onPreferenceChange={changeMangaPreferences}
+              onRetry={() => void detailSession.retryReader()}
               onRead={(chapter) => {
-                void document.documentElement.requestFullscreen().catch(() => undefined);
                 setActiveChapter(chapter);
               }}
             />
@@ -433,11 +503,18 @@ export function MediaDetailModal({
               <h3>More from this story</h3>
               <div className="detail-mini-grid">
                 {detail.relations.slice(0, 8).map((relation) => (
-                  <div key={`${relation.relationType}-${relation.media.type}-${relation.media.id}`}>
+                  <button
+                    type="button"
+                    className="detail-relation-action"
+                    disabled={!onNavigate}
+                    key={`${relation.relationType}-${relation.media.type}-${relation.media.id}`}
+                    aria-label={`Open ${relation.media.title} · ${formatLabel(relation.relationType)}`}
+                    onClick={() => onNavigate?.(relation.media)}
+                  >
                     <CoverImage src={relation.media.coverUrl} title={relation.media.title} />
                     <strong>{relation.media.title}</strong>
                     <span>{formatLabel(relation.relationType)}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </section>
@@ -479,7 +556,8 @@ export function MediaDetailModal({
         <AnimatePresence>
           {activeChapter && readerSession?.status === "available" ? (
             <MangaReaderFullscreen
-              key={activeChapter.id}
+              key={resolved.id}
+              media={media}
               aniListId={resolved.id}
               title={resolved.title}
               session={readerSession}
@@ -503,16 +581,25 @@ function MangaChapterBrowser({
   currentProgress,
   resume,
   loading,
+  loadError,
+  onPreferenceChange,
+  onRetry,
   onRead,
 }: {
   session?: MangaDexReaderSession;
   currentProgress: number;
   resume?: MangaReadingResume;
   loading: boolean;
+  loadError?: string;
+  onPreferenceChange: (translatedLanguage: string, preferredGroupId?: string) => void;
+  onRetry: () => void;
   onRead: (chapter: MangaDexReaderChapter) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [descending, setDescending] = useState(true);
+  const languages = session
+    ? [...new Set([session.translatedLanguage, ...session.availableLanguages])]
+    : ["en"];
   const chapters = [...(session?.chapters ?? [])]
     .filter((chapter) => {
       const normalized = query.trim().toLocaleLowerCase();
@@ -530,14 +617,7 @@ function MangaChapterBrowser({
 
   return (
     <section className="manga-chapter-browser">
-      <div className="chapter-browser-tabs">
-        <button type="button" className="active">
-          Chapters
-        </button>
-        <button type="button" disabled>
-          Volumes
-        </button>
-      </div>
+      <h3 className="chapter-browser-title">Chapters</h3>
       <div className="chapter-browser-toolbar">
         <input
           type="search"
@@ -545,20 +625,95 @@ function MangaChapterBrowser({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <span>LANG · {session?.translatedLanguage?.toLocaleUpperCase() ?? "EN"}</span>
-        <span>TYPE · All</span>
+        <label>
+          <span>Language</span>
+          <select
+            aria-label="Chapter language"
+            value={session?.translatedLanguage ?? "en"}
+            disabled={!session || loading}
+            onChange={(event) => onPreferenceChange(event.target.value)}
+          >
+            {languages.map((language) => (
+              <option key={language} value={language}>
+                {language.toLocaleUpperCase()}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Group</span>
+          <select
+            aria-label="Preferred scanlation group"
+            value={session?.preferredGroupId ?? ""}
+            disabled={!session || loading || session.availableGroups.length === 0}
+            onChange={(event) =>
+              onPreferenceChange(
+                session?.translatedLanguage ?? "en",
+                event.target.value || undefined,
+              )
+            }
+          >
+            <option value="">Any group</option>
+            {session?.availableGroups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="button" onClick={() => setDescending((value) => !value)}>
           Chapter {descending ? "↓" : "↑"}
         </button>
       </div>
       {session?.status === "unavailable" || session?.status === "unmapped" ? (
+        <div className="provider-note provider-note--action" role="status">
+          <span>
+            {session.status === "unmapped"
+              ? "This title is not linked to MangaDex yet, so AniStream cannot open its chapters."
+              : "MangaDex could not load chapters for this title. Try again shortly."}
+          </span>
+          <button type="button" onClick={onRetry} disabled={loading}>
+            Retry chapters
+          </button>
+        </div>
+      ) : null}
+      {session?.status === "available" && session.message ? (
         <p className="provider-note">{session.message}</p>
       ) : null}
-      {!session || loading ? (
+      {session?.archiveStatus === "partial" && session.chapters.length ? (
+        <p className="provider-note">Some chapter archive pages could not be loaded.</p>
+      ) : null}
+      {loading ? (
         <div className="chapter-browser-list" aria-hidden="true">
           {Array.from({ length: 6 }, (_, index) => (
             <span className="chapter-row-skeleton" key={`chapter-skeleton-${index}`} />
           ))}
+        </div>
+      ) : !session ? (
+        <div className="chapter-browser-empty" role="alert">
+          <strong>Chapters could not be loaded.</strong>
+          <span>{loadError ?? "MangaDex did not return a chapter list. Try again shortly."}</span>
+          <button type="button" onClick={onRetry}>
+            Retry chapters
+          </button>
+        </div>
+      ) : chapters.length === 0 ? (
+        <div className="chapter-browser-empty" role="status">
+          <strong>
+            {session.chapters.length === 0
+              ? `No readable chapters are available in ${session.translatedLanguage.toLocaleUpperCase()} yet.`
+              : "No chapters match this search."}
+          </strong>
+          <span>
+            {session.chapters.length === 0
+              ? "Choose another listed language or retry the chapter feed."
+              : "Clear the chapter search to see the full list."}
+          </span>
+          {session.chapters.length === 0 ? (
+            <button type="button" onClick={onRetry}>
+              Retry chapters
+            </button>
+          ) : null}
         </div>
       ) : (
         <div className="chapter-browser-list">
@@ -574,6 +729,9 @@ function MangaChapterBrowser({
                 <strong>
                   Ch. {chapter.number ?? "?"}
                   {chapter.title ? <small> · {chapter.title}</small> : null}
+                  {chapter.groups.length ? (
+                    <small> · {chapter.groups.map((group) => group.name).join(" + ")}</small>
+                  ) : null}
                 </strong>
                 {completed ? <Check size={15} className="chapter-complete" /> : null}
                 <span>{relativeDate(chapter.publishedAt)}</span>

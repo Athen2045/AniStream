@@ -5,6 +5,7 @@ import type {
   AnimePlaybackInput,
   AnimePlaybackResult,
   AnimeProviderEpisode,
+  ProviderReadiness,
 } from "../shared/contracts";
 import { cleanDisplayText } from "../shared/text";
 import { createBoundedCache } from "./anilist/cache";
@@ -95,6 +96,49 @@ export class AnikotoClient {
     }
   }
 
+  public async checkReadiness(): Promise<ProviderReadiness> {
+    const checkedAt = new Date().toISOString();
+    try {
+      const payload = await this.getRecentIndex();
+      if (!isRecord(payload) || payload.ok !== true || !Array.isArray(payload.data)) {
+        // A Retry must be able to perform a fresh check instead of retaining a malformed response
+        // for the full recent-index TTL.
+        this.recent.delete("recent");
+        return {
+          provider: "anikoto",
+          status: "unavailable",
+          checkedAt,
+          message: "Anikoto returned an unexpected readiness response.",
+        };
+      }
+      return { provider: "anikoto", status: "ready", checkedAt };
+    } catch (reason) {
+      const detail = messageFrom(reason, "Anikoto is unavailable.");
+      if (/rate limit|429|cooldown/i.test(detail)) {
+        return {
+          provider: "anikoto",
+          status: "rate-limited",
+          checkedAt,
+          message: "Anikoto is busy right now. Please try again after its cooldown.",
+        };
+      }
+      if (/failed to fetch|fetch failed|network|offline|enotfound|econn|dns|socket/i.test(detail)) {
+        return {
+          provider: "anikoto",
+          status: "offline",
+          checkedAt,
+          message: "AniStream could not reach the network while checking anime playback.",
+        };
+      }
+      return {
+        provider: "anikoto",
+        status: "unavailable",
+        checkedAt,
+        message: "Anikoto playback availability could not be confirmed.",
+      };
+    }
+  }
+
   public async getPlayback(input: AnimePlaybackInput): Promise<AnimePlaybackResult> {
     validatePlaybackInput(input);
 
@@ -112,6 +156,10 @@ export class AnikotoClient {
   }
 
   private async findRecentSeries(aniListId: number): Promise<RecentSeries | undefined> {
+    return findExactRecentAniListSeries(await this.getRecentIndex(), aniListId);
+  }
+
+  private async getRecentIndex(): Promise<unknown> {
     const cacheKey = "recent";
     let recent = this.recent.get(cacheKey);
     if (!recent) {
@@ -121,7 +169,7 @@ export class AnikotoClient {
       recent = await this.requestJson(url);
       this.recent.set(cacheKey, recent);
     }
-    return findExactRecentAniListSeries(recent, aniListId);
+    return recent;
   }
 
   private async getSeries(seriesId: number): Promise<unknown> {
