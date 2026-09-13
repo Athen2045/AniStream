@@ -1,4 +1,7 @@
 import type { IpcInvokeArgs, IpcInvokeChannel } from "../shared/ipc";
+import { parseReaderSettings } from "../shared/reader-settings";
+import { validReleaseAcknowledgement } from "./personal-repository";
+import { normalizeActivityInput } from "../shared/activity";
 import type {
   AniListEntryStatus,
   AniListMediaType,
@@ -8,7 +11,9 @@ import type {
   MangaDexAvailabilityInput,
   MangaDexPageInput,
   MangaDexReaderInput,
+  KitsuHeroArtworkInput,
   SaveMangaReadingResumeInput,
+  SaveMangaReaderPreferencesInput,
   SavePlaybackResumeInput,
   UpdateAniListEntryInput,
 } from "../shared/contracts";
@@ -16,6 +21,7 @@ import {
   isValidMangaReadingResumeInput,
   isValidPlaybackResumeInput,
 } from "../shared/resume-validation";
+import type { RecommendationEvent } from "../shared/recommendations";
 
 export type IpcArgValidator<Channel extends IpcInvokeChannel> = (
   args: unknown[],
@@ -56,6 +62,19 @@ function asRequestId(value: unknown): string {
 
 function asOptionalString(value: unknown): string | undefined {
   return value === undefined ? undefined : asString(value);
+}
+
+function asMangaLanguage(value: unknown): string {
+  const language = asString(value).trim().toLocaleLowerCase();
+  if (!/^[a-z]{2}(?:-[a-z]{2,4})?$/.test(language)) fail();
+  return language;
+}
+
+function asOptionalSafeId(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  const id = asString(value);
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) fail();
+  return id;
 }
 
 function asPositiveInt(value: unknown): number {
@@ -145,6 +164,17 @@ function browseAniListInput(value: unknown): BrowseAniListInput {
   };
 }
 
+function kitsuHeroArtworkInput(value: unknown): KitsuHeroArtworkInput {
+  const input = asRecord(value);
+  const title = asString(input.title).trim();
+  if (title.length === 0 || title.length > 200) fail();
+  return {
+    aniListId: asPositiveInt(input.aniListId),
+    type: asMediaType(input.type),
+    title,
+  };
+}
+
 function updateAniListEntryInput(value: unknown): UpdateAniListEntryInput {
   const input = asRecord(value);
   return {
@@ -185,13 +215,37 @@ function mangaDexAvailabilityInput(value: unknown): MangaDexAvailabilityInput[] 
   if (!Array.isArray(value)) fail();
   return value.map((item) => {
     const input = asRecord(item);
-    return { aniListId: asPositiveInt(input.aniListId), title: asString(input.title) };
+    return {
+      aniListId: asPositiveInt(input.aniListId),
+      title: asString(input.title),
+      translatedLanguage:
+        input.translatedLanguage === undefined
+          ? undefined
+          : asMangaLanguage(input.translatedLanguage),
+    };
   });
 }
 
 function mangaDexReaderInput(value: unknown): MangaDexReaderInput {
   const input = asRecord(value);
-  return { aniListId: asPositiveInt(input.aniListId), title: asString(input.title) };
+  return {
+    aniListId: asPositiveInt(input.aniListId),
+    title: asString(input.title),
+    translatedLanguage:
+      input.translatedLanguage === undefined
+        ? undefined
+        : asMangaLanguage(input.translatedLanguage),
+    preferredGroupId: asOptionalSafeId(input.preferredGroupId),
+  };
+}
+
+function saveMangaReaderPreferencesInput(value: unknown): SaveMangaReaderPreferencesInput {
+  const input = asRecord(value);
+  return {
+    aniListId: asPositiveInt(input.aniListId),
+    translatedLanguage: asMangaLanguage(input.translatedLanguage),
+    preferredGroupId: asOptionalSafeId(input.preferredGroupId),
+  };
 }
 
 function mangaDexPageInput(value: unknown): MangaDexPageInput {
@@ -232,8 +286,87 @@ function noArgs(value: unknown[]): [] {
   return [];
 }
 
+function recommendationEvent(value: unknown): RecommendationEvent {
+  const input = asRecord(value);
+  const eventType = asString(input.eventType);
+  const source = asString(input.source);
+  const validEventTypes = new Set([
+    "explored",
+    "searched-and-opened",
+    "started",
+    "progressed",
+    "completed",
+    "rated",
+    "skipped",
+    "dismissed",
+    "saved",
+  ]);
+  const validSources = new Set(["detail", "search", "player", "reader", "profile"]);
+  if (!validEventTypes.has(eventType) || !validSources.has(source)) fail();
+  return {
+    anilistId: asPositiveInt(input.anilistId),
+    mediaType: asMediaType(input.mediaType),
+    occurredAt: asPositiveInt(input.occurredAt),
+    eventType: eventType as RecommendationEvent["eventType"],
+    source: source as RecommendationEvent["source"],
+    value: asOptionalNonNegativeNumber(input.value),
+  };
+}
+
 export const ipcArgValidators: IpcArgValidatorMap = {
+  "backup:export": noArgs,
+  "backup:prepare": noArgs,
+  "backup:restore": (value) => {
+    const [token] = argsOfLength(value, 1);
+    const parsed = asString(token);
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(parsed)) fail();
+    return [parsed];
+  },
+  "backup:cancel": (value) => {
+    const [token] = argsOfLength(value, 1);
+    const parsed = asString(token);
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(parsed)) fail();
+    return [parsed];
+  },
+  "reader:settings": (value) => {
+    argsOfLength(value, 0);
+    return [];
+  },
+  "reader:save-settings": (value) => {
+    argsOfLength(value, 1);
+    return [parseReaderSettings(value[0])];
+  },
+  "personal:anime-updates": (value) => {
+    const [ids] = argsOfLength(value, 1);
+    if (!Array.isArray(ids) || ids.length > 24) fail();
+    const parsed = ids.map(asPositiveInt);
+    if (parsed.some((id) => id > 2147483647)) fail();
+    return [parsed];
+  },
+  "personal:acknowledgements": noArgs,
+  "personal:acknowledge": (value) => {
+    const [raw] = argsOfLength(value, 1);
+    const record = asRecord(raw);
+    const input = { key: asString(record.key), unit: asNonNegativeNumber(record.unit) };
+    if (!validReleaseAcknowledgement(input)) fail();
+    return [input];
+  },
+  "activity:record": (args) => {
+    argsOfLength(args, 1);
+    return [normalizeActivityInput(args[0])];
+  },
+  "activity:list": (args) => {
+    argsOfLength(args, 0);
+    return [];
+  },
+  "activity:retry": (args) => {
+    argsOfLength(args, 0);
+    return [];
+  },
   "app:get-info": noArgs,
+  "anime:provider-readiness": noArgs,
+  "app:update-status": noArgs,
+  "app:check-updates": noArgs,
   "anilist:auth-state": noArgs,
   "anilist:login": noArgs,
   "anilist:cancel-login": noArgs,
@@ -288,6 +421,10 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     const [type] = argsOfLength(value, 1);
     return [asMediaType(type)];
   },
+  "kitsu:hero-art": (value) => {
+    const [input] = argsOfLength(value, 1);
+    return [kitsuHeroArtworkInput(input)];
+  },
   "mangadex:latest": (value) => {
     const [page] = argsOfLength(value, 1);
     return [asPositiveInt(page)];
@@ -299,6 +436,10 @@ export const ipcArgValidators: IpcArgValidatorMap = {
   "manga:title-snapshot": (value) => {
     const [input, requestId] = argsOfLength(value, 2);
     return [mangaDexReaderInput(input), asRequestId(requestId)];
+  },
+  "manga:save-reader-preferences": (value) => {
+    const [input] = argsOfLength(value, 1);
+    return [saveMangaReaderPreferencesInput(input)];
   },
   "mangadex:page": (value) => {
     const [input] = argsOfLength(value, 1);
@@ -327,5 +468,40 @@ export const ipcArgValidators: IpcArgValidatorMap = {
   "manga:clear-reading-resume": (value) => {
     const [aniListId] = argsOfLength(value, 1);
     return [asPositiveInt(aniListId)];
+  },
+  "recommendations:get-for-you-preview": noArgs,
+  "discovery:for-you": (value) => {
+    const [type] = argsOfLength(value, 1);
+    return [asMediaType(type)];
+  },
+  "discovery:feedback": (value) => {
+    const [raw] = argsOfLength(value, 1);
+    const input = asRecord(raw);
+    const requestId = asString(input.requestId);
+    if (!/^[a-zA-Z0-9-]{1,120}$/.test(requestId)) fail();
+    if (input.action !== "dismiss" && input.action !== "undo" && input.action !== "explore") fail();
+    return [
+      {
+        requestId,
+        anilistId: asPositiveInt(input.anilistId),
+        action: input.action as "dismiss" | "undo" | "explore",
+      },
+    ];
+  },
+  "discovery:impressions": (value) => {
+    const [raw] = argsOfLength(value, 1);
+    const input = asRecord(raw);
+    const requestId = asString(input.requestId);
+    if (
+      !/^[a-zA-Z0-9-]{1,120}$/.test(requestId) ||
+      !Array.isArray(input.anilistIds) ||
+      input.anilistIds.length > 10
+    )
+      fail();
+    return [{ requestId, anilistIds: (input.anilistIds as unknown[]).map(asPositiveInt) }];
+  },
+  "recommendations:record-interaction": (value) => {
+    const [event] = argsOfLength(value, 1);
+    return [recommendationEvent(event)];
   },
 };

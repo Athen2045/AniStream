@@ -1,7 +1,10 @@
 import { ShieldCheck } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import type { AniListAuthState } from "../../shared/contracts";
 import { motionTransition } from "./motion";
+import { LocalDataSettings } from "./LocalDataSettings";
+import { AppUpdates } from "./AppUpdates";
+import { useAppReducedMotion } from "./useAppReducedMotion";
 
 export function ProfileConnectView({
   auth,
@@ -16,7 +19,7 @@ export function ProfileConnectView({
   onConnect: () => Promise<void>;
   onCancel: () => Promise<void>;
 }): React.JSX.Element {
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = useAppReducedMotion();
   const authorizing = auth.status === "authorizing";
   const connectionState = restoring ? "restoring" : authorizing ? "authorizing" : "ready";
   const transition = motionTransition(reducedMotion, "emphasis");
@@ -51,7 +54,9 @@ export function ProfileConnectView({
           A
         </div>
         <p className="profile-connect-label">AniList connection</p>
-        <h1 id="profile-connect-title">Make AniStream yours</h1>
+        <h1 id="profile-connect-title" data-profile-heading tabIndex={-1}>
+          Make AniStream yours
+        </h1>
 
         <AnimatePresence mode="wait" initial={false}>
           <motion.p
@@ -115,6 +120,8 @@ export function ProfileConnectView({
           </p>
         ) : null}
       </motion.article>
+      <LocalDataSettings />
+      <AppUpdates />
     </section>
   );
 }

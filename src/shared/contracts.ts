@@ -1,8 +1,22 @@
+import type { RecommendationEvent, RecommendationResult } from "./recommendations";
+import type { ReaderSettings } from "./reader-settings";
+import type { RestorePreview, RestoreSummary } from "./local-backup";
+import type { PersonalAiringUpdate, ReleaseAcknowledgement } from "./personal-library";
+import type { LocalActivity, RecordActivityInput } from "./activity";
+import type { DiscoveryFeed, DiscoveryFeedback, DiscoveryImpressionInput } from "./discovery";
+
 export interface AppInfo {
   version: string;
   platform: string;
   databaseReady: boolean;
   videoSourceStatus: "configured" | "unavailable";
+}
+
+export interface ProviderReadiness {
+  provider: "anikoto";
+  status: "ready" | "disabled" | "offline" | "rate-limited" | "unavailable";
+  checkedAt: string;
+  message?: string;
 }
 
 export type AniListMediaType = "ANIME" | "MANGA";
@@ -65,6 +79,19 @@ export interface AniListPageInfo {
 export interface AniListCatalogPage {
   pageInfo: AniListPageInfo;
   items: AniListCatalogMedia[];
+}
+
+export interface KitsuHeroArtworkInput {
+  aniListId: number;
+  type: AniListMediaType;
+  title: string;
+}
+
+export interface KitsuHeroArtwork {
+  source: "kitsu";
+  imageUrl: string;
+  width?: number;
+  height?: number;
 }
 
 export interface BrowseAniListInput {
@@ -156,6 +183,7 @@ export interface LatestMangaUpdate {
 export interface MangaDexAvailabilityInput {
   aniListId: number;
   title: string;
+  translatedLanguage?: string;
 }
 
 export interface MangaDexChapterAvailability {
@@ -171,6 +199,13 @@ export interface MangaDexChapterAvailability {
 export interface MangaDexReaderInput {
   aniListId: number;
   title: string;
+  translatedLanguage?: string;
+  preferredGroupId?: string;
+}
+
+export interface MangaDexScanlationGroup {
+  id: string;
+  name: string;
 }
 
 export interface MangaDexReaderChapter {
@@ -179,6 +214,7 @@ export interface MangaDexReaderChapter {
   volume?: string;
   title?: string;
   translatedLanguage: string;
+  groups: MangaDexScanlationGroup[];
   groupName?: string;
   publishedAt?: string;
   pages: number;
@@ -190,8 +226,25 @@ export interface MangaDexReaderSession {
   mangaDexId?: string;
   publicationStatus?: "ongoing" | "completed" | "hiatus" | "cancelled";
   translatedLanguage: string;
+  availableLanguages: string[];
+  availableGroups: MangaDexScanlationGroup[];
+  preferredGroupId?: string;
+  archiveStatus: "complete" | "partial";
   chapters: MangaDexReaderChapter[];
   message?: string;
+}
+
+export interface MangaReaderPreferences {
+  aniListId: number;
+  translatedLanguage: string;
+  preferredGroupId?: string;
+  updatedAt: string;
+}
+
+export interface SaveMangaReaderPreferencesInput {
+  aniListId: number;
+  translatedLanguage: string;
+  preferredGroupId?: string;
 }
 
 export interface MangaDexPageInput {
@@ -243,6 +296,7 @@ export interface MangaTitleSnapshot {
   enrichment?: MangaEnrichment;
   reader?: MangaDexReaderSession;
   resume?: MangaReadingResume;
+  preferences?: MangaReaderPreferences;
   issues: MangaTitleIssue[];
 }
 
@@ -408,7 +462,29 @@ export interface UpdateAniListEntryInput {
 }
 
 export interface AniStreamBridge {
+  getUpdateStatus(): Promise<import("./update-check").UpdateStatus>;
+  checkForUpdates(): Promise<import("./update-check").UpdateStatus>;
+  onUpdateStatusChanged(
+    callback: (state: import("./update-check").UpdateStatus) => void,
+  ): () => void;
+  getForYou(type: AniListMediaType): Promise<DiscoveryFeed>;
+  getReaderSettings(): Promise<ReaderSettings>;
+  exportLocalBackup(): Promise<boolean>;
+  prepareLocalRestore(): Promise<RestorePreview | null>;
+  restoreLocalBackup(token: string): Promise<RestoreSummary>;
+  cancelLocalRestore(token: string): Promise<void>;
+  saveReaderSettings(input: ReaderSettings): Promise<ReaderSettings>;
+  recordDiscoveryFeedback(input: DiscoveryFeedback): Promise<void>;
+  recordDiscoveryImpressions(input: DiscoveryImpressionInput): Promise<void>;
+  onActivityChanged(callback: () => void): () => void;
+  getPersonalAnimeUpdates(mediaIds: number[]): Promise<PersonalAiringUpdate[]>;
+  getReleaseAcknowledgements(): Promise<ReleaseAcknowledgement[]>;
+  acknowledgeRelease(input: ReleaseAcknowledgement): Promise<void>;
+  recordActivity(input: RecordActivityInput): Promise<LocalActivity>;
+  getLocalActivity(): Promise<LocalActivity[]>;
+  retryActivitySync(): Promise<LocalActivity[]>;
   getAppInfo(): Promise<AppInfo>;
+  getAnimeProviderReadiness(): Promise<ProviderReadiness>;
   getAniListAuthState(): Promise<AniListAuthState>;
   startAniListLogin(): Promise<void>;
   cancelAniListLogin(): Promise<void>;
@@ -426,10 +502,14 @@ export interface AniStreamBridge {
   getLatestMangaUpdates(page: number): Promise<LatestUpdatesPage<LatestMangaUpdate>>;
   getMalScore(type: AniListMediaType, malId: number): Promise<MalScore | undefined>;
   getMalTrendingFallback(type: AniListMediaType): Promise<MalRankingItem[]>;
+  getKitsuHeroArtwork(input: KitsuHeroArtworkInput): Promise<KitsuHeroArtwork | undefined>;
   getMangaDexAvailability(
     media: MangaDexAvailabilityInput[],
   ): Promise<MangaDexChapterAvailability[]>;
   getMangaTitleSnapshot(input: MangaDexReaderInput, requestId: string): Promise<MangaTitleSnapshot>;
+  saveMangaReaderPreferences(
+    input: SaveMangaReaderPreferencesInput,
+  ): Promise<MangaReaderPreferences>;
   cancelRequest(requestId: string): Promise<void>;
   getMangaDexPage(input: MangaDexPageInput): Promise<MangaDexReaderPage>;
   getAnimePlayback(input: AnimePlaybackInput): Promise<AnimePlaybackResult>;
@@ -439,5 +519,7 @@ export interface AniStreamBridge {
   getMangaReadingResume(aniListId: number): Promise<MangaReadingResume | undefined>;
   saveMangaReadingResume(input: SaveMangaReadingResumeInput): Promise<void>;
   clearMangaReadingResume(aniListId: number): Promise<void>;
+  getForYouPreview(): Promise<RecommendationResult[]>;
+  recordRecommendationInteraction(event: RecommendationEvent): Promise<void>;
   onAniListAuthChanged(callback: (state: AniListAuthState) => void): () => void;
 }

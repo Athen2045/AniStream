@@ -1,7 +1,13 @@
 import type { SaveMangaReadingResumeInput, SavePlaybackResumeInput } from "./contracts";
 
-export function isValidPlaybackResumeInput(input: SavePlaybackResumeInput): boolean {
+export function isValidPlaybackResumeInput(value: unknown): value is SavePlaybackResumeInput {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const input = value as Record<string, unknown>;
   return (
+    typeof input.aniListId === "number" &&
+    typeof input.episode === "number" &&
+    typeof input.positionSeconds === "number" &&
+    typeof input.durationSeconds === "number" &&
     Number.isInteger(input.aniListId) &&
     input.aniListId > 0 &&
     Number.isInteger(input.episode) &&
@@ -14,13 +20,22 @@ export function isValidPlaybackResumeInput(input: SavePlaybackResumeInput): bool
   );
 }
 
-export function isValidMangaReadingResumeInput(input: SaveMangaReadingResumeInput): boolean {
+export function isValidMangaReadingResumeInput(
+  value: unknown,
+): value is SaveMangaReadingResumeInput {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const input = value as Record<string, unknown>;
   return (
+    typeof input.aniListId === "number" &&
+    typeof input.chapterId === "string" &&
+    typeof input.progress === "number" &&
     Number.isInteger(input.aniListId) &&
     input.aniListId > 0 &&
     /^[A-Za-z0-9_-]{1,160}$/.test(input.chapterId) &&
     (input.chapterNumber === undefined ||
-      (Number.isFinite(input.chapterNumber) && input.chapterNumber >= 0)) &&
+      (typeof input.chapterNumber === "number" &&
+        Number.isFinite(input.chapterNumber) &&
+        input.chapterNumber >= 0)) &&
     Number.isFinite(input.progress) &&
     input.progress >= 0 &&
     input.progress <= 1

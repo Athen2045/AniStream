@@ -12,6 +12,17 @@ export function registerAnimeDomain(
   trustedRendererOrigin: string,
   { anikoto, mal }: AnimeDomainDeps,
 ): void {
+  registerTrustedIpcHandler(trustedRendererOrigin, "anime:provider-readiness", async () => {
+    if (!anikoto) {
+      return {
+        provider: "anikoto",
+        status: "disabled",
+        checkedAt: new Date().toISOString(),
+        message: "Anime playback is disabled in AniStream's local configuration.",
+      };
+    }
+    return anikoto.checkReadiness();
+  });
   registerTrustedIpcHandler(
     trustedRendererOrigin,
     "anime:episode-catalog",

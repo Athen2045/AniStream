@@ -1,21 +1,18 @@
 import type { AniListClient } from "../anilist";
 import type { AppDatabase } from "../database";
 import { registerTrustedIpcHandler } from "../ipc";
-import type { AniListAuthState } from "../../shared/contracts";
 
 export interface TrackerDomainDeps {
   aniList: AniListClient | undefined;
   database: AppDatabase | undefined;
-  authRestored: Promise<AniListAuthState>;
 }
 
 /** AniList auth, profile, dashboard, and list-entry mutations. */
 export function registerTrackerDomain(
   trustedRendererOrigin: string,
-  { aniList, database, authRestored }: TrackerDomainDeps,
+  { aniList, database }: TrackerDomainDeps,
 ): void {
   registerTrustedIpcHandler(trustedRendererOrigin, "anilist:auth-state", async () => {
-    await authRestored;
     return aniList?.getState() ?? { status: "signed-out" };
   });
   registerTrustedIpcHandler(trustedRendererOrigin, "anilist:login", async () => {

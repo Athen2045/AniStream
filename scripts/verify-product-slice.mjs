@@ -21,6 +21,8 @@ const [
   trackerDomain,
   ipcValidation,
   catalogData,
+  localActivity,
+  activityRepository,
 ] = await Promise.all([
   readFile("src/main/index.ts", "utf8"),
   readFile("src/main/anilist/client.ts", "utf8"),
@@ -42,6 +44,8 @@ const [
   readFile("src/main/domains/tracker.ts", "utf8"),
   readFile("src/main/ipc-validation.ts", "utf8"),
   readFile("src/renderer/src/catalog-data.ts", "utf8"),
+  readFile("src/renderer/src/local-activity.ts", "utf8"),
+  readFile("src/main/activity/repository.ts", "utf8"),
 ]);
 const aniList = aniListClient + aniListQueries;
 const catalogSurface = catalog + catalogData;
@@ -108,8 +112,8 @@ for (const [name, source, fragments] of [
     animeWatch + animePlaybackSession,
     [
       "AnikotoEmbedPlayer",
-      "requestFullscreen",
-      '"fullscreenchange"',
+      "useMediaFullscreen",
+      "allowFullScreen",
       "parseMegaPlayEvent",
       "AnimatePresence",
       "watch-view-transition",
@@ -126,7 +130,7 @@ for (const [name, source, fragments] of [
     [
       "useScroll",
       "scrollYProgress",
-      "saveMangaReadingResume",
+      "saveMangaActivity",
       '"fullscreenchange"',
       "Previous chapter",
       "Next chapter",
@@ -136,6 +140,12 @@ for (const [name, source, fragments] of [
     "manga resume database",
     database,
     ["manga_reading_resume", "saveMangaReadingResume", "getMangaReadingResume"],
+  ],
+  ["local activity bridge", localActivity, ["recordActivity", "checkpoint: input"]],
+  [
+    "atomic progress repository",
+    activityRepository,
+    ["db.transaction", "manga_reading_resume", "local_activity_v1"],
   ],
 ]) {
   for (const fragment of fragments) {

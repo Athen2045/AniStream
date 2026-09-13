@@ -86,6 +86,28 @@ describe("createRequestGate", () => {
     }
   });
 
+  it("spaces request starts to avoid an undocumented provider burst limiter", async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createRequestGate({ requestsPerMinute: 25, minIntervalMs: 350 });
+      const starts: number[] = [];
+      const runs = [
+        gate.run(undefined, async () => starts.push(Date.now())),
+        gate.run(undefined, async () => starts.push(Date.now())),
+      ];
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(starts).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(349);
+      expect(starts).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await Promise.all(runs);
+      expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(350);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("pauses every future request after reportRateLimited until the duration elapses", async () => {
     vi.useFakeTimers();
     try {

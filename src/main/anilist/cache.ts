@@ -5,14 +5,16 @@ export interface BoundedCache<T> {
   clear(): void;
 }
 
-export interface BoundedCacheOptions {
+export interface BoundedCacheOptions<T = unknown> {
   maxEntries: number;
   ttlMs: number;
+  maxBytes?: number;
+  sizeOf?: (value: T) => number;
 }
 
 /** A small LRU-ish, TTL-bounded cache for view data (see API.md client strategy). */
-export function createBoundedCache<T>(options: BoundedCacheOptions): BoundedCache<T> {
-  const store = new Map<string, { value: T; expiresAt: number }>();
+export function createBoundedCache<T>(options: BoundedCacheOptions<T>): BoundedCache<T> {
+  const store = new Map<string, { value: T; expiresAt: number; bytes: number }>();
 
   return {
     get(key) {
@@ -28,10 +30,18 @@ export function createBoundedCache<T>(options: BoundedCacheOptions): BoundedCach
     },
     set(key, value) {
       store.delete(key);
-      store.set(key, { value, expiresAt: Date.now() + options.ttlMs });
-      if (store.size > options.maxEntries) {
+      const bytes = options.sizeOf?.(value) ?? 0;
+      const maxBytes = options.maxBytes ?? Infinity;
+      if (!Number.isFinite(bytes) || bytes < 0 || bytes > maxBytes) return;
+      const now = Date.now();
+      for (const [key, entry] of store) if (entry.expiresAt <= now) store.delete(key);
+      store.set(key, { value, expiresAt: now + options.ttlMs, bytes });
+      let retained = [...store.values()].reduce((total, entry) => total + entry.bytes, 0);
+      while (store.size > options.maxEntries || retained > maxBytes) {
         const oldestKey = store.keys().next().value;
-        if (oldestKey !== undefined) store.delete(oldestKey);
+        if (oldestKey === undefined) break;
+        retained -= store.get(oldestKey)!.bytes;
+        store.delete(oldestKey);
       }
     },
     delete(key) {

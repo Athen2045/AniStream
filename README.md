@@ -8,17 +8,18 @@ An AniList account is optional.
 
 <img width="1920" height="1140" alt="AniStream-home" src="https://github.com/user-attachments/assets/b112ed9d-dbca-40c8-8b12-b65c484a8f14" />
 
-> **Current release:** v0.1.3 for Apple Silicon Macs running macOS 12 or newer, with an unsigned
-> Windows x64 installer built by GitHub Actions. Android remains under development.
+> **Current release:** v0.1.4. Official unsigned packages are produced from one validated `main`
+> commit: an Apple Silicon DMG for macOS 12 or newer and a Windows x64 installer. Android remains
+> under development.
 
 ## Download AniStream for macOS
 
-1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.3.
-2. Under **Assets**, download the macOS DMG: `AniStream-0.1.3-arm64.dmg`.
+1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.4.
+2. Under **Assets**, download the macOS DMG: `AniStream-0.1.4-arm64.dmg`.
 3. Open the DMG and drag **AniStream** into **Applications**.
 4. Open AniStream from the Applications folder.
 
-AniStream v0.1.3 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
+AniStream v0.1.4 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
 launch, Control-click AniStream in Applications, choose **Open**, then confirm **Open**. You only
 need to do this once. Do not disable Gatekeeper globally.
 
@@ -35,14 +36,25 @@ signed out.
 
 ## Download AniStream for Windows
 
-1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.3.
-2. Under **Assets**, download `AniStream Setup 0.1.3.exe`.
+1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.4.
+2. Under **Assets**, download `AniStream Setup 0.1.4.exe`.
 3. Run the installer and choose an installation folder.
 4. Launch AniStream from the Start menu or desktop shortcut.
 
 The Windows installer is currently unsigned, so SmartScreen may show a warning. Select **More
 info**, confirm the unsigned release status, and choose **Run anyway** only when you downloaded
 the installer from the project release page. Signing and SmartScreen reputation remain pending.
+
+## Check for updates
+
+Installed Windows x64 and Apple Silicon Mac releases check GitHub once when they start. You can run
+the same check manually from **Profile → App updates → Check for updates**; AniList sign-in is not
+required. When a newer compatible release is published, AniStream links to its GitHub release page
+so you can review the notes and download the installer yourself. The app never replaces itself or
+your local data automatically. Development builds do not perform update checks.
+
+See [Check for AniStream updates](docs/how-to/check-for-updates.md) for the result states and the
+one-minute retry cooldown.
 
 ### What is included
 
@@ -186,6 +198,7 @@ npm run format:check         # Check Prettier formatting
 npm run build                # Create production main, preload, and renderer bundles
 npm run check:product-slice  # Verify cross-process product contracts
 npm run check:anilist-oauth  # Verify the implicit OAuth implementation
+npm run check:packaged-build  # Compare a packaged ASAR with the fresh build
 npm run package:mac          # Build the unsigned Apple Silicon app and DMG
 npm run package:win          # Build the unsigned Windows x64 NSIS installer
 ```
@@ -215,7 +228,7 @@ project entry point.
 `electron-builder.yml` configures both the unsigned Apple Silicon DMG and the unsigned Windows x64
 NSIS installer.
 
-## Build and release v0.1.3
+## Build and release v0.1.4
 
 Build the unsigned DMG locally:
 
@@ -231,24 +244,22 @@ the Windows SDK, Node.js, and Git installed:
 npm run package:win
 ```
 
-The Windows output is `dist/AniStream Setup 0.1.3.exe`. The macOS output is
-`dist/AniStream-0.1.3-arm64.dmg`. Both packaging workflows run for tags matching `v*.*.*` and
-manual dispatch. Each workflow verifies the sandbox-safe CommonJS preload, uploads an artifact, and
-attaches its package to the matching GitHub Release. The Windows workflow also verifies install,
-launch, and uninstall in an isolated temporary profile. Both packages remain unsigned until a
-signing provider is configured.
+The Windows output is `dist/AniStream Setup 0.1.4.exe`. The macOS output is
+`dist/AniStream-0.1.4-arm64.dmg`. The platform workflows build, validate, and upload preview
+artifacts for tag or manual runs. The **Promote production release** workflow
+is the official path: it validates `main`, builds both packages from the same commit, verifies each
+package, waits for production approval, then creates the tag and GitHub Release. The Windows job
+also verifies install, launch, and uninstall in an isolated temporary profile. Both packages remain
+unsigned until a signing provider is configured.
 
 For a signed Windows build, provide the electron-builder signing variables through CI secrets
 (`CSC_LINK` and `CSC_KEY_PASSWORD`) and remove `CSC_IDENTITY_AUTO_DISCOVERY=false` from the signed
 release job. Do not commit certificates, passwords, or Azure Artifact Signing tokens.
 
-```bash
-git tag v0.1.3
-git push origin v0.1.3
-```
-
-Tagging should happen only after the version bump and release changes are committed. Code signing
-and notarization remain pending until a valid Developer ID Application certificate is available.
+Do not create the production tag manually. After the version bump and release notes are merged to
+`main`, run **Actions → Promote production release**, enter the exact package version, and approve
+the protected `production` environment after reviewing both artifacts. Code signing and notarization
+remain pending until valid certificates are available.
 
 ## Staged release workflow
 
@@ -270,7 +281,8 @@ environment settings.
 
 ## Platform roadmap
 
-- **macOS on Apple Silicon:** active and available as the v0.1.3 preview.
+- **macOS on Apple Silicon:** active; the official DMG is built and verified on the `macos-14`
+  GitHub runner.
 - **Windows:** x64 NSIS packaging, native SQLite rebuilds, secretless AniList OAuth, CI checks, and
   installer lifecycle validation are implemented; signing and SmartScreen reputation remain
   pending.

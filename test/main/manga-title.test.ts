@@ -27,12 +27,24 @@ describe("MangaTitleModule", () => {
         getGroups: vi.fn().mockRejectedValue(new Error("groups unavailable")),
       },
       mangaDex: {
-        getReader: vi.fn().mockResolvedValue({
-          status: "available",
+        getReader: async (input) => ({
+          status: "available" as const,
           aniListId: 30_013,
           mangaDexId: "one-piece",
-          translatedLanguage: "en",
+          translatedLanguage: input.translatedLanguage ?? "en",
+          availableLanguages: ["en", "es"],
+          availableGroups: [],
+          preferredGroupId: input.preferredGroupId,
+          archiveStatus: "complete" as const,
           chapters: [],
+        }),
+      },
+      preferences: {
+        getMangaReaderPreferences: vi.fn().mockReturnValue({
+          aniListId: 30_013,
+          translatedLanguage: "es",
+          preferredGroupId: "group-a",
+          updatedAt: "2026-08-02T00:00:00.000Z",
         }),
       },
       resume: {
@@ -54,7 +66,15 @@ describe("MangaTitleModule", () => {
       latestChapter: 1189,
       groups: [],
     });
-    expect(snapshot.reader?.status).toBe("available");
+    expect(snapshot.reader).toMatchObject({
+      status: "available",
+      translatedLanguage: "es",
+      preferredGroupId: "group-a",
+    });
+    expect(snapshot.preferences).toMatchObject({
+      translatedLanguage: "es",
+      preferredGroupId: "group-a",
+    });
     expect(snapshot.resume?.progress).toBe(0.42);
     expect(snapshot.issues).toEqual([
       { source: "mangaupdates-groups", message: "groups unavailable" },

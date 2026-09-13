@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseRetryAfterMs } from "../../src/main/anilist/client";
+import {
+  parseAniListMinIntervalMs,
+  parseRateLimitResetMs,
+  parseRetryAfterMs,
+} from "../../src/main/anilist/client";
 
 describe("parseRetryAfterMs", () => {
   it("parses a delta-seconds Retry-After header", () => {
@@ -29,5 +33,26 @@ describe("parseRetryAfterMs", () => {
 
   it("falls back to a conservative default when the header is unparseable", () => {
     expect(parseRetryAfterMs("not-a-valid-value")).toBe(60_000);
+  });
+});
+
+describe("parseRateLimitResetMs", () => {
+  it("converts a future Unix reset timestamp to a delay", () => {
+    expect(parseRateLimitResetMs("1700000030", 1_700_000_000_000)).toBe(30_000);
+  });
+
+  it("ignores missing, malformed, and expired reset timestamps", () => {
+    expect(parseRateLimitResetMs(null, 1_700_000_000_000)).toBeUndefined();
+    expect(parseRateLimitResetMs("later", 1_700_000_000_000)).toBeUndefined();
+    expect(parseRateLimitResetMs("1699999999", 1_700_000_000_000)).toBeUndefined();
+  });
+});
+
+describe("parseAniListMinIntervalMs", () => {
+  it("uses conservative burst spacing by default and accepts a bounded override", () => {
+    expect(parseAniListMinIntervalMs(undefined)).toBe(350);
+    expect(parseAniListMinIntervalMs("600")).toBe(600);
+    expect(parseAniListMinIntervalMs("0")).toBe(350);
+    expect(parseAniListMinIntervalMs("10001")).toBe(350);
   });
 });

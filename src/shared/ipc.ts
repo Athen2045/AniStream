@@ -15,6 +15,8 @@ import type {
   LatestAnimeUpdate,
   LatestMangaUpdate,
   LatestUpdatesPage,
+  KitsuHeroArtwork,
+  KitsuHeroArtworkInput,
   MalRankingItem,
   MalScore,
   MangaDexAvailabilityInput,
@@ -24,11 +26,21 @@ import type {
   MangaDexReaderPage,
   MangaTitleSnapshot,
   MangaReadingResume,
+  MangaReaderPreferences,
   PlaybackResume,
+  ProviderReadiness,
   SaveMangaReadingResumeInput,
+  SaveMangaReaderPreferencesInput,
   SavePlaybackResumeInput,
   UpdateAniListEntryInput,
 } from "./contracts";
+import type { RecommendationEvent, RecommendationResult } from "./recommendations";
+import type { ReaderSettings } from "./reader-settings";
+import type { UpdateStatus } from "./update-check";
+import type { RestorePreview, RestoreSummary } from "./local-backup";
+import type { PersonalAiringUpdate, ReleaseAcknowledgement } from "./personal-library";
+import type { LocalActivity, RecordActivityInput } from "./activity";
+import type { DiscoveryFeed, DiscoveryFeedback, DiscoveryImpressionInput } from "./discovery";
 
 /**
  * The single source of truth for request/response IPC. Keeping channel names and
@@ -36,7 +48,20 @@ import type {
  * fail together at compile time when a contract changes.
  */
 export interface IpcInvokeChannelMap {
+  "app:update-status": { args: []; result: UpdateStatus };
+  "app:check-updates": { args: []; result: UpdateStatus };
+  "backup:export": { args: []; result: boolean };
+  "backup:prepare": { args: []; result: RestorePreview | null };
+  "backup:restore": { args: [token: string]; result: RestoreSummary };
+  "backup:cancel": { args: [token: string]; result: void };
+  "personal:anime-updates": { args: [mediaIds: number[]]; result: PersonalAiringUpdate[] };
+  "personal:acknowledgements": { args: []; result: ReleaseAcknowledgement[] };
+  "personal:acknowledge": { args: [input: ReleaseAcknowledgement]; result: void };
+  "activity:record": { args: [input: RecordActivityInput]; result: LocalActivity };
+  "activity:list": { args: []; result: LocalActivity[] };
+  "activity:retry": { args: []; result: LocalActivity[] };
   "app:get-info": { args: []; result: AppInfo };
+  "anime:provider-readiness": { args: []; result: ProviderReadiness };
   "anilist:auth-state": { args: []; result: AniListAuthState };
   "anilist:login": { args: []; result: void };
   "anilist:cancel-login": { args: []; result: void };
@@ -73,6 +98,10 @@ export interface IpcInvokeChannelMap {
     args: [type: AniListMediaType];
     result: MalRankingItem[];
   };
+  "kitsu:hero-art": {
+    args: [input: KitsuHeroArtworkInput];
+    result: KitsuHeroArtwork | undefined;
+  };
   "mangadex:latest": {
     args: [page: number];
     result: LatestUpdatesPage<LatestMangaUpdate>;
@@ -84,6 +113,10 @@ export interface IpcInvokeChannelMap {
   "manga:title-snapshot": {
     args: [input: MangaDexReaderInput, requestId: string];
     result: MangaTitleSnapshot;
+  };
+  "manga:save-reader-preferences": {
+    args: [input: SaveMangaReaderPreferencesInput];
+    result: MangaReaderPreferences;
   };
   "mangadex:page": { args: [input: MangaDexPageInput]; result: MangaDexReaderPage };
   "playback:resume": { args: [aniListId: number]; result: PlaybackResume | undefined };
@@ -98,9 +131,18 @@ export interface IpcInvokeChannelMap {
     result: void;
   };
   "manga:clear-reading-resume": { args: [aniListId: number]; result: void };
+  "recommendations:get-for-you-preview": { args: []; result: RecommendationResult[] };
+  "discovery:for-you": { args: [type: AniListMediaType]; result: DiscoveryFeed };
+  "reader:settings": { args: []; result: ReaderSettings };
+  "reader:save-settings": { args: [input: ReaderSettings]; result: ReaderSettings };
+  "discovery:feedback": { args: [input: DiscoveryFeedback]; result: void };
+  "discovery:impressions": { args: [input: DiscoveryImpressionInput]; result: void };
+  "recommendations:record-interaction": { args: [event: RecommendationEvent]; result: void };
 }
 
 export interface IpcEventChannelMap {
+  "app:update-status-changed": UpdateStatus;
+  "activity:changed": undefined;
   "anilist:auth-changed": AniListAuthState;
 }
 

@@ -43,6 +43,82 @@ describe("ProviderTransport", () => {
     await assertion;
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("includes rate-limit queue time in the provider deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn<typeof fetch>();
+      const gate = createRequestGate({ requestsPerMinute: 10 });
+      gate.reportRateLimited(60_000);
+      const transport = new ProviderTransport({ fetcher, gate, timeoutMs: 1_000 });
+      const request = transport.request(new URL("https://example.com"));
+      const assertion = expect(request).rejects.toMatchObject({ name: "TimeoutError" });
+
+      await vi.advanceTimersByTimeAsync(1_001);
+
+      await assertion;
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("preserves an already-aborted caller reason", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const transport = new ProviderTransport({
+      fetcher,
+      gate: createRequestGate({ requestsPerMinute: 10 }),
+      timeoutMs: 1_000,
+    });
+    const controller = new AbortController();
+    const reason = new DOMException("Title closed.", "AbortError");
+    controller.abort(reason);
+
+    await expect(
+      transport.request(new URL("https://example.com/title"), {
+        signal: controller.signal,
+      }),
+    ).rejects.toBe(reason);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("cancels safely when Electron dispatches an abort event with no currentTarget", async () => {
+    let fireCallerAbort: (() => void) | undefined;
+    const reason = new DOMException("Title closed.", "AbortError");
+    const callerSignal = {
+      aborted: false,
+      reason,
+      addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+        fireCallerAbort = () => {
+          const callback =
+            typeof listener === "function" ? listener : listener.handleEvent.bind(listener);
+          callback(new Event("abort"));
+        };
+      },
+      removeEventListener: vi.fn(),
+    } as unknown as AbortSignal;
+    const fetcher = vi.fn<typeof fetch>(
+      async (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
+            once: true,
+          });
+        }),
+    );
+    const transport = new ProviderTransport({
+      fetcher,
+      gate: createRequestGate({ requestsPerMinute: 10 }),
+      timeoutMs: 1_000,
+    });
+
+    const request = transport.request(new URL("https://example.com/title"), {
+      signal: callerSignal,
+    });
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+
+    expect(() => fireCallerAbort?.()).not.toThrow();
+    await expect(request).rejects.toBe(reason);
+  });
 });
 
 describe("mapSettledWithConcurrency", () => {

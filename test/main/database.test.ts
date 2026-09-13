@@ -97,4 +97,26 @@ describe("local reading progress", () => {
 
     database.close();
   });
+
+  it("persists manga language and exact scanlation group preferences across restarts", () => {
+    const directory = mkdtempSync(join(tmpdir(), "anistream-database-"));
+    temporaryDirectories.push(directory);
+    const databasePath = join(directory, "anistream.sqlite");
+    let database = openAppDatabase(databasePath);
+
+    database.saveMangaReaderPreferences({
+      aniListId: 30_013,
+      translatedLanguage: "pt-br",
+      preferredGroupId: "group-uuid",
+    });
+    database.close();
+
+    database = openAppDatabase(databasePath);
+    expect(database.getMangaReaderPreferences(30_013)).toMatchObject({
+      aniListId: 30_013,
+      translatedLanguage: "pt-br",
+      preferredGroupId: "group-uuid",
+    });
+    database.close();
+  });
 });

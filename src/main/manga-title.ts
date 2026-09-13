@@ -3,6 +3,7 @@ import type {
   MangaDexReaderSession,
   MangaEnrichment,
   MangaReadingResume,
+  MangaReaderPreferences,
   MangaTitleIssue,
   MangaTitleSnapshot,
   MangaUpdatesEnrichment,
@@ -23,6 +24,9 @@ export interface MangaTitleModuleDeps {
   resume?: {
     getMangaReadingResume(aniListId: number): MangaReadingResume | undefined;
   };
+  preferences?: {
+    getMangaReaderPreferences(aniListId: number): MangaReaderPreferences | undefined;
+  };
 }
 
 /**
@@ -34,16 +38,24 @@ export class MangaTitleModule {
 
   public async load(input: MangaDexReaderInput, signal?: AbortSignal): Promise<MangaTitleSnapshot> {
     const issues: MangaTitleIssue[] = [];
+    const preferences = this.deps.preferences?.getMangaReaderPreferences(input.aniListId);
+    const readerInput = preferences
+      ? {
+          ...input,
+          translatedLanguage: preferences.translatedLanguage,
+          preferredGroupId: preferences.preferredGroupId,
+        }
+      : input;
     const [enrichmentResult, readerResult, resumeResult] = await Promise.allSettled([
       this.loadEnrichment(input.aniListId, issues, signal),
-      this.loadReader(input, signal),
+      this.loadReader(readerInput, signal),
       Promise.resolve(this.deps.resume?.getMangaReadingResume(input.aniListId)),
     ]);
 
     const enrichment = valueOrIssue(enrichmentResult, "mangabaka", issues);
     const reader = valueOrIssue(readerResult, "mangadex-reader", issues);
     const resume = valueOrIssue(resumeResult, "resume", issues);
-    return { aniListId: input.aniListId, enrichment, reader, resume, issues };
+    return { aniListId: input.aniListId, enrichment, reader, resume, preferences, issues };
   }
 
   private async loadEnrichment(

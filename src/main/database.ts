@@ -1,4 +1,9 @@
 import Database from "better-sqlite3";
+import { createUpdateLaunchStore, type UpdateLaunchStore } from "./update-launch-store";
+import { createBackupRepository, type BackupRepository } from "./backup-repository";
+import { createReaderSettingsRepository, type ReaderSettingsRepository } from "./reader-settings";
+import { createPersonalRepository, type PersonalRepository } from "./personal-repository";
+import { createActivityRepository, type ActivityRepository } from "./activity/repository";
 import type {
   AniListDashboard,
   MangaReadingResume,
@@ -10,9 +15,25 @@ import {
   isValidMangaReadingResumeInput,
   isValidPlaybackResumeInput,
 } from "../shared/resume-validation";
+import type { RecommendationRepository } from "./recommendations/repository";
+import { createRecommendationRepository } from "./recommendations/repository";
+import { createDiscoveryStore, type DiscoveryStore } from "./recommendations/discovery-store";
+import {
+  createMangaPreferenceRepository,
+  type MangaPreferenceRepository,
+} from "./manga-preferences";
 
-export interface AppDatabase {
+export interface AppDatabase
+  extends
+    RecommendationRepository,
+    ActivityRepository,
+    PersonalRepository,
+    MangaPreferenceRepository,
+    ReaderSettingsRepository {
   readonly ready: boolean;
+  readonly discovery: DiscoveryStore;
+  readonly backup: BackupRepository;
+  readonly updateLaunch: UpdateLaunchStore;
   getCachedAniListDashboard(): AniListDashboard | undefined;
   saveCachedAniListDashboard(dashboard: AniListDashboard): void;
   clearCachedAniListDashboard(): void;
@@ -53,6 +74,46 @@ export function openAppDatabase(path: string): AppDatabase {
       progress REAL NOT NULL DEFAULT 0 CHECK (progress >= 0 AND progress <= 1),
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS recommendation_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      anilist_id INTEGER NOT NULL CHECK (anilist_id > 0),
+      media_type TEXT NOT NULL CHECK (media_type IN ('ANIME', 'MANGA')),
+      occurred_at INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      source TEXT NOT NULL,
+      value REAL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_recommendation_events_time
+      ON recommendation_events (occurred_at DESC, id DESC);
+
+    CREATE TABLE IF NOT EXISTS recommendation_item_features (
+      anilist_id INTEGER PRIMARY KEY CHECK (anilist_id > 0),
+      media_type TEXT NOT NULL CHECK (media_type IN ('ANIME', 'MANGA')),
+      mal_id INTEGER,
+      normalized_title TEXT NOT NULL,
+      cover_url TEXT,
+      features_json TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_recommendation_item_features_updated
+      ON recommendation_item_features (updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS recommendation_impressions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id TEXT NOT NULL,
+      anilist_id INTEGER NOT NULL CHECK (anilist_id > 0),
+      media_type TEXT NOT NULL CHECK (media_type IN ('ANIME', 'MANGA')),
+      position INTEGER NOT NULL CHECK (position >= 0 AND position < 10),
+      score REAL NOT NULL CHECK (score >= 0 AND score <= 100),
+      result_json TEXT NOT NULL,
+      shown_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_recommendation_impressions_request
+      ON recommendation_impressions (request_id, position);
   `);
 
   const readPlaybackResume = database.prepare<[number], PlaybackResumeRow>(`
@@ -130,7 +191,18 @@ export function openAppDatabase(path: string): AppDatabase {
   const deleteAppMeta = database.prepare("DELETE FROM app_meta WHERE key = ?");
   const dashboardCacheKey = "anilist.dashboard.v1";
 
+  const recommendationRepository = createRecommendationRepository(database);
+  const mangaPreferenceRepository = createMangaPreferenceRepository(database);
+
   return {
+    ...createReaderSettingsRepository(database),
+    ...createPersonalRepository(database),
+    ...createActivityRepository(database),
+    ...mangaPreferenceRepository,
+    ...recommendationRepository,
+    discovery: createDiscoveryStore(database),
+    backup: createBackupRepository(database),
+    updateLaunch: createUpdateLaunchStore(database),
     ready: true,
     getCachedAniListDashboard: () => {
       const row = readAppMeta.get(dashboardCacheKey);

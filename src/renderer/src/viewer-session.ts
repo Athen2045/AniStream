@@ -8,11 +8,13 @@ import type {
   AniStreamBridge,
 } from "../../shared/contracts";
 import type { ViewerAccess } from "./viewer-access";
+import { friendlyRemoteError } from "./remote-error";
 
 export type ViewerSessionBridge = Pick<
   AniStreamBridge,
   | "getAniListAuthState"
   | "onAniListAuthChanged"
+  | "onActivityChanged"
   | "startAniListLogin"
   | "cancelAniListLogin"
   | "logoutAniList"
@@ -27,11 +29,13 @@ export interface ViewerSessionSnapshot {
   auth: AniListAuthState;
   restoring: boolean;
   syncing: boolean;
+  hasVerifiedDashboard: boolean;
   error?: string;
   access: ViewerAccess;
 }
 
 export interface ViewerSessionModule {
+  activate(): void;
   getSnapshot(): ViewerSessionSnapshot;
   subscribe(listener: () => void): () => void;
   restore(): Promise<void>;
@@ -46,6 +50,7 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
   const listeners = new Set<() => void>();
   let auth: AniListAuthState = { status: "signed-out" };
   let dashboard: AniListDashboard | undefined;
+  let dashboardVerified = false;
   let restoring = true;
   let syncing = false;
   let error: string | undefined;
@@ -53,7 +58,12 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
   let disposed = false;
   let restored = false;
   let unsubscribeAuth: (() => void) | undefined;
+  let unsubscribeActivity: (() => void) | undefined;
   let snapshot: ViewerSessionSnapshot;
+  const guestAccess: ViewerAccess = { kind: "guest" };
+  let dashboardRevision = 0;
+  let accessDashboardRevision = -1;
+  let memberAccess: Extract<ViewerAccess, { kind: "member" }> | undefined;
 
   const messageFrom = (reason: unknown, fallback: string): string =>
     reason instanceof Error ? reason.message : fallback;
@@ -101,9 +111,13 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
 
   const buildAccess = (): ViewerAccess => {
     if (auth.status !== "signed-in" || !dashboard || dashboard.profile.id !== auth.profile.id) {
-      return { kind: "guest" };
+      accessDashboardRevision = -1;
+      memberAccess = undefined;
+      return guestAccess;
     }
-    return {
+    if (memberAccess && accessDashboardRevision === dashboardRevision) return memberAccess;
+    accessDashboardRevision = dashboardRevision;
+    memberAccess = {
       kind: "member",
       dashboard,
       libraryEntries: buildLibraryEntries(),
@@ -112,10 +126,18 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
       removeFromLibrary,
       refreshLibrary,
     };
+    return memberAccess;
   };
 
   const notify = (): void => {
-    snapshot = { auth, restoring, syncing, error, access: buildAccess() };
+    snapshot = {
+      auth,
+      restoring,
+      syncing,
+      hasVerifiedDashboard: dashboardVerified,
+      error,
+      access: buildAccess(),
+    };
     for (const listener of listeners) listener();
   };
 
@@ -135,15 +157,19 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
       const next = await bridge.getAniListDashboard();
       if (isCurrent(expectedGeneration, profileId) && next.profile.id === profileId) {
         dashboard = next;
+        dashboardRevision += 1;
+        dashboardVerified = true;
         error = undefined;
         notify();
       }
     } catch (reason) {
       if (isCurrent(expectedGeneration, profileId)) {
-        error = messageFrom(
-          reason,
-          "Unable to refresh your AniList lists. Your saved login remains active.",
-        );
+        error = friendlyRemoteError(reason, {
+          provider: "AniList",
+          operation: "library data",
+          retained: dashboardVerified,
+          fallback: "Your AniList library could not be refreshed. Try again shortly.",
+        });
         notify();
       }
     } finally {
@@ -160,10 +186,20 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
     const currentGeneration = generation;
     auth = nextAuth;
     restoring = false;
-    error = nextAuth.status === "error" ? nextAuth.message : undefined;
+    error =
+      nextAuth.status === "error"
+        ? friendlyRemoteError(nextAuth.message, {
+            provider: "AniList",
+            operation: "profile data",
+            fallback:
+              "AniList sign-in could not finish. Return to Profile and try connecting again.",
+          })
+        : undefined;
 
     if (nextAuth.status !== "signed-in") {
       dashboard = undefined;
+      dashboardRevision += 1;
+      dashboardVerified = false;
       syncing = false;
       notify();
       return;
@@ -171,6 +207,8 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
 
     if (!dashboard || dashboard.profile.id !== nextAuth.profile.id) {
       dashboard = emptyDashboard(nextAuth);
+      dashboardRevision += 1;
+      dashboardVerified = false;
     }
     notify();
 
@@ -181,6 +219,8 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
         cached?.profile.id === nextAuth.profile.id
       ) {
         dashboard = cached;
+        dashboardRevision += 1;
+        dashboardVerified = true;
         notify();
       }
     } catch {
@@ -190,9 +230,19 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
     await refresh(currentGeneration);
   }
 
-  snapshot = { auth, restoring, syncing, error, access: { kind: "guest" } };
+  snapshot = {
+    auth,
+    restoring,
+    syncing,
+    hasVerifiedDashboard: dashboardVerified,
+    error,
+    access: guestAccess,
+  };
 
   return {
+    activate() {
+      disposed = false;
+    },
     getSnapshot: () => snapshot,
 
     subscribe(listener) {
@@ -202,18 +252,29 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
 
     async restore() {
       if (disposed) return;
+      const restoreGeneration = generation;
       if (!restored) {
         restored = true;
         unsubscribeAuth = bridge.onAniListAuthChanged((nextAuth) => {
           void applyAuthState(nextAuth);
         });
+        unsubscribeActivity = bridge.onActivityChanged(() => {
+          void refresh(generation);
+        });
       }
       try {
-        await applyAuthState(await bridge.getAniListAuthState());
+        const nextAuth = await bridge.getAniListAuthState();
+        if (disposed || restoreGeneration !== generation) return;
+        await applyAuthState(nextAuth);
       } catch (reason) {
-        if (disposed) return;
+        if (disposed || restoreGeneration !== generation) return;
         restoring = false;
-        error = messageFrom(reason, "Unable to read the saved AniList session.");
+        error = friendlyRemoteError(reason, {
+          provider: "AniList",
+          operation: "profile data",
+          fallback:
+            "The saved AniList connection could not be restored. Connect AniList again from Profile.",
+        });
         notify();
       }
     },
@@ -224,7 +285,12 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
       try {
         await bridge.startAniListLogin();
       } catch (reason) {
-        error = messageFrom(reason, "Unable to start AniList sign-in.");
+        error = friendlyRemoteError(reason, {
+          provider: "AniList",
+          operation: "sign-in",
+          fallback:
+            "AniList sign-in could not start. Check your default browser and try connecting again.",
+        });
         notify();
       }
     },
@@ -235,7 +301,11 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
       try {
         await bridge.cancelAniListLogin();
       } catch (reason) {
-        error = messageFrom(reason, "Unable to cancel AniList sign-in.");
+        error = friendlyRemoteError(reason, {
+          provider: "AniList",
+          operation: "sign-in",
+          fallback: "AniList sign-in could not be canceled. You can safely close the browser tab.",
+        });
         notify();
       }
     },
@@ -247,10 +317,13 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
     async logout() {
       const previousAuth = auth;
       const previousDashboard = dashboard;
+      const previousDashboardVerified = dashboardVerified;
       const previousSyncing = syncing;
       generation += 1;
       auth = { status: "signed-out" };
       dashboard = undefined;
+      dashboardRevision += 1;
+      dashboardVerified = false;
       syncing = false;
       error = undefined;
       notify();
@@ -262,6 +335,8 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
         generation += 1;
         auth = previousAuth;
         dashboard = previousDashboard;
+        dashboardRevision += 1;
+        dashboardVerified = previousDashboardVerified;
         syncing = previousSyncing;
         error = messageFrom(reason, "Unable to log out of AniList.");
         notify();
@@ -271,9 +346,12 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
     dispose() {
       if (disposed) return;
       disposed = true;
+      restored = false;
       generation += 1;
       unsubscribeAuth?.();
       unsubscribeAuth = undefined;
+      unsubscribeActivity?.();
+      unsubscribeActivity = undefined;
       listeners.clear();
     },
   };

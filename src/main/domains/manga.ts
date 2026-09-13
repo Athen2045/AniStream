@@ -4,12 +4,16 @@ import type { MangaDexClient } from "../mangadex";
 import type { MangaTitleModule } from "../manga-title";
 import { MangaLatestModule } from "../manga-latest";
 import { registerTrustedIpcHandler } from "../ipc";
+import type { MangaPreferenceRepository } from "../manga-preferences";
+import type { ReaderSettingsRepository } from "../reader-settings";
 
 export interface MangaDomainDeps {
   mangaDex: MangaDexClient | undefined;
   mangaTitle: MangaTitleModule | undefined;
   aniList: AniListClient | undefined;
   mal: MalClient | undefined;
+  preferences?: MangaPreferenceRepository;
+  readerSettings?: ReaderSettingsRepository;
 }
 
 /**
@@ -18,8 +22,16 @@ export interface MangaDomainDeps {
  */
 export function registerMangaDomain(
   trustedRendererOrigin: string,
-  { mangaDex, mangaTitle, aniList, mal }: MangaDomainDeps,
+  { mangaDex, mangaTitle, aniList, mal, preferences, readerSettings }: MangaDomainDeps,
 ): void {
+  registerTrustedIpcHandler(trustedRendererOrigin, "reader:settings", () => {
+    if (!readerSettings) throw new Error("Reader settings are not ready.");
+    return readerSettings.getReaderSettings();
+  });
+  registerTrustedIpcHandler(trustedRendererOrigin, "reader:save-settings", (_event, input) => {
+    if (!readerSettings) throw new Error("Reader settings are not ready.");
+    return readerSettings.saveReaderSettings(input);
+  });
   const titleRequests = new Map<string, AbortController>();
   const mangaLatest = new MangaLatestModule({ mangaDex, aniList, mal });
   registerTrustedIpcHandler(trustedRendererOrigin, "request:cancel", (_event, requestId) => {
@@ -34,7 +46,22 @@ export function registerMangaDomain(
     "mangadex:availability",
     async (_event, media) => {
       if (!mangaDex) throw new Error("MangaDex is not ready.");
-      return mangaDex.getAvailability(media);
+      return mangaDex.getAvailability(
+        media.map((item) => ({
+          ...item,
+          translatedLanguage:
+            item.translatedLanguage ??
+            preferences?.getMangaReaderPreferences(item.aniListId)?.translatedLanguage,
+        })),
+      );
+    },
+  );
+  registerTrustedIpcHandler(
+    trustedRendererOrigin,
+    "manga:save-reader-preferences",
+    (_event, input) => {
+      if (!preferences) throw new Error("Manga reader preferences are not ready.");
+      return preferences.saveMangaReaderPreferences(input);
     },
   );
   registerTrustedIpcHandler(
