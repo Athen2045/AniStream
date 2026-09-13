@@ -50,6 +50,22 @@ export interface ReadinessSession {
   dispose(): void;
 }
 
+/**
+ * Public catalog data improves the first paint but must never prevent a guest
+ * from opening the shell when AniList is unavailable.
+ */
+export function createLaunchCatalogReadinessStage(run: () => Promise<void>): ReadinessStage {
+  return {
+    id: "catalog",
+    label: "Loading AniList trending titles",
+    weight: 40,
+    required: false,
+    provider: "AniList",
+    failureOutcome: "provider-error",
+    run,
+  };
+}
+
 interface MutableStep extends ReadinessStepSnapshot {
   definition: ReadinessStage;
   failureOutcome?: Exclude<ReadinessOutcome, "checking" | "ready">;

@@ -25,6 +25,7 @@ import { ReadinessScreen } from "./ReadinessScreen";
 import appIcon from "./assets/app-icon.png";
 import {
   createReadinessSession,
+  createLaunchCatalogReadinessStage,
   type ReadinessSession,
   type ReadinessSnapshot,
   type ReadinessStageResult,
@@ -95,22 +96,14 @@ function AppContent(): React.JSX.Element {
               }
             },
           },
-          {
-            id: "catalog",
-            label: "Loading AniList trending titles",
-            weight: 40,
-            required: true,
-            provider: "AniList",
-            failureOutcome: "provider-error",
-            run: async () => {
-              await window.anistream.browseAniList({
-                type: "ANIME",
-                page: 1,
-                perPage: 20,
-                sort: "TRENDING_DESC",
-              });
-            },
-          },
+          createLaunchCatalogReadinessStage(async () => {
+            await window.anistream.browseAniList({
+              type: "ANIME",
+              page: 1,
+              perPage: 20,
+              sort: "TRENDING_DESC",
+            });
+          }),
           {
             id: "playback",
             label: "Checking anime playback availability",

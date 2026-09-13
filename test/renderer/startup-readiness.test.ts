@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createLaunchCatalogReadinessStage,
   createReadinessSession,
   type ReadinessStage,
   type ReadinessStageResult,
@@ -34,6 +35,23 @@ function stage(
 }
 
 describe("readiness session", () => {
+  it("lets a guest continue when the public AniList catalog is unavailable", async () => {
+    const catalog = createLaunchCatalogReadinessStage(async () => {
+      throw new Error("AniList is unavailable");
+    });
+    const session = createReadinessSession({
+      mode: "launch",
+      stages: [stage("local", 60, async () => undefined), catalog],
+    });
+
+    await session.start();
+
+    expect(session.getSnapshot()).toMatchObject({
+      outcome: "provider-error",
+      canContinue: true,
+    });
+  });
+
   it("publishes only real completed weight and never moves progress backward", async () => {
     const local = deferred();
     const session = createReadinessSession({
