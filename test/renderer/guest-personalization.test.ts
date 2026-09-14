@@ -125,6 +125,9 @@ describe("guest personalization boundary", () => {
     expect(markup).toContain("Trending anime");
     expect(markup).toContain("Latest Anime Updates");
     expect(markup).not.toContain("Continue Watching");
+    expect(markup).not.toContain("For You");
+    expect(markup).not.toContain("Fresh episodes from AniList airing data");
+    expect(markup).not.toContain("From your watch/read history · AniList");
     expect(markup).not.toContain("Add Trending title to your list");
   });
 
@@ -132,6 +135,9 @@ describe("guest personalization boundary", () => {
     const markup = renderCatalog(memberAccess);
 
     expect(markup).toContain("Continue Watching");
+    expect(markup).toContain("For You");
+    expect(markup).not.toContain("Fresh episodes from AniList airing data");
+    expect(markup).not.toContain("From your watch/read history · AniList");
     expect(markup).toContain("Add Trending title to your list");
   });
 

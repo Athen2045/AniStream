@@ -25,7 +25,6 @@ import type {
 import { chooseInitialAnimeEpisode, createAnimePlaybackSession } from "./anime-playback-session";
 import { saveAnimeActivity } from "./local-activity";
 import { formatMediaLabel } from "./format-label";
-import { decodeHtmlEntities } from "../../shared/text";
 import { motionTransition } from "./motion";
 import { useAutoHideMediaControls } from "./useAutoHideMediaControls";
 import { friendlyPlaybackError, friendlyRemoteError } from "./remote-error";
@@ -143,8 +142,6 @@ export function AnimeWatchExperience({
           catalogMedia.nextAiringEpisode ? catalogMedia.nextAiringEpisode.episode - 1 : 0,
           catalogInitialEpisode,
         ),
-        fallbackThumbnailUrl: catalogMedia.bannerUrl ?? catalogMedia.coverUrl,
-        fallbackDescription: plainText(catalogMedia.description),
       }),
       window.anistream.getPlaybackResume(catalogMedia.id),
       window.anistream.getLocalActivity(),
@@ -550,7 +547,6 @@ function EpisodeBrowser({
   onSeasonNumberResolved: (number: number) => void;
   onPlay: (episode: AnimeProviderEpisode) => void;
 }): React.JSX.Element {
-  const description = plainText(media.description);
   const format = media.format ? formatLabel(media.format) : "Anime";
   const runtime = "duration" in media ? media.duration : undefined;
   const [expanded, setExpanded] = useState(false);
@@ -591,6 +587,9 @@ function EpisodeBrowser({
         {visibleEpisodes.map((episode) => {
           const isCurrent = sameEpisode(episode, activeEpisode);
           const isWatched = episode.number <= watchedEpisodes;
+          const defaultTitle = `Episode ${episode.number}`;
+          const episodeTitle = episode.title?.trim();
+          const episodeArt = episode.thumbnailUrl ?? media.bannerUrl ?? media.coverUrl;
           const progress =
             resume?.episode === episode.number && resume.durationSeconds > 0
               ? Math.min(100, (resume.positionSeconds / resume.durationSeconds) * 100)
@@ -603,19 +602,15 @@ function EpisodeBrowser({
               key={`${activeSeason?.id ?? "season"}:${episode.id}:${episode.number}`}
               type="button"
               className={isCurrent ? "is-current" : undefined}
-              aria-label={`Play episode ${episode.number}: ${episode.title ?? `Episode ${episode.number}`}`}
+              aria-label={`Play episode ${episode.number}: ${episodeTitle ?? defaultTitle}`}
               onClick={() => onPlay(episode)}
             >
               <span className="netflix-episode-number">{episode.number}</span>
               <span className="netflix-episode-thumb">
-                {(episode.thumbnailUrl ?? media.bannerUrl ?? media.coverUrl) ? (
-                  <img
-                    src={episode.thumbnailUrl ?? media.bannerUrl ?? media.coverUrl}
-                    alt=""
-                    loading="lazy"
-                  />
+                {episodeArt ? (
+                  <img src={episodeArt} alt="" loading="lazy" />
                 ) : (
-                  <span className="episode-thumb-fallback">{media.title}</span>
+                  <span className="episode-thumb-fallback">{defaultTitle}</span>
                 )}
                 <span className="episode-play">
                   <Play size={25} fill="currentColor" />
@@ -628,14 +623,9 @@ function EpisodeBrowser({
               </span>
               <span className="netflix-episode-copy">
                 <span className="netflix-episode-title">
-                  <strong>{episode.title ?? `Episode ${episode.number}`}</strong>
+                  <strong>{episodeTitle ?? defaultTitle}</strong>
                   <span>{episode.durationMinutes ?? runtime ?? 24}m</span>
                 </span>
-                <small>
-                  {episode.description ??
-                    description ??
-                    `${media.title}, episode ${episode.number}.`}
-                </small>
               </span>
             </button>
           );
@@ -1042,9 +1032,6 @@ function fallbackSeason(media: AniListCatalogMedia | AniListMediaDetail): AnimeP
     episodes: Array.from({ length: count }, (_, index) => ({
       id: "",
       number: index + 1,
-      title: `Episode ${index + 1}`,
-      thumbnailUrl: media.bannerUrl ?? media.coverUrl,
-      description: plainText(media.description),
     })),
   };
 }
@@ -1067,17 +1054,6 @@ function seasonContainingEpisode(
 
 function sameEpisode(left: AnimeProviderEpisode, right: AnimeProviderEpisode): boolean {
   return left.id && right.id ? left.id === right.id : left.number === right.number;
-}
-
-function plainText(value?: string): string | undefined {
-  if (!value) return undefined;
-  const text = value
-    .replaceAll(/<br\s*\/?>/gi, " ")
-    .replaceAll(/<[^>]+>/g, " ")
-    .replaceAll(/\s+/g, " ")
-    .trim();
-  const decoded = decodeHtmlEntities(text);
-  return decoded || undefined;
 }
 
 function formatLabel(value: string): string {

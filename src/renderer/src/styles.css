@@ -210,9 +210,6 @@ button {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
-.profile-connect-page > .app-updates {
-  align-self: center;
-}
 .app-updates p {
   font-size: 14px;
 }
@@ -659,6 +656,25 @@ html[data-platform="win32"] .profile-hero::after {
   text-transform: uppercase;
 }
 
+.anilist-source-icon {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  place-items: center;
+  vertical-align: -3px;
+}
+
+.anilist-source-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.catalog-kicker .anilist-source-icon {
+  margin-left: 7px;
+}
+
 .catalog-hero h1 {
   max-width: 680px;
   margin: 0;
@@ -857,6 +873,12 @@ html[data-platform="win32"] .profile-hero::after {
   font-weight: 700;
   letter-spacing: -0.025em;
   line-height: 1.3;
+}
+
+.source-heading {
+  display: flex;
+  gap: 9px;
+  align-items: center;
 }
 
 .rail-count {
@@ -3451,8 +3473,8 @@ a.rail-card {
   isolation: isolate;
   display: grid;
   place-items: center;
-  min-height: 100vh;
-  padding: 108px 48px 56px;
+  min-height: calc(100vh - var(--app-navbar-height));
+  padding: 40px 48px;
   overflow: hidden;
 }
 
@@ -3509,14 +3531,19 @@ a.rail-card {
   transform: translateX(-50%);
 }
 
-.profile-connect-panel .brand-mark {
-  width: 42px;
-  height: 48px;
-  margin: 0 auto 24px;
-  font-size: 1.2rem;
+.profile-connect-app-icon {
+  display: block;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 22px;
+  border-radius: 15px;
 }
 
 .profile-connect-label {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  align-items: center;
   margin: 0 0 8px;
   color: var(--highlight-lavender);
   font-size: 0.67rem;
@@ -3689,6 +3716,9 @@ a.rail-card {
 }
 
 .profile-kicker {
+  display: flex;
+  gap: 7px;
+  align-items: center;
   margin: 0 0 7px;
   color: var(--highlight-lavender);
   font-size: 0.66rem;
@@ -3771,80 +3801,6 @@ a.rail-card {
   line-height: 1.35;
   text-align: right;
   white-space: nowrap;
-}
-
-.profile-account-menu {
-  position: absolute;
-  z-index: 3;
-  top: 92px;
-  right: max(48px, calc((100vw - 1280px) / 2));
-}
-
-.profile-account-menu summary {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface-glass);
-  color: var(--text-secondary);
-  cursor: pointer;
-  list-style: none;
-  backdrop-filter: blur(18px);
-}
-
-.profile-account-menu summary::-webkit-details-marker {
-  display: none;
-}
-
-.profile-account-menu summary:hover,
-.profile-account-menu[open] summary {
-  border-color: var(--line-strong);
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.profile-account-menu > div {
-  position: absolute;
-  top: 43px;
-  right: 0;
-  display: grid;
-  width: 184px;
-  padding: 6px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-overlay);
-  box-shadow: 0 18px 48px var(--shadow);
-  backdrop-filter: blur(22px);
-}
-
-.profile-account-menu button {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  padding: 9px 10px;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 0.75rem;
-  text-align: left;
-}
-
-.profile-account-menu button:hover,
-.profile-account-menu button:focus-visible {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.profile-account-menu button.danger {
-  color: var(--error-text);
-}
-
-.profile-account-menu button:disabled {
-  cursor: default;
-  opacity: 0.58;
 }
 
 .library-shell {
@@ -4493,10 +4449,6 @@ a.rail-card {
     padding-left: 40px;
   }
 
-  .profile-account-menu {
-    right: 40px;
-  }
-
   .library-shell {
     width: calc(100% - 80px);
   }
@@ -4606,7 +4558,4 @@ a.rail-card {
 .local-data-settings > summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
-}
-.profile-connect-page > .local-data-settings {
-  align-self: center;
 }

@@ -1,4 +1,4 @@
-import { RefreshCw, UserRound } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Suspense, lazy, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type {
@@ -22,6 +22,8 @@ import { SearchView } from "./SearchView";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import { useSmoothDocumentScroll } from "./useSmoothDocumentScroll";
 import { ReadinessScreen } from "./ReadinessScreen";
+import { NavbarAccountMenu } from "./NavbarAccountMenu";
+import { SettingsView } from "./SettingsView";
 import appIcon from "./assets/app-icon.png";
 import {
   createReadinessSession,
@@ -47,6 +49,7 @@ const inactiveReadinessSnapshot: ReadinessSnapshot = {
 };
 const subscribeToInactiveReadiness = (): (() => void) => () => undefined;
 const getInactiveReadinessSnapshot = (): ReadinessSnapshot => inactiveReadinessSnapshot;
+type AppView = "ANIME" | "MANGA" | "PROFILE" | "SEARCH" | "SETTINGS";
 
 export function App(): React.JSX.Element {
   return (
@@ -130,7 +133,7 @@ function AppContent(): React.JSX.Element {
   const syncing = viewerSnapshot.syncing;
   const error = viewerSnapshot.error;
   const [editingEntry, setEditingEntry] = useState<{ entry: AniListEntry; viewerId: number }>();
-  const [view, setView] = useState<"ANIME" | "MANGA" | "PROFILE" | "SEARCH">("ANIME");
+  const [view, setView] = useState<AppView>("ANIME");
   const [browseQuery, setBrowseQuery] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<AniListCatalogMedia>();
   const [selectedAction, setSelectedAction] = useState<"details" | "play" | "read">("details");
@@ -320,31 +323,23 @@ function AppContent(): React.JSX.Element {
                       onAnimationEnd={() => setLibraryRefreshSpinning(false)}
                     />
                   </button>
-                  <button
-                    className={`avatar-button ${view === "PROFILE" ? "active" : ""}`}
-                    type="button"
-                    onClick={openProfile}
-                    aria-label="Open profile"
-                    title="Open profile"
-                  >
-                    {viewerAccess.dashboard.profile.avatarUrl ? (
-                      <img src={viewerAccess.dashboard.profile.avatarUrl} alt="" decoding="async" />
-                    ) : (
-                      <UserRound size={17} />
-                    )}
-                  </button>
+                  <NavbarAccountMenu
+                    kind="member"
+                    active={view === "PROFILE" || view === "SETTINGS"}
+                    name={viewerAccess.dashboard.profile.name}
+                    avatarUrl={viewerAccess.dashboard.profile.avatarUrl}
+                    onOpenProfile={openProfile}
+                    onOpenSettings={openSettings}
+                    onLogout={() => void viewerSession.logout()}
+                  />
                 </>
               ) : (
-                <button
-                  className={`session-button ${view === "PROFILE" ? "active" : ""}`}
-                  type="button"
-                  onClick={openProfile}
-                  aria-label="Open profile and connect AniList"
-                  title="Sign in to AniList"
-                >
-                  <UserRound size={17} />
-                  <span>Sign in</span>
-                </button>
+                <NavbarAccountMenu
+                  kind="guest"
+                  active={view === "PROFILE" || view === "SETTINGS"}
+                  onOpenSettings={openSettings}
+                  onSignIn={openProfile}
+                />
               )}
             </div>
           </nav>
@@ -388,6 +383,18 @@ function AppContent(): React.JSX.Element {
                   onLibrary={manageLibrary}
                 />
               </motion.div>
+            ) : view === "SETTINGS" ? (
+              <motion.div
+                className="route-view"
+                key="settings"
+                variants={routeVariants}
+                initial={reducedMotion ? false : "initial"}
+                animate="animate"
+                exit={reducedMotion ? undefined : "exit"}
+                transition={motionTransition(reducedMotion)}
+              >
+                <SettingsView />
+              </motion.div>
             ) : viewerAccess.kind === "member" ? (
               <motion.div
                 className="profile-route-transition"
@@ -407,7 +414,6 @@ function AppContent(): React.JSX.Element {
                   listQuery={listQuery}
                   librarySort={librarySort}
                   adding={adding}
-                  syncing={syncing}
                   error={error}
                   onSwitchType={switchMediaType}
                   onSelectGroup={setSelectedGroup}
@@ -420,8 +426,6 @@ function AppContent(): React.JSX.Element {
                   }
                   access={viewerAccess}
                   onLibrary={manageLibrary}
-                  onRefresh={() => viewerSession.refresh()}
-                  onLogout={() => viewerSession.logout()}
                   onOpenMedia={(media, action) => openMedia({ ...media, genres: [] }, action)}
                 />
               </motion.div>
@@ -582,6 +586,14 @@ function AppContent(): React.JSX.Element {
     });
     setActiveReadiness(profileReadiness);
     void profileReadiness.start();
+  }
+
+  function openSettings(): void {
+    setSelectedMedia(undefined);
+    setView("SETTINGS");
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>("[data-settings-heading]")?.focus();
+    });
   }
 }
 

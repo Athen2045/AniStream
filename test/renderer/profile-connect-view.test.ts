@@ -28,7 +28,11 @@ describe("ProfileConnectView", () => {
 
     expect(markup).toContain("Make AniStream yours");
     expect(markup).toContain("Continue with AniList");
-    expect(markup).toContain("No AniList password or Developer API setup is required");
+    expect(markup).toContain('class="profile-connect-app-icon"');
+    expect(markup).toContain('aria-label="AniList"');
+    expect(markup).not.toContain("No AniList password or Developer API setup is required");
+    expect(markup).not.toContain("Local progress and backups");
+    expect(markup).not.toContain("App updates");
     expect(markup).not.toContain("Your watchlist, when you want it");
     expect(markup).not.toContain("profile-connect-capabilities");
   });

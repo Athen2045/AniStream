@@ -1,10 +1,9 @@
-import { ShieldCheck } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { AniListAuthState } from "../../shared/contracts";
 import { motionTransition } from "./motion";
-import { LocalDataSettings } from "./LocalDataSettings";
-import { AppUpdates } from "./AppUpdates";
 import { useAppReducedMotion } from "./useAppReducedMotion";
+import appIcon from "./assets/app-icon.png";
+import { AniListSourceIcon } from "./AniListSourceIcon";
 
 export function ProfileConnectView({
   auth,
@@ -50,10 +49,11 @@ export function ProfileConnectView({
               ? "AniList authorization is open in your browser."
               : "Ready to connect an AniList account."}
         </p>
-        <div className="brand-mark" aria-hidden="true">
-          A
-        </div>
-        <p className="profile-connect-label">AniList connection</p>
+        <img className="profile-connect-app-icon" src={appIcon} alt="" aria-hidden="true" />
+        <p className="profile-connect-label">
+          <AniListSourceIcon />
+          AniList connection
+        </p>
         <h1 id="profile-connect-title" data-profile-heading tabIndex={-1}>
           Make AniStream yours
         </h1>
@@ -109,19 +109,12 @@ export function ProfileConnectView({
           ) : null}
         </AnimatePresence>
 
-        <p className="privacy-note">
-          <ShieldCheck size={15} aria-hidden="true" />
-          No AniList password or Developer API setup is required. Your connection stays on this
-          device.
-        </p>
         {error ? (
           <p className="error-banner" role="alert">
             {error}
           </p>
         ) : null}
       </motion.article>
-      <LocalDataSettings />
-      <AppUpdates />
     </section>
   );
 }

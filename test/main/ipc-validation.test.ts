@@ -86,8 +86,6 @@ describe("IPC argument validation", () => {
         titles: ["One Piece"],
         seasonLabel: undefined,
         totalEpisodes: undefined,
-        fallbackThumbnailUrl: undefined,
-        fallbackDescription: undefined,
       },
     ]);
   });
