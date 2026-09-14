@@ -434,10 +434,6 @@ html[data-platform="darwin"] .app-navbar {
   margin-top: 4px;
   font-size: 12px;
 }
-.profile-account-menu {
-  top: 24px;
-  right: var(--page-gutter);
-}
 .library-shell {
   width: auto;
   margin: 0 var(--page-gutter);

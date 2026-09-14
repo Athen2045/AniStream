@@ -26,18 +26,18 @@ the reader flow.
 
 The profile view brings AniList statistics, library filters, and local progress into one workspace.
 
-> **Current release:** v0.1.6. Official unsigned packages are produced from one validated `main`
+> **Current release:** v0.1.7. Official unsigned packages are produced from one validated `main`
 > commit: an Apple Silicon DMG for macOS 12 or newer and a Windows x64 installer. Android remains
 > under development.
 
 ## Download AniStream for macOS
 
-1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.6.
-2. Under **Assets**, download the macOS DMG: `AniStream-0.1.6-arm64.dmg`.
+1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.7.
+2. Under **Assets**, download the macOS DMG: `AniStream-0.1.7-arm64.dmg`.
 3. Open the DMG and drag **AniStream** into **Applications**.
 4. Open AniStream from the Applications folder.
 
-AniStream v0.1.6 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
+AniStream v0.1.7 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
 launch, Control-click AniStream in Applications, choose **Open**, then confirm **Open**. You only
 need to do this once. Do not disable Gatekeeper globally.
 
@@ -54,8 +54,8 @@ signed out.
 
 ## Download AniStream for Windows
 
-1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.6.
-2. Under **Assets**, download `AniStream Setup 0.1.6.exe`.
+1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.7.
+2. Under **Assets**, download `AniStream Setup 0.1.7.exe`.
 3. Run the installer and choose an installation folder.
 4. Launch AniStream from the Start menu or desktop shortcut.
 
@@ -66,7 +66,7 @@ the installer from the project release page. Signing and SmartScreen reputation 
 ## Check for updates
 
 Installed Windows x64 and Apple Silicon Mac releases check GitHub once when they start. You can run
-the same check manually from **Profile → App updates → Check for updates**; AniList sign-in is not
+the same check manually from **Account menu → Settings → App updates → Check for updates**; AniList sign-in is not
 required. When a newer compatible release is published, AniStream links to its GitHub release page
 so you can review the notes and download the installer yourself. The app never replaces itself or
 your local data automatically. Development builds do not perform update checks.
@@ -247,7 +247,7 @@ project entry point.
 `electron-builder.yml` configures both the unsigned Apple Silicon DMG and the unsigned Windows x64
 NSIS installer.
 
-## Build and release v0.1.6
+## Build and release v0.1.7
 
 Build the unsigned DMG locally:
 
@@ -263,8 +263,8 @@ the Windows SDK, Node.js, and Git installed:
 npm run package:win
 ```
 
-The Windows output is `dist/AniStream Setup 0.1.6.exe`. The macOS output is
-`dist/AniStream-0.1.6-arm64.dmg`. The platform workflows build, validate, and upload preview artifacts
+The Windows output is `dist/AniStream Setup 0.1.7.exe`. The macOS output is
+`dist/AniStream-0.1.7-arm64.dmg`. The platform workflows build, validate, and upload preview artifacts
 without publishing. The macOS job also runs on `develop` when packaging or icon inputs change. The
 **Promote production release** workflow
 is the official path: it validates `main`, builds both packages from the same commit, verifies each

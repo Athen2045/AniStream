@@ -66,6 +66,7 @@ describe("Anikoto response normalization", () => {
       { id: "anikoto:775493", number: 1, title: "Episode 1" },
       { id: "anikoto:803762", number: 2, title: "Episode 2" },
     ]);
+    expect(result.seasons[0]?.episodes[0]).not.toHaveProperty("thumbnailUrl");
 
     expect(
       parseAnikotoSeriesCatalog(payload, {
@@ -212,7 +213,7 @@ describe("Anikoto client", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it("uses the documented direct AniList route when no catalog mapping is available", async () => {
+  it("uses the direct AniList route without reporting an expected catalog miss as an error", async () => {
     const fetcher = vi.fn(async () => jsonResponse({ ok: true, data: [] }));
     const client = new AnikotoClient(fetcher as typeof fetch);
 
@@ -228,7 +229,7 @@ describe("Anikoto client", () => {
     });
 
     expect(catalog.seasons[0]?.episodes).toHaveLength(2);
-    expect(catalog.message).toContain("does not publish a full-catalog search endpoint");
+    expect(catalog.message).toBeUndefined();
     expect(playback.candidates[0]?.url).toBe("https://megaplay.buzz/stream/ani/170942/2/sub");
     expect(playback.candidates.every((candidate) => candidate.kind === "embed")).toBe(true);
   });

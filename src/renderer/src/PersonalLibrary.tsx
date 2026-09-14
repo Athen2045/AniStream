@@ -4,6 +4,7 @@ import { ContentCarousel } from "./ContentCarousel";
 import { CoverImage } from "./CoverImage";
 import { RailHoverActions } from "./RailHoverActions";
 import { usePersonalLibrary } from "./PersonalLibraryProvider";
+import { AniListSourceIcon } from "./AniListSourceIcon";
 
 export function PersonalLibrary({
   type,
@@ -38,7 +39,14 @@ export function PersonalLibrary({
           <div className="rail-heading">
             <div>
               <p className="catalog-kicker">
-                {access.kind === "member" ? "Local activity & AniList" : "Saved on this device"}
+                {access.kind === "member" ? (
+                  <>
+                    Local activity
+                    <AniListSourceIcon label="AniList source" />
+                  </>
+                ) : (
+                  "Saved on this device"
+                )}
               </p>
               <h2>{label}</h2>
             </div>

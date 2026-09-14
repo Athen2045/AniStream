@@ -107,8 +107,6 @@ export interface AnimeEpisodeCatalogInput {
   titles: string[];
   seasonLabel?: string;
   totalEpisodes?: number;
-  fallbackThumbnailUrl?: string;
-  fallbackDescription?: string;
 }
 
 export interface AnimeProviderEpisode {

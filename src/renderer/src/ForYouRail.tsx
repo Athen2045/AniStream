@@ -64,7 +64,6 @@ export function ForYouRail({
     >
       <div className="rail-heading">
         <div>
-          <p className="catalog-kicker">From your watch/read history · AniList</p>
           <h2>For You</h2>
         </div>
         <button

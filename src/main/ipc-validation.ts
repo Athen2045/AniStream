@@ -194,8 +194,6 @@ function animeEpisodeCatalogInput(value: unknown): AnimeEpisodeCatalogInput {
     titles: asStringArray(input.titles),
     seasonLabel: asOptionalString(input.seasonLabel),
     totalEpisodes: asOptionalPositiveInt(input.totalEpisodes),
-    fallbackThumbnailUrl: asOptionalString(input.fallbackThumbnailUrl),
-    fallbackDescription: asOptionalString(input.fallbackDescription),
   };
 }
 

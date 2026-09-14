@@ -71,11 +71,7 @@ export class AnikotoClient {
     try {
       const match = await this.findRecentSeries(input.aniListId);
       if (!match) {
-        return {
-          ...fallback,
-          message:
-            "Anikoto does not publish a full-catalog search endpoint. Episode numbers come from AniList; playback uses Anikoto's documented AniList-ID embed route.",
-        };
+        return fallback;
       }
 
       const payload = await this.getSeries(match.id);
@@ -241,7 +237,6 @@ export function parseAnikotoSeriesCatalog(
     return unavailableCatalog("Anikoto series identity did not match the requested AniList ID.");
   }
 
-  const thumbnailUrl = safeHttpsUrl(anime.background_image) ?? safeHttpsUrl(anime.poster);
   const normalized = episodes
     .flatMap((episode): AnimeProviderEpisode[] => {
       if (!isRecord(episode)) return [];
@@ -249,21 +244,20 @@ export function parseAnikotoSeriesCatalog(
       const embedId = cleanString(episode.episode_embed_id);
       if (!number || number > MAX_EPISODES || !embedId || !/^\d+$/.test(embedId)) return [];
 
+      const title = cleanString(episode.title);
+      const thumbnailUrl =
+        safeHttpsUrl(episode.thumbnail_url) ??
+        safeHttpsUrl(episode.thumbnail) ??
+        safeHttpsUrl(episode.image);
+      const description = cleanString(episode.description) ?? cleanString(episode.synopsis);
+
       return [
         {
           id: `anikoto:${embedId}`,
           number,
-          title: cleanString(episode.title) ?? `Episode ${number}`,
-          thumbnailUrl:
-            safeHttpsUrl(episode.thumbnail_url) ??
-            safeHttpsUrl(episode.thumbnail) ??
-            safeHttpsUrl(episode.image) ??
-            thumbnailUrl ??
-            input.fallbackThumbnailUrl,
-          description:
-            cleanString(episode.description) ??
-            cleanString(episode.synopsis) ??
-            input.fallbackDescription,
+          ...(title ? { title } : {}),
+          ...(thumbnailUrl ? { thumbnailUrl } : {}),
+          ...(description ? { description } : {}),
         },
       ];
     })
@@ -302,9 +296,6 @@ function createAniListCatalog(input: AnimeEpisodeCatalogInput): AnimeEpisodeCata
         episodes: Array.from({ length: count }, (_, index) => ({
           id: `anilist:${input.aniListId}:episode:${index + 1}`,
           number: index + 1,
-          title: `Episode ${index + 1}`,
-          thumbnailUrl: input.fallbackThumbnailUrl,
-          description: input.fallbackDescription,
         })),
       },
     ],

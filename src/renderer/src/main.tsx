@@ -6,6 +6,7 @@ import "./styles.css";
 import "./styles/controls.css";
 import "./styles/notifications.css";
 import "./styles/redesign.css";
+import "./styles/account-menu.css";
 
 document.documentElement.dataset.platform = navigator.userAgent.includes("Windows")
   ? "win32"

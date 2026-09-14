@@ -1,6 +1,6 @@
-import { LogOut, MoreHorizontal, Plus, RefreshCw, Search, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListDashboard,
@@ -15,6 +15,7 @@ import { motionTransition } from "./motion";
 import { LibraryCard } from "./LibraryCard";
 import { SearchView } from "./SearchView";
 import type { ViewerAccess } from "./viewer-access";
+import { AniListSourceIcon } from "./AniListSourceIcon";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 export type LibrarySort = "UPDATED_DESC" | "TITLE_ASC" | "SCORE_DESC" | "PROGRESS_DESC";
 export function ProfileView({
@@ -26,7 +27,6 @@ export function ProfileView({
   listQuery,
   librarySort,
   adding,
-  syncing,
   error,
   onSwitchType,
   onSelectGroup,
@@ -37,8 +37,6 @@ export function ProfileView({
   onEdit,
   access,
   onLibrary,
-  onRefresh,
-  onLogout,
   onOpenMedia,
 }: {
   dashboard: AniListDashboard;
@@ -49,7 +47,6 @@ export function ProfileView({
   listQuery: string;
   librarySort: LibrarySort;
   adding: boolean;
-  syncing: boolean;
   error?: string;
   onSwitchType: (type: AniListMediaType) => void;
   onSelectGroup: (name: string) => void;
@@ -60,28 +57,12 @@ export function ProfileView({
   onEdit: (entry: AniListEntry) => void;
   onLibrary: (media: AniListCatalogMedia) => Promise<void>;
   onSave: (input: UpdateAniListEntryInput) => Promise<void>;
-  onRefresh: () => Promise<void>;
-  onLogout: () => Promise<void>;
   onOpenMedia: (media: AniListMedia, action: "details" | "play" | "read") => void;
 }): React.JSX.Element {
-  const [refreshSpin, setRefreshSpin] = useState(0);
   const groups = mediaType === "ANIME" ? dashboard.animeLists : dashboard.mangaLists;
   const reducedMotion = useAppReducedMotion();
-  const accountMenuRef = useRef<HTMLDetailsElement>(null);
   const activeListName = activeGroupName ?? selectedGroup;
   const profileTransition = motionTransition(reducedMotion, "emphasis");
-
-  const closeAccountMenu = useCallback((): void => {
-    accountMenuRef.current?.removeAttribute("open");
-  }, []);
-
-  useEffect(() => {
-    const closeOnOutsideClick = (event: PointerEvent): void => {
-      if (!accountMenuRef.current?.contains(event.target as Node)) closeAccountMenu();
-    };
-    document.addEventListener("pointerdown", closeOnOutsideClick);
-    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
-  }, [closeAccountMenu]);
 
   return (
     <>
@@ -111,7 +92,10 @@ export function ProfileView({
             />
           </div>
           <div className="profile-summary-copy">
-            <p className="profile-kicker">AniList profile</p>
+            <p className="profile-kicker">
+              <AniListSourceIcon />
+              Profile
+            </p>
             <h1 data-profile-heading tabIndex={-1}>
               {dashboard.profile.name}
             </h1>
@@ -145,53 +129,6 @@ export function ProfileView({
             ]}
           />
         </motion.div>
-
-        <details
-          className="profile-account-menu"
-          ref={accountMenuRef}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              closeAccountMenu();
-              accountMenuRef.current?.querySelector("summary")?.focus();
-            }
-          }}
-        >
-          <summary aria-label="Profile options" title="Profile options">
-            <MoreHorizontal size={19} aria-hidden="true" />
-          </summary>
-          <div role="menu">
-            <button
-              type="button"
-              role="menuitem"
-              disabled={syncing}
-              onClick={() => {
-                setRefreshSpin((spin) => spin + 1);
-                void onRefresh();
-              }}
-            >
-              <RefreshCw
-                key={refreshSpin}
-                className={refreshSpin ? "refresh-spin-once" : undefined}
-                size={16}
-                aria-hidden="true"
-              />
-              {syncing ? "Refreshing" : "Refresh AniList"}
-            </button>
-            <button
-              className="danger"
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeAccountMenu();
-                void onLogout();
-              }}
-            >
-              <LogOut size={16} aria-hidden="true" />
-              Log out
-            </button>
-          </div>
-        </details>
       </motion.header>
 
       <section className="library-shell">

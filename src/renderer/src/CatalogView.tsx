@@ -19,6 +19,7 @@ import { motionTransition } from "./motion";
 import { ForYouRail } from "./ForYouRail";
 import { PersonalLibrary } from "./PersonalLibrary";
 import { useAppReducedMotion } from "./useAppReducedMotion";
+import { AniListSourceIcon } from "./AniListSourceIcon";
 
 const NO_AVAILABILITY_MEDIA: [] = [];
 
@@ -234,14 +235,16 @@ export function CatalogView({
           </section>
         ) : null}
 
-        <ForYouRail
-          key={`for-you:${type}:${access.kind === "member" ? access.dashboard.profile.id : "guest"}`}
-          type={type}
-          onSelect={onSelect}
-          onPrimary={onPrimary}
-          onLibrary={onLibrary}
-          access={access}
-        />
+        {access.kind === "member" ? (
+          <ForYouRail
+            key={`for-you:${type}:${access.dashboard.profile.id}`}
+            type={type}
+            onSelect={onSelect}
+            onPrimary={onPrimary}
+            onLibrary={onLibrary}
+            access={access}
+          />
+        ) : null}
 
         {!trending.length && malTrendingFallback.length ? (
           <section className="media-rail" aria-label={`Trending ${mediaName} via MyAnimeList`}>
@@ -289,9 +292,9 @@ export function CatalogView({
             aria-busy={latestLoading}
           >
             <div className="rail-heading">
-              <div>
-                <p className="catalog-kicker">Fresh episodes from AniList airing data</p>
+              <div className="source-heading">
                 <h2>Latest Anime Updates</h2>
+                <AniListSourceIcon label="AniList source" />
               </div>
               <span className="rail-count">Page {latestPage}</span>
             </div>
