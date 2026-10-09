@@ -111,7 +111,14 @@ export function ProfileLookDialog({
         `${file.name} is ${width} × ${height}. Choose an image up to ${HERO_RULES.maxSide} × ${HERO_RULES.maxSide}.`,
       );
     }
-    setUpload({ name: file.name, bytes: file.size, bitmap, url: URL.createObjectURL(file) });
+    let url: string;
+    try {
+      url = await previewUrl(bitmap);
+    } catch {
+      bitmap.close();
+      return setProblem(`${file.name} could not be opened as an image.`);
+    }
+    setUpload({ name: file.name, bytes: file.size, bitmap, url });
     setCrop({ x: 0.5, y: 0.5, zoom: 1 });
     setHero("custom");
   }
@@ -434,6 +441,19 @@ async function encode(
   context.drawImage(upload.bitmap, rect.x, rect.y, rect.w, rect.h, 0, 0, width, height);
   const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.88 });
   return new Uint8Array(await blob.arrayBuffer());
+}
+
+/**
+ * Object URL for the preview and crop frame, re-encoded from the decoded pixels so the picked file's
+ * own bytes are never handed to an image source.
+ */
+async function previewUrl(bitmap: ImageBitmap): Promise<string> {
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("No canvas");
+  context.drawImage(bitmap, 0, 0);
+  const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.92 });
+  return URL.createObjectURL(blob);
 }
 
 function clamp(value: number): number {
