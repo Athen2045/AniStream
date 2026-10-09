@@ -36,7 +36,7 @@ export class KitsuClient {
       timeoutMs: REQUEST_TIMEOUT_MS,
       headers: {
         Accept: "application/vnd.api+json",
-        "User-Agent": "AniStream/0.1.4 (development Kitsu hero preview)",
+        "User-Agent": "AniStream (development Kitsu hero preview)",
       },
     });
   }

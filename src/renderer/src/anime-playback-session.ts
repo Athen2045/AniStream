@@ -1,8 +1,7 @@
 import type { SavePlaybackResumeInput } from "../../shared/contracts";
-import { parseMegaPlayEvent } from "../../shared/megaplay-events";
+import { parseAnimePlayerMessage } from "../../shared/anime-player-events";
 import { friendlyPlaybackError } from "./remote-error";
 
-const MEGAPLAY_ORIGIN = "https://megaplay.buzz";
 const RESUME_SAVE_INTERVAL_MS = 10_000;
 const PLAYER_LOAD_TIMEOUT_MS = 15_000;
 const COMPLETE_PERCENT = 90;
@@ -19,6 +18,8 @@ export interface AnimePlaybackSessionSnapshot {
 
 export interface AnimePlaybackSessionOptions {
   mediaId: number;
+  /** Origin of the embed URL main returned; messages from any other origin are ignored. */
+  playerOrigin: string;
   episode: number;
   saveResume: (input: SavePlaybackResumeInput) => Promise<void> | void;
   clearResume: (aniListId: number) => Promise<void> | void;
@@ -162,14 +163,14 @@ export function createAnimePlaybackSession(
     handleMessage(data, origin, source, expectedSource) {
       if (
         disposed ||
-        origin !== MEGAPLAY_ORIGIN ||
+        origin !== options.playerOrigin ||
         expectedSource === null ||
         source !== expectedSource
       ) {
         return;
       }
 
-      const message = parseMegaPlayEvent(data);
+      const message = parseAnimePlayerMessage(data);
       if (!message) return;
 
       if (message.kind === "progress") {

@@ -10,7 +10,7 @@ export interface RequestGateOptions {
   requestsPerMinute: number;
   windowMs?: number;
   /** Minimum spacing between request starts, independent of the per-minute budget.
-   * Used by providers (e.g. Anikoto) that document a strict inter-request gap rather
+   * Used by providers (e.g. the anime episode index) that document a strict inter-request gap rather
    * than a sliding-window quota. */
   minIntervalMs?: number;
 }
@@ -62,34 +62,48 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
     return slot;
   }
 
+  function run<T>(
+    dedupeKey: string | undefined,
+    fn: () => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (signal?.aborted) return Promise.reject(abortReason(signal));
+    if (dedupeKey) {
+      const existing = inFlight.get(dedupeKey);
+      if (existing) {
+        return raceWithAbort(existing as Promise<T>, signal).catch((error: unknown) => {
+          // The shared request belonged to another caller who cancelled it. This caller did not
+          // cancel, so it runs the request itself instead of inheriting someone else's abort.
+          if (!isCancellation(error) || signal?.aborted) throw error;
+          if (inFlight.get(dedupeKey) === existing) inFlight.delete(dedupeKey);
+          return run(dedupeKey, fn, signal);
+        });
+      }
+    }
+
+    const execution = (async () => {
+      await acquireSlot(signal);
+      throwIfAborted(signal);
+      return fn();
+    })();
+
+    if (dedupeKey) {
+      const key = dedupeKey;
+      inFlight.set(key, execution);
+      const clearInFlight = (): void => {
+        if (inFlight.get(key) === execution) inFlight.delete(key);
+      };
+      // `finally()` would create a second promise that rejects whenever `execution`
+      // rejects. If that cleanup promise is ignored, an expected provider outage is
+      // reported by Electron as an unhandled rejection even though the caller handled it.
+      void execution.then(clearInFlight, clearInFlight);
+    }
+
+    return execution;
+  }
+
   return {
-    run<T>(dedupeKey: string | undefined, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-      if (signal?.aborted) return Promise.reject(abortReason(signal));
-      if (dedupeKey) {
-        const existing = inFlight.get(dedupeKey);
-        if (existing) return raceWithAbort(existing as Promise<T>, signal);
-      }
-
-      const execution = (async () => {
-        await acquireSlot(signal);
-        throwIfAborted(signal);
-        return fn();
-      })();
-
-      if (dedupeKey) {
-        const key = dedupeKey;
-        inFlight.set(key, execution);
-        const clearInFlight = (): void => {
-          if (inFlight.get(key) === execution) inFlight.delete(key);
-        };
-        // `finally()` would create a second promise that rejects whenever `execution`
-        // rejects. If that cleanup promise is ignored, an expected provider outage is
-        // reported by Electron as an unhandled rejection even though the caller handled it.
-        void execution.then(clearInFlight, clearInFlight);
-      }
-
-      return execution;
-    },
+    run,
     reportRateLimited(retryAfterMs: number): void {
       blockedUntil = Math.max(blockedUntil, Date.now() + Math.max(0, retryAfterMs));
     },
@@ -111,6 +125,11 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     };
     signal.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+/** A caller's cancellation, as opposed to a timeout or a provider failure. */
+function isCancellation(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

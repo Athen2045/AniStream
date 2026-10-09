@@ -1,41 +1,59 @@
 import { randomUUID } from "node:crypto";
-import type {
-  AniListCatalogPage,
-  AniListDashboard,
-  AniListMedia,
-  AniListMediaType,
-  BrowseAniListInput,
-} from "../../shared/contracts";
+import type { AniListDashboard, AniListMediaType } from "../../shared/contracts";
 import type { LocalActivity } from "../../shared/activity";
 import type {
   DiscoveryFeed,
   DiscoveryFeedback,
   DiscoveryImpressionInput,
 } from "../../shared/discovery";
-import type {
-  RecommendationItemFeatures,
-  RecommendationResult,
-} from "../../shared/recommendations";
-import type { DiscoveryStore } from "./discovery-store";
-import { discoveryEvidence, recommendationFeatures } from "./discovery-evidence";
-import { buildRecommendationProfile, profileFeatureKey } from "./profile";
 import {
-  filterRecommendationCandidates,
-  scoreRecommendationCandidate,
-  selectRecommendations,
-} from "./scoring";
+  HYBRID_WEIGHTS,
+  type RecommendationItemFeatures,
+  type RecommendationResult,
+} from "../../shared/recommendations";
+import type { RecommendationSeedData } from "../anilist/recommendation-seeds";
+import type { AnimeTmdbLinkIndex } from "../anime-tmdb-links";
+import type { DiscoveryStore } from "./discovery-store";
+import type { TitleFeedbackRow } from "./personalization-store";
+import { discoveryEvidence, recommendationFeatures } from "./discovery-evidence";
+import {
+  buildSeedRows,
+  buildThemeRow,
+  eligibilityFilter,
+  firstSeason,
+  rankHybrid,
+  redirectEdges,
+  rowStrength,
+  selectHybrid,
+  type HybridHistoryItem,
+} from "./hybrid";
+
+/** Titles watched/read (any section) before For You starts; matches the hero (user 2026-10-08). */
+const MIN_TITLES = 3;
 
 interface Dependencies {
   store: DiscoveryStore;
   owner(): number;
   activity(): LocalActivity[];
   dashboard(): AniListDashboard | undefined;
-  seeds(ids: number[], signal?: AbortSignal): Promise<AniListMedia[]>;
-  browse(input: BrowseAniListInput, signal?: AbortSignal): Promise<AniListCatalogPage>;
+  seeds(ids: number[], signal?: AbortSignal): Promise<RecommendationSeedData>;
+  trending(type: AniListMediaType, signal?: AbortSignal): Promise<RecommendationItemFeatures[]>;
+  /** Title-page "Interested" / "Not interested" choices (all sections; AniList reads its own). */
+  feedback?: () => TitleFeedbackRow[];
+  /** Exact AniList ↔ TMDB links; absent means no cross-section identity. */
+  links?: () => AnimeTmdbLinkIndex;
+  /** More titles really watched (`MOVIE:id` / `TV:id`); their anime stays out of For You. */
+  watchedMore?: () => ReadonlySet<string>;
   now?: () => number;
   providerTimeoutMs?: number;
 }
 const PROVIDER_DEADLINE_MS = 12_000;
+/** Strongest liked titles considered as graph seeds; hydrated one AniList page per load. */
+const MAX_SEEDS = 48;
+const SEED_PAGE_SIZE = 24;
+const SEED_TTL_MS = 7 * 86_400_000;
+const INTERESTED_AFFINITY = 0.5;
+const HALF_LIFE_MS = HYBRID_WEIGHTS.halfLifeDays * 86_400_000;
 interface CandidatePool {
   items: RecommendationItemFeatures[];
   expiresAt: number;
@@ -45,7 +63,7 @@ interface CandidatePool {
 export class DiscoveryService {
   private readonly now: () => number;
   private readonly providerTimeoutMs: number;
-  private readonly pools = new Map<string, CandidatePool>();
+  private readonly pools = new Map<AniListMediaType, CandidatePool>();
   private readonly pending = new Map<string, Promise<DiscoveryFeed>>();
   private readonly requests = new Map<
     string,
@@ -92,6 +110,53 @@ export class DiscoveryService {
     }
   }
 
+  /**
+   * The viewer's AniList taste as ranker history from cached features only (no provider
+   * requests), used as the cross-section prior for More.
+   */
+  tasteHistory(): HybridHistoryItem[] {
+    const owner = this.deps.owner();
+    const now = this.now();
+    const dashboard = this.deps.dashboard();
+    const evidence = discoveryEvidence(
+      this.deps.activity(),
+      dashboard?.profile.id === owner ? dashboard : undefined,
+    );
+    const features = new Map(
+      this.deps.store
+        .features(evidence.history.map((row) => row.anilistId))
+        .map((row) => [row.anilistId, row]),
+    );
+    for (const media of evidence.historyMedia)
+      if (!features.has(media.id)) features.set(media.id, recommendationFeatures(media, now));
+    return evidence.history.flatMap((row) => {
+      const item = features.get(row.anilistId);
+      return item ? [{ features: item, affinity: row.affinity, occurredAt: row.occurredAt }] : [];
+    });
+  }
+
+  /** AniList titles the viewer has started (any list status but Planning, or local progress). */
+  watchedAniList(): Set<number> {
+    const owner = this.deps.owner();
+    const dashboard = this.deps.dashboard();
+    return discoveryEvidence(
+      this.deps.activity(),
+      dashboard?.profile.id === owner ? dashboard : undefined,
+    ).watched;
+  }
+
+  /** Distinct titles of one type with real progress (the hero personalizes from three). */
+  private sectionTitles(type: AniListMediaType, owner: number): number {
+    const dashboard = this.deps.dashboard();
+    const evidence = discoveryEvidence(
+      this.deps.activity(),
+      dashboard?.profile.id === owner ? dashboard : undefined,
+    );
+    return new Set(
+      evidence.events.filter((row) => row.mediaType === type).map((row) => row.anilistId),
+    ).size;
+  }
+
   dispose(): void {
     this.disposed = true;
     this.requests.clear();
@@ -116,7 +181,8 @@ export class DiscoveryService {
       controller.abort(new DOMException("Recommendation request timed out.", "TimeoutError"));
     }, this.providerTimeoutMs);
     try {
-      return await this.loadWithinDeadline(type, owner, controller.signal);
+      const feed = await this.loadWithinDeadline(type, owner, controller.signal);
+      return { ...feed, sectionTitles: this.sectionTitles(type, owner) };
     } finally {
       clearTimeout(timeout);
     }
@@ -134,122 +200,228 @@ export class DiscoveryService {
       this.deps.activity(),
       dashboard?.profile.id === owner ? dashboard : undefined,
     );
-    if (new Set(evidence.events.map((row) => row.anilistId)).size < 5)
+    if (new Set(evidence.events.map((row) => row.anilistId)).size < MIN_TITLES)
       return {
         status: "learning",
         items: [],
         message:
-          "Watch or read five titles to shape your recommendations. Opening a title alone does not count.",
+          "Watch or read three titles to shape your recommendations. Opening a title alone does not count.",
       };
     const feedback = this.deps.store.events(owner);
-    const stored = this.deps.store.features([
-      ...evidence.media.map((row) => row.id),
-      ...feedback.map((row) => row.anilistId),
-    ]);
-    const features = new Map(stored.map((row) => [row.anilistId, row]));
-    const missing: number[] = [];
-    for (const media of evidence.media) {
-      if (media.genres?.length) features.set(media.id, recommendationFeatures(media, now));
-      else if (!features.has(media.id) || features.get(media.id)!.updatedAt < now - 6 * 60 * 60_000)
-        missing.push(media.id);
+    const dismissed = new Set(
+      feedback.filter((row) => row.eventType === "dismissed").map((row) => row.anilistId),
+    );
+    // Title-page choices: "Not interested" behaves like a dismissal, "Interested" like a liked
+    // title (it seeds rows and never comes back as a recommendation).
+    for (const choice of this.deps.feedback?.() ?? []) {
+      if (choice.type !== "ANIME" && choice.type !== "MANGA") continue;
+      if (choice.value === "not-interested") {
+        if (choice.type === type) dismissed.add(choice.id);
+        continue;
+      }
+      evidence.excluded.add(choice.id);
+      const known = evidence.history.find((row) => row.anilistId === choice.id);
+      if (known) known.affinity = Math.max(known.affinity, INTERESTED_AFFINITY);
+      else
+        evidence.history.push({
+          anilistId: choice.id,
+          mediaType: choice.type,
+          affinity: INTERESTED_AFFINITY,
+          occurredAt: choice.updatedAt,
+        });
     }
+    const features = new Map(
+      this.deps.store
+        .features([...evidence.history.map((row) => row.anilistId), ...dismissed])
+        .map((row) => [row.anilistId, row]),
+    );
+    for (const media of evidence.historyMedia)
+      if (!features.has(media.id)) features.set(media.id, recommendationFeatures(media, now));
+
+    // Hydrate the strongest liked titles lacking fresh recommendation edges, one bounded page per
+    // load; later refreshes continue down the list, so the cache converges without bursts.
+    const missing = evidence.history
+      .filter((row) => row.affinity > 0)
+      .map((row) => ({
+        id: row.anilistId,
+        weight:
+          row.affinity *
+          Math.pow(0.5, Math.max(0, now - row.occurredAt) / HALF_LIFE_MS) *
+          (row.mediaType === type ? 1 : HYBRID_WEIGHTS.crossTypePrior),
+      }))
+      .sort((a, b) => b.weight - a.weight || a.id - b.id)
+      .slice(0, MAX_SEEDS)
+      .filter(({ id }) => {
+        const row = features.get(id);
+        return !row?.recommendations || !row.relations || row.updatedAt < now - SEED_TTL_MS;
+      })
+      .map(({ id }) => id)
+      .slice(0, SEED_PAGE_SIZE);
+    let message: string | undefined;
     if (missing.length) {
       try {
-        const hydrated = await this.deps.seeds(missing.slice(0, 24), signal);
+        const hydrated = await this.deps.seeds(missing, signal);
         this.assertOwner(owner);
-        for (const media of hydrated) {
-          if (missing.includes(media.id))
-            features.set(media.id, recommendationFeatures(media, now));
-        }
+        for (const row of hydrated.neighbors)
+          if (!features.get(row.anilistId)?.recommendations) features.set(row.anilistId, row);
+        for (const row of hydrated.seeds) features.set(row.anilistId, row);
+        this.deps.store.saveFeatures([...hydrated.neighbors, ...hydrated.seeds]);
       } catch (reason) {
         this.assertOwner(owner);
-        return {
-          status: "unavailable",
-          items: [],
-          message: providerMessage(reason, "AniList history metadata could not be checked."),
-        };
+        // Degrade to cached edges and trending candidates instead of failing the whole rail.
+        message = providerMessage(reason, "AniList history metadata could not be checked.");
       }
     }
     this.assertOwner(owner);
-    const allFeatures = [...features.values()];
-    this.deps.store.saveFeatures(allFeatures);
-    const profile = buildRecommendationProfile([...evidence.events, ...feedback], allFeatures, now);
-    const genres = [...new Set(allFeatures.flatMap((row) => row.genres))]
-      .map((genre) => {
-        const weight = profile.features[profileFeatureKey("genre", genre)];
-        return {
-          genre,
-          weight: (weight?.positiveWeight ?? 0) - (weight?.negativeWeight ?? 0) * 1.15,
+
+    const history: HybridHistoryItem[] = [
+      ...evidence.history.flatMap((row) => {
+        const item = features.get(row.anilistId);
+        return item && !dismissed.has(row.anilistId)
+          ? [{ features: item, affinity: row.affinity, occurredAt: row.occurredAt }]
+          : [];
+      }),
+      ...[...dismissed].flatMap((id) => {
+        const item = features.get(id);
+        const occurredAt = feedback.find((row) => row.anilistId === id)?.occurredAt ?? now;
+        return item ? [{ features: item, affinity: -1, occurredAt }] : [];
+      }),
+    ];
+    let pool = this.pools.get(type);
+    // After a failed seed request the shared transport is cooling down; never fan out further.
+    if (message) pool ??= { items: [], expiresAt: 0 };
+    else if (!pool || pool.expiresAt <= now) {
+      // Trending covers titles too new for recommendation edges. Genre pages added no measured
+      // recall over graph neighbors (2026-10-04 harness) and surfaced unwatched later seasons.
+      try {
+        const items = await this.deps.trending(type, signal);
+        this.assertOwner(owner);
+        pool = { items, expiresAt: now + 10 * 60_000 };
+      } catch (reason) {
+        this.assertOwner(owner);
+        pool = {
+          items: pool?.items ?? [],
+          expiresAt: now + 60_000,
+          message: providerMessage(
+            reason,
+            "AniList recommendation check failed. Available results may be incomplete or out of date.",
+          ),
         };
-      })
-      .filter((row) => row.weight > 0)
-      .sort((a, b) => b.weight - a.weight || a.genre.localeCompare(b.genre))
-      .slice(0, 2)
-      .map((row) => row.genre);
-    const key = `${type}:${genres.join(",")}`;
-    let pool = this.pools.get(key);
-    if (!pool || pool.expiresAt <= now) {
-      const candidates: RecommendationItemFeatures[] = [];
-      let failure: unknown;
-      for (const genre of [...genres, undefined]) {
-        try {
-          const page = await this.deps.browse(
-            {
-              type,
-              genre,
-              page: 1,
-              perPage: 20,
-              sort: genre ? "SCORE_DESC" : "TRENDING_DESC",
-            },
-            signal,
-          );
-          this.assertOwner(owner);
-          candidates.push(
-            ...page.items
-              .slice(0, 20)
-              .filter((row) => row.type === type)
-              .map((row) => recommendationFeatures(row, now)),
-          );
-        } catch (reason) {
-          this.assertOwner(owner);
-          failure = reason;
-          break; // The shared transport owns cooldown; never fan out after a 429/403.
-        }
       }
-      pool = {
-        items: candidates.length ? candidates : (pool?.items ?? []),
-        expiresAt: now + (failure ? 60_000 : 10 * 60_000),
-        message: failure
-          ? providerMessage(
-              failure,
-              "AniList recommendation check failed. Available results may be incomplete or out of date.",
-            )
-          : undefined,
-      };
-      this.pools.set(key, pool);
-      if (this.pools.size > 8) this.pools.delete(this.pools.keys().next().value!);
+      this.pools.set(type, pool);
     }
     this.assertOwner(owner);
-    this.deps.store.saveFeatures(pool.items);
-    for (const row of feedback)
-      if (row.eventType === "dismissed") evidence.excluded.add(row.anilistId);
-    const items = selectRecommendations(
-      filterRecommendationCandidates(
-        pool.items.map((features) => ({ features })),
-        evidence.excluded,
-      ).map((row) => scoreRecommendationCandidate(row, profile, now)),
-      10,
+    this.deps.store.saveFeatures(pool.items.filter((row) => !features.has(row.anilistId)));
+    message ??= pool.message;
+
+    // Graph neighbors come from the local feature cache: no extra provider requests.
+    const neighborIds = new Set<number>();
+    for (const item of history)
+      if (item.affinity > 0)
+        for (const edge of item.features.recommendations ?? [])
+          if (edge.mediaType === type) neighborIds.add(edge.id);
+    const known = new Map(features);
+    for (const row of this.deps.store.features([...neighborIds].filter((id) => !known.has(id))))
+      known.set(row.anilistId, row);
+    const links = this.deps.links?.();
+    const watchedMore = this.deps.watchedMore?.() ?? new Set<string>();
+    const watchedInMore = (row: RecommendationItemFeatures): boolean =>
+      Boolean(links) &&
+      row.mediaType === "ANIME" &&
+      links!.tmdbKeysFor(row.anilistId).some((key) => watchedMore.has(key));
+    const eligible = eligibilityFilter(
+      history.map((row) => row.features),
+      evidence.watched,
     );
+    const allowed = (row: RecommendationItemFeatures): boolean =>
+      row.mediaType === type &&
+      !row.isAdult &&
+      !evidence.excluded.has(row.anilistId) &&
+      !dismissed.has(row.anilistId) &&
+      !watchedInMore(row);
+    const raw = [...[...neighborIds].flatMap((id) => known.get(id) ?? []), ...pool.items];
+    // A later season whose prequel was never started is recommended as its first season instead
+    // (release order, exact AniList relations only), inheriting its "similar to" links.
+    const gather = () => {
+      const candidates = new Map<number, RecommendationItemFeatures>();
+      const redirects = new Map<number, number>();
+      const missing = new Set<number>();
+      for (const row of raw) {
+        if (!allowed(row) || candidates.has(row.anilistId)) continue;
+        if (eligible(row)) {
+          candidates.set(row.anilistId, row);
+          continue;
+        }
+        const start = firstSeason(row, (id) => known.get(id), evidence.watched);
+        if (start && "missing" in start) missing.add(start.missing);
+        else if (
+          start &&
+          allowed(start.entry) &&
+          !candidates.has(start.entry.anilistId) &&
+          eligible(start.entry, start.storyPrequels)
+        ) {
+          if (start.entry !== row) redirects.set(row.anilistId, start.entry.anilistId);
+          candidates.set(start.entry.anilistId, start.entry);
+        } else if (
+          start &&
+          "entry" in start &&
+          start.entry !== row &&
+          candidates.has(start.entry.anilistId)
+        )
+          redirects.set(row.anilistId, start.entry.anilistId);
+      }
+      return { candidates, redirects, missing };
+    };
+    let gathered = gather();
+    // Earlier seasons not cached yet: one bounded lookup, cached for later loads.
+    if (gathered.missing.size && !message) {
+      try {
+        const hydrated = await this.deps.seeds(
+          [...gathered.missing].slice(0, SEED_PAGE_SIZE),
+          signal,
+        );
+        this.assertOwner(owner);
+        for (const row of hydrated.seeds) known.set(row.anilistId, row);
+        this.deps.store.saveFeatures([...hydrated.neighbors, ...hydrated.seeds]);
+        gathered = gather();
+      } catch {
+        this.assertOwner(owner);
+        // Without them those sequels simply stay out, as before.
+      }
+    }
+    const { candidates } = gathered;
+    const ranked = redirectEdges(history, gathered.redirects);
+    const scored = rankHybrid({
+      section: type,
+      history: ranked,
+      candidates: [...candidates.values()],
+      now,
+    });
+    const items = selectHybrid(scored, ranked, 10);
+    const shown = new Set(items.map((row) => row.anilistId));
+    const seedRows = buildSeedRows(scored, ranked, type, shown);
+    for (const row of seedRows) for (const item of row.items) shown.add(item.anilistId);
+    const themeRow = buildThemeRow(scored, ranked, type, shown);
+    // Strongest row first, so the best match is the first thing the viewer sees.
+    const rows = (themeRow ? [...seedRows, themeRow] : seedRows)
+      .map((row) => ({ row, strength: rowStrength(row.items) }))
+      .sort((a, b) => b.strength - a.strength)
+      .map(({ row }) => row);
     const requestId = randomUUID();
     for (const [id, request] of this.requests)
       if (request.expiresAt <= now || request.owner !== owner) this.requests.delete(id);
-    this.requests.set(requestId, { owner, items, expiresAt: now + 60 * 60_000 });
+    this.requests.set(requestId, {
+      owner,
+      items: [...items, ...rows.flatMap((row) => row.items)],
+      expiresAt: now + 60 * 60_000,
+    });
     if (this.requests.size > 32) this.requests.delete(this.requests.keys().next().value!);
     return {
-      status: pool.message && !items.length ? "unavailable" : "ready",
+      status: message && !items.length ? "unavailable" : "ready",
       items,
+      rows,
       requestId,
-      message: pool.message,
+      message,
     };
   }
 }

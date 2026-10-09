@@ -1,7 +1,7 @@
 import type { MangaUpdatesEnrichment, MangaUpdatesGroup } from "../shared/contracts";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
-import { ProviderTransport } from "./provider-transport";
+import { PROVIDER_USER_AGENT, ProviderTransport } from "./provider-transport";
 
 const BASE_URL = "https://api.mangaupdates.com/v1/";
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -31,7 +31,7 @@ export class MangaUpdatesClient {
       timeoutMs: REQUEST_TIMEOUT_MS,
       headers: {
         Accept: "application/json",
-        "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+        "User-Agent": PROVIDER_USER_AGENT,
       },
     });
   }

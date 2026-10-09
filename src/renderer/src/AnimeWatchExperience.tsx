@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, ChevronLeft, LoaderCircle, Play, SkipForward } from "lucide-react";
+import { PlayerStarting } from "./PlayerStarting";
+import { Check, ChevronDown, ChevronLeft, Clock3, LoaderCircle, Play } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useMediaFullscreen } from "./useMediaFullscreen";
+import { getAppPreferences, preferredAudioSource } from "./app-preferences";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import {
   useCallback,
@@ -24,9 +26,14 @@ import type {
 } from "../../shared/contracts";
 import { chooseInitialAnimeEpisode, createAnimePlaybackSession } from "./anime-playback-session";
 import { saveAnimeActivity } from "./local-activity";
+import { episodeAiringLabel, unairedEpisode } from "./airing";
+import { AutoplayNext, useNextUp } from "./AutoplayNext";
+import { EpisodeQueueToggle } from "./UpNextButton";
+import { animeBingeItem } from "./binge-session";
 import { formatMediaLabel } from "./format-label";
 import { motionTransition } from "./motion";
 import { useAutoHideMediaControls } from "./useAutoHideMediaControls";
+import { useCaptionControlsVisibility } from "./useCaptionControlsVisibility";
 import { friendlyPlaybackError, friendlyRemoteError } from "./remote-error";
 import {
   buildAnimeSeasonChain,
@@ -34,8 +41,9 @@ import {
   inferMediaDisplayedSeasonNumber,
   type AnimeSeasonChoice,
 } from "./anime-season-chain";
+import { playStarted } from "./play-timer";
 
-const EPISODES_PAGE_SIZE = 10;
+const EPISODES_PAGE_SIZE = 12;
 
 type WatchView = "episodes" | "player";
 
@@ -53,7 +61,7 @@ export function AnimeWatchExperience({
   onNavigate?: (media: AniListCatalogMedia) => void;
 }): React.JSX.Element {
   const rootRef = useRef<HTMLElement>(null);
-  const { exitFullscreen, isFullscreenEscape } = useMediaFullscreen(rootRef);
+  const { fullscreen, exitFullscreen, isFullscreenEscape } = useMediaFullscreen(rootRef);
   const episodeFocus = useRef<HTMLElement | null>(null);
   const backButtonRef = useRef<HTMLButtonElement>(null);
   const reducedMotion = useAppReducedMotion();
@@ -85,6 +93,10 @@ export function AnimeWatchExperience({
     reveal: revealPlayerControls,
     setPinned: setPlayerControlsPinned,
   } = useAutoHideMediaControls();
+  // Windowed, the controls live in their own strip above the video and stay visible; only
+  // display fullscreen hides them while idle.
+  const playerChromeShown = playerControlsVisible || !source || !fullscreen;
+  useCaptionControlsVisibility(view === "player", playerChromeShown);
 
   const titles = useMemo(() => {
     const detailTitles =
@@ -101,31 +113,81 @@ export function AnimeWatchExperience({
   }, [catalogMedia]);
 
   const fallback = useMemo(() => fallbackSeason(catalogMedia), [catalogMedia]);
-  const seasons = useMemo(
-    () => (catalog?.seasons.length ? catalog.seasons : [fallback]),
-    [catalog, fallback],
+  // TMDB episode stills (exact link, aligned by air date) replace the episode artwork when found.
+  const [episodeArt, setEpisodeArt] = useState<ReadonlyMap<number, string>>(new Map());
+  const listedSeasons = catalog?.seasons.length ? catalog.seasons : [fallback];
+  const lastEpisode = Math.max(
+    0,
+    ...listedSeasons.flatMap((season) => season.episodes.map((episode) => episode.number)),
   );
+  const seasons = useMemo(() => {
+    const listed = catalog?.seasons.length ? catalog.seasons : [fallback];
+    const withArt = episodeArt.size
+      ? listed.map((season) => ({
+          ...season,
+          episodes: season.episodes.map((episode) => {
+            const still = episodeArt.get(episode.number);
+            return still ? { ...episode, thumbnailUrl: still } : episode;
+          }),
+        }))
+      : listed;
+    return withNextAiringTile(withArt, media);
+  }, [catalog, episodeArt, fallback, media]);
   const activeSeason =
     seasons.find((season) => season.id === selectedSeasonId) ??
     seasonContainingEpisode(seasons, activeEpisode) ??
     seasons[0];
   const allEpisodes = useMemo(() => seasons.flatMap((season) => season.episodes), [seasons]);
+  // Stills follow the episodes on screen: long series load the TMDB seasons around this tab.
+  const artFocus = activeSeason?.episodes[0]?.number ?? catalogInitialEpisode;
+  useEffect(() => {
+    if (loadingCatalog || lastEpisode < 1) return;
+    let active = true;
+    window.anistream
+      .getAnimeEpisodeArt({
+        aniListId: catalogMedia.id,
+        episodes: lastEpisode,
+        focus: Math.min(lastEpisode, Math.max(1, artFocus)),
+      })
+      .then((art) => {
+        if (active && art.length)
+          setEpisodeArt(
+            (known) =>
+              new Map([...known, ...art.map((row) => [row.number, row.stillUrl] as const)]),
+          );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [artFocus, catalogMedia.id, lastEpisode, loadingCatalog]);
   const activeIndex = useMemo(
     () => allEpisodes.findIndex((episode) => sameEpisode(episode, activeEpisode)),
     [allEpisodes, activeEpisode],
   );
-  const nextEpisode = useMemo(
-    () =>
+  const nextEpisode = useMemo(() => {
+    const next =
       activeIndex >= 0 && activeIndex + 1 < allEpisodes.length
         ? allEpisodes[activeIndex + 1]
-        : undefined,
-    [activeIndex, allEpisodes],
-  );
+        : undefined;
+    // The end-of-episode prompt never offers an episode that has not aired yet.
+    return next && !unairedEpisode(media, next.number) ? next : undefined;
+  }, [activeIndex, allEpisodes, media]);
   const embedSources = useMemo(
     () => playback?.candidates.filter((candidate) => candidate.kind === "embed") ?? [],
     [playback],
   );
+  // Audio cycles through the episode's embeds (normally subtitles ⇄ dub).
+  const nextAudioSource =
+    embedSources.length > 1
+      ? embedSources[
+          (embedSources.findIndex((candidate) => candidate.id === source?.id) + 1) %
+            embedSources.length
+        ]
+      : undefined;
   const watchedEpisodes = "listEntry" in media ? (media.listEntry?.progress ?? 0) : 0;
+
+  useEffect(() => playStarted("ANIME"), []);
 
   useEffect(() => {
     let active = true;
@@ -153,10 +215,10 @@ export function AnimeWatchExperience({
           ? catalogResult.value
           : {
               status: "unavailable" as const,
-              provider: "anikoto" as const,
+              provider: "anime-source" as const,
               seasons: [],
               message: friendlyRemoteError(catalogResult.reason, {
-                provider: "Anikoto",
+                provider: "The anime player",
                 operation: "episode details",
                 fallback:
                   "Episode details could not be loaded. You can still try an episode, or retry the list.",
@@ -214,7 +276,13 @@ export function AnimeWatchExperience({
       .then((result) => {
         if (!active) return;
         setPlayback(result);
-        setSource(result.candidates.find((candidate) => candidate.kind === "embed"));
+        // Start on the audio chosen in Settings when the episode offers it.
+        setSource(
+          preferredAudioSource(
+            result.candidates.filter((candidate) => candidate.kind === "embed"),
+            getAppPreferences().audio,
+          ),
+        );
         setError(
           result.candidates.some((candidate) => candidate.kind === "embed")
             ? undefined
@@ -263,6 +331,8 @@ export function AnimeWatchExperience({
 
   const playEpisode = useCallback(
     (episode: AnimeProviderEpisode): void => {
+      // Unaired episodes are blocked; their tiles show when they air instead.
+      if (unairedEpisode(media, episode.number)) return;
       if (view !== "player" && document.activeElement instanceof HTMLElement)
         episodeFocus.current = document.activeElement;
       setResume((current) => (current?.episode === episode.number ? current : undefined));
@@ -277,7 +347,7 @@ export function AnimeWatchExperience({
       pendingEpisodeRef.current = episode;
       transitionTo("player");
     },
-    [seasons, selectedSeasonId, transitionTo, view],
+    [media, seasons, selectedSeasonId, transitionTo, view],
   );
 
   useEffect(() => {
@@ -386,62 +456,59 @@ export function AnimeWatchExperience({
             aria-hidden="true"
             onPointerMove={revealPlayerControls}
           />
+          {/* Hidden controls keep their footprint hoverable so they reappear where the pointer is. */}
+          <div
+            className="media-control-hotspot media-control-hotspot--back"
+            aria-hidden="true"
+            onPointerMove={revealPlayerControls}
+          />
+          {nextAudioSource ? (
+            <div
+              className="media-control-hotspot media-control-hotspot--caption media-control-hotspot--text"
+              aria-hidden="true"
+              onPointerMove={revealPlayerControls}
+            />
+          ) : null}
           <div
             className="media-control-layer media-control-layer--player"
-            data-visible={playerControlsVisible || !source}
-            aria-hidden={!(playerControlsVisible || !source)}
-            inert={playerControlsVisible || !source ? undefined : true}
+            data-visible={playerChromeShown}
+            aria-hidden={!playerChromeShown}
+            inert={playerChromeShown ? undefined : true}
             onFocusCapture={() => setPlayerControlsPinned(true)}
             onBlurCapture={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null))
                 setPlayerControlsPinned(false);
             }}
           >
+            {/* Window drag area between the controls; display fullscreen has no window to drag. */}
+            {!fullscreen ? <div className="player-drag-strip" aria-hidden="true" /> : null}
             <button
               ref={backButtonRef}
               type="button"
               className="watch-player-back"
               aria-label="Back to episode list"
-              title="Back to episode list"
+              title="Back to episode list (Esc)"
               onClick={returnToEpisodes}
             >
-              <ChevronLeft size={28} />
-              <span>Episodes</span>
+              <ChevronLeft size={22} />
             </button>
 
-            <div className="watch-player-heading">
-              <span>{media.title}</span>
-              <strong>
-                S{displayedSeasonNumber}:E{activeEpisode.number}
-                {activeEpisode.title ? ` · ${activeEpisode.title}` : ""}
-              </strong>
-            </div>
-
-            {embedSources.length > 1 ? (
-              <label className="watch-source-select">
-                <span>Audio</span>
-                <select
-                  aria-label="Episode audio"
-                  value={source?.id ?? ""}
-                  onChange={(event) => {
-                    const selected = embedSources.find(
-                      (candidate) => candidate.id === event.target.value,
-                    );
-                    if (selected) setSource(selected);
-                  }}
-                >
-                  {embedSources.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            {/* The title and fullscreen stay in the player's own controls. */}
+            {nextAudioSource && source ? (
+              <button
+                type="button"
+                className="watch-caption-tool watch-caption-tool--text"
+                aria-label={`Audio: ${source.label}. Switch to ${nextAudioSource.label}`}
+                title={`Audio: ${source.label} (switch to ${nextAudioSource.label})`}
+                onClick={() => setSource(nextAudioSource)}
+              >
+                {audioShortLabel(source.label)}
+              </button>
             ) : null}
           </div>
 
           {source ? (
-            <AnikotoEmbedPlayer
+            <AnimeEmbedPlayer
               key={`${activeEpisode.number}:${source.id}:${retryCount}`}
               mediaId={media.id}
               media={catalogMedia}
@@ -459,10 +526,10 @@ export function AnimeWatchExperience({
           ) : (
             <div className="player-unavailable" role="status">
               <Play size={54} />
-              <h3>{loadingPlayback ? "Opening Anikoto…" : "Anikoto player unavailable"}</h3>
+              <h3>{loadingPlayback ? "Opening the player…" : "Player unavailable"}</h3>
               <p>
                 {loadingPlayback
-                  ? "Preparing the approved Anikoto episode embed."
+                  ? "Preparing the episode player."
                   : (error ??
                     "This episode is unavailable from the player right now. Try another episode.")}
               </p>
@@ -547,31 +614,36 @@ function EpisodeBrowser({
   onSeasonNumberResolved: (number: number) => void;
   onPlay: (episode: AnimeProviderEpisode) => void;
 }): React.JSX.Element {
-  const format = media.format ? formatLabel(media.format) : "Anime";
   const runtime = "duration" in media ? media.duration : undefined;
   const [expanded, setExpanded] = useState(false);
   const episodes = activeSeason?.episodes ?? [];
-  const visibleEpisodes = expanded ? episodes : episodes.slice(0, EPISODES_PAGE_SIZE);
-  const hiddenCount = episodes.length - EPISODES_PAGE_SIZE;
+  // Collapsed, show the page of episodes holding the current one (episode 112 of 366 opens on
+  // 109–120), not always the first page.
+  const currentIndex = Math.max(
+    0,
+    episodes.findIndex((episode) => sameEpisode(episode, activeEpisode)),
+  );
+  const pageStart = Math.floor(currentIndex / EPISODES_PAGE_SIZE) * EPISODES_PAGE_SIZE;
+  const visibleEpisodes = expanded
+    ? episodes
+    : episodes.slice(pageStart, pageStart + EPISODES_PAGE_SIZE);
 
   return (
     <div className="netflix-episode-browser">
       <header className="episode-browser-heading">
-        <h2>Episodes</h2>
+        <h2>
+          Episodes
+          <small>
+            Season {displayedSeasonNumber}
+            {episodes.length ? ` · ${episodes.length} episodes` : ""}
+          </small>
+        </h2>
         <SeasonPicker
           media={media}
           onNavigate={onNavigate}
           onCurrentNumber={onSeasonNumberResolved}
         />
       </header>
-
-      <div className="episode-browser-meta">
-        <strong>Season {displayedSeasonNumber}:</strong>
-        <span>{format}</span>
-        {media.genres.slice(0, 2).map((genre) => (
-          <span key={genre}>{genre}</span>
-        ))}
-      </div>
 
       {loading ? <p className="catalog-loading">Loading episode details…</p> : null}
       {providerMessage ? (
@@ -583,51 +655,107 @@ function EpisodeBrowser({
         </div>
       ) : null}
 
-      <div className="netflix-episode-list">
-        {visibleEpisodes.map((episode) => {
+      <div className="episode-grid">
+        {visibleEpisodes.map((episode, index) => {
           const isCurrent = sameEpisode(episode, activeEpisode);
-          const isWatched = episode.number <= watchedEpisodes;
+          const upcoming = unairedEpisode(media, episode.number);
+          const isWatched = !upcoming && episode.number <= watchedEpisodes;
           const defaultTitle = `Episode ${episode.number}`;
           const episodeTitle = episode.title?.trim();
-          const episodeArt = episode.thumbnailUrl ?? media.bannerUrl ?? media.coverUrl;
-          const progress =
-            resume?.episode === episode.number && resume.durationSeconds > 0
-              ? Math.min(100, (resume.positionSeconds / resume.durationSeconds) * 100)
+          // Most episodes have no still: a slice of the series art sits behind the episode number.
+          const seriesArt = media.bannerUrl ?? media.coverUrl;
+          const duration = episode.durationMinutes ?? runtime ?? 24;
+          const resumed =
+            resume?.episode === episode.number && resume.durationSeconds > 0 ? resume : undefined;
+          const progress = resumed
+            ? Math.min(100, (resumed.positionSeconds / resumed.durationSeconds) * 100)
+            : isWatched
+              ? 100
+              : 0;
+          const minutesLeft = resumed
+            ? Math.max(1, Math.round((resumed.durationSeconds - resumed.positionSeconds) / 60))
+            : undefined;
+          const status = upcoming
+            ? episodeAiringLabel(upcoming)
+            : isCurrent
+              ? minutesLeft && progress < 100
+                ? `Continue · ${minutesLeft}m left`
+                : "Up next"
               : isWatched
-                ? 100
-                : 0;
+                ? "Watched"
+                : defaultTitle;
 
           return (
-            <button
+            <div
               key={`${activeSeason?.id ?? "season"}:${episode.id}:${episode.number}`}
-              type="button"
-              className={isCurrent ? "is-current" : undefined}
-              aria-label={`Play episode ${episode.number}: ${episodeTitle ?? defaultTitle}`}
-              onClick={() => onPlay(episode)}
+              className={`episode-tile-wrap${isWatched && !isCurrent ? " is-watched" : ""}`}
             >
-              <span className="netflix-episode-number">{episode.number}</span>
-              <span className="netflix-episode-thumb">
-                {episodeArt ? (
-                  <img src={episodeArt} alt="" loading="lazy" />
-                ) : (
-                  <span className="episode-thumb-fallback">{defaultTitle}</span>
-                )}
-                <span className="episode-play">
-                  <Play size={25} fill="currentColor" />
+              <button
+                type="button"
+                className={`episode-tile${isCurrent ? " is-current" : ""}${isWatched && !isCurrent ? " is-watched" : ""}${upcoming ? " is-upcoming" : ""}`}
+                aria-label={
+                  upcoming
+                    ? `Episode ${episode.number}: ${episodeTitle ?? defaultTitle}. ${status}`
+                    : `Play episode ${episode.number}: ${episodeTitle ?? defaultTitle}`
+                }
+                disabled={Boolean(upcoming)}
+                onClick={() => onPlay(episode)}
+              >
+                <span className="episode-tile-frame">
+                  {episode.thumbnailUrl ? (
+                    <img
+                      className="episode-tile-still"
+                      src={episode.thumbnailUrl}
+                      alt=""
+                      loading="lazy"
+                    />
+                  ) : seriesArt ? (
+                    <img
+                      className="episode-tile-art"
+                      src={seriesArt}
+                      alt=""
+                      loading="lazy"
+                      style={{ objectPosition: `${(index * 29) % 100}% 40%` }}
+                    />
+                  ) : null}
+                  {episode.thumbnailUrl ? (
+                    <span className="episode-tile-badge">E{episode.number}</span>
+                  ) : (
+                    <span className="episode-tile-number" aria-hidden="true">
+                      {String(episode.number).padStart(2, "0")}
+                    </span>
+                  )}
+                  {isWatched && !isCurrent ? (
+                    <span className="episode-tile-check" aria-hidden="true">
+                      <Check size={13} strokeWidth={3} />
+                    </span>
+                  ) : null}
+                  {upcoming ? (
+                    <span className="episode-upcoming" aria-hidden="true">
+                      <Clock3 size={20} />
+                    </span>
+                  ) : (
+                    <span className="episode-play" aria-hidden="true">
+                      <Play size={22} fill="currentColor" />
+                    </span>
+                  )}
+                  {upcoming ? null : <span className="episode-tile-duration">{duration}m</span>}
+                  {progress > 0 ? (
+                    <span className="episode-watch-progress" aria-hidden="true">
+                      <span style={{ transform: `scaleX(${progress / 100})` }} />
+                    </span>
+                  ) : null}
                 </span>
-                {progress > 0 ? (
-                  <span className="episode-watch-progress" aria-hidden="true">
-                    <span style={{ transform: `scaleX(${progress / 100})` }} />
-                  </span>
-                ) : null}
-              </span>
-              <span className="netflix-episode-copy">
-                <span className="netflix-episode-title">
-                  <strong>{episodeTitle ?? defaultTitle}</strong>
-                  <span>{episode.durationMinutes ?? runtime ?? 24}m</span>
-                </span>
-              </span>
-            </button>
+                <strong>{episodeTitle ?? defaultTitle}</strong>
+                <span className="episode-tile-status">{status}</span>
+              </button>
+              {upcoming ? null : (
+                <EpisodeQueueToggle
+                  item={animeBingeItem(media, episode.number)}
+                  label={`episode ${episode.number}`}
+                />
+              )}
+            </div>
           );
         })}
       </div>
@@ -636,10 +764,10 @@ function EpisodeBrowser({
           type="button"
           className="episode-list-toggle"
           aria-expanded={expanded}
-          aria-label={expanded ? "Show fewer episodes" : `Show ${hiddenCount} more episodes`}
           onClick={() => setExpanded((value) => !value)}
         >
-          <ChevronDown size={22} className={expanded ? "is-expanded" : undefined} />
+          {expanded ? "Show fewer episodes" : `Show all ${episodes.length} episodes`}
+          <ChevronDown size={18} className={expanded ? "is-expanded" : undefined} />
         </button>
       ) : null}
     </div>
@@ -903,7 +1031,7 @@ function seasonChoiceLabel(choice: AnimeSeasonChoice): string {
   return `Season ${choice.number}${choice.partNumber ? ` · Part ${choice.partNumber}` : ""}`;
 }
 
-function AnikotoEmbedPlayer({
+function AnimeEmbedPlayer({
   mediaId,
   media,
   title,
@@ -929,18 +1057,30 @@ function AnikotoEmbedPlayer({
     () =>
       createAnimePlaybackSession({
         mediaId,
+        playerOrigin: new URL(source.url).origin,
         episode: episode.number,
         saveResume: (input) => saveAnimeActivity(media, input),
         // Completion clears only this episode's checkpoint atomically in the main journal.
         clearResume: () => undefined,
         onWatched,
       }),
-    [episode.number, media, mediaId, onWatched],
+    [episode.number, media, mediaId, onWatched, source.url],
   );
   const sessionState = useSyncExternalStore(
     session.subscribe,
     session.getSnapshot,
     session.getSnapshot,
+  );
+  // The next episode wins; at the end of what is available, the next Up Next title plays.
+  const nextUp = useNextUp(
+    nextEpisode
+      ? {
+          heading: "Next episode",
+          title: `E${nextEpisode.number} · ${nextEpisode.title ?? `Episode ${nextEpisode.number}`}`,
+          play: () => onNext(nextEpisode),
+        }
+      : undefined,
+    [`anime:${mediaId}`, `anime:${mediaId}:e${episode.number}`],
   );
 
   useEffect(() => {
@@ -963,12 +1103,12 @@ function AnikotoEmbedPlayer({
   }, [session]);
 
   return (
-    <div className="anistream-player anikoto-player">
+    <div className="anistream-player anime-embed-player">
       <iframe
         ref={iframeRef}
-        className="anikoto-embed"
+        className="anime-embed-frame"
         src={source.url}
-        title={`${title} episode ${episode.number} · ${source.label}`}
+        aria-label={`${title} episode ${episode.number} · ${source.label}`}
         allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
@@ -976,7 +1116,7 @@ function AnikotoEmbedPlayer({
       />
 
       {sessionState.loadTimedOut || sessionState.hasError ? (
-        <div className="anikoto-player-notice" role={sessionState.hasError ? "alert" : "status"}>
+        <div className="anime-embed-notice" role={sessionState.hasError ? "alert" : "status"}>
           <strong>{sessionState.errorMessage ?? "No playback progress received yet."}</strong>
           <p>
             {sessionState.hasError
@@ -988,9 +1128,12 @@ function AnikotoEmbedPlayer({
           </button>
         </div>
       ) : !sessionState.hasError && !sessionState.ended && !sessionState.loaded ? (
-        <div className="anikoto-player-loading" role="status">
-          <span className="spinner" />
-          <strong>Loading MegaPlay player…</strong>
+        <div className="anime-embed-loading">
+          <PlayerStarting
+            title={`Starting ${title} · E${episode.number}`}
+            detail={`Loading the player · ${source.label}`}
+            backdropUrl={media.bannerUrl ?? media.coverUrl}
+          />
         </div>
       ) : null}
 
@@ -1003,14 +1146,8 @@ function AnikotoEmbedPlayer({
         </div>
       ) : null}
 
-      {sessionState.ended && nextEpisode ? (
-        <button className="next-preview" type="button" onClick={() => onNext(nextEpisode)}>
-          <span>Next episode</span>
-          <strong>
-            E{nextEpisode.number} · {nextEpisode.title ?? `Episode ${nextEpisode.number}`}
-          </strong>
-          <SkipForward size={22} />
-        </button>
+      {sessionState.ended && nextUp ? (
+        <AutoplayNext key={`${mediaId}:${episode.number}`} next={nextUp} />
       ) : null}
     </div>
   );
@@ -1034,6 +1171,25 @@ function fallbackSeason(media: AniListCatalogMedia | AniListMediaDetail): AnimeP
       number: index + 1,
     })),
   };
+}
+
+/**
+ * Provider lists stop at the last aired episode. When the list ends right before AniList's next
+ * scheduled episode, show that episode too, as a locked tile with its airing time.
+ */
+function withNextAiringTile(
+  seasons: AnimeProviderSeason[],
+  media: AniListCatalogMedia | AniListMediaDetail,
+): AnimeProviderSeason[] {
+  const next = media.nextAiringEpisode;
+  const last = seasons.at(-1);
+  if (!next || !last || !unairedEpisode(media, next.episode)) return seasons;
+  const highest = Math.max(0, ...last.episodes.map((episode) => episode.number));
+  if (highest !== next.episode - 1) return seasons;
+  return [
+    ...seasons.slice(0, -1),
+    { ...last, episodes: [...last.episodes, { id: "", number: next.episode }] },
+  ];
 }
 
 function episodePlaceholder(number: number): AnimeProviderEpisode {
@@ -1062,4 +1218,11 @@ function formatLabel(value: string): string {
 
 function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+/** Caption-sized audio label: "SUB"/"DUB" for the usual embeds, otherwise the language. */
+function audioShortLabel(label: string): string {
+  if (/\bdub/i.test(label)) return "DUB";
+  if (/\bsub/i.test(label)) return "SUB";
+  return (label.split("·")[0] ?? label).trim().slice(0, 3).toUpperCase();
 }

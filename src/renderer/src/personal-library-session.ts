@@ -12,45 +12,57 @@ import {
   type PersonalAiringUpdate,
   type PersonalRelease,
   type PersonalTitle,
-  type ReleaseAcknowledgement,
 } from "../../shared/personal-library";
 import type { ViewerAccess } from "./viewer-access";
 
 const REFRESH_MS = 30 * 60_000;
 const MANUAL_REFRESH_MS = 60_000;
+/** Progress saved while AniList was unreachable is retried this often (and on reconnect). */
+const AUTO_SYNC_MS = 5 * 60_000;
 type Bridge = Pick<
   AniStreamBridge,
   | "getLocalActivity"
-  | "getReleaseAcknowledgements"
   | "getPersonalAnimeUpdates"
   | "getMangaDexAvailability"
-  | "acknowledgeRelease"
   | "retryActivitySync"
+  | "getPendingAniListChanges"
 >;
 export interface PersonalLibrarySnapshot {
   continuing: Record<AniListMediaType, ContinueTitle[]>;
   releases: PersonalRelease[];
+  /**
+   * Every anime behind Continue Watching (including ones caught up and waiting for the next
+   * episode, which the rail hides), with progress; the airing schedule follows these.
+   */
+  continueAnime: { id: number; progress: number }[];
+  /** Latest watch/read activity per `TYPE:id` (local plays and AniList progress), epoch ms. */
+  activityAt: ReadonlyMap<string, number>;
   pending: number;
   syncing: boolean;
   loading: boolean;
   error?: string;
-  acknowledging: string[];
 }
 type Check = { key: string; checkedAt: number; flight?: Promise<void>; error?: string };
 
 export function createPersonalLibrarySession(
   initialAccess: ViewerAccess,
   bridge: Bridge,
-  runtime = {
+  runtime: {
+    now: () => number;
+    visible: () => boolean;
+    /** Titles the viewer removed from Continue; they stay out until touched again. */
+    hidden?: (title: PersonalTitle) => boolean;
+  } = {
     now: () => Date.now(),
     visible: () => document.visibilityState === "visible",
   },
 ) {
+  const shown = (title: PersonalTitle): boolean => !runtime.hidden?.(title);
   let access = initialAccess;
   let active = false;
   let generation = 0;
   let activity: LocalActivity[] = [];
-  let acknowledgements: ReleaseAcknowledgement[] = [];
+  let pendingEdits = 0;
   let airing: PersonalAiringUpdate[] = [];
   let manga = new Map<number, MangaDexChapterAvailability>();
   let titles: Record<AniListMediaType, PersonalTitle[]> = { ANIME: [], MANGA: [] };
@@ -59,50 +71,58 @@ export function createPersonalLibrarySession(
   let localRevision = 0;
   let localError: string | undefined;
   let syncing = false;
+  let lastAutoSync = 0;
+  let autoSyncTimer: ReturnType<typeof setInterval> | undefined;
   let mangaRevision = 0;
-  const acknowledging = new Set<string>();
   const listeners = new Set<() => void>();
   let snapshot: PersonalLibrarySnapshot = {
     continuing: { ANIME: [], MANGA: [] },
     releases: [],
+    continueAnime: [],
+    activityAt: new Map(),
     pending: 0,
     syncing: false,
     loading: false,
-    acknowledging: [],
   };
 
   function rebuild(): void {
     const dashboard = access.kind === "member" ? access.dashboard : undefined;
+    const fetchedAt = dashboard ? Date.parse(dashboard.fetchedAt) || undefined : undefined;
     titles = {
       ANIME: buildPersonalTitles(
         "ANIME",
         dashboard?.animeLists.flatMap((group) => group.entries) ?? [],
         activity,
+        fetchedAt,
       ),
       MANGA: buildPersonalTitles(
         "MANGA",
         dashboard?.mangaLists.flatMap((group) => group.entries) ?? [],
         activity,
+        fetchedAt,
       ),
     };
     snapshot = {
       continuing: {
-        ANIME: continueTitles(titles.ANIME, manga, runtime.now()),
-        MANGA: continueTitles(titles.MANGA, manga, runtime.now()),
+        ANIME: continueTitles(titles.ANIME.filter(shown), manga, runtime.now()),
+        MANGA: continueTitles(titles.MANGA.filter(shown), manga, runtime.now()),
       },
-      releases: personalReleases(
-        [...titles.ANIME, ...titles.MANGA],
-        airing,
-        manga,
-        acknowledgements,
-        runtime.now(),
+      releases: personalReleases([...titles.ANIME, ...titles.MANGA], airing, manga, runtime.now()),
+      continueAnime: titles.ANIME.filter(shown).map(({ media, progress }) => ({
+        id: media.id,
+        progress,
+      })),
+      activityAt: activityTimes(
+        [...(dashboard?.animeLists ?? []), ...(dashboard?.mangaLists ?? [])].flatMap(
+          (group) => group.entries,
+        ),
+        activity,
       ),
-      pending: activity.filter((item) => item.syncStatus === "pending").length,
+      pending: activity.filter((item) => item.syncStatus === "pending").length + pendingEdits,
       syncing,
       loading: Boolean(localFlight || checks.ANIME.flight || checks.MANGA.flight),
       error:
         [localError, checks.ANIME.error, checks.MANGA.error].filter(Boolean).join(" ") || undefined,
-      acknowledging: [...acknowledging],
     };
     if (active) for (const listener of listeners) listener();
   }
@@ -115,17 +135,15 @@ export function createPersonalLibrarySession(
       do {
         revision = localRevision;
         try {
-          const [local, seen] = await Promise.all([
+          const [local, edits] = await Promise.all([
             bridge.getLocalActivity(),
-            bridge.getReleaseAcknowledgements(),
+            access.kind === "member"
+              ? bridge.getPendingAniListChanges().catch(() => 0)
+              : Promise.resolve(0),
           ]);
           if (!active || generation !== expected) return;
           activity = local;
-          // A concurrent mark-seen must not be undone by an older local read.
-          const merged = new Map(acknowledgements.map((item) => [item.key, item]));
-          for (const item of seen)
-            if ((merged.get(item.key)?.unit ?? -1) < item.unit) merged.set(item.key, item);
-          acknowledgements = [...merged.values()];
+          pendingEdits = edits;
           localError = undefined;
         } catch {
           if (active && generation === expected)
@@ -141,9 +159,20 @@ export function createPersonalLibrarySession(
       if (localFlight === request) {
         localFlight = undefined;
         rebuild();
+        autoSync(false);
       }
     }
   }
+
+  /** Sends progress queued while offline once AniList may be reachable again. */
+  function autoSync(force: boolean): void {
+    if (!active || syncing || access.kind !== "member") return;
+    if (!pendingEdits && !activity.some((item) => item.syncStatus === "pending")) return;
+    if (!force && runtime.now() - lastAutoSync < AUTO_SYNC_MS) return;
+    lastAutoSync = runtime.now();
+    void session.retrySync();
+  }
+  const syncOnReconnect = (): void => autoSync(true);
 
   function candidateKey(type: AniListMediaType): string {
     return `${type === "MANGA" ? mangaRevision : 0}:${JSON.stringify(titles[type].map(({ media }) => ({ aniListId: media.id, title: media.title })).sort((a, b) => a.aniListId - b.aniListId))}`;
@@ -213,7 +242,7 @@ export function createPersonalLibrarySession(
   }
 
   rebuild();
-  return {
+  const session = {
     getSnapshot: () => snapshot,
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -223,6 +252,10 @@ export function createPersonalLibrarySession(
     },
     activate() {
       active = true;
+      if (typeof window !== "undefined") {
+        window.addEventListener("online", syncOnReconnect);
+        autoSyncTimer = setInterval(() => autoSync(false), AUTO_SYNC_MS);
+      }
       void refresh();
     },
     setAccess(next: ViewerAccess) {
@@ -239,6 +272,10 @@ export function createPersonalLibrarySession(
       if (active) void refresh();
     },
     refresh,
+    /** Re-applies Continue removals without reloading anything. */
+    invalidateHidden() {
+      rebuild();
+    },
     invalidateLocal() {
       localRevision += 1;
       void refresh();
@@ -247,39 +284,16 @@ export function createPersonalLibrarySession(
       mangaRevision += 1;
       void check("MANGA", false);
     },
-    async acknowledge(item: ReleaseAcknowledgement): Promise<boolean> {
-      if (!active || acknowledging.has(item.key)) return false;
-      acknowledging.add(item.key);
-      rebuild();
-      try {
-        await bridge.acknowledgeRelease({ key: item.key, unit: item.unit });
-        acknowledgements = [
-          ...acknowledgements.filter((row) => row.key !== item.key),
-          {
-            key: item.key,
-            unit: Math.max(
-              item.unit,
-              acknowledgements.find((row) => row.key === item.key)?.unit ?? 0,
-            ),
-          },
-        ];
-        localError = undefined;
-        return true;
-      } catch {
-        localError = "Could not mark this update as seen. Please try again.";
-        return false;
-      } finally {
-        acknowledging.delete(item.key);
-        rebuild();
-      }
-    },
     async retrySync(): Promise<void> {
       if (syncing) return;
       syncing = true;
       rebuild();
       try {
         activity = await bridge.retryActivitySync();
+        // The library refresh also sends edits queued while AniList was unreachable.
         if (access.kind === "member") await access.refreshLibrary();
+        pendingEdits =
+          access.kind === "member" ? await bridge.getPendingAniListChanges().catch(() => 0) : 0;
         localError = undefined;
       } catch {
         localError = "Progress is saved locally, but AniList sync could not finish.";
@@ -290,12 +304,31 @@ export function createPersonalLibrarySession(
     },
     dispose() {
       active = false;
+      if (typeof window !== "undefined") window.removeEventListener("online", syncOnReconnect);
+      if (autoSyncTimer !== undefined) clearInterval(autoSyncTimer);
+      autoSyncTimer = undefined;
       generation += 1;
       checks = freshChecks();
       localFlight = undefined;
       listeners.clear();
     },
   };
+  return session;
+}
+
+function activityTimes(
+  entries: { media: { id: number; type: AniListMediaType }; progress: number; updatedAt: number }[],
+  activity: LocalActivity[],
+): Map<string, number> {
+  const times = new Map<string, number>();
+  const note = (key: string, at: number): void => {
+    if (at > (times.get(key) ?? 0)) times.set(key, at);
+  };
+  for (const entry of entries)
+    if (entry.progress > 0) note(`${entry.media.type}:${entry.media.id}`, entry.updatedAt * 1000);
+  for (const local of activity)
+    note(`${local.media.type}:${local.media.id}`, Date.parse(local.updatedAt) || 0);
+  return times;
 }
 
 function freshChecks(): Record<AniListMediaType, Check> {

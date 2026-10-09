@@ -25,6 +25,29 @@ describe("parseMalScore", () => {
     });
   });
 
+  it("keeps a bounded summary, English title, and genres for AniList gaps", () => {
+    const score = parseMalScore(
+      {
+        id: 192747,
+        synopsis: "  Touri searches for his sister.\n\n(source: MangaDex)\u0007 ",
+        alternative_titles: { en: "The Former Magical Girl Wants to Know L❤ve.", ja: "元魔法少女" },
+        genres: [{ id: 9, name: "Ecchi" }, { id: 22, name: "Romance" }, { id: 1 }, "Action"],
+      },
+      "manga",
+    );
+    expect(score?.synopsis).toBe("Touri searches for his sister.\n\n(source: MangaDex)");
+    expect(score?.englishTitle).toBe("The Former Magical Girl Wants to Know L❤ve.");
+    expect(score?.genres).toEqual(["Ecchi", "Romance"]);
+    const empty = parseMalScore(
+      { id: 1, synopsis: "   ", alternative_titles: { en: "" }, genres: [], mean: 7 },
+      "anime",
+    );
+    expect(empty).toEqual({ malId: 1, score: 7, malUrl: "https://myanimelist.net/anime/1" });
+    expect(
+      parseMalScore({ id: 2, synopsis: "x".repeat(8_001) }, "anime")?.synopsis,
+    ).toBeUndefined();
+  });
+
   it("returns undefined for malformed payloads", () => {
     expect(parseMalScore(undefined, "anime")).toBeUndefined();
     expect(parseMalScore({ mean: 8 }, "anime")).toBeUndefined();

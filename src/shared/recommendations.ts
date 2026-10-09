@@ -1,6 +1,14 @@
-import type { AniListMediaType } from "./contracts";
+import type { AniListMediaType, MoreMediaType } from "./contracts";
 
 export type RecommendationMediaType = AniListMediaType;
+/** Every rankable item kind: AniList anime/manga and TMDB movies/shows (the More section). */
+export type RecommendationItemType = RecommendationMediaType | MoreMediaType;
+/** A For You surface; MOVIE and TV items both belong to the More section. */
+export type RecommendationSection = RecommendationMediaType | "MORE";
+
+export function recommendationSection(type: RecommendationItemType): RecommendationSection {
+  return type === "MOVIE" || type === "TV" ? "MORE" : type;
+}
 
 export type RecommendationEventType =
   | "explored"
@@ -24,7 +32,9 @@ export interface RecommendationEvent {
   value?: number;
 }
 
-export type RecommendationCreatorRole = "AUTHOR" | "ARTIST" | "STUDIO" | "STAFF";
+/** AniList studios/staff, or TMDB people (directors, creators, lead cast) and companies. */
+export type RecommendationCreatorRole =
+  "AUTHOR" | "ARTIST" | "STUDIO" | "STAFF" | "PERSON" | "COMPANY";
 
 export interface RecommendationTag {
   id: number;
@@ -39,11 +49,18 @@ export interface RecommendationCreator {
 }
 
 export interface RecommendationItemFeatures {
+  /**
+   * Provider ID within `mediaType`: AniList for ANIME/MANGA, TMDB for MOVIE/TV. Historical name;
+   * always key items by mediaType and ID together.
+   */
   anilistId: number;
-  mediaType: RecommendationMediaType;
+  mediaType: RecommendationItemType;
   malId?: number;
   normalizedTitle: string;
   coverUrl?: string;
+  /** Display-only artwork/date for More cards rebuilt from cached features. */
+  backdropUrl?: string;
+  releaseDate?: string;
   titleTokens: string[];
   synonyms: string[];
   genres: string[];
@@ -53,7 +70,40 @@ export interface RecommendationItemFeatures {
   malScore?: number;
   popularity?: number;
   status?: string;
+  /** AniList start date as YYYYMMDD (unknown month/day are 00); orders seasons by release. */
+  startedOn?: number;
+  format?: string;
+  isAdult?: boolean;
+  /**
+   * Where the title comes from: TMDB's original language ("ml", "en") for movies and shows,
+   * AniList's country of origin ("JP", "KR") for anime and manga. Rows follow their seed's origin.
+   */
+  origin?: string;
+  /** Provider "More like this" edges (exact IDs, user-voted rating); present on hydrated seeds. */
+  recommendations?: RecommendationEdge[];
+  /** Exact provider franchise/adaptation links; absent on rows cached before they were fetched. */
+  relations?: RecommendationRelation[];
   updatedAt: number;
+}
+
+export interface RecommendationRelation {
+  id: number;
+  mediaType: RecommendationItemType;
+  relationType:
+    | "PREQUEL"
+    | "SEQUEL"
+    | "PARENT"
+    | "SIDE_STORY"
+    | "ADAPTATION"
+    | "SOURCE"
+    | "ALTERNATIVE"
+    | "SPIN_OFF";
+}
+
+export interface RecommendationEdge {
+  id: number;
+  mediaType: RecommendationItemType;
+  rating: number;
 }
 
 export type RecommendationProfileFeatureKind =
@@ -104,6 +154,8 @@ export interface RecommendationResult {
   score: number;
   reasonCodes: RecommendationReasonCode[];
   relatedTo?: number;
+  /** Display title of the history entry behind a "similar-to" reason. */
+  relatedTitle?: string;
 }
 
 export interface RecommendationImpression extends RecommendationResult {
@@ -147,4 +199,19 @@ export const RANKING_WEIGHTS = {
   mediaTypeFit: 0.08,
   freshness: 0.05,
   explorationBonus: 0.05,
+} as const;
+
+/**
+ * Hybrid For You weights. Chosen with the offline leave-one-out harness (test/eval, 2026-10-04):
+ * graph = provider recommendation edges from liked history, content = IDF-weighted cosine over
+ * genres/tags/creators, popularity and quality are priors. Heuristic ranks, not probabilities.
+ */
+export const HYBRID_WEIGHTS = {
+  graph: 0.3,
+  content: 0.35,
+  popularity: 0.3,
+  quality: 0.1,
+  /** Weight of the other media type's history (shared taste, own section first). */
+  crossTypePrior: 0.35,
+  halfLifeDays: 730,
 } as const;

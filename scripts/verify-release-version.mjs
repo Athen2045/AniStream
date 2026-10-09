@@ -13,7 +13,7 @@ if (packageJson.version !== requestedVersion) {
   );
 }
 
-const releaseNotesPath = `docs/releases/v${requestedVersion}.md`;
+const releaseNotesPath = `.github/releases/v${requestedVersion}.md`;
 await access(releaseNotesPath);
 
 const existingTags = execFileSync("git", ["tag", "--list", `v${requestedVersion}`], {

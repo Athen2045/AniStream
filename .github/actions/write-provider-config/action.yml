@@ -1,0 +1,36 @@
+name: Write local provider configuration
+description: >
+  Writes providers.local.json from the ANISTREAM_PROVIDERS_JSON secret so packaged builds can play.
+  Streaming-source endpoints are never stored in the repository.
+
+inputs:
+  providers-json:
+    description: Contents of the ANISTREAM_PROVIDERS_JSON repository secret
+    required: false
+    default: ""
+  required:
+    description: >
+      "true" fails the job when the secret is empty, so a published release can never ship without
+      playback. Preview and package builds leave it "false" and only warn.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Write providers.local.json
+      shell: bash
+      env:
+        ANISTREAM_PROVIDERS_JSON: ${{ inputs.providers-json }}
+        PROVIDERS_REQUIRED: ${{ inputs.required }}
+      run: |
+        if [ -n "$ANISTREAM_PROVIDERS_JSON" ]; then
+          printf "%s" "$ANISTREAM_PROVIDERS_JSON" > providers.local.json
+          node -e "JSON.parse(require('fs').readFileSync('providers.local.json', 'utf8'))" \
+            || { echo "::error::ANISTREAM_PROVIDERS_JSON is not valid JSON."; exit 1; }
+        elif [ "$PROVIDERS_REQUIRED" = "true" ]; then
+          echo "::error::ANISTREAM_PROVIDERS_JSON is not set; a release cannot ship without playback."
+          exit 1
+        else
+          echo "::warning::ANISTREAM_PROVIDERS_JSON is not set; playback will be unconfigured in this package."
+        fi

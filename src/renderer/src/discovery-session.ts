@@ -33,6 +33,7 @@ export function createDiscoverySession(
   const listeners = new Set<() => void>();
   const impressions = new Set<string>();
   let flight: Promise<void> | undefined;
+  let loadedAt = 0;
   const notify = (changes: Partial<DiscoverySnapshot>): void => {
     if (disposed) return;
     snapshot = { ...snapshot, ...changes };
@@ -50,6 +51,7 @@ export function createDiscoverySession(
           options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
         );
         if (disposed || current !== generation) return;
+        loadedAt = Date.now();
         const retained = Boolean(snapshot.feed?.items.length);
         const providerError =
           feed.status === "unavailable"
@@ -102,6 +104,12 @@ export function createDiscoverySession(
       };
     },
     load,
+    /** Loads unless a feed arrived within `maxAgeMs` (the hero and the rail share one session). */
+    ensure(maxAgeMs: number): Promise<void> {
+      if (flight) return flight;
+      if (snapshot.feed && Date.now() - loadedAt < maxAgeMs) return Promise.resolve();
+      return load();
+    },
     async explore(item: RecommendationResult): Promise<void> {
       const requestId = snapshot.feed?.requestId;
       if (!requestId) return;
@@ -132,6 +140,10 @@ export function createDiscoverySession(
             ? {
                 ...snapshot.feed,
                 items: snapshot.feed.items.filter((row) => row.anilistId !== item.anilistId),
+                rows: snapshot.feed.rows?.map((row) => ({
+                  ...row,
+                  items: row.items.filter((entry) => entry.anilistId !== item.anilistId),
+                })),
               }
             : undefined,
           undo: { requestId, anilistId: item.anilistId, action: "undo" },

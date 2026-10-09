@@ -1,9 +1,8 @@
 import { BookOpen, ExternalLink, Info, Play } from "lucide-react";
-import { motion, useScroll, useSpring, useTransform } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useScroll, useSpring } from "framer-motion";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type {
   AniListCatalogMedia,
-  AniListEntry,
   AniListMediaType,
   LatestMangaUpdate,
 } from "../../shared/contracts";
@@ -17,11 +16,24 @@ import { useCatalogData } from "./useCatalogData";
 import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
 import { motionTransition } from "./motion";
 import { ForYouRail } from "./ForYouRail";
+import { useAppPreferences } from "./app-preferences";
 import { PersonalLibrary } from "./PersonalLibrary";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import { AniListSourceIcon } from "./AniListSourceIcon";
+import { titleAccentStyle } from "./title-accent";
+import { usePersonalLibrary } from "./PersonalLibraryProvider";
+import { cachedArtworkUrl } from "../../shared/artwork";
+import { startBrowsing } from "./play-timer";
+import { createDiscoverySession } from "./discovery-session";
+import type { DiscoveryFeed } from "../../shared/discovery";
+import { HERO_SLIDES, mixHeroPicks, withTrendingSlide } from "./hero-picks";
+import { usePersonalHero } from "./usePersonalHero";
+import { LegalFooter } from "./LegalFooter";
 
 const NO_AVAILABILITY_MEDIA: [] = [];
+const HERO_SIZE = 6;
+const HERO_ROTATE_MS = 9_000;
+const noSubscribe = (): (() => void) => () => undefined;
 
 export function CatalogView({
   type,
@@ -31,7 +43,6 @@ export function CatalogView({
   onLibrary,
 }: {
   type: AniListMediaType;
-  searchQuery?: string;
   onLibrary?: (media: AniListCatalogMedia) => Promise<void>;
   access: ViewerAccess;
   onSelect: (media: AniListCatalogMedia) => void;
@@ -45,9 +56,8 @@ export function CatalogView({
     damping: 28,
     mass: 0.22,
   });
-  // Keep the fit-framed artwork calm while the page moves underneath it.
-  const heroParallaxY = useTransform(scrollYProgress, [0, 0.2], [0, 24]);
   const personalized = hasPersonalizedAccess(access);
+  const preferences = useAppPreferences();
   const {
     latestPage,
     trending,
@@ -62,12 +72,112 @@ export function CatalogView({
     setLatestPage,
   } = useCatalogData({
     type,
-    searchQuery: "",
     availabilityMedia: NO_AVAILABILITY_MEDIA,
     trackAvailabilityNow: false,
+    latest: preferences.latestUpdates,
   });
 
-  const hero = trending[0];
+  const { state: libraryState } = usePersonalLibrary();
+  const continuing = libraryState.continuing[type];
+
+  // One For You feed per section and viewer, shared by the hero and the For You rail.
+  const forYouKey =
+    access.kind === "member" && preferences.forYou
+      ? `${type}:${access.dashboard.profile.id}`
+      : undefined;
+  const forYouSession = useMemo(
+    () => (forYouKey ? createDiscoverySession(type) : undefined),
+    [forYouKey, type],
+  );
+  useEffect(() => {
+    if (!forYouSession) return;
+    forYouSession.activate();
+    void forYouSession.ensure(60_000);
+    return () => forYouSession.dispose();
+  }, [forYouSession]);
+  const forYouFeedSnapshot = (): DiscoveryFeed | undefined => forYouSession?.getSnapshot().feed;
+  const forYouFeed = useSyncExternalStore(
+    forYouSession?.subscribe ?? noSubscribe,
+    forYouFeedSnapshot,
+    forYouFeedSnapshot,
+  );
+  const verb = type === "MANGA" ? "read" : "watched";
+  // From three titles watched/read here, the hero mixes For You with "Because you…" picks.
+  const personalHero = usePersonalHero<AniListCatalogMedia>({
+    section: type,
+    owner: access.kind === "member" ? String(access.dashboard.profile.id) : undefined,
+    enabled: Boolean(forYouKey),
+    feedKey: forYouFeed?.requestId,
+    sectionTitles: forYouFeed?.sectionTitles,
+    build: async () => {
+      if (!forYouFeed) return [];
+      const picks = mixHeroPicks(
+        { reason: "For You", items: forYouFeed.items },
+        (forYouFeed.rows ?? [])
+          .filter((row) => !row.theme)
+          .map((row) => ({ reason: `Because you ${verb} ${row.seedTitle}`, items: row.items })),
+        (item) => String(item.anilistId),
+        12,
+      );
+      if (picks.length < 2) return [];
+      const media = await window.anistream.getAniListMediaByIds(
+        picks.map((pick) => pick.item.anilistId),
+        type,
+      );
+      const byId = new Map(media.map((item) => [item.id, item]));
+      const slides = picks.flatMap((pick) => {
+        const item = byId.get(pick.item.anilistId);
+        return item ? [{ item, reason: pick.reason }] : [];
+      });
+      // Wide banner artwork reads best in the hero; covers fill in only when banners are scarce.
+      const wide = slides.filter((slide) => slide.item.bannerUrl);
+      return (wide.length >= 2 ? wide : slides).slice(0, HERO_SLIDES);
+    },
+    watchedSince: (item, savedAt) =>
+      (libraryState.activityAt.get(`${type}:${item.id}`) ?? 0) > savedAt,
+  });
+
+  // Otherwise rotate through the top trending titles, preferring ones with wide banner artwork.
+  // When trending is unavailable (AniList down or offline) the hero falls back to Continue titles,
+  // whose data and artwork are kept locally, so the hero never collapses.
+  const heroFromContinue = !personalHero && !trending.length && !trendingLoading;
+  // A personalized set keeps one live Trending slide (not cached, so it stays current).
+  const personalSet = useMemo(
+    () =>
+      personalHero &&
+      withTrendingSlide(
+        personalHero.map((slide) => slide.item),
+        trending.slice(0, 12).filter((media) => media.bannerUrl),
+        (media) => String(media.id),
+        (media) => libraryState.activityAt.has(`${type}:${media.id}`),
+      ),
+    [libraryState.activityAt, personalHero, trending, type],
+  );
+  const heroItems = useMemo(() => {
+    if (personalSet) return personalSet.items;
+    const top = heroFromContinue ? continuing.map((item) => item.media) : trending.slice(0, 12);
+    const withBanners = top.filter((media) => media.bannerUrl);
+    return (withBanners.length >= 2 ? withBanners : top).slice(0, HERO_SIZE);
+  }, [continuing, heroFromContinue, personalSet, trending]);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroPaused, setHeroPaused] = useState(false);
+  const hero = heroItems[heroIndex] ?? heroItems[0];
+  const heroContinue = heroFromContinue
+    ? continuing.find((item) => item.media.id === hero?.id)
+    : undefined;
+  const autoAdvance = preferences.heroRotate && !reducedMotion;
+  const rotating = autoAdvance && !heroPaused && heroItems.length > 1;
+  // Time to play starts when this section opens.
+  useEffect(() => startBrowsing(type), [type]);
+
+  useEffect(() => {
+    if (!rotating) return;
+    const timer = window.setTimeout(
+      () => setHeroIndex((index) => (index + 1) % heroItems.length),
+      HERO_ROTATE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [heroIndex, heroItems.length, rotating]);
   const [heroImageState, setHeroImageState] = useState<{ id: number; source?: string }>({ id: 0 });
   const [kitsuHeroState, setKitsuHeroState] = useState<{ id: number; source?: string }>({ id: 0 });
   const mediaName = type === "ANIME" ? "anime" : "manga";
@@ -108,74 +218,169 @@ export function CatalogView({
       />
       {hero ? (
         <motion.header
-          key={`${type}:${hero.id}`}
-          className="catalog-hero"
+          key={type}
+          className="home-hero"
+          style={type === "MANGA" ? titleAccentStyle(hero.coverColor) : undefined}
+          aria-roledescription="carousel"
+          aria-label={`Trending ${mediaName}`}
           initial={reducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={motionTransition(reducedMotion, "entrance")}
+          onMouseEnter={() => setHeroPaused(true)}
+          onMouseLeave={() => setHeroPaused(false)}
+          onFocus={() => setHeroPaused(true)}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+              setHeroPaused(false);
+          }}
         >
-          {heroImageSource ? (
-            <motion.img
-              className="catalog-hero-art"
-              src={heroImageSource}
-              alt=""
-              aria-hidden="true"
-              loading="eager"
-              fetchPriority="high"
-              decoding="async"
-              onError={() => {
-                // Banners are nicer, but a stale CDN URL should never leave the hero empty.
-                // Warning: do not retry the same URL here; broken provider URLs can otherwise loop.
-                if (heroImageSource === kitsuHeroState.source) {
-                  setKitsuHeroState({ id: hero.id });
-                } else {
-                  setHeroImageState({
-                    id: hero.id,
-                    source:
-                      heroImageSource === hero.bannerUrl && hero.coverUrl !== hero.bannerUrl
-                        ? hero.coverUrl
-                        : undefined,
-                  });
-                }
-              }}
-              style={{ y: reducedMotion ? 0 : heroParallaxY }}
-            />
-          ) : (
-            <div className="catalog-hero-art-fallback" aria-hidden="true" />
-          )}
-          <div className="catalog-hero-copy">
-            <p className="catalog-kicker">Now trending</p>
-            <h1>{hero.title}</h1>
-            <div className="catalog-facts">
-              {hero.averageScore ? <span className="match">{hero.averageScore}% score</span> : null}
-              {hero.seasonYear ? <span>{hero.seasonYear}</span> : null}
-              <span>{formatLabel(hero.format)}</span>
-              {hero.totalProgress ? (
-                <span>
-                  {hero.totalProgress} {type === "ANIME" ? "episodes" : "chapters"}
-                </span>
+          {/* AniList banners are a fixed 1900×400: the band keeps that ratio instead of cropping. */}
+          <div
+            className={`title-band home-hero-band${
+              heroImageSource && heroImageSource === hero.coverUrl ? " title-band--fallback" : ""
+            }`}
+            aria-hidden="true"
+          >
+            <AnimatePresence initial={false}>
+              {heroImageSource ? (
+                <motion.img
+                  key={`art:${hero.id}`}
+                  initial={reducedMotion ? false : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: reducedMotion ? 0 : 0.8 }}
+                  className="title-band-art"
+                  src={cachedArtworkUrl(heroImageSource)}
+                  alt=""
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                  onError={() => {
+                    // Banners are nicer, but a stale CDN URL should never leave the hero empty.
+                    // Warning: do not retry the same URL here; broken provider URLs can otherwise loop.
+                    if (heroImageSource === kitsuHeroState.source) {
+                      setKitsuHeroState({ id: hero.id });
+                    } else {
+                      setHeroImageState({
+                        id: hero.id,
+                        source:
+                          heroImageSource === hero.bannerUrl && hero.coverUrl !== hero.bannerUrl
+                            ? hero.coverUrl
+                            : undefined,
+                      });
+                    }
+                  }}
+                />
               ) : null}
-            </div>
-            <p>
-              {cleanDescription(hero.description) ||
-                (personalized
-                  ? `Discover ${hero.title} and keep your progress synced with AniList.`
-                  : `Discover ${hero.title}, then watch or read without connecting an account.`)}
-            </p>
-            <div className="hero-actions">
-              <button className="play-action" type="button" onClick={() => onPrimary(hero)}>
-                {type === "ANIME" ? <Play size={20} fill="currentColor" /> : <BookOpen size={20} />}
-                {type === "ANIME" ? "Watch" : "Read"}
-              </button>
-              <button className="info-action" type="button" onClick={() => onSelect(hero)}>
-                <Info size={20} />
-                Details
-              </button>
-            </div>
+            </AnimatePresence>
           </div>
+          <motion.div
+            key={`copy:${hero.id}`}
+            className="home-hero-row"
+            aria-live="polite"
+            initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reducedMotion ? 0 : 0.45, delay: reducedMotion ? 0 : 0.12 }}
+          >
+            <button
+              type="button"
+              className={`title-cover home-hero-cover${type === "MANGA" ? " title-cover--book" : ""}`}
+              aria-label={`Details for ${hero.title}`}
+              onClick={() => onSelect(hero)}
+            >
+              <CoverImage src={cachedArtworkUrl(hero.coverUrl)} title={hero.title} />
+            </button>
+            <div className="home-hero-copy">
+              <p className="title-kicker">
+                {/* Personalized slides carry no label; only Continue and Trending ones do. */}
+                {personalSet && personalSet.trendingKey !== String(hero.id) ? null : (
+                  <span className="home-hero-rank">
+                    {heroContinue
+                      ? type === "ANIME"
+                        ? "Continue watching"
+                        : "Continue reading"
+                      : `#${trending.indexOf(hero) + 1} Trending`}
+                  </span>
+                )}
+                {type === "ANIME" && hero.season && hero.seasonYear ? (
+                  <span>
+                    {formatLabel(hero.season)} {hero.seasonYear}
+                  </span>
+                ) : (
+                  <span>{formatLabel(hero.format)}</span>
+                )}
+              </p>
+              <h1>{hero.title}</h1>
+              <div className="title-stats">
+                {hero.averageScore ? (
+                  <span className="title-score">{hero.averageScore}%</span>
+                ) : null}
+                {type === "ANIME" ? <span>{formatLabel(hero.format)}</span> : null}
+                {hero.totalProgress ? (
+                  <span>
+                    {hero.totalProgress} {type === "ANIME" ? "episodes" : "chapters"}
+                  </span>
+                ) : null}
+                {hero.genres.length ? <span>{hero.genres.slice(0, 2).join(" · ")}</span> : null}
+              </div>
+              <p className="home-hero-synopsis">
+                {cleanDescription(hero.description) ||
+                  (personalized
+                    ? `Discover ${hero.title} and keep your progress synced with AniList.`
+                    : `Discover ${hero.title}, then watch or read without connecting an account.`)}
+              </p>
+              <div className="title-actions">
+                <button
+                  className="title-primary"
+                  type="button"
+                  onClick={() => onPrimary(hero, heroContinue?.targetUnit)}
+                >
+                  {type === "ANIME" ? (
+                    <Play size={18} fill="currentColor" />
+                  ) : (
+                    <BookOpen size={18} />
+                  )}
+                  {heroContinue?.label ?? (type === "ANIME" ? "Watch" : "Read")}
+                </button>
+                <button className="title-library" type="button" onClick={() => onSelect(hero)}>
+                  <Info size={17} />
+                  Details
+                </button>
+              </div>
+            </div>
+          </motion.div>
+          {heroItems.length > 1 ? (
+            <div
+              className="hero-dots home-hero-dots"
+              role="tablist"
+              aria-label={`Trending ${mediaName}`}
+            >
+              {heroItems.map((media, position) => (
+                <button
+                  key={media.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={media.id === hero.id}
+                  aria-label={`Show ${media.title}`}
+                  className={media.id === hero.id ? "active" : undefined}
+                  onClick={() => setHeroIndex(position)}
+                >
+                  {media.id === hero.id && autoAdvance ? (
+                    <span
+                      key={`${heroIndex}:${heroPaused ? "p" : "r"}`}
+                      className={heroPaused ? "paused" : undefined}
+                      style={{ animationDuration: `${HERO_ROTATE_MS}ms` }}
+                    />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </motion.header>
       ) : trendingLoading ? (
-        <div className="catalog-hero catalog-hero-skeleton" aria-hidden="true" />
+        <div className="home-hero home-hero-skeleton" aria-hidden="true">
+          <div className="title-band" />
+        </div>
       ) : null}
 
       <div className="catalog-content">
@@ -203,6 +408,19 @@ export function CatalogView({
           onSelect={onSelect}
           onPrimary={onPrimary}
         />
+
+        {/* For You right after Continue: the most relevant picks first. */}
+        {access.kind === "member" && forYouSession ? (
+          <ForYouRail
+            key={`for-you:${forYouKey}`}
+            session={forYouSession}
+            type={type}
+            onSelect={onSelect}
+            onPrimary={onPrimary}
+            onLibrary={onLibrary}
+            access={access}
+          />
+        ) : null}
 
         {trending.length ? (
           <section className="media-rail" aria-label={`Trending ${mediaName}`}>
@@ -233,17 +451,6 @@ export function CatalogView({
               ))}
             </ContentCarousel>
           </section>
-        ) : null}
-
-        {access.kind === "member" ? (
-          <ForYouRail
-            key={`for-you:${type}:${access.dashboard.profile.id}`}
-            type={type}
-            onSelect={onSelect}
-            onPrimary={onPrimary}
-            onLibrary={onLibrary}
-            access={access}
-          />
         ) : null}
 
         {!trending.length && malTrendingFallback.length ? (
@@ -285,7 +492,7 @@ export function CatalogView({
           </section>
         ) : null}
 
-        {type === "ANIME" ? (
+        {type === "ANIME" && preferences.latestUpdates ? (
           <section
             className="latest-updates-section"
             aria-label="Latest anime updates"
@@ -341,7 +548,7 @@ export function CatalogView({
           </section>
         ) : null}
 
-        {type === "MANGA" ? (
+        {type === "MANGA" && preferences.latestUpdates ? (
           <section
             className="latest-updates-section"
             aria-label="Latest manga updates"
@@ -399,6 +606,7 @@ export function CatalogView({
             ) : null}
           </section>
         ) : null}
+        <LegalFooter />
       </div>
     </section>
   );
@@ -458,33 +666,6 @@ function toMangaCatalogMedia(update: LatestMangaUpdate): AniListCatalogMedia {
 
 function cardMotionStyle(index: number): React.CSSProperties {
   return { "--card-index": Math.min(index, 5) } as React.CSSProperties;
-}
-
-export function shouldShowInContinue(
-  entry: AniListEntry,
-  latestMangaChapter?: number,
-  now = Date.now(),
-): boolean {
-  if (entry.status !== "CURRENT" || entry.progress <= 0) return false;
-
-  const total = entry.media.totalProgress;
-  if (entry.media.status === "FINISHED" && total && entry.progress >= total) return false;
-
-  const nextAiringEpisode = entry.media.nextAiringEpisode;
-  if (
-    entry.media.type === "ANIME" &&
-    nextAiringEpisode &&
-    nextAiringEpisode.airingAt * 1_000 > now &&
-    entry.progress >= Math.max(0, nextAiringEpisode.episode - 1)
-  ) {
-    return false;
-  }
-
-  if (entry.media.type === "MANGA") {
-    if (latestMangaChapter !== undefined && entry.progress >= latestMangaChapter) return false;
-    if (total && entry.progress >= total) return false;
-  }
-  return true;
 }
 
 export function relativeTime(timestampMs: number, now = Date.now()): string {

@@ -6,7 +6,6 @@ import {
   NavbarAccountMenuPanel,
   type NavbarAccountMenuProps,
 } from "../../src/renderer/src/NavbarAccountMenu";
-import { NotificationBellIcon } from "../../src/renderer/src/ReleaseNotifications";
 
 function renderPanel(props: NavbarAccountMenuProps): string {
   return renderToStaticMarkup(
@@ -66,17 +65,23 @@ describe("navbar account menu", () => {
     expect(markup).not.toContain("Sign In");
   });
 
-  it("uses the requested normal and unread notification artwork", () => {
-    const normal = renderToStaticMarkup(
-      React.createElement(NotificationBellIcon, { unread: false }),
-    );
-    const unread = renderToStaticMarkup(
-      React.createElement(NotificationBellIcon, { unread: true }),
-    );
+  it("puts Report a bug between Settings and the account action for guests and members", () => {
+    const guest = renderPanel({ kind: "guest", onOpenSettings: vi.fn(), onSignIn: vi.fn() });
+    const member = renderPanel({
+      kind: "member",
+      name: "Athen101",
+      onOpenProfile: vi.fn(),
+      onOpenSettings: vi.fn(),
+      onLogout: vi.fn(),
+    });
 
-    expect(normal).toContain('viewBox="0 0 24 24"');
-    expect(normal).toContain("M18 8C18 6.4087");
-    expect(unread).toContain("M18 8V2M15 5H21");
-    expect(normal).not.toEqual(unread);
+    for (const [markup, last] of [
+      [guest, "Sign In"],
+      [member, "Log Out"],
+    ] as const) {
+      const report = markup.indexOf("Report a bug");
+      expect(report).toBeGreaterThan(markup.indexOf("Settings"));
+      expect(report).toBeLessThan(markup.indexOf(last));
+    }
   });
 });

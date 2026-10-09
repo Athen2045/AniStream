@@ -8,19 +8,19 @@ import {
 
 export interface UseCatalogDataInput {
   type: AniListMediaType;
-  searchQuery: string;
   availabilityMedia: MangaDexAvailabilityInput[];
   trackAvailabilityNow: boolean;
+  /** Load the Latest Updates grid (default true). */
+  latest?: boolean;
 }
 
 export interface CatalogData extends CatalogDataSnapshot {
-  setSearchPage(page: number): void;
   setLatestPage(page: number): void;
 }
 
 export function useCatalogData(input: UseCatalogDataInput): CatalogData {
   const [controller] = useState<CatalogDataModule>(() => createCatalogDataModule(window.anistream));
-  const { availabilityMedia, searchQuery, trackAvailabilityNow, type } = input;
+  const { availabilityMedia, trackAvailabilityNow, type, latest = true } = input;
   const snapshot = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
@@ -29,12 +29,11 @@ export function useCatalogData(input: UseCatalogDataInput): CatalogData {
 
   useLayoutEffect(() => () => controller.deactivate(), [controller]);
   useLayoutEffect(() => {
-    controller.activate({ availabilityMedia, searchQuery, trackAvailabilityNow, type });
-  }, [availabilityMedia, controller, searchQuery, trackAvailabilityNow, type]);
+    controller.activate({ availabilityMedia, trackAvailabilityNow, type, latest });
+  }, [availabilityMedia, controller, trackAvailabilityNow, type, latest]);
 
   return {
     ...snapshot,
-    setSearchPage: controller.setSearchPage,
     setLatestPage: controller.setLatestPage,
   };
 }

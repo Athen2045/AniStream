@@ -1,29 +1,62 @@
-import { RefreshCw } from "lucide-react";
+import { CalendarDays, ListVideo, RefreshCw, Search } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Suspense, lazy, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type {
   AniListCatalogMedia,
   AniListEntry,
   AniListMediaType,
+  MoreCatalogItem,
   UpdateAniListEntryInput,
 } from "../../shared/contracts";
 import { CatalogView } from "./CatalogView";
-import { GlobalSearch } from "./GlobalSearch";
 import { ProfileConnectView } from "./ProfileConnectView";
 import { UpdateNotice, UpdateProvider } from "./AppUpdates";
 import { mediaDetailInstanceKey } from "./viewer-access";
 import { createViewerSession } from "./viewer-session";
-import { motionTransition, profileRouteVariants, routeVariants } from "./motion";
+import {
+  motionTransition,
+  navIndicatorTransition,
+  profileRouteVariants,
+  routeVariants,
+  sectionDirection,
+  sectionVariants,
+} from "./motion";
 import { PersonalLibraryProvider } from "./PersonalLibraryProvider";
-import { ReleaseNotifications } from "./ReleaseNotifications";
-import { ProfileView, type LibrarySort } from "./ProfileView";
+import { ProfileView } from "./ProfileView";
+import { SimklProfileView } from "./SimklProfile";
+import { TitlePageFallback } from "./TitlePageFallback";
+import type { ProfileSyncSource } from "./ProfileSyncChip";
+import { choosePicture, useProfileLook, useSimklProfile, useSimklStatus } from "./profile-look";
+import {
+  buildLibraryShelves,
+  defaultShelfKey,
+  filterLibrary,
+  type LibrarySort,
+} from "./profile-library";
 import { EntryEditor } from "./EntryEditor";
-import { SearchView } from "./SearchView";
+import { SectionSearch, type SearchScope } from "./SectionSearch";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import { useSmoothDocumentScroll } from "./useSmoothDocumentScroll";
 import { ReadinessScreen } from "./ReadinessScreen";
 import { NavbarAccountMenu } from "./NavbarAccountMenu";
 import { SettingsView } from "./SettingsView";
+import { ContinueUndoToast } from "./ContinueRemoveButton";
+import { getAppPreferences, useAppPreferences } from "./app-preferences";
+import { ScheduleView } from "./ScheduleView";
+import { BingeProvider, useBinge } from "./BingeProvider";
+import { UpNextView } from "./UpNextView";
+import { bingeAnimeMedia, bingeMoreItem } from "./binge-session";
+import type { BingeItem } from "../../shared/binge";
+import type { MorePlayTarget } from "./more-format";
+import { MoreView } from "./MoreView";
 import appIcon from "./assets/app-icon.png";
 import {
   createReadinessSession,
@@ -34,9 +67,12 @@ import {
 } from "./startup-readiness";
 // Only needed once a title is opened, never on initial launch -- load it as its own
 // chunk instead of paying its parse/compile cost during startup.
+const loadMediaDetailModal = () => import("./MediaDetailModal");
 const MediaDetailModal = lazy(() =>
-  import("./MediaDetailModal").then((module) => ({ default: module.MediaDetailModal })),
+  loadMediaDetailModal().then((module) => ({ default: module.MediaDetailModal })),
 );
+/** Once launch settles, the title page's code loads quietly so opening a title never waits on it. */
+const MEDIA_DETAIL_PREFETCH_DELAY_MS = 1_500;
 
 const inactiveReadinessSnapshot: ReadinessSnapshot = {
   attempt: 0,
@@ -48,8 +84,10 @@ const inactiveReadinessSnapshot: ReadinessSnapshot = {
   canContinue: false,
 };
 const subscribeToInactiveReadiness = (): (() => void) => () => undefined;
+const SIMKL_PROFILE_SYNC_AFTER_MS = 30 * 60_000;
 const getInactiveReadinessSnapshot = (): ReadinessSnapshot => inactiveReadinessSnapshot;
-type AppView = "ANIME" | "MANGA" | "PROFILE" | "SEARCH" | "SETTINGS";
+type AppView =
+  "ANIME" | "MANGA" | "MORE" | "PROFILE" | "SEARCH" | "SETTINGS" | "SCHEDULE" | "UPNEXT";
 
 export function App(): React.JSX.Element {
   return (
@@ -71,6 +109,7 @@ function AppContent(): React.JSX.Element {
           {
             id: "local",
             label: "Opening local data",
+            shortLabel: "Local data",
             weight: 15,
             required: true,
             failureOutcome: "local-error",
@@ -84,6 +123,7 @@ function AppContent(): React.JSX.Element {
           {
             id: "session",
             label: "Restoring your saved session",
+            shortLabel: "Session",
             weight: 25,
             required: false,
             provider: "AniList",
@@ -110,9 +150,10 @@ function AppContent(): React.JSX.Element {
           {
             id: "playback",
             label: "Checking anime playback availability",
+            shortLabel: "Anime player",
             weight: 20,
             required: false,
-            provider: "Anikoto",
+            provider: "The anime player",
             failureOutcome: "degraded",
             run: async () =>
               normalizePlaybackReadiness(await window.anistream.getAnimeProviderReadiness()),
@@ -129,19 +170,96 @@ function AppContent(): React.JSX.Element {
   const auth = viewerSnapshot.auth;
   const viewerAccess = viewerSnapshot.access;
   const dashboard = viewerAccess.kind === "member" ? viewerAccess.dashboard : undefined;
+  const simklStatus = useSimklStatus();
+  const simklAuth = simklStatus?.auth.status === "connected" ? simklStatus.auth : undefined;
+  const simklProfileState = useSimklProfile(simklStatus);
+  const simklProfile = simklProfileState.profile;
+  const profileLook = useProfileLook();
+  const accountPicture = choosePicture(
+    profileLook.picture,
+    dashboard?.profile.avatarUrl,
+    simklAuth?.avatarUrl,
+  );
   const authRestoring = viewerSnapshot.restoring;
   const syncing = viewerSnapshot.syncing;
   const error = viewerSnapshot.error;
+  // What the Profile status chip shows: each connected account still updating, or failed.
+  const profileSyncSources: ProfileSyncSource[] = [
+    ...(viewerAccess.kind === "member"
+      ? [
+          {
+            source: "anilist" as const,
+            state: syncing ? ("busy" as const) : error ? ("failed" as const) : ("done" as const),
+          },
+        ]
+      : []),
+    ...(simklAuth
+      ? [
+          {
+            source: "simkl" as const,
+            state:
+              simklStatus?.library?.syncing || simklProfileState.loading
+                ? ("busy" as const)
+                : simklStatus?.library?.error
+                  ? ("failed" as const)
+                  : ("done" as const),
+          },
+        ]
+      : []),
+  ];
   const [editingEntry, setEditingEntry] = useState<{ entry: AniListEntry; viewerId: number }>();
-  const [view, setView] = useState<AppView>("ANIME");
-  const [browseQuery, setBrowseQuery] = useState("");
+  // The previous view is kept with the current one so section transitions know their direction.
+  // The app opens on the section chosen in Settings → Customize.
+  const [{ view, from: previousView }, setViewPair] = useState<{ view: AppView; from: AppView }>(
+    () => ({ view: getAppPreferences().startSection, from: getAppPreferences().startSection }),
+  );
+  const preferences = useAppPreferences();
+  const setView = useCallback(
+    (next: AppView) =>
+      setViewPair((current) =>
+        current.view === next ? current : { view: next, from: current.view },
+      ),
+    [],
+  );
+  const [searchScope, setSearchScope] = useState<SearchScope>(
+    () => getAppPreferences().startSection,
+  );
   const [selectedMedia, setSelectedMedia] = useState<AniListCatalogMedia>();
+  const [selectedMore, setSelectedMore] = useState<MoreCatalogItem>();
+  const [selectedMoreAction, setSelectedMoreAction] = useState<"details" | "play">("details");
+  const [navbarScrolled, setNavbarScrolled] = useState(false);
+  const openMoreDetails = useCallback((item: MoreCatalogItem) => {
+    setSelectedMoreAction("details");
+    setSelectedMore(item);
+  }, []);
+  // A queued episode starts at its exact target; otherwise the title page picks the resume point.
+  const [selectedMoreStart, setSelectedMoreStart] = useState<MorePlayTarget>();
+  // Bumped when Up Next starts an item, so replaying the open title remounts its page and plays.
+  const [playNonce, setPlayNonce] = useState(0);
+  const openMorePlayback = useCallback((item: MoreCatalogItem, start?: MorePlayTarget) => {
+    setSelectedMoreAction("play");
+    setSelectedMoreStart(start);
+    setSelectedMore(item);
+  }, []);
+  // A More title opened from Search returns there on Back (Anime/Manga titles already open over
+  // the search page; More titles live inside the More section).
+  const [moreFromSearch, setMoreFromSearch] = useState(false);
+  const closeMoreTitle = useCallback(() => {
+    setSelectedMore(undefined);
+    setSelectedMoreAction("details");
+    if (moreFromSearch) {
+      setMoreFromSearch(false);
+      setSearchScope("MORE");
+      setView("SEARCH");
+    }
+  }, [moreFromSearch, setView]);
   const [selectedAction, setSelectedAction] = useState<"details" | "play" | "read">("details");
   const [selectedStartUnit, setSelectedStartUnit] = useState<number>();
   const [mediaType, setMediaType] = useState<AniListMediaType>("ANIME");
   const [selectedGroup, setSelectedGroup] = useState("");
   const [listQuery, setListQuery] = useState("");
   const [librarySort, setLibrarySort] = useState<LibrarySort>("UPDATED_DESC");
+  const [formatFilter, setFormatFilter] = useState("");
   const [adding, setAdding] = useState(false);
   const [libraryRefreshSpinning, setLibraryRefreshSpinning] = useState(false);
   const [activeReadiness, setActiveReadiness] = useState<ReadinessSession | undefined>(
@@ -155,8 +273,15 @@ function AppContent(): React.JSX.Element {
 
   useEffect(() => {
     viewerSession.activate();
-    void launchReadiness.start();
+    let prefetch: number | undefined;
+    void launchReadiness.start().then(() => {
+      prefetch = window.setTimeout(
+        () => void loadMediaDetailModal().catch(() => undefined),
+        MEDIA_DETAIL_PREFETCH_DELAY_MS,
+      );
+    });
     return () => {
+      window.clearTimeout(prefetch);
       launchReadiness.dispose();
       viewerSession.dispose();
     };
@@ -179,51 +304,70 @@ function AppContent(): React.JSX.Element {
       reducedMotion ? 0 : 240,
     );
     return () => window.clearTimeout(dismiss);
-  }, [activeReadiness, readinessSnapshot.mode, readinessSnapshot.outcome, reducedMotion]);
+  }, [activeReadiness, readinessSnapshot.mode, readinessSnapshot.outcome, reducedMotion, setView]);
 
   useEffect(() => {
     cancelSmoothDocumentScroll();
     window.scrollTo({ top: 0, behavior: "instant" });
-  }, [browseQuery, cancelSmoothDocumentScroll, view]);
+  }, [cancelSmoothDocumentScroll, view]);
+
+  // Catalog navbars float over hero artwork and only gain a surface once content scrolls under it.
+  const overlayNavbar =
+    view === "MORE" ||
+    view === "ANIME" ||
+    view === "MANGA" ||
+    view === "SEARCH" ||
+    view === "PROFILE" ||
+    view === "SCHEDULE" ||
+    view === "UPNEXT" ||
+    view === "SETTINGS";
+  const direction = sectionDirection(previousView, view);
+  const sectionActive = (section: SearchScope): boolean =>
+    view === section || (view === "SEARCH" && searchScope === section);
+  useEffect(() => {
+    if (!overlayNavbar) return;
+    const update = (): void => setNavbarScrolled(window.scrollY > 24);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, [overlayNavbar]);
 
   useEffect(() => {
     const focusSearch = (event: KeyboardEvent): void => {
       if (document.querySelector('[aria-modal="true"]')) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "k") {
         event.preventDefault();
-        document.querySelector<HTMLInputElement>(".global-search input")?.focus();
+        openSearch(false);
+        document.querySelector<HTMLInputElement>(".section-search-field input")?.focus();
       }
     };
     window.addEventListener("keydown", focusSearch);
     return () => window.removeEventListener("keydown", focusSearch);
-  }, []);
+  });
 
   const groups = mediaType === "ANIME" ? dashboard?.animeLists : dashboard?.mangaLists;
-  const activeGroup = useMemo(
-    () => groups?.find((group) => group.name === selectedGroup) ?? groups?.[0],
-    [groups, selectedGroup],
+  // Profile shelves: one per status (AniList's per-format lists merged) plus custom lists.
+  const shelves = useMemo(
+    () => buildLibraryShelves(groups ?? [], mediaType === "ANIME"),
+    [groups, mediaType],
   );
-  const visibleEntries = useMemo(() => {
-    const query = listQuery.trim().toLocaleLowerCase();
-    const filtered = query
-      ? (activeGroup?.entries ?? []).filter((entry) =>
-          entry.media.title.toLocaleLowerCase().includes(query),
-        )
-      : (activeGroup?.entries ?? []);
-    return [...filtered].sort((left, right) => {
-      if (librarySort === "TITLE_ASC") {
-        return left.media.title.localeCompare(right.media.title);
-      }
-      if (librarySort === "SCORE_DESC") return right.score - left.score;
-      if (librarySort === "PROGRESS_DESC") return right.progress - left.progress;
-      return right.updatedAt - left.updatedAt;
-    });
-  }, [activeGroup, librarySort, listQuery]);
+  const activeShelf =
+    shelves.find((shelf) => shelf.key === selectedGroup) ??
+    shelves.find((shelf) => shelf.key === defaultShelfKey(shelves));
+  const visibleEntries = useMemo(
+    () =>
+      filterLibrary(activeShelf?.entries ?? [], {
+        query: listQuery,
+        format: formatFilter,
+        sort: librarySort,
+      }),
+    [activeShelf, formatFilter, librarySort, listQuery],
+  );
   function switchMediaType(type: AniListMediaType): void {
     setMediaType(type);
     setListQuery("");
-    const nextGroups = type === "ANIME" ? dashboard?.animeLists : dashboard?.mangaLists;
-    setSelectedGroup(nextGroups?.[0]?.name ?? "");
+    setSelectedGroup("");
+    setFormatFilter("");
   }
 
   async function connect(): Promise<void> {
@@ -262,13 +406,19 @@ function AppContent(): React.JSX.Element {
 
   return (
     <PersonalLibraryProvider access={viewerAccess}>
-      <>
+      <BingeProvider onPlay={playBingeItem}>
         <main
           className="app-shell"
           inert={activeReadiness ? true : undefined}
           aria-hidden={activeReadiness ? true : undefined}
         >
-          <nav className="app-navbar">
+          <nav
+            className={
+              overlayNavbar
+                ? `app-navbar app-navbar--overlay${navbarScrolled ? " is-scrolled" : ""}`
+                : "app-navbar"
+            }
+          >
             <button
               className="wordmark"
               type="button"
@@ -280,30 +430,78 @@ function AppContent(): React.JSX.Element {
             </button>
             <div className="nav-links" aria-label="Main navigation">
               <button
-                className={view === "ANIME" ? "active" : ""}
+                className={sectionActive("ANIME") ? "active" : ""}
                 type="button"
                 onClick={() => openCatalog("ANIME")}
               >
                 Anime
+                {sectionActive("ANIME") ? (
+                  <motion.span
+                    className="nav-underline"
+                    layoutId="nav-underline"
+                    transition={navIndicatorTransition(reducedMotion)}
+                    aria-hidden="true"
+                  />
+                ) : null}
               </button>
               <button
-                className={view === "MANGA" ? "active" : ""}
+                className={sectionActive("MANGA") ? "active" : ""}
                 type="button"
                 onClick={() => openCatalog("MANGA")}
               >
                 Manga
+                {sectionActive("MANGA") ? (
+                  <motion.span
+                    className="nav-underline"
+                    layoutId="nav-underline"
+                    transition={navIndicatorTransition(reducedMotion)}
+                    aria-hidden="true"
+                  />
+                ) : null}
+              </button>
+              <button
+                className={sectionActive("MORE") ? "active" : ""}
+                type="button"
+                onClick={() => openMore()}
+              >
+                More
+                {sectionActive("MORE") ? (
+                  <motion.span
+                    className="nav-underline"
+                    layoutId="nav-underline"
+                    transition={navIndicatorTransition(reducedMotion)}
+                    aria-hidden="true"
+                  />
+                ) : null}
               </button>
             </div>
-            <GlobalSearch
-              onSelect={(media) => openMedia(media, "details")}
-              onSubmit={(query) => {
-                setSelectedMedia(undefined);
-                setBrowseQuery(query);
-                setView("SEARCH");
-              }}
-            />
+            <span className="nav-spacer" aria-hidden="true" />
             <div className="nav-account">
-              <ReleaseNotifications onSelect={(media) => openMedia(media, "details")} />
+              <button
+                type="button"
+                className={`nav-search-button${view === "SEARCH" ? " active" : ""}`}
+                aria-label={view === "SEARCH" ? "Close search" : "Search"}
+                aria-pressed={view === "SEARCH"}
+                title="Search (Ctrl+K)"
+                onClick={() => openSearch(true)}
+              >
+                <Search size={17} aria-hidden="true" />
+              </button>
+              {preferences.schedule ? (
+                <button
+                  type="button"
+                  className={`nav-schedule-button${view === "SCHEDULE" ? " active" : ""}`}
+                  aria-label="Airing schedule"
+                  aria-pressed={view === "SCHEDULE"}
+                  title="Airing schedule"
+                  onClick={openSchedule}
+                >
+                  <CalendarDays size={17} aria-hidden="true" />
+                </button>
+              ) : null}
+              {preferences.upNext ? (
+                <UpNextNavButton active={view === "UPNEXT"} onOpen={openUpNext} />
+              ) : null}
               {viewerAccess.kind === "member" ? (
                 <>
                   <button
@@ -327,12 +525,24 @@ function AppContent(): React.JSX.Element {
                     kind="member"
                     active={view === "PROFILE" || view === "SETTINGS"}
                     name={viewerAccess.dashboard.profile.name}
-                    avatarUrl={viewerAccess.dashboard.profile.avatarUrl}
+                    avatarUrl={accountPicture.url}
+                    subtitle={simklAuth ? "AniList + Simkl" : "AniList profile"}
                     onOpenProfile={openProfile}
                     onOpenSettings={openSettings}
                     onLogout={() => void viewerSession.logout()}
                   />
                 </>
+              ) : simklAuth ? (
+                <NavbarAccountMenu
+                  kind="member"
+                  active={view === "PROFILE" || view === "SETTINGS"}
+                  name={simklAuth.userName ?? "Simkl"}
+                  avatarUrl={simklAuth.avatarUrl}
+                  subtitle="Simkl profile"
+                  onOpenProfile={openProfile}
+                  onOpenSettings={openSettings}
+                  onLogout={() => void window.anistream.disconnectSimkl().catch(() => undefined)}
+                />
               ) : (
                 <NavbarAccountMenu
                   kind="guest"
@@ -344,124 +554,226 @@ function AppContent(): React.JSX.Element {
             </div>
           </nav>
           <UpdateNotice />
+          <ContinueUndoToast />
 
-          <AnimatePresence mode="wait" initial={false}>
-            {view === "ANIME" || view === "MANGA" ? (
-              <motion.div
-                className="route-view"
-                key={`catalog-${view}`}
-                variants={routeVariants}
-                initial={reducedMotion ? false : "initial"}
-                animate="animate"
-                exit={reducedMotion ? undefined : "exit"}
-                transition={motionTransition(reducedMotion)}
-              >
-                <CatalogView
-                  type={view}
-                  searchQuery=""
-                  onLibrary={manageLibrary}
-                  access={viewerAccess}
-                  onSelect={(media) => openMedia(media, "details")}
-                  onPrimary={(media, targetUnit) =>
-                    openMedia(media, view === "ANIME" ? "play" : "read", targetUnit)
-                  }
-                />
-              </motion.div>
-            ) : view === "SEARCH" ? (
-              <motion.div
-                key="search"
-                className="route-view"
-                initial={false}
-                animate={{ opacity: 1 }}
-              >
-                <SearchView
-                  key={browseQuery}
-                  query={browseQuery}
-                  access={viewerAccess}
-                  onSelect={(media) => openMedia(media, "details")}
-                  onPrimary={(media) => openMedia(media, media.type === "ANIME" ? "play" : "read")}
-                  onLibrary={manageLibrary}
-                />
-              </motion.div>
-            ) : view === "SETTINGS" ? (
-              <motion.div
-                className="route-view"
-                key="settings"
-                variants={routeVariants}
-                initial={reducedMotion ? false : "initial"}
-                animate="animate"
-                exit={reducedMotion ? undefined : "exit"}
-                transition={motionTransition(reducedMotion)}
-              >
-                <SettingsView />
-              </motion.div>
-            ) : viewerAccess.kind === "member" ? (
-              <motion.div
-                className="profile-route-transition"
-                key={`profile-member-${viewerAccess.dashboard.profile.id}`}
-                variants={profileRouteVariants}
-                initial={reducedMotion ? false : "initial"}
-                animate="animate"
-                exit={reducedMotion ? undefined : "exit"}
-                transition={motionTransition(reducedMotion, "emphasis")}
-              >
-                <ProfileView
-                  dashboard={viewerAccess.dashboard}
-                  mediaType={mediaType}
-                  selectedGroup={selectedGroup}
-                  activeGroupName={activeGroup?.name}
-                  visibleEntries={visibleEntries}
-                  listQuery={listQuery}
-                  librarySort={librarySort}
-                  adding={adding}
-                  error={error}
-                  onSwitchType={switchMediaType}
-                  onSelectGroup={setSelectedGroup}
-                  onListQuery={setListQuery}
-                  onLibrarySort={setLibrarySort}
-                  onToggleAdding={() => setAdding((value) => !value)}
-                  onSave={saveEntry}
-                  onEdit={(entry) =>
-                    setEditingEntry({ entry, viewerId: viewerAccess.dashboard.profile.id })
-                  }
-                  access={viewerAccess}
-                  onLibrary={manageLibrary}
-                  onOpenMedia={(media, action) => openMedia({ ...media, genres: [] }, action)}
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                className="profile-route-transition"
-                key="profile-connect"
-                initial={false}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reducedMotion ? undefined : { opacity: 0, y: -12, scale: 0.99 }}
-                transition={motionTransition(reducedMotion, "standard")}
-              >
-                <ProfileConnectView
-                  auth={auth}
-                  restoring={authRestoring}
-                  error={error}
-                  onConnect={connect}
-                  onCancel={cancelConnect}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* An open title page covers the route; keep the route out of focus order underneath. */}
+          <div className="route-stack" inert={selectedMedia ? true : undefined}>
+            <AnimatePresence mode="wait" initial={false} custom={direction}>
+              {view === "ANIME" || view === "MANGA" ? (
+                <motion.div
+                  className="route-view"
+                  key={`catalog-${view}`}
+                  custom={direction}
+                  variants={sectionVariants}
+                  initial={reducedMotion ? false : "initial"}
+                  animate="animate"
+                  exit={reducedMotion ? undefined : "exit"}
+                  transition={motionTransition(reducedMotion)}
+                >
+                  <CatalogView
+                    type={view}
+                    onLibrary={manageLibrary}
+                    access={viewerAccess}
+                    onSelect={(media) => openMedia(media, "details")}
+                    onPrimary={(media, targetUnit) =>
+                      openMedia(media, view === "ANIME" ? "play" : "read", targetUnit)
+                    }
+                  />
+                </motion.div>
+              ) : view === "MORE" ? (
+                <motion.div
+                  className="route-view"
+                  key="more"
+                  custom={direction}
+                  variants={sectionVariants}
+                  initial={reducedMotion ? false : "initial"}
+                  animate="animate"
+                  exit={reducedMotion ? undefined : "exit"}
+                  transition={motionTransition(reducedMotion)}
+                >
+                  <MoreView
+                    selection={
+                      selectedMore
+                        ? {
+                            item: selectedMore,
+                            action: selectedMoreAction,
+                            start: selectedMoreAction === "play" ? selectedMoreStart : undefined,
+                            nonce: playNonce,
+                            backLabel: moreFromSearch ? "Search" : undefined,
+                          }
+                        : undefined
+                    }
+                    onSelect={openMoreDetails}
+                    onPrimary={(item) => openMorePlayback(item)}
+                    onCloseTitle={closeMoreTitle}
+                  />
+                </motion.div>
+              ) : view === "SEARCH" ? (
+                <motion.div
+                  className="route-view"
+                  key={`search-${searchScope}`}
+                  variants={profileRouteVariants}
+                  initial={reducedMotion ? false : "initial"}
+                  animate="animate"
+                  exit={reducedMotion ? undefined : "exit"}
+                  transition={motionTransition(reducedMotion)}
+                >
+                  <SectionSearch
+                    scope={searchScope}
+                    access={viewerAccess}
+                    onOpenMedia={(media) => openMedia(media, "details")}
+                    onPrimaryMedia={(media) =>
+                      openMedia(media, media.type === "ANIME" ? "play" : "read")
+                    }
+                    onLibrary={manageLibrary}
+                    onOpenMore={(item) => {
+                      openMore();
+                      setMoreFromSearch(true);
+                      openMoreDetails(item);
+                    }}
+                    onPrimaryMore={(item) => {
+                      openMore();
+                      setMoreFromSearch(true);
+                      openMorePlayback(item);
+                    }}
+                  />
+                </motion.div>
+              ) : view === "UPNEXT" ? (
+                <motion.div
+                  className="route-view"
+                  key="upnext"
+                  variants={routeVariants}
+                  initial={reducedMotion ? false : "initial"}
+                  animate="animate"
+                  exit={reducedMotion ? undefined : "exit"}
+                  transition={motionTransition(reducedMotion)}
+                >
+                  <UpNextView />
+                </motion.div>
+              ) : view === "SCHEDULE" ? (
+                <motion.div
+                  className="route-view"
+                  key="schedule"
+                  variants={routeVariants}
+                  initial={reducedMotion ? false : "initial"}
+                  animate="animate"
+                  exit={reducedMotion ? undefined : "exit"}
+                  transition={motionTransition(reducedMotion)}
+                >
+                  <ScheduleView
+                    access={viewerAccess}
+                    onOpenMedia={(media) => openMedia(media, "details")}
+                    onContinue={(media) =>
+                      openMedia(media, media.type === "ANIME" ? "play" : "read")
+                    }
+                  />
+                </motion.div>
+              ) : view === "SETTINGS" ? (
+                <motion.div
+                  className="route-view"
+                  key="settings"
+                  variants={routeVariants}
+                  initial={reducedMotion ? false : "initial"}
+                  animate="animate"
+                  exit={reducedMotion ? undefined : "exit"}
+                  transition={motionTransition(reducedMotion)}
+                >
+                  <SettingsView
+                    access={viewerAccess}
+                    onSignIn={openProfile}
+                    onOpenProfile={openProfile}
+                    onLogout={() => void viewerSession.logout()}
+                  />
+                </motion.div>
+              ) : viewerAccess.kind === "member" ? (
+                <motion.div
+                  className="profile-route-transition"
+                  key={`profile-member-${viewerAccess.dashboard.profile.id}`}
+                  variants={profileRouteVariants}
+                  initial={reducedMotion ? false : "initial"}
+                  animate="animate"
+                  exit={reducedMotion ? undefined : "exit"}
+                  transition={motionTransition(reducedMotion, "emphasis")}
+                >
+                  <ProfileView
+                    dashboard={viewerAccess.dashboard}
+                    mediaType={mediaType}
+                    shelves={shelves}
+                    activeShelfKey={activeShelf?.key ?? ""}
+                    formatFilter={formatFilter}
+                    onFormatFilter={setFormatFilter}
+                    visibleEntries={visibleEntries}
+                    listQuery={listQuery}
+                    librarySort={librarySort}
+                    adding={adding}
+                    error={error}
+                    onSwitchType={switchMediaType}
+                    onSelectShelf={(key) => {
+                      setSelectedGroup(key);
+                      setFormatFilter("");
+                    }}
+                    onListQuery={setListQuery}
+                    onLibrarySort={setLibrarySort}
+                    onToggleAdding={() => setAdding((value) => !value)}
+                    onEdit={(entry) =>
+                      setEditingEntry({ entry, viewerId: viewerAccess.dashboard.profile.id })
+                    }
+                    access={viewerAccess}
+                    onLibrary={manageLibrary}
+                    onOpenMedia={(media, action) => openMedia({ ...media, genres: [] }, action)}
+                    simkl={simklProfile}
+                    simklStatus={simklStatus}
+                    simklStatsLoading={simklProfileState.statsLoading}
+                    syncSources={profileSyncSources}
+                    onOpenMore={openMoreFromProfile}
+                  />
+                </motion.div>
+              ) : simklStatus && simklAuth ? (
+                <motion.div
+                  className="profile-route-transition"
+                  key="profile-simkl"
+                  variants={profileRouteVariants}
+                  initial={reducedMotion ? false : "initial"}
+                  animate="animate"
+                  exit={reducedMotion ? undefined : "exit"}
+                  transition={motionTransition(reducedMotion, "emphasis")}
+                >
+                  <SimklProfileView
+                    profile={simklProfile}
+                    status={simklStatus}
+                    statsLoading={simklProfileState.statsLoading}
+                    syncSources={profileSyncSources}
+                    onOpenMore={openMoreFromProfile}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  className="profile-route-transition"
+                  key="profile-connect"
+                  initial={false}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reducedMotion ? undefined : { opacity: 0, y: -12, scale: 0.99 }}
+                  transition={motionTransition(reducedMotion, "standard")}
+                >
+                  <ProfileConnectView
+                    simkl={simklStatus}
+                    auth={auth}
+                    restoring={authRestoring}
+                    error={error}
+                    onConnect={connect}
+                    onCancel={cancelConnect}
+                    onBrowse={openStartSection}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-          <Suspense
-            fallback={
-              selectedMedia ? (
-                <div className="modal-suspense-fallback" role="status" aria-label="Loading details">
-                  <span className="loading-orbit" aria-hidden="true" />
-                </div>
-              ) : null
-            }
-          >
+          <Suspense fallback={selectedMedia ? <TitlePageFallback media={selectedMedia} /> : null}>
             <AnimatePresence mode="wait">
               {selectedMedia ? (
                 <MediaDetailModal
-                  key={mediaDetailInstanceKey(selectedMedia, viewerAccess)}
+                  key={`${mediaDetailInstanceKey(selectedMedia, viewerAccess)}:${playNonce}`}
                   media={selectedMedia}
                   initialAction={selectedAction}
                   initialUnit={selectedStartUnit}
@@ -473,6 +785,7 @@ function AppContent(): React.JSX.Element {
                   }}
                   access={viewerAccess}
                   onLibrary={manageLibrary}
+                  onScrolledChange={setNavbarScrolled}
                 />
               ) : null}
             </AnimatePresence>
@@ -500,14 +813,56 @@ function AppContent(): React.JSX.Element {
             />
           ) : null}
         </AnimatePresence>
-      </>
+      </BingeProvider>
     </PersonalLibraryProvider>
   );
 
   function openCatalog(type: "ANIME" | "MANGA"): void {
     setSelectedMedia(undefined);
-    setBrowseQuery("");
+    setSelectedMore(undefined);
     setView(type);
+  }
+
+  /** Opens the search page for the current section; `toggle` returns to that section instead. */
+  function openSearch(toggle: boolean): void {
+    if (view === "SEARCH") {
+      if (!toggle) return;
+      if (searchScope === "MORE") openMore();
+      else openCatalog(searchScope);
+      return;
+    }
+    if (view === "ANIME" || view === "MANGA" || view === "MORE") setSearchScope(view);
+    setSelectedMedia(undefined);
+    setSelectedMore(undefined);
+    setView("SEARCH");
+  }
+
+  function openStartSection(): void {
+    const start = getAppPreferences().startSection;
+    if (start === "MORE") openMore();
+    else openCatalog(start);
+  }
+
+  /** Opening Profile syncs Simkl when its last import is over 30 minutes old. */
+  function refreshSimklIfStale(): void {
+    const library = simklStatus?.library;
+    if (!simklAuth || !library || library.syncing) return;
+    const syncedAt = library.syncedAt ? Date.parse(library.syncedAt) : 0;
+    if (Date.now() - syncedAt > SIMKL_PROFILE_SYNC_AFTER_MS)
+      void window.anistream.syncSimkl().catch(() => undefined);
+  }
+
+  function openMoreFromProfile(item: MoreCatalogItem): void {
+    openMore();
+    openMoreDetails(item);
+  }
+
+  function openMore(): void {
+    setSelectedMedia(undefined);
+    setSelectedMore(undefined);
+    setMoreFromSearch(false);
+    setSelectedMoreAction("details");
+    setView("MORE");
   }
 
   function openMedia(
@@ -524,12 +879,31 @@ function AppContent(): React.JSX.Element {
     if (view === "PROFILE" && !activeReadiness) return;
     if (activeReadiness?.getSnapshot().mode === "profile") return;
     setSelectedMedia(undefined);
+    setSelectedMore(undefined);
+    // A saved copy opens at once and updates in place (approved 2026-10-07); the full-screen
+    // check stays only for a first load with nothing saved.
+    const current = viewerSession.getSnapshot();
+    const savedAniList = current.access.kind === "member" && current.hasVerifiedDashboard;
+    const simklOnly = current.access.kind === "guest" && Boolean(simklAuth);
+    if (savedAniList || simklOnly) {
+      cancelSmoothDocumentScroll();
+      window.scrollTo({ top: 0, behavior: "instant" });
+      setView("PROFILE");
+      if (savedAniList) void viewerSession.refresh();
+      refreshSimklIfStale();
+      window.requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>("[data-profile-heading]")?.focus();
+      });
+      return;
+    }
+    refreshSimklIfStale();
     const profileReadiness = createReadinessSession({
       mode: "profile",
       stages: [
         {
           id: "account",
           label: "Checking your AniList account",
+          shortLabel: "Account",
           weight: 30,
           required: true,
           provider: "AniList",
@@ -548,6 +922,7 @@ function AppContent(): React.JSX.Element {
         {
           id: "saved-profile",
           label: "Preparing your saved profile",
+          shortLabel: "Saved profile",
           weight: 30,
           required: false,
           provider: "AniList",
@@ -564,6 +939,7 @@ function AppContent(): React.JSX.Element {
         {
           id: "library",
           label: "Updating your AniList library",
+          shortLabel: "Library",
           weight: 40,
           required: true,
           provider: "AniList",
@@ -588,8 +964,37 @@ function AppContent(): React.JSX.Element {
     void profileReadiness.start();
   }
 
+  /** Starts an Up Next or playlist item: anime opens its title page and plays, More likewise. */
+  function playBingeItem(item: BingeItem): void {
+    setPlayNonce((nonce) => nonce + 1);
+    if (item.kind === "anime") {
+      setSelectedMore(undefined);
+      openMedia(bingeAnimeMedia(item), "play", item.episode);
+      return;
+    }
+    setSelectedMedia(undefined);
+    setView("MORE");
+    openMorePlayback(
+      bingeMoreItem(item),
+      item.season && item.episode ? { season: item.season, episode: item.episode } : undefined,
+    );
+  }
+
+  function openUpNext(): void {
+    setSelectedMedia(undefined);
+    setSelectedMore(undefined);
+    setView("UPNEXT");
+  }
+
+  function openSchedule(): void {
+    setSelectedMedia(undefined);
+    setSelectedMore(undefined);
+    setView("SCHEDULE");
+  }
+
   function openSettings(): void {
     setSelectedMedia(undefined);
+    setSelectedMore(undefined);
     setView("SETTINGS");
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLElement>("[data-settings-heading]")?.focus();
@@ -602,14 +1007,39 @@ function normalizePlaybackReadiness(
 ): void | ReadinessStageResult {
   if (result.status === "ready") return;
   if (result.status === "disabled") return { status: "disabled", message: result.message };
-  if (result.status === "offline") return { status: "offline", provider: "Anikoto" };
+  if (result.status === "offline") return { status: "offline", provider: "The anime player" };
   if (result.status === "rate-limited") {
     return {
       status: "degraded",
-      provider: "Anikoto",
-      message: "Anikoto is busy right now. Please wait a few minutes, then try again.",
+      provider: "The anime player",
+      message: "The anime player is busy right now. Please wait a few minutes, then try again.",
       canContinue: true,
     };
   }
-  return { status: "degraded", provider: "Anikoto", canContinue: true };
+  return { status: "degraded", provider: "The anime player", canContinue: true };
+}
+
+/** Navbar entry to Up Next, with the queue length as a badge. */
+function UpNextNavButton({
+  active,
+  onOpen,
+}: {
+  active: boolean;
+  onOpen: () => void;
+}): React.JSX.Element {
+  const { state } = useBinge();
+  const count = state.queue.length;
+  return (
+    <button
+      type="button"
+      className={`nav-upnext-button${active ? " active" : ""}`}
+      aria-label={count ? `Up Next, ${count} queued` : "Up Next"}
+      aria-pressed={active}
+      title="Up Next and playlists"
+      onClick={onOpen}
+    >
+      <ListVideo size={17} aria-hidden="true" />
+      {count ? <span className="nav-badge">{count > 99 ? "99+" : count}</span> : null}
+    </button>
+  );
 }

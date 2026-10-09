@@ -80,9 +80,9 @@ describe("catalog data request lifecycle", () => {
       .mockReturnValueOnce(retriedAnime.promise);
     const catalog = createCatalogDataModule(api({ browseAniList }));
 
-    catalog.activate({ type: "ANIME", searchQuery: "", availabilityMedia: [] });
-    catalog.activate({ type: "MANGA", searchQuery: "", availabilityMedia: [] });
-    catalog.activate({ type: "ANIME", searchQuery: "", availabilityMedia: [] });
+    catalog.activate({ type: "ANIME", availabilityMedia: [] });
+    catalog.activate({ type: "MANGA", availabilityMedia: [] });
+    catalog.activate({ type: "ANIME", availabilityMedia: [] });
 
     expect(browseAniList.mock.calls.map(([input]) => input.type)).toEqual([
       "ANIME",
@@ -101,6 +101,31 @@ describe("catalog data request lifecycle", () => {
     catalog.dispose();
   });
 
+  it("falls back to MAL trending when AniList returns an empty trending page", async () => {
+    const getMalTrendingFallback = vi.fn<CatalogDataApi["getMalTrendingFallback"]>(async () => [
+      { malId: 1, title: "Fallback", malUrl: "https://myanimelist.net/manga/1" },
+    ]);
+    const catalog = createCatalogDataModule(
+      api({
+        browseAniList: vi.fn(async () => ({
+          pageInfo: { currentPage: 1, perPage: 20, lastPage: 1, hasNextPage: false },
+          items: [],
+        })),
+        getMalTrendingFallback,
+      }),
+    );
+
+    catalog.activate({ type: "MANGA", availabilityMedia: [] });
+    await settle();
+    await settle();
+
+    expect(getMalTrendingFallback).toHaveBeenCalledWith("MANGA");
+    expect(catalog.getSnapshot().malTrendingFallback.map((item) => item.title)).toEqual([
+      "Fallback",
+    ]);
+    catalog.dispose();
+  });
+
   it("rejects a stale Latest Anime page after a newer page has rendered", async () => {
     const firstPage = deferred<LatestUpdatesPage<LatestAnimeUpdate>>();
     const secondPage = deferred<LatestUpdatesPage<LatestAnimeUpdate>>();
@@ -110,7 +135,7 @@ describe("catalog data request lifecycle", () => {
       .mockReturnValueOnce(secondPage.promise);
     const catalog = createCatalogDataModule(api({ getLatestAnimeUpdates }));
 
-    catalog.activate({ type: "ANIME", searchQuery: "", availabilityMedia: [] });
+    catalog.activate({ type: "ANIME", availabilityMedia: [] });
     catalog.setLatestPage(2);
 
     secondPage.resolve(latestPage(2, { media: media(22, "ANIME"), episode: 4, airedAt: 22 }));
@@ -126,6 +151,31 @@ describe("catalog data request lifecycle", () => {
     expect(catalog.getSnapshot()).toMatchObject({
       latestPage: 2,
       latestAnime: [{ media: { id: 22 } }],
+      latestLoading: false,
+    });
+
+    catalog.dispose();
+  });
+
+  it("skips Latest Updates while the viewer has them off and loads them when turned on", async () => {
+    const getLatestAnimeUpdates = vi.fn<CatalogDataApi["getLatestAnimeUpdates"]>(async () =>
+      latestPage(1, { media: media(31, "ANIME"), episode: 2, airedAt: 31 }),
+    );
+    const getLatestMangaUpdates = vi.fn<CatalogDataApi["getLatestMangaUpdates"]>();
+    const catalog = createCatalogDataModule(api({ getLatestAnimeUpdates, getLatestMangaUpdates }));
+
+    catalog.activate({ type: "ANIME", availabilityMedia: [], latest: false });
+    catalog.activate({ type: "MANGA", availabilityMedia: [], latest: false });
+    await settle();
+    expect(getLatestAnimeUpdates).not.toHaveBeenCalled();
+    expect(getLatestMangaUpdates).not.toHaveBeenCalled();
+
+    catalog.activate({ type: "ANIME", availabilityMedia: [], latest: false });
+    catalog.activate({ type: "ANIME", availabilityMedia: [], latest: true });
+    await settle();
+    expect(getLatestAnimeUpdates).toHaveBeenCalledTimes(1);
+    expect(catalog.getSnapshot()).toMatchObject({
+      latestAnime: [{ media: { id: 31 } }],
       latestLoading: false,
     });
 

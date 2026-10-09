@@ -1,0 +1,133 @@
+/* "More like this" (Anime, Manga, More) and the More cast carousel (user-approved 2026-10-06). */
+.similar-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 18px;
+}
+.similar-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.similar-art {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  background: var(--surface-panel);
+  transition:
+    transform var(--motion-standard) var(--motion-ease),
+    box-shadow var(--motion-standard) var(--motion-ease);
+}
+.similar-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.similar-card:hover .similar-art,
+.similar-card:focus-visible .similar-art {
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.5);
+  transform: translateY(-2px);
+}
+.similar-card:focus-visible {
+  outline: none;
+}
+.similar-score {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgb(10 12 11 / 0.72);
+  color: #4fd39a;
+  font-size: 12px;
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+}
+.similar-score--star {
+  color: #fff;
+}
+.similar-score--star svg {
+  color: #f5c451;
+}
+.similar-card strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.similar-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.more-cast .carousel-track > * {
+  flex: 0 0 150px;
+}
+.more-cast-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin: 0;
+  text-align: center;
+}
+.more-cast-card img,
+.more-cast-initial {
+  width: 104px;
+  height: 104px;
+  border: 2px solid rgb(255 255 255 / 0.08);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  object-fit: cover;
+}
+.more-cast-initial {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 32px;
+  font-weight: 700;
+}
+.more-cast-card strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+.more-cast-card span {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@media (max-width: 1100px) {
+  .similar-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.more-title-page > .more-cast,
+.more-title-page > .more-similar {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 36px;
+  padding: 0 var(--page-gutter);
+}

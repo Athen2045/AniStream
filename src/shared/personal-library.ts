@@ -11,10 +11,6 @@ export interface PersonalAiringUpdate {
   episode: number;
   airedAt: number;
 }
-export interface ReleaseAcknowledgement {
-  key: string;
-  unit: number;
-}
 export interface PersonalTitle {
   media: AniListCatalogMedia;
   progress: number;
@@ -26,7 +22,10 @@ export interface ContinueTitle extends PersonalTitle {
   label: string;
   targetUnit: number;
 }
-export interface PersonalRelease extends ReleaseAcknowledgement {
+/** An aired episode or new chapter past the user's progress; it clears once they catch up. */
+export interface PersonalRelease {
+  key: string;
+  unit: number;
   media: AniListCatalogMedia;
   kind: "aired" | "translated";
   language?: string;
@@ -37,6 +36,8 @@ export function buildPersonalTitles(
   type: AniListMediaType,
   entries: AniListEntry[],
   activity: LocalActivity[],
+  /** When the AniList lists were fetched (epoch ms); absent for guests. */
+  listsFetchedAt?: number,
 ): PersonalTitle[] {
   const titles = new Map<number, PersonalTitle>();
   for (const entry of entries) {
@@ -56,6 +57,15 @@ export function buildPersonalTitles(
     const previous = titles.get(local.media.id);
     if (previous?.local && Date.parse(previous.local.updatedAt) >= Date.parse(local.updatedAt))
       continue;
+    // Progress already sent to AniList, then removed there (or moved off Watching/Completed),
+    // stays off: AniList's newer list is the answer, so a stray test play cannot linger.
+    if (
+      listsFetchedAt !== undefined &&
+      local.syncStatus === "synced" &&
+      !previous?.entry &&
+      Date.parse(local.updatedAt) < listsFetchedAt
+    )
+      continue;
     titles.set(local.media.id, {
       ...previous,
       media: previous?.media ?? { ...local.media, genres: local.media.genres ?? [] },
@@ -68,7 +78,34 @@ export function buildPersonalTitles(
       local,
     });
   }
-  return [...titles.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 24);
+  // Titles that can still be continued take the 24 slots first; finished ones only fill what is
+  // left (they stay for release checks but never reach Continue), so an older in-progress title is
+  // not pushed out by recently completed ones.
+  return [...titles.values()]
+    .sort((a, b) => Number(isFinished(a)) - Number(isFinished(b)) || b.updatedAt - a.updatedAt)
+    .slice(0, PERSONAL_TITLE_LIMIT);
+}
+
+export const PERSONAL_TITLE_LIMIT = 24;
+
+/** Mirrors `continueTitles`: finished unless a local checkpoint is resuming (e.g. a rewatch). */
+function isFinished(title: PersonalTitle): boolean {
+  const { media, progress, entry } = title;
+  if (resumesLocally(title)) return false;
+  return (
+    entry?.status === "COMPLETED" || Boolean(media.totalProgress && progress >= media.totalProgress)
+  );
+}
+
+/**
+ * Whether a started local checkpoint drives Continue: always for guests, when it is ahead of the
+ * tracker, and for AniList rewatches. A completed entry counts as a rewatch only when the
+ * checkpoint is newer than the completion; an older one is a leftover from the first watch.
+ */
+function resumesLocally({ local, progress, entry }: PersonalTitle): boolean {
+  if (local?.state !== "started") return false;
+  if (!entry || local.unit > progress || entry.status === "REPEATING") return true;
+  return entry.status === "COMPLETED" && Date.parse(local.updatedAt) > entry.updatedAt * 1000;
 }
 
 export function continueTitles(
@@ -81,10 +118,7 @@ export function continueTitles(
     const unit = media.type === "ANIME" ? "episode" : "chapter";
     // Guests and explicit AniList rewatches keep their local unit. For a normal CURRENT entry,
     // an older checkpoint must never move the tracker-backed Continue target backwards.
-    if (
-      local?.state === "started" &&
-      (!entry || local.unit > progress || ["REPEATING", "COMPLETED"].includes(entry.status))
-    ) {
+    if (local?.state === "started" && resumesLocally(title)) {
       const resume = media.type === "ANIME" ? local.playbackResume : local.mangaResume;
       return [
         {
@@ -126,10 +160,8 @@ export function personalReleases(
   titles: PersonalTitle[],
   airing: PersonalAiringUpdate[],
   availability: Map<number, MangaDexChapterAvailability>,
-  acknowledgements: ReleaseAcknowledgement[],
   now = Date.now(),
 ): PersonalRelease[] {
-  const acknowledged = new Map(acknowledgements.map((value) => [value.key, value.unit]));
   const releases: PersonalRelease[] = [];
   for (const { media, progress } of titles) {
     if (media.type === "ANIME") {
@@ -137,7 +169,7 @@ export function personalReleases(
         .filter((row) => row.aniListId === media.id && row.airedAt * 1000 <= now)
         .sort((a, b) => b.episode - a.episode)[0];
       const key = `ANIME:${media.id}`;
-      if (latest && latest.episode > Math.max(progress, acknowledged.get(key) ?? 0))
+      if (latest && latest.episode > progress)
         releases.push({
           key,
           unit: latest.episode,
@@ -149,7 +181,7 @@ export function personalReleases(
       const latest = availability.get(media.id);
       if (latest?.status !== "available" || latest.latestChapter === undefined) continue;
       const key = `MANGA:${media.id}:${latest.translatedLanguage}`;
-      if (latest.latestChapter > Math.max(progress, acknowledged.get(key) ?? 0))
+      if (latest.latestChapter > progress)
         releases.push({
           key,
           unit: latest.latestChapter,

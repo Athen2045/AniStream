@@ -54,9 +54,18 @@ jobs:
           npm run check:product-slice
           npm run check:anilist-oauth
 
+      - name: Write local provider configuration
+        # Streaming-source endpoints are not in the repository; they come from a secret.
+        uses: ./.github/actions/write-provider-config
+        with:
+          providers-json: ${{ secrets.ANISTREAM_PROVIDERS_JSON }}
+
       - name: Build Windows preview installer
         run: npm run package:win
         env:
+          # Read-only public-data keys bundled into the package (scripts/write-app-keys.mjs).
+          ANISTREAM_TMDB_ACCESS_TOKEN: ${{ secrets.ANISTREAM_TMDB_ACCESS_TOKEN }}
+          ANISTREAM_MAL_CLIENT_ID: ${{ secrets.ANISTREAM_MAL_CLIENT_ID }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Verify preview installer

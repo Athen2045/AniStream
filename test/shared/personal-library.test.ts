@@ -52,6 +52,42 @@ describe("personal continuation", () => {
     expect(titles[0].local?.unit).toBe(5);
     expect(titles[0].progress).toBe(4);
   });
+  it("keeps an older in-progress title ahead of 24+ recently completed ones", () => {
+    const completed = Array.from({ length: 30 }, (_, index) => ({
+      ...entry,
+      id: 100 + index,
+      status: "COMPLETED" as const,
+      progress: 12,
+      updatedAt: 1_000 + index,
+      media: { ...media, id: 100 + index, siteUrl: `https://anilist.co/anime/${100 + index}` },
+    }));
+    const titles = buildPersonalTitles("ANIME", [...completed, { ...entry, updatedAt: 1 }], []);
+
+    expect(titles).toHaveLength(24);
+    expect(titles[0].media.id).toBe(10);
+    expect(continueTitles(titles, new Map()).map((title) => title.media.id)).toEqual([10]);
+  });
+  it("drops synced local progress once a newer AniList list no longer has the title", () => {
+    const synced = {
+      ...activity,
+      unit: 1,
+      state: "completed" as const,
+      completedProgress: 1,
+      syncStatus: "synced" as const,
+    };
+    const after = 300_000;
+    expect(buildPersonalTitles("ANIME", [], [synced], after)).toEqual([]);
+    expect(
+      buildPersonalTitles("ANIME", [{ ...entry, status: "DROPPED" }], [synced], after),
+    ).toEqual([]);
+    // Lists fetched before the play, pending sync, guests, and listed titles keep it.
+    expect(buildPersonalTitles("ANIME", [], [synced], 100_000)).toHaveLength(1);
+    expect(
+      buildPersonalTitles("ANIME", [], [{ ...synced, syncStatus: "pending" }], after),
+    ).toHaveLength(1);
+    expect(buildPersonalTitles("ANIME", [], [synced])).toHaveLength(1);
+    expect(buildPersonalTitles("ANIME", [entry], [synced], after)).toHaveLength(1);
+  });
   it("merges custom-list duplicates and local activity by exact identity", () => {
     const titles = buildPersonalTitles(
       "ANIME",
@@ -86,6 +122,14 @@ describe("personal continuation", () => {
       continueTitles(buildPersonalTitles("ANIME", [completed], [activity]), new Map()),
     ).toHaveLength(1);
   });
+  it("drops a checkpoint left over from before the title was completed", () => {
+    // Completed on AniList (updatedAt 300 s) after the episode-5 checkpoint (200 s) was saved.
+    const completedLater = { ...entry, status: "COMPLETED" as const, progress: 12, updatedAt: 300 };
+    const titles = buildPersonalTitles("ANIME", [completedLater], [activity]);
+    expect(continueTitles(titles, new Map())).toEqual([]);
+    // It stays a personal title (for release checks) but sorts behind in-progress titles.
+    expect(titles).toHaveLength(1);
+  });
   it("hides completed local titles without discarding them from release candidates", () => {
     const titles = buildPersonalTitles(
       "ANIME",
@@ -118,20 +162,19 @@ describe("personal continuation", () => {
 });
 
 describe("personal release inbox", () => {
-  it("uses actual past airing results, hides consumed and acknowledged units", () => {
+  it("uses actual past airing results and hides units the user has reached", () => {
     const titles = buildPersonalTitles("ANIME", [entry], []);
     const aired = [{ aniListId: 10, episode: 5, airedAt: 100 }];
-    expect(personalReleases(titles, aired, new Map(), [], 200_000)[0]).toMatchObject({
+    expect(personalReleases(titles, aired, new Map(), 200_000)[0]).toMatchObject({
       kind: "aired",
       unit: 5,
       key: "ANIME:10",
     });
-    expect(
-      personalReleases(titles, aired, new Map(), [{ key: "ANIME:10", unit: 5 }], 200_000),
-    ).toEqual([]);
-    expect(
-      personalReleases(titles, [{ ...aired[0], airedAt: 300 }], new Map(), [], 200_000),
-    ).toEqual([]);
+    const caughtUp = buildPersonalTitles("ANIME", [{ ...entry, progress: 5 }], []);
+    expect(personalReleases(caughtUp, aired, new Map(), 200_000)).toEqual([]);
+    expect(personalReleases(titles, [{ ...aired[0], airedAt: 300 }], new Map(), 200_000)).toEqual(
+      [],
+    );
   });
   it("never treats an outage or an unmapped manga as an available release", () => {
     const titles = buildPersonalTitles(
@@ -151,9 +194,9 @@ describe("personal release inbox", () => {
         },
       ],
     ]);
-    expect(personalReleases(titles, [], unavailable, [])).toEqual([]);
+    expect(personalReleases(titles, [], unavailable)).toEqual([]);
     const available = new Map([[10, { ...unavailable.get(10)!, status: "available" as const }]]);
-    expect(personalReleases(titles, [], available, [])[0]).toMatchObject({
+    expect(personalReleases(titles, [], available)[0]).toMatchObject({
       kind: "translated",
       key: "MANGA:10:en",
       unit: 9,

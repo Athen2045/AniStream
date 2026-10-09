@@ -122,4 +122,18 @@ describe("For You renderer session", () => {
     await session.load();
     expect(session.getSnapshot().feed?.items).toEqual([item]);
   });
+  it("removes a dismissed title from seed rows as well as the main rail", async () => {
+    const api = bridge();
+    const other = { ...item, anilistId: 11 };
+    api.getForYou.mockResolvedValueOnce({
+      ...feed,
+      rows: [{ seedId: 1, seedTitle: "Seed", items: [item, other] }],
+    });
+    const session = createDiscoverySession("ANIME", api);
+    await session.load();
+    await session.dismiss(item);
+    const snapshot = session.getSnapshot();
+    expect(snapshot.feed?.items).toEqual([]);
+    expect(snapshot.feed?.rows?.[0].items).toEqual([other]);
+  });
 });

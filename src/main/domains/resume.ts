@@ -14,28 +14,20 @@ export function registerResumeDomain(
     if (!database) throw new Error("AniStream database is not ready.");
     return database.getPlaybackResume(aniListId);
   });
-  registerTrustedIpcHandler(trustedRendererOrigin, "playback:save-resume", (_event, input) => {
-    if (!database) throw new Error("AniStream database is not ready.");
-    database.savePlaybackResume(input);
-  });
-  registerTrustedIpcHandler(trustedRendererOrigin, "playback:clear-resume", (_event, aniListId) => {
-    if (!database) throw new Error("AniStream database is not ready.");
-    database.clearPlaybackResume(aniListId);
-  });
   registerTrustedIpcHandler(trustedRendererOrigin, "manga:reading-resume", (_event, aniListId) => {
     if (!database) throw new Error("AniStream database is not ready.");
     return database.getMangaReadingResume(aniListId);
   });
-  registerTrustedIpcHandler(trustedRendererOrigin, "manga:save-reading-resume", (_event, input) => {
+  registerTrustedIpcHandler(trustedRendererOrigin, "more:resume", (_event, input) => {
     if (!database) throw new Error("AniStream database is not ready.");
-    database.saveMangaReadingResume(input);
+    return database.getMorePlaybackResume(input);
   });
-  registerTrustedIpcHandler(
-    trustedRendererOrigin,
-    "manga:clear-reading-resume",
-    (_event, aniListId) => {
-      if (!database) throw new Error("AniStream database is not ready.");
-      database.clearMangaReadingResume(aniListId);
-    },
-  );
+  registerTrustedIpcHandler(trustedRendererOrigin, "more:save-resume", (_event, input) => {
+    if (!database) throw new Error("AniStream database is not ready.");
+    database.saveMorePlaybackResume(input);
+  });
+  registerTrustedIpcHandler(trustedRendererOrigin, "more:clear-resume", (_event, input) => {
+    if (!database) throw new Error("AniStream database is not ready.");
+    database.clearMorePlaybackResume(input);
+  });
 }

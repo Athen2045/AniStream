@@ -1,10 +1,21 @@
-import type { BackupTitle, LocalBackup } from "../shared/local-backup";
+import type {
+  BackupBingeEntry,
+  BackupTitle,
+  BackupUpNext,
+  LocalBackup,
+} from "../shared/local-backup";
+import {
+  BINGE_LIST_LIMIT,
+  BINGE_PLAYLIST_LIMIT,
+  bingeItemKey,
+  parseBingeItem,
+  parseBingeName,
+} from "../shared/binge";
 import { parseReaderSettings } from "../shared/reader-settings";
 import {
   isValidMangaReadingResumeInput,
   isValidPlaybackResumeInput,
 } from "../shared/resume-validation";
-import { validReleaseAcknowledgement } from "./personal-repository";
 
 export const BACKUP_MAX_BYTES = 10 * 1024 * 1024;
 const invalid = (): never => {
@@ -38,6 +49,39 @@ function safeId(value: unknown): string | undefined {
   const result = text(value, 160);
   return /^[A-Za-z0-9_-]+$/.test(result) ? result : invalid();
 }
+function bingeEntries(value: unknown): BackupBingeEntry[] {
+  return rows(
+    value,
+    BINGE_LIST_LIMIT,
+    (raw) => {
+      const row = record(raw);
+      const item = parseBingeItem(row.item);
+      return item ? { item, addedAt: date(row.addedAt) } : invalid();
+    },
+    (row) => bingeItemKey(row.item),
+  );
+}
+
+/** Up Next and playlists, rebuilt with the same rules the app applies to its own lists. */
+function parseUpNext(value: unknown): BackupUpNext {
+  const raw = record(value);
+  return {
+    queue: bingeEntries(raw.queue),
+    playlists: rows(
+      raw.playlists,
+      BINGE_PLAYLIST_LIMIT,
+      (item) => {
+        const row = record(item);
+        const name = parseBingeName(row.name);
+        return name
+          ? { name, updatedAt: date(row.updatedAt), entries: bingeEntries(row.entries) }
+          : invalid();
+      },
+      (row) => row.name.toLowerCase(),
+    ),
+  };
+}
+
 function rows<T>(
   value: unknown,
   max: number,
@@ -133,17 +177,9 @@ export function parseLocalBackup(value: unknown): LocalBackup {
       },
       (row) => row.aniListId,
     ),
-    releaseAcknowledgements: rows(
-      raw.releaseAcknowledgements,
-      1000,
-      (value) => {
-        const row = record(value);
-        const result = { key: text(row.key, 50), unit: number(row.unit, Number.MIN_VALUE) };
-        if (!validReleaseAcknowledgement(result)) return invalid();
-        return result;
-      },
-      (row) => row.key,
-    ),
+    // Release notices were removed; older backups may still list them and they are ignored.
+    releaseAcknowledgements: [],
     readerSettings: raw.readerSettings === null ? null : parseReaderSettings(raw.readerSettings),
+    ...(raw.upNext === undefined ? {} : { upNext: parseUpNext(raw.upNext) }),
   };
 }

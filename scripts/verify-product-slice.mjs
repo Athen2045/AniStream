@@ -11,7 +11,7 @@ const [
   catalog,
   catalogStyles,
   mangaKind,
-  anikoto,
+  animeSource,
   animeWatch,
   animePlaybackSession,
   mediaDetail,
@@ -33,7 +33,7 @@ const [
   readFile("src/renderer/src/CatalogView.tsx", "utf8"),
   readFile("src/renderer/src/styles.css", "utf8"),
   readFile("src/main/manga-kind.ts", "utf8"),
-  readFile("src/main/anikoto.ts", "utf8"),
+  readFile("src/main/anime-source.ts", "utf8"),
   readFile("src/renderer/src/AnimeWatchExperience.tsx", "utf8"),
   readFile("src/renderer/src/anime-playback-session.ts", "utf8"),
   readFile("src/renderer/src/MediaDetailModal.tsx", "utf8"),
@@ -71,7 +71,7 @@ for (const [name, source, fragments] of [
     contracts,
     ["AniListCatalogPage", "AniListMediaDetail", "BrowseAniListInput"],
   ],
-  ["renderer", renderer, ["CatalogView", "GlobalSearch", "MediaDetailModal"]],
+  ["renderer", renderer, ["CatalogView", "SectionSearch", "MediaDetailModal"]],
   [
     "MangaDex adapter",
     mangaDex,
@@ -96,18 +96,18 @@ for (const [name, source, fragments] of [
     ["mangaKindFromOriginalLanguage", "mangaKindFromCountry", "mangaKindFromMalMediaType"],
   ],
   [
-    "Anikoto adapter",
-    anikoto,
-    ["https://anikotoapi.site", "https://megaplay.buzz", "getEpisodeCatalog", "getPlayback"],
+    "anime source adapter",
+    animeSource,
+    ["AnimeSourceConfig", "fillUrlTemplate", "getEpisodeCatalog", "getPlayback"],
   ],
   [
     "anime player",
     animeWatch + animePlaybackSession,
     [
-      "AnikotoEmbedPlayer",
+      "AnimeEmbedPlayer",
       "useMediaFullscreen",
       "allowFullScreen",
-      "parseMegaPlayEvent",
+      "parseAnimePlayerMessage",
       "AnimatePresence",
       "watch-view-transition",
     ],
@@ -132,7 +132,8 @@ for (const [name, source, fragments] of [
   [
     "manga resume database",
     database,
-    ["manga_reading_resume", "saveMangaReadingResume", "getMangaReadingResume"],
+    // Writes are checked under the atomic progress repository below.
+    ["manga_reading_resume", "getMangaReadingResume"],
   ],
   ["local activity bridge", localActivity, ["recordActivity", "checkpoint: input"]],
   [
@@ -158,7 +159,7 @@ if (
 }
 
 if (animeWatch.includes("sandbox=")) {
-  throw new Error("The approved MegaPlay iframe must not regain an HTML sandbox attribute.");
+  throw new Error("The approved anime player iframe must not regain an HTML sandbox attribute.");
 }
 
 if (mediaDetail.includes("Keep your progress current")) {
@@ -166,5 +167,5 @@ if (mediaDetail.includes("Keep your progress current")) {
 }
 
 console.log(
-  "Verified durable session, catalog/detail IPC, static Latest grids, MangaDex classification/reader resume, Framer Motion transitions, and Anikoto playback.",
+  "Verified durable session, catalog/detail IPC, static Latest grids, MangaDex classification/reader resume, Framer Motion transitions, and anime playback.",
 );

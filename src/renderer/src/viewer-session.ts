@@ -96,17 +96,32 @@ export function createViewerSession(bridge: ViewerSessionBridge): ViewerSessionM
     return result;
   };
 
+  /**
+   * An edit made while AniList is unreachable is queued in the main process and applied to the
+   * offline library copy; show that copy instead of a live refresh that would fail.
+   */
+  const showQueuedLibrary = async (): Promise<void> => {
+    if (auth.status !== "signed-in") return;
+    const profileId = auth.profile.id;
+    const cached = await bridge.getCachedAniListDashboard();
+    if (cached && auth.status === "signed-in" && cached.profile.id === profileId) {
+      dashboard = cached;
+      dashboardRevision += 1;
+      notify();
+    }
+  };
+
   const updateEntry = async (input: UpdateAniListEntryInput): Promise<AniListListEntrySummary> => {
     if (auth.status !== "signed-in") throw new Error("Connect AniList to manage your library.");
     const result = await bridge.updateAniListEntry(input);
-    await refreshLibrary();
+    await (result.queued ? showQueuedLibrary() : refreshLibrary());
     return result;
   };
 
   const removeFromLibrary = async (entry: AniListEntry): Promise<void> => {
     if (auth.status !== "signed-in") throw new Error("Connect AniList to manage your library.");
-    await bridge.deleteAniListEntry(entry.id);
-    await refreshLibrary();
+    const result = await bridge.deleteAniListEntry(entry.id);
+    await (result.queued ? showQueuedLibrary() : refreshLibrary());
   };
 
   const buildAccess = (): ViewerAccess => {

@@ -8,6 +8,14 @@ files:
   - package.json
 asarUnpack:
   - node_modules/better-sqlite3/**
+# Local streaming-source endpoints and read-only public-data keys (both gitignored). Each is
+# included only when it exists; release workflows write them from repository secrets.
+extraResources:
+  - from: .
+    to: .
+    filter:
+      - providers.local.json
+      - app-keys.local.json
 protocols:
   - name: AniStream OAuth callback
     schemes:

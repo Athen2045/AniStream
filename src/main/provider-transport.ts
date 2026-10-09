@@ -2,6 +2,9 @@ import type { RequestGate } from "./anilist/request-queue";
 
 type Fetcher = typeof fetch;
 
+/** One identifying User-Agent for every provider adapter; unversioned so it cannot go stale. */
+export const PROVIDER_USER_AGENT = "AniStream (personal desktop app)";
+
 export interface ProviderTransportOptions {
   gate: RequestGate;
   fetcher?: Fetcher;

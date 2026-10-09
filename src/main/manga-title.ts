@@ -9,6 +9,8 @@ import type {
   MangaUpdatesEnrichment,
   MangaUpdatesGroup,
 } from "../shared/contracts";
+import { buildMangaChapterFallback } from "./manga-chapter-fallback";
+import { mergeMirrorChapters, MIRROR_LANGUAGE, type MirrorChapter } from "./manga-mirror";
 
 export interface MangaTitleModuleDeps {
   mangaBaka?: {
@@ -26,6 +28,13 @@ export interface MangaTitleModuleDeps {
   };
   preferences?: {
     getMangaReaderPreferences(aniListId: number): MangaReaderPreferences | undefined;
+  };
+  /** Adds official-site chapters MangaDex cannot serve in-app (manga `official-links` media). */
+  chapterFallback?: boolean;
+  /** Configured chapter mirror (manga `chapter-mirror` media): fills English chapters MangaDex lacks. */
+  mirror?: {
+    label: string;
+    getChapters(aniListId: number, signal?: AbortSignal): Promise<MirrorChapter[]>;
   };
 }
 
@@ -46,16 +55,47 @@ export class MangaTitleModule {
           preferredGroupId: preferences.preferredGroupId,
         }
       : input;
-    const [enrichmentResult, readerResult, resumeResult] = await Promise.allSettled([
+    const mirror = this.deps.mirror;
+    // The mirror is English-only; skip it outright for an explicit other-language request.
+    const wantsMirror =
+      mirror && (readerInput.translatedLanguage ?? MIRROR_LANGUAGE) === MIRROR_LANGUAGE;
+    const [enrichmentResult, readerResult, resumeResult, mirrorResult] = await Promise.allSettled([
       this.loadEnrichment(input.aniListId, issues, signal),
       this.loadReader(readerInput, signal),
       Promise.resolve(this.deps.resume?.getMangaReadingResume(input.aniListId)),
+      wantsMirror ? mirror.getChapters(input.aniListId, signal) : Promise.resolve([]),
     ]);
 
     const enrichment = valueOrIssue(enrichmentResult, "mangabaka", issues);
-    const reader = valueOrIssue(readerResult, "mangadex-reader", issues);
+    const mangaDexReader = valueOrIssue(readerResult, "mangadex-reader", issues);
+    // A mirror failure only means "no extra chapters"; MangaDex is never affected.
+    const mirrorChapters = valueOrIssue(mirrorResult, "chapter-mirror", issues) ?? [];
+    const reader =
+      mirror && mirrorChapters.length
+        ? mergeMirrorChapters({
+            aniListId: input.aniListId,
+            reader: mangaDexReader,
+            mirror: mirrorChapters,
+            label: mirror.label,
+          })
+        : mangaDexReader;
     const resume = valueOrIssue(resumeResult, "resume", issues);
-    return { aniListId: input.aniListId, enrichment, reader, resume, preferences, issues };
+    const chapterFallback = this.deps.chapterFallback
+      ? buildMangaChapterFallback({
+          reader,
+          enrichment,
+          defaultLanguage: readerInput.translatedLanguage ?? "en",
+        })
+      : undefined;
+    return {
+      aniListId: input.aniListId,
+      enrichment,
+      reader,
+      resume,
+      preferences,
+      ...(chapterFallback ? { chapterFallback } : {}),
+      issues,
+    };
   }
 
   private async loadEnrichment(

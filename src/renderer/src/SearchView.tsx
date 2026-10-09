@@ -10,6 +10,7 @@ import {
 import { CatalogCard } from "./CatalogCard";
 import { Pagination } from "./Pagination";
 import type { ViewerAccess } from "./viewer-access";
+import { Select } from "./Select";
 
 export function SearchView({
   query,
@@ -108,16 +109,17 @@ export function SearchView({
             </button>
           ) : null}
         </label>
-        <select
-          aria-label="Sort search results"
+        <Select<SearchSort>
+          ariaLabel="Sort search results"
           value={state.filters.sort}
-          onChange={(event) => apply({ sort: event.target.value as SearchSort })}
-        >
-          <option value="POPULARITY_DESC">Popularity</option>
-          <option value="TRENDING_DESC">Trending</option>
-          <option value="SCORE_DESC">Highest score</option>
-          <option value="START_DATE_DESC">Release date</option>
-        </select>
+          onChange={(sort) => apply({ sort })}
+          options={[
+            { value: "POPULARITY_DESC", label: "Popularity" },
+            { value: "TRENDING_DESC", label: "Trending" },
+            { value: "SCORE_DESC", label: "Highest score" },
+            { value: "START_DATE_DESC", label: "Release date" },
+          ]}
+        />
         <button className="primary-button" type="submit">
           Search
         </button>

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { friendlyPlaybackError, friendlyRemoteError } from "../../src/renderer/src/remote-error";
+import {
+  friendlyPlaybackError,
+  friendlyRemoteError,
+  friendlyMorePlayerError,
+  friendlyMorePlayerStatus,
+} from "../../src/renderer/src/remote-error";
 
 const options = {
   provider: "AniList",
@@ -56,5 +61,27 @@ describe("friendly remote errors", () => {
       /taking longer.*retry the player/i,
     );
     expect(friendlyPlaybackError(new Error("internal resolver 17"))).not.toContain("resolver");
+  });
+
+  it("turns More player diagnostics into clear recovery guidance", () => {
+    expect(friendlyMorePlayerError(new Error("TMDB ID not found"))).toMatch(/TMDB ID/i);
+    expect(friendlyMorePlayerError(new Error("No qualities received"))).toMatch(
+      /No playable source/i,
+    );
+    expect(friendlyMorePlayerError(new Error("Error decrypting sources: Failed to fetch"))).toMatch(
+      /preparing a source.*15 seconds/i,
+    );
+    expect(friendlyMorePlayerError(new Error("ERR_NAME_NOT_RESOLVED"))).toMatch(
+      /could not be reached/i,
+    );
+    expect(friendlyMorePlayerError(new Error("Trying Helium server"))).not.toContain("Helium");
+  });
+
+  it("explains More player server-status failures without raw codes", () => {
+    expect(friendlyMorePlayerStatus(500)).toMatch(/player's servers.*retry/i);
+    expect(friendlyMorePlayerStatus(503)).not.toContain("503");
+    expect(friendlyMorePlayerStatus(429)).toMatch(/busy/i);
+    expect(friendlyMorePlayerStatus(404)).toMatch(/No playable source/i);
+    expect(friendlyMorePlayerStatus(200)).toBeUndefined();
   });
 });

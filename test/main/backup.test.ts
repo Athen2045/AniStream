@@ -61,7 +61,6 @@ function seed(db: AppDatabase): void {
     preferredGroupId: "group-2",
   });
   db.saveReaderSettings({ width: 720, fit: "original", quality: "data-saver" });
-  db.acknowledgeRelease({ key: "ANIME:1", unit: 3 });
 }
 function files(backup: LocalBackup): BackupFiles {
   return {
@@ -100,8 +99,9 @@ it("round-trips local history and preferences without accounts, URLs, sync queue
   expect(target.backup.preview(backup)).toEqual({
     titles: 2,
     mangaPreferences: 1,
-    releaseAcknowledgements: 1,
     readerSettings: true,
+    upNextItems: 0,
+    playlists: 0,
     keptExisting: 0,
   });
   target.backup.restore(backup);
@@ -109,7 +109,8 @@ it("round-trips local history and preferences without accounts, URLs, sync queue
   expect(target.getMangaReadingResume(2)).toEqual(source.getMangaReadingResume(2));
   expect(target.getReaderSettings()).toEqual(source.getReaderSettings());
   expect(target.getMangaReaderPreferences(2)).toEqual(source.getMangaReaderPreferences(2));
-  expect(target.getReleaseAcknowledgements()).toEqual(source.getReleaseAcknowledgements());
+  // Release notices were removed; exports keep an empty list for older versions.
+  expect(backup.releaseAcknowledgements).toEqual([]);
   expect(target.listActivity(42)).toHaveLength(2);
   expect(target.listActivity(42).every((row) => row.syncStatus === "local")).toBe(true);
   expect(target.pendingActivity(42)).toEqual([]);
@@ -122,9 +123,10 @@ it("round-trips local history and preferences without accounts, URLs, sync queue
   expect(target.backup.restore(backup)).toEqual({
     titles: 0,
     mangaPreferences: 0,
-    releaseAcknowledgements: 0,
     readerSettings: false,
-    keptExisting: 5,
+    upNextItems: 0,
+    playlists: 0,
+    keptExisting: 4,
   });
 });
 
@@ -149,14 +151,22 @@ it("keeps local completions and explicit preferences even when a backup has a ne
 });
 
 it("retains legacy checkpoints with no journal and deduplicates a title across sign-ins", () => {
-  const db = database();
+  const path = join(directory(), "legacy.sqlite");
+  const db = database(path);
   seed(db);
   db.recordActivity({
     media: { id: 1, type: "ANIME", coverUrl: "", siteUrl: "", title: "Local Sky" },
     unit: 3,
     state: "started",
   });
-  db.saveMangaReadingResume({ aniListId: 3, chapterId: "unknown-number", progress: 0.6 });
+  // A checkpoint written before the activity journal existed has no matching activity row.
+  const raw = new Database(path);
+  raw
+    .prepare(
+      "INSERT INTO manga_reading_resume (anilist_id, chapter_id, chapter_number, progress, updated_at) VALUES (3, 'unknown-number', NULL, 0.6, ?)",
+    )
+    .run(new Date().toISOString());
+  raw.close();
   const backup = db.backup.snapshot();
   expect(backup.titles).toHaveLength(3);
   const target = database();
@@ -322,4 +332,109 @@ it("exposes no path or payload IPC and validates preview tokens", () => {
     expect(ipcArgValidators[channel](["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"])).toHaveLength(1);
     expect(() => ipcArgValidators[channel](["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", {}])).toThrow();
   }
+});
+
+it("backs up Up Next and playlists without artwork and merges them on restore", () => {
+  const anime = {
+    kind: "anime" as const,
+    media: {
+      id: 21,
+      title: "Queued Anime",
+      coverUrl: "https://s4.anilist.co/file/anilistcdn/cover-sentinel.jpg",
+    },
+  };
+  const film = {
+    kind: "more" as const,
+    title: {
+      id: 8,
+      type: "MOVIE" as const,
+      title: "Queued Film",
+      posterUrl: "https://image.tmdb.org/t/p/w500/poster-sentinel.jpg",
+    },
+  };
+  const source = database();
+  const queue = { list: "queue" } as const;
+  source.applyBingeChange({ op: "add", target: queue, item: anime, position: "end" });
+  source.applyBingeChange({ op: "add", target: queue, item: film, position: "end" });
+  source.applyBingeChange({ op: "create-playlist", name: "Rewatch", fromQueue: true });
+  source.applyBingeChange({ op: "create-playlist", name: "Later", fromQueue: false });
+  const backup = source.backup.snapshot();
+  const exported = JSON.stringify(backup);
+  expect(exported).not.toContain("sentinel");
+  expect(exported).not.toContain("https://");
+  expect(backup.upNext?.queue.map((entry) => entry.item.kind)).toEqual(["anime", "more"]);
+
+  // The target already has the film queued and a playlist called "rewatch".
+  const target = database();
+  target.applyBingeChange({ op: "add", target: queue, item: film, position: "end" });
+  target.applyBingeChange({ op: "create-playlist", name: "rewatch", fromQueue: false });
+  expect(target.backup.preview(backup)).toMatchObject({ upNextItems: 1, playlists: 1 });
+  const summary = target.backup.restore(backup);
+  expect(summary).toMatchObject({ upNextItems: 1, playlists: 1 });
+  expect(summary.keptExisting).toBeGreaterThanOrEqual(2);
+  const state = target.getBingeState();
+  expect(state.queue.map((entry) => entry.key)).toEqual(["more:MOVIE:8", "anime:21"]);
+  expect(state.queue[1]!.item).toEqual({
+    kind: "anime",
+    media: { id: 21, title: "Queued Anime" },
+  });
+  expect(state.playlists.map((playlist) => playlist.name).sort()).toEqual(["Later", "rewatch"]);
+  // The existing "rewatch" playlist is kept as it was (empty), not merged.
+  expect(state.playlists.find((playlist) => playlist.name === "rewatch")!.entries).toEqual([]);
+});
+
+it("restores older backups without Up Next and rejects malformed or oversized Up Next data", () => {
+  const source = database();
+  const legacy = source.backup.snapshot();
+  delete (legacy as { upNext?: unknown }).upNext;
+  const target = database();
+  expect(target.backup.restore(legacy)).toMatchObject({ upNextItems: 0, playlists: 0 });
+
+  const malformed = {
+    ...legacy,
+    upNext: {
+      queue: [
+        {
+          item: { kind: "anime", media: { id: 1, title: "X", coverUrl: "https://evil.example/a" } },
+          addedAt: new Date().toISOString(),
+        },
+      ],
+      playlists: [],
+    },
+  };
+  expect(() => target.backup.preview(malformed as never)).toThrow(/not a valid AniStream/);
+  const duplicateNames = {
+    ...legacy,
+    upNext: {
+      queue: [],
+      playlists: [
+        { name: "Mix", updatedAt: new Date().toISOString(), entries: [] },
+        { name: "mix", updatedAt: new Date().toISOString(), entries: [] },
+      ],
+    },
+  };
+  expect(() => target.backup.preview(duplicateNames as never)).toThrow(/not a valid AniStream/);
+
+  // Restoring past the Up Next limit stops before writing anything.
+  for (let id = 1; id <= 200; id += 1)
+    target.applyBingeChange({
+      op: "add",
+      target: { list: "queue" },
+      item: { kind: "anime", media: { id, title: `A${id}` } },
+      position: "end",
+    });
+  const overflow = {
+    ...legacy,
+    upNext: {
+      queue: [
+        {
+          item: { kind: "anime", media: { id: 999, title: "One more" } },
+          addedAt: new Date().toISOString(),
+        },
+      ],
+      playlists: [],
+    },
+  };
+  expect(() => target.backup.restore(overflow as never)).toThrow(/more than 200 titles/);
+  expect(target.getBingeState().queue).toHaveLength(200);
 });

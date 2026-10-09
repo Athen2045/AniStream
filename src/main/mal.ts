@@ -7,7 +7,7 @@ import type {
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
 import { mangaKindFromMalMediaType } from "./manga-kind";
-import { ProviderTransport } from "./provider-transport";
+import { PROVIDER_USER_AGENT, ProviderTransport } from "./provider-transport";
 
 const MAL_API_URL = "https://api.myanimelist.net/v2";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -53,7 +53,7 @@ export class MalClient {
       timeoutMs: REQUEST_TIMEOUT_MS,
       headers: {
         Accept: "application/json",
-        "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+        "User-Agent": PROVIDER_USER_AGENT,
       },
     });
   }
@@ -72,7 +72,12 @@ export class MalClient {
     if (cached) return cached;
 
     const url = new URL(`${MAL_API_URL}/${kind}/${malId}`);
-    url.searchParams.set("fields", "mean,rank,num_scoring_users");
+    // Summary, English title, and genres ride along so the title page can fill AniList gaps
+    // without a second MAL request.
+    url.searchParams.set(
+      "fields",
+      "mean,rank,num_scoring_users,synopsis,alternative_titles,genres",
+    );
     try {
       const payload = await this.requestJson(url, cacheKey);
       const score = parseMalScore(payload, kind);
@@ -150,13 +155,37 @@ export class MalClient {
 
 export function parseMalScore(payload: unknown, kind: "anime" | "manga"): MalScore | undefined {
   if (!isRecord(payload) || typeof payload.id !== "number" || payload.id <= 0) return undefined;
+  const synopsis = boundedText(payload.synopsis, MAX_SYNOPSIS_LENGTH);
+  const englishTitle = isRecord(payload.alternative_titles)
+    ? boundedText(payload.alternative_titles.en, MAX_TITLE_LENGTH)
+    : undefined;
+  const genres = Array.isArray(payload.genres)
+    ? payload.genres
+        .map((genre) => (isRecord(genre) ? boundedText(genre.name, MAX_TITLE_LENGTH) : undefined))
+        .filter((name): name is string => Boolean(name))
+        .slice(0, MAX_GENRES)
+    : [];
   return {
     malId: payload.id,
     score: toFiniteNumber(payload.mean),
     rank: toFiniteNumber(payload.rank),
     scoredBy: toFiniteNumber(payload.num_scoring_users),
     malUrl: `https://myanimelist.net/${kind}/${payload.id}`,
+    ...(synopsis ? { synopsis } : {}),
+    ...(englishTitle ? { englishTitle } : {}),
+    ...(genres.length ? { genres } : {}),
   };
+}
+
+const MAX_SYNOPSIS_LENGTH = 8_000;
+const MAX_TITLE_LENGTH = 300;
+const MAX_GENRES = 12;
+
+/** Trimmed text without control characters (newlines kept), or undefined when empty or too long. */
+function boundedText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = value.replace(/(?![\n\t])\p{Cc}/gu, "").trim();
+  return text && text.length <= maxLength ? text : undefined;
 }
 
 export function parseMalRanking(payload: unknown, kind: "anime" | "manga"): MalRankingItem[] {

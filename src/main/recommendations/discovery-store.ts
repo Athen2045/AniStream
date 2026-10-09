@@ -24,6 +24,11 @@ export interface DiscoveryStore {
   ): void;
 }
 
+// Seeds with edges plus their neighbors: about 1–2 KB per row, so the cache stays a few MB.
+const MAX_FEATURE_READ = 2_000;
+const MAX_FEATURE_WRITE = 1_000;
+const MAX_FEATURE_ROWS = 4_000;
+
 export function createDiscoveryStore(db: Database.Database): DiscoveryStore {
   // Synthetic preview history is intentionally never migrated into this live store.
   db.exec(`CREATE TABLE IF NOT EXISTS discovery_features_v1 (
@@ -45,7 +50,7 @@ export function createDiscoveryStore(db: Database.Database): DiscoveryStore {
       const read = db.prepare<[number], { features: string }>(
         "SELECT features FROM discovery_features_v1 WHERE media_id=?",
       );
-      return [...new Set(ids)].slice(0, 120).flatMap((id) => {
+      return [...new Set(ids)].slice(0, MAX_FEATURE_READ).flatMap((id) => {
         const row = read.get(id);
         if (!row) return [];
         try {
@@ -60,10 +65,27 @@ export function createDiscoveryStore(db: Database.Database): DiscoveryStore {
         const write = db.prepare(
           "INSERT INTO discovery_features_v1 VALUES (?, ?, ?) ON CONFLICT(media_id) DO UPDATE SET features=excluded.features, updated_at=excluded.updated_at",
         );
-        for (const item of items.slice(0, 120))
-          write.run(item.anilistId, JSON.stringify(item), item.updatedAt);
+        const read = db.prepare<[number], { features: string }>(
+          "SELECT features FROM discovery_features_v1 WHERE media_id=?",
+        );
+        for (const item of items.slice(0, MAX_FEATURE_WRITE)) {
+          let row = item;
+          if (!item.recommendations) {
+            // A neighbor-only save must not erase a seed's cached recommendation edges.
+            const previous = read.get(item.anilistId);
+            try {
+              const edges = previous
+                ? (JSON.parse(previous.features) as RecommendationItemFeatures).recommendations
+                : undefined;
+              if (edges) row = { ...item, recommendations: edges };
+            } catch {
+              // Corrupt rows are simply replaced.
+            }
+          }
+          write.run(row.anilistId, JSON.stringify(row), row.updatedAt);
+        }
         db.prepare(
-          "DELETE FROM discovery_features_v1 WHERE media_id NOT IN (SELECT media_id FROM discovery_features_v1 ORDER BY updated_at DESC LIMIT 500)",
+          `DELETE FROM discovery_features_v1 WHERE media_id NOT IN (SELECT media_id FROM discovery_features_v1 ORDER BY updated_at DESC LIMIT ${MAX_FEATURE_ROWS})`,
         ).run();
       })();
     },

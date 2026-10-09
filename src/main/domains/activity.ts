@@ -25,7 +25,7 @@ export function registerActivityDomain(
           add: (id) => aniList.addEntry(id),
           update: (input) => aniList.updateEntry(input),
         });
-        database.clearCachedAniListDashboard();
+        // The offline library copy is kept; local activity already shows the newer progress.
       },
     },
     onChanged,

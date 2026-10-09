@@ -1,4 +1,5 @@
 import type {
+  AniListAiringTime,
   AniListCatalogMedia,
   AniListCatalogPage,
   AniListEntry,
@@ -111,6 +112,8 @@ export function normalizeMedia(value: unknown, expectedType: AniListMediaType): 
     type: expectedType,
     title: preferredTitle,
     coverUrl: requiredString(cover.large, "cover image"),
+    coverColor: optionalHexColor(cover.color),
+    bannerUrl: optionalString(media.bannerImage),
     format: optionalString(media.format),
     status: optionalString(media.status),
     totalProgress:
@@ -175,6 +178,7 @@ export function normalizeCatalogMedia(
     type: expectedType,
     title: preferredTitle,
     coverUrl: optionalString(cover.extraLarge) ?? requiredString(cover.large, "cover image"),
+    coverColor: optionalHexColor(cover.color),
     bannerUrl: optionalString(media.bannerImage),
     description: optionalString(media.description),
     format: optionalString(media.format),
@@ -344,6 +348,7 @@ export function normalizeMediaDetail(
     duration: optionalNumber(media.duration),
     startDate: normalizeFuzzyDate(media.startDate),
     endDate: normalizeFuzzyDate(media.endDate),
+    upcomingEpisodes: normalizeUpcomingEpisodes(media.airingSchedule),
     studios: mainStudios.length ? mainStudios : producers,
     producers,
     characters,
@@ -367,6 +372,28 @@ export function normalizeMediaDetail(
           }
         : undefined,
   };
+}
+
+/** Future airings only, ascending; a malformed row is skipped rather than failing the page. */
+function normalizeUpcomingEpisodes(value: unknown): AniListAiringTime[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const nodes = (value as Record<string, unknown>).nodes;
+  if (!Array.isArray(nodes)) return [];
+  const byEpisode = new Map<number, AniListAiringTime>();
+  for (const node of nodes.slice(0, 25)) {
+    if (!node || typeof node !== "object") continue;
+    const { episode, airingAt } = node as Record<string, unknown>;
+    if (
+      typeof episode === "number" &&
+      Number.isInteger(episode) &&
+      episode > 0 &&
+      typeof airingAt === "number" &&
+      Number.isInteger(airingAt) &&
+      airingAt > 0
+    )
+      byEpisode.set(episode, { episode, airingAt });
+  }
+  return [...byEpisode.values()].sort((a, b) => a.episode - b.episode);
 }
 
 function normalizePeopleConnection(value: unknown, kind: string): AniListNamedPerson[] {
@@ -448,4 +475,11 @@ function requiredNumber(value: unknown, field: string): number {
 
 function optionalNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/** Only a plain `#rrggbb` color reaches the renderer, where it becomes a CSS custom property. */
+function optionalHexColor(value: unknown): string | undefined {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)
+    ? value.toLowerCase()
+    : undefined;
 }

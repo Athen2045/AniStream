@@ -52,3 +52,39 @@ export function friendlyPlaybackError(reason: unknown): string {
     return "This episode is unavailable from the player right now. Try another audio option or episode.";
   return "This episode could not be played. Retry the player or choose another audio option or episode.";
 }
+
+/** Explains a failed More player status; returns undefined when the status is fine. */
+export function friendlyMorePlayerStatus(httpStatus: number): string | undefined {
+  if (httpStatus < 400) return undefined;
+  if (httpStatus === 429)
+    return "The player is busy right now. Wait a moment, then retry playback.";
+  if (httpStatus >= 500)
+    return "The player's servers are having a problem right now, so no source could be loaded. Retry in a few minutes or try another title.";
+  return "No playable source is available for this title right now. Try another title or retry in a moment.";
+}
+
+/** Converts More player diagnostics into user-facing recovery guidance. */
+export function friendlyMorePlayerError(reason: unknown): string {
+  const raw = rawMessage(reason);
+  if (/invalid (?:tmdb|media) id|tmdb.*(?:not found|invalid)|title.*not found/i.test(raw))
+    return "This title could not be found for its TMDB ID. Open it from More search and try again.";
+  if (
+    /type mismatch|wrong (?:content )?type|movie.*(?:series|show)|(?:series|show).*movie/i.test(raw)
+  )
+    return "The movie/show type does not match this title's playback route. Open it again from More search.";
+  if (
+    /no (?:video|playable) sources?|no qualities|sources? (?:unavailable|not found)|not available on (?:any|all) server/i.test(
+      raw,
+    )
+  )
+    return "No playable source is available for this title right now. Try another title or retry in a moment.";
+  if (/wasm|decrypt|failed to fetch|source.*fetch|initiali[sz]ing source/i.test(raw))
+    return "The player is still preparing a source. If playback does not begin within 15 seconds, retry or try another title.";
+  if (/timeout|timed out|timeouterror/i.test(raw))
+    return "The player is taking longer than expected to find a source. Retry in a moment or try another title.";
+  if (/429|rate.?limit|temporarily busy/i.test(raw))
+    return "The player is busy right now. Wait a moment, then retry playback.";
+  if (/network|offline|enotfound|name_not_resolved|econn|dns|internet/i.test(raw))
+    return "The player could not be reached. Check your connection and retry playback.";
+  return "The player could not start playback. Retry it or try another title.";
+}

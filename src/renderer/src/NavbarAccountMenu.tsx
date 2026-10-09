@@ -1,4 +1,4 @@
-import { ChevronDown, LogOut } from "lucide-react";
+import { Bug, ChevronDown, LogOut } from "lucide-react";
 import type { KeyboardEventHandler } from "react";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -14,10 +14,15 @@ type MemberAccountMenuProps = {
   active?: boolean;
   name: string;
   avatarUrl?: string;
+  /** Under the name in the menu, e.g. "AniList profile" or "AniList + Simkl". */
+  subtitle?: string;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onLogout: () => void;
 };
+
+/** Bug reports go to the project's GitHub issues for now (user request 2026-10-09). */
+export const BUG_REPORT_URL = "https://github.com/Athen2045/AniStream/issues";
 
 export type NavbarAccountMenuProps = GuestAccountMenuProps | MemberAccountMenuProps;
 
@@ -147,7 +152,7 @@ export function NavbarAccountMenuPanel(
           )}
           <span>
             <strong>{props.name}</strong>
-            <small>AniList profile</small>
+            <small>{props.subtitle ?? "AniList profile"}</small>
           </span>
         </button>
       ) : null}
@@ -163,6 +168,18 @@ export function NavbarAccountMenuPanel(
         >
           <SettingsIcon />
           <span>Settings</span>
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            props.onClose();
+            // The main process hands https links to the default browser.
+            window.open(BUG_REPORT_URL, "_blank", "noopener");
+          }}
+        >
+          <Bug size={18} aria-hidden="true" />
+          <span>Report a bug</span>
         </button>
         {props.kind === "guest" ? (
           <button

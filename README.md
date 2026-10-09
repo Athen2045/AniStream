@@ -1,319 +1,120 @@
-# AniStream
+<h1 align="center"><img src="assets/app-icon/AniStream-128.png" alt="Ani" width="64" height="64" align="center" /> Stream</h1>
 
-**Discover anime and manga, watch or read, and keep your progress in one desktop app.**
+<p align="center">
+<img src="assets/screenshots/anime.webp" alt="AniStream Anime home" width="100%" />
+</p>
 
-AniStream is an early-preview media app for anime and manga fans. Browse trending titles, search
-both catalogs from one place, open episode and chapter lists, and continue from where you left off.
-An AniList account is optional.
+<p align="center">
+  <a href="https://github.com/Athen2045/AniStream/releases/latest">Download</a> |
+  <a href=".github/releases/v2.0.0.md">Release notes</a> |
+  <a href="CHANGELOG.md">Changelog</a> |
+  <a href="LEGAL.md">Copyright</a>
+</p>
 
-<img width="1800" height="1126" alt="AniStream Home" src="docs/images/home.png" />
+<div align="center">
+  <a href="https://github.com/Athen2045/AniStream/releases/latest">
+    <img src="https://img.shields.io/github/v/release/Athen2045/AniStream?style=flat-square&color=1fd17a" alt="Latest release" />
+  </a>
+  <a href="https://github.com/Athen2045/AniStream/releases">
+    <img src="https://img.shields.io/github/downloads/Athen2045/AniStream/total?style=flat-square&color=1fd17a" alt="Downloads" />
+  </a>
+  <a href="https://github.com/Athen2045/AniStream/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/Athen2045/AniStream/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" />
+  </a>
+  <img src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square&logo=windows11&logoColor=white" alt="Windows x64" />
+  <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS Apple Silicon" />
+</div>
 
-## Interface tour
+<h5 align="center">
+Leave a star if you like the project! ⭐️
+</h5>
 
-The home view keeps discovery in one place, with a featured title followed by Continue Watching,
-Trending, and personalized rails.
+## About
 
-### Manga discovery
+AniStream is a **desktop app** for anime and manga. Browse what's trending, watch episodes, read
+chapters, and pick up exactly where you left off. Your progress stays on your computer, and you can
+connect AniList to sync your lists if you want to.
 
-<img width="1800" height="1126" alt="AniStream Manga discovery" src="docs/images/manga.png" />
+> [!IMPORTANT]
+> AniStream does not host, store, or distribute any videos or manga. Streaming and reading
+> availability depends on outside providers and can change without notice. Only watch or read media
+> you are legally allowed to access where you live.
 
-The Manga view combines trending titles with recommendations and keeps chapter discovery close to
-the reader flow.
+## Features
 
-### Profile and library
+- **Watch**: Anime with sub or dub, continuing from the last episode you watched
+- **Read**: Manga in a fullscreen reader that remembers your page
+- **Discover**: Trending titles, latest updates, and full title pages with similar picks
+- **For You**: Personal recommendations that run entirely on your device
+  - Ranks titles by AniList recommendations from what you liked, how closely their tags, genres,
+    and creators match your taste (rarer themes count more), and their popularity and rating
+  - Recent history counts more than old history, and no single title can fill your rows
+  - "Because you watched…" and "Because you like…" rows rotate through your whole history
+  - One slot is saved for a well-rated pick outside your usual taste
+  - Mark titles **Not interested** to teach it, or turn off **Learn from my activity** in Settings
+- **Track**: Progress saved locally, with optional AniList sync
+- **No ads, no telemetry**: Your data stays on your device, and you can back it up anytime
 
-<img width="1800" height="1126" alt="AniStream Profile and library" src="docs/images/profile.png" />
+<p align="center">
+<img src="assets/screenshots/title-page.webp" alt="AniStream title page" width="100%" />
+</p>
 
-The profile view brings AniList statistics, library filters, and local progress into one workspace.
+<p align="center">
+<img src="assets/screenshots/manga.webp" alt="AniStream Manga home" width="100%" />
+</p>
 
-> **Current release:** v0.1.7. Official unsigned packages are produced from one validated `main`
-> commit: an Apple Silicon DMG for macOS 12 or newer and a Windows x64 installer. Android remains
-> under development.
+## Get started
 
-## Download AniStream for macOS
+Download the installer for your platform from the
+[latest release](https://github.com/Athen2045/AniStream/releases/latest).
 
-1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.7.
-2. Under **Assets**, download the macOS DMG: `AniStream-0.1.7-arm64.dmg`.
-3. Open the DMG and drag **AniStream** into **Applications**.
-4. Open AniStream from the Applications folder.
+| Platform | File                        | Requires                           |
+| -------- | --------------------------- | ---------------------------------- |
+| Windows  | `AniStream Setup 2.0.0.exe` | Windows 10 or 11, x64              |
+| macOS    | `AniStream-2.0.0-arm64.dmg` | macOS 12 or newer on Apple Silicon |
 
-AniStream v0.1.7 is not signed or notarized with an Apple Developer ID. If macOS blocks the first
-launch, Control-click AniStream in Applications, choose **Open**, then confirm **Open**. You only
-need to do this once. Do not disable Gatekeeper globally.
+Both installers are unsigned. On Windows, select **More info → Run anyway** if SmartScreen warns
+you. On macOS, open **System Settings → Privacy & Security** and choose **Open Anyway** after the
+first launch. Each release includes a `SHA256SUMS.txt` file to verify your download.
 
-### Start using the app
+**Updating from 0.1.x?** Install over your existing copy. Your progress, settings, and AniList
+session are kept. AniStream checks GitHub for new versions when it starts and links you to the
+release. It never updates itself or touches your data.
 
-- Browse **Anime** and **Manga** without creating an account.
-- Use the search bar to find a title, then open its episode or chapter list.
-- AniStream stores playback and reading progress locally on your Mac.
-- Open **Profile** if you want to connect AniList and add your lists, ratings, and tracker progress.
+## Goal
 
-AniList connection is optional. Users sign in and approve AniStream in the AniList browser flow;
-no Developer Settings client or secret is required. The rest of the app remains available while
-signed out.
+This is a one-person project. It is built around a few rules: no ads, your data stays on your
+device, nothing is sold or shared, and every integration is optional.
 
-## Download AniStream for Windows
+## Tech stack
 
-1. Open [AniStream Releases](https://github.com/Athen2045/AniStream/releases) and select v0.1.7.
-2. Under **Assets**, download `AniStream Setup 0.1.7.exe`.
-3. Run the installer and choose an installation folder.
-4. Launch AniStream from the Start menu or desktop shortcut.
+- Desktop: [Electron](https://www.electronjs.org/)
+- Frontend: [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/),
+  [electron-vite](https://electron-vite.org/)
+- Storage: [SQLite](https://www.sqlite.org/) via `better-sqlite3`
 
-The Windows installer is currently unsigned, so SmartScreen may show a warning. Select **More
-info**, confirm the unsigned release status, and choose **Run anyway** only when you downloaded
-the installer from the project release page. Signing and SmartScreen reputation remain pending.
+## Development and Build
 
-## Check for updates
-
-Installed Windows x64 and Apple Silicon Mac releases check GitHub once when they start. You can run
-the same check manually from **Account menu → Settings → App updates → Check for updates**; AniList sign-in is not
-required. When a newer compatible release is published, AniStream links to its GitHub release page
-so you can review the notes and download the installer yourself. The app never replaces itself or
-your local data automatically. Development builds do not perform update checks.
-
-See [Check for AniStream updates](docs/how-to/check-for-updates.md) for the result states and the
-one-minute retry cooldown.
-
-### What is included
-
-- One search experience for anime and manga.
-- Trending and latest-update discovery pages.
-- Detailed title information from AniList and supplemental metadata providers.
-- Episode browsing with sub/dub embedded anime playback.
-- MangaDex chapter lists and a fullscreen vertical reader.
-- Local episode, chapter, and scroll-position resume.
-- Optional AniList profile, list, score, progress, and completion syncing.
-
-> AniStream is an early personal project. Streaming and reading availability depends on external
-> providers and can change without notice. Only access media you are legally permitted to use in
-> your region.
-
----
-
-# For developers
-
-AniStream is a cross-platform Electron application built as a portfolio-scale full-stack desktop
-system. It demonstrates secure process isolation, typed IPC, provider orchestration, local-first
-persistence, OAuth lifecycle management, resilient network behavior, and media-focused React UI
-engineering without introducing a separate cloud backend.
-
-## Engineering scope
-
-- **Desktop architecture:** Electron main, preload, and renderer processes with explicit ownership
-  boundaries.
-- **Type-safe integration:** strict TypeScript contracts shared across validated IPC channels.
-- **Security:** `contextIsolation`, Electron sandboxing, disabled renderer Node integration,
-  origin-validated IPC, runtime payload validation, denied child navigation, and encrypted local
-  credential storage through Electron `safeStorage`.
-- **Local persistence:** SQLite stores playback checkpoints, manga reading progress, and the cached
-  AniList dashboard for one local user; provider adapters use bounded in-memory caches.
-- **Network resilience:** request throttling, in-flight deduplication, TTL caches, abort signals,
-  bounded retries, provider cooldowns, stale-response rejection, and degraded-mode orchestration.
-- **Media UX:** code-split anime and manga experiences, fullscreen view transitions, reduced-motion
-  support, keyboard navigation, paged discovery grids, viewport-lazy manga pages, and local resume.
-- **Quality gates:** strict type checking, ESLint, Prettier, fixture-based Vitest coverage, preload
-  packaging checks, OAuth contract checks, GitHub Actions, CodeQL, and dependency auditing.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    UI[React renderer] -->|Typed preload API| IPC[Validated Electron IPC]
-    IPC --> MAIN[Electron main process]
-    MAIN --> DOMAINS[Tracker, anime, manga, and resume domains]
-    DOMAINS --> DB[(SQLite)]
-    DOMAINS --> KEYCHAIN[OS credential store]
-    DOMAINS --> ANILIST[AniList GraphQL]
-    DOMAINS --> MANGA[MangaDex and enrichment APIs]
-    DOMAINS --> VIDEO[Anikoto and MegaPlay]
-```
-
-The renderer owns presentation and transient interaction state. The trusted main process owns
-credentials, persistence, provider traffic, throttling, caching, media-source resolution, and
-filesystem access. The preload exposes a narrow serializable API rather than raw Electron access.
-
-## Technology stack
-
-| Layer            | Technology                               | Role                                                                                                 |
-| ---------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Desktop runtime  | Electron 43                              | macOS windowing, lifecycle, custom OAuth protocol, secure IPC, and packaging                         |
-| UI               | React 19, Framer Motion, Lucide          | catalog, profile, detail, player, reader, accessible transitions, and iconography                    |
-| Language         | TypeScript 7                             | strict contracts across main, preload, shared, and renderer code                                     |
-| Build            | electron-vite 5, Vite 7                  | development server and production bundles                                                            |
-| Persistence      | SQLite with `better-sqlite3`             | local resume state, cached dashboard data, and bounded persistence                                   |
-| Styling          | Plain CSS and design tokens              | responsive cinematic UI without a component-framework dependency                                     |
-| Testing          | Vitest, ESLint, Prettier                 | fixtures, unit/regression checks, static analysis, and formatting                                    |
-| Packaging and CI | electron-builder, GitHub Actions, CodeQL | Apple Silicon DMG and Windows x64 installer builds, release assets, verification, and security scans |
-
-## Provider boundaries
-
-| Provider                   | Responsibility                                                         | Failure behavior                                                 |
-| -------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| AniList                    | Primary metadata, search, profile, lists, scores, and tracker progress | Signed-out discovery and local resume remain usable              |
-| MangaDex                   | Exact-ID manga mapping, chapter feeds, MangaDex@Home page delivery     | Manga details degrade without breaking anime or profile features |
-| Anikoto and MegaPlay       | Episode lookup and embedded sub/dub playback                           | Discovery and manga continue when playback is unavailable        |
-| MangaBaka and MangaUpdates | Exact-ID supplemental manga metadata                                   | Enrichment disappears; MangaDex remains the reader source        |
-| MyAnimeList                | Optional score cross-check and bounded catalog fallback                | AniList remains primary                                          |
-
-Provider response types stay inside their adapters. Renderer-facing code receives normalized domain
-contracts, and one provider failure does not invalidate unrelated data that loaded successfully.
-
-## Local development setup
-
-### Requirements
-
-- Apple Silicon Mac for the macOS package, or Windows x64 for the Windows package
-- macOS 12 or newer for the Mac app
-- Node.js 22 or newer
-- npm
-
-### Install and run
+You'll need [Node.js](https://nodejs.org/en/download) 22 or newer.
 
 ```bash
 git clone https://github.com/Athen2045/AniStream.git
 cd AniStream
-npm ci --legacy-peer-deps
+npm ci
 cp .env.example .env
 npm run dev
 ```
 
-Most public discovery and reading features work with the defaults in `.env.example`. Optional
-providers and account integrations can be configured separately.
+Discovery, lists, and reading work with the defaults in `.env.example`. Playback endpoints are not
+part of this repository; copy `providers.example.json` to `providers.local.json` to configure them.
 
-### Configure AniList for development
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for checks, packaging, and the release workflow. Bug
+reports and ideas are welcome through the
+[issue forms](https://github.com/Athen2045/AniStream/issues/new/choose); report security problems
+privately as described in [SECURITY.md](.github/SECURITY.md).
 
-AniStream uses AniList's implicit OAuth grant with the registered callback
-`anistream://auth/anilist`. Users only sign in to AniList and approve AniStream in the browser;
-they never need to create an AniList Developer application or provide a client secret. The access
-token returned in the callback is encrypted with Electron `safeStorage` and stored only on this
-device. The Windows installer registers `anistream://` and routes the callback back to the existing
-AniStream instance.
+<br>
 
-### Environment variables
-
-| Variable                                     | Purpose                                                   | Required     |
-| -------------------------------------------- | --------------------------------------------------------- | ------------ |
-| `MANGADEX_LANGUAGE`                          | Preferred MangaDex chapter language; defaults to `en`     | No           |
-| `ANISTREAM_ANIKOTO_ENABLED`                  | Local kill switch for the Anikoto adapter                 | No           |
-| `ANISTREAM_ANIKOTO_API_URL`                  | Override for a verified Anikoto-compatible HTTPS endpoint | No           |
-| `ANISTREAM_MAL_CLIENT_ID`                    | MyAnimeList score and catalog fallback                    | No           |
-| `ANISTREAM_MANGABAKA_TOKEN`                  | MangaBaka PAT for higher API limits                       | No           |
-| `MANGADEX_CLIENT_ID` and related credentials | Reserved for planned opt-in MangaDex account sync         | Not used yet |
-| `PARSE_API_KEY` and Parse adapter values     | Reserved placeholders; no active adapter consumes them    | Not used yet |
-
-Keep secrets in the trusted process. Never expose them to renderer code or commit a populated
-`.env` file. Packaged development configuration can be read from
-`~/Library/Application Support/AniStream/.env`.
-
-## Development commands
-
-```bash
-npm run dev                  # Run Electron with the development renderer
-npm test                     # Run the Vitest suite
-npm run typecheck            # Check main and renderer TypeScript projects
-npm run lint                 # Run ESLint
-npm run format:check         # Check Prettier formatting
-npm run build                # Create production main, preload, and renderer bundles
-npm run check:product-slice  # Verify cross-process product contracts
-npm run check:anilist-oauth  # Verify the implicit OAuth implementation
-npm run check:branding       # Verify the navbar PNG and native Windows/macOS icons
-npm run check:packaged-build  # Compare a packaged ASAR with the fresh build
-npm run package:mac          # Build the unsigned Apple Silicon app and DMG
-npm run package:win          # Build the unsigned Windows x64 NSIS installer
-```
-
-## Project structure
-
-```text
-AniStream/
-├── assets/app-icon/          native Windows .ico, macOS .icns, and PNG icon sizes
-├── build/                    electron-builder resources
-├── scripts/                  OAuth, packaging, and contract verification scripts
-├── src/main/                 trusted process, providers, persistence, and IPC
-│   ├── anilist/              OAuth, GraphQL client, normalization, queue, and session storage
-│   └── domains/              tracker, anime, manga, and resume orchestration
-├── src/preload/              narrow typed renderer bridge
-├── src/renderer/             React interface and media experiences
-├── src/shared/               serializable contracts and cross-process validation rules
-├── test/                     fixtures and Vitest regression coverage
-├── electron-builder.yml      Apple Silicon DMG configuration
-└── electron.vite.config.ts   main, preload, and renderer build configuration
-```
-
-Local `API.md`, `AGENTS.md`, `CONTEXT.md`, `docs/research/`, `docs/superpowers/`, and `spec/` files
-are development-agent working notes and are intentionally gitignored. `README.md` is the public
-project entry point.
-
-`electron-builder.yml` configures both the unsigned Apple Silicon DMG and the unsigned Windows x64
-NSIS installer.
-
-## Build and release v0.1.7
-
-Build the unsigned DMG locally:
-
-```bash
-npm ci --legacy-peer-deps
-npm run package:mac
-```
-
-Windows packaging can be prepared from a Windows checkout with Visual Studio C++ tools,
-the Windows SDK, Node.js, and Git installed:
-
-```bash
-npm run package:win
-```
-
-The Windows output is `dist/AniStream Setup 0.1.7.exe`. The macOS output is
-`dist/AniStream-0.1.7-arm64.dmg`. The platform workflows build, validate, and upload preview artifacts
-without publishing. The macOS job also runs on `develop` when packaging or icon inputs change. The
-**Promote production release** workflow
-is the official path: it validates `main`, builds both packages from the same commit, verifies each
-package, waits for production approval, then creates the tag and GitHub Release. The Windows job
-also verifies install, launch, and uninstall in an isolated temporary profile. Both packages remain
-unsigned until a signing provider is configured.
-
-For a signed Windows build, provide the electron-builder signing variables through CI secrets
-(`CSC_LINK` and `CSC_KEY_PASSWORD`) and remove `CSC_IDENTITY_AUTO_DISCOVERY=false` from the signed
-release job. Do not commit certificates, passwords, or Azure Artifact Signing tokens.
-
-Do not create the production tag manually. After the version bump and release notes are merged to
-`main`, run **Actions → Promote production release**, enter the exact package version, and approve
-the protected `production` environment after reviewing both artifacts. Code signing and notarization
-remain pending until valid certificates are available.
-
-## Staged release workflow
-
-New work is tested on `develop` before it reaches protected `main`:
-
-1. Push the feature work to `develop`.
-2. Download the **Develop Windows preview** artifact from GitHub Actions.
-3. Install and manually test the preview installer.
-4. Open a pull request from `develop` to `main` and wait for required checks/review.
-5. Bump `package.json` and `package-lock.json`, add `docs/releases/vX.Y.Z.md`, and merge into `main`.
-6. Manually run **Promote production release** with the exact package version.
-7. Approve the protected `production` environment after reviewing the built artifacts.
-
-The promotion workflow builds macOS and Windows packages from one validated `main` commit, then
-creates the version tag and GitHub Release from those exact artifacts. It refuses reused tags,
-missing release notes, version mismatches, and versions that are not newer than the latest tag.
-See [the staged release guide](docs/how-to/staged-releases.md) for the one-time GitHub branch and
-environment settings.
-
-## Platform roadmap
-
-- **macOS on Apple Silicon:** active; the official DMG is built and verified on the `macos-14`
-  GitHub runner.
-- **Windows:** x64 NSIS packaging, native SQLite rebuilds, secretless AniList OAuth, CI checks, and
-  installer lifecycle validation are implemented; signing and SmartScreen reputation remain
-  pending.
-- **Android:** under development as a future companion application; no APK is published yet.
-- **MangaDex account sync:** planned as an opt-in Keychain-backed integration. Public MangaDex
-  reading remains independent.
-
-## Bugs and development ideas
-
-See [ISSUES.md](ISSUES.md) for bug-report details, current opportunities, and the contributor
-checklist. Security-sensitive reports should not include credentials or private library data.
-
-AniStream is an independent personal project and is not affiliated with AniList, MangaDex,
-MyAnimeList, MangaBaka, MangaUpdates, Anikoto, or MegaPlay.
+> [!NOTE]
+> AniStream is an independent personal project and is not affiliated with AniList, MangaDex,
+> MyAnimeList, or any playback provider. For copyright-related requests, see [LEGAL.md](LEGAL.md).

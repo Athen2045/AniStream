@@ -1,23 +1,35 @@
 import Database from "better-sqlite3";
+import { serializeDashboardForCache } from "./dashboard-cache";
 import { createUpdateLaunchStore, type UpdateLaunchStore } from "./update-launch-store";
 import { createBackupRepository, type BackupRepository } from "./backup-repository";
 import { createReaderSettingsRepository, type ReaderSettingsRepository } from "./reader-settings";
-import { createPersonalRepository, type PersonalRepository } from "./personal-repository";
 import { createActivityRepository, type ActivityRepository } from "./activity/repository";
+import { createEntryChangeRepository, type EntryChangeRepository } from "./entry-changes";
+import { createMoreLibraryRepository, type MoreLibraryRepository } from "./more-library";
+import { createBingeRepository, type BingeRepository } from "./binge-repository";
 import type {
   AniListDashboard,
   MangaReadingResume,
+  MorePlaybackInput,
+  MorePlaybackResume,
+  SaveMorePlaybackResumeInput,
   PlaybackResume,
-  SaveMangaReadingResumeInput,
-  SavePlaybackResumeInput,
 } from "../shared/contracts";
-import {
-  isValidMangaReadingResumeInput,
-  isValidPlaybackResumeInput,
-} from "../shared/resume-validation";
 import type { RecommendationRepository } from "./recommendations/repository";
 import { createRecommendationRepository } from "./recommendations/repository";
 import { createDiscoveryStore, type DiscoveryStore } from "./recommendations/discovery-store";
+import { createSimklLibraryStore, type SimklLibraryStore } from "./simkl/library";
+import { createSimklCatalogStore, type SimklCatalogStore } from "./simkl/collaborative";
+import { createMangaDexMappingStore, type MangaDexMappingStore } from "./mangadex-mappings";
+import {
+  createPersonalizationStore,
+  type PersonalizationStore,
+} from "./recommendations/personalization-store";
+import { AnimeTmdbLinks } from "./anime-tmdb-links";
+import {
+  createMoreDiscoveryStore,
+  type MoreDiscoveryStore,
+} from "./recommendations/more-discovery-store";
 import {
   createMangaPreferenceRepository,
   type MangaPreferenceRepository,
@@ -27,22 +39,29 @@ export interface AppDatabase
   extends
     RecommendationRepository,
     ActivityRepository,
-    PersonalRepository,
+    EntryChangeRepository,
     MangaPreferenceRepository,
+    MoreLibraryRepository,
+    BingeRepository,
     ReaderSettingsRepository {
   readonly ready: boolean;
   readonly discovery: DiscoveryStore;
+  readonly moreDiscovery: MoreDiscoveryStore;
+  readonly animeTmdbLinks: AnimeTmdbLinks;
+  readonly simklLibrary: SimklLibraryStore;
+  readonly simklCatalog: SimklCatalogStore;
+  readonly mangaDexMappings: MangaDexMappingStore;
+  readonly personalization: PersonalizationStore;
   readonly backup: BackupRepository;
   readonly updateLaunch: UpdateLaunchStore;
   getCachedAniListDashboard(): AniListDashboard | undefined;
   saveCachedAniListDashboard(dashboard: AniListDashboard): void;
   clearCachedAniListDashboard(): void;
   getPlaybackResume(aniListId: number): PlaybackResume | undefined;
-  savePlaybackResume(input: SavePlaybackResumeInput): void;
-  clearPlaybackResume(aniListId: number): void;
   getMangaReadingResume(aniListId: number): MangaReadingResume | undefined;
-  saveMangaReadingResume(input: SaveMangaReadingResumeInput): void;
-  clearMangaReadingResume(aniListId: number): void;
+  getMorePlaybackResume(input: MorePlaybackInput): MorePlaybackResume | undefined;
+  saveMorePlaybackResume(input: SaveMorePlaybackResumeInput): void;
+  clearMorePlaybackResume(input: MorePlaybackInput): void;
   close(): void;
 }
 
@@ -72,6 +91,17 @@ export function openAppDatabase(path: string): AppDatabase {
       chapter_id TEXT NOT NULL,
       chapter_number REAL,
       progress REAL NOT NULL DEFAULT 0 CHECK (progress >= 0 AND progress <= 1),
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS more_playback_resume (
+      media_key TEXT PRIMARY KEY,
+      tmdb_id INTEGER NOT NULL CHECK (tmdb_id > 0),
+      media_type TEXT NOT NULL CHECK (media_type IN ('MOVIE', 'TV')),
+      season INTEGER,
+      episode INTEGER,
+      position_seconds REAL NOT NULL DEFAULT 0 CHECK (position_seconds >= 0),
+      duration_seconds REAL NOT NULL CHECK (duration_seconds > 0),
       updated_at TEXT NOT NULL
     );
 
@@ -126,27 +156,6 @@ export function openAppDatabase(path: string): AppDatabase {
     FROM playback_resume
     WHERE anilist_id = ?
   `);
-  const writePlaybackResume = database.prepare(`
-    INSERT INTO playback_resume (
-      anilist_id,
-      episode,
-      position_seconds,
-      duration_seconds,
-      updated_at
-    ) VALUES (
-      @aniListId,
-      @episode,
-      @positionSeconds,
-      @durationSeconds,
-      @updatedAt
-    )
-    ON CONFLICT(anilist_id) DO UPDATE SET
-      episode = excluded.episode,
-      position_seconds = excluded.position_seconds,
-      duration_seconds = excluded.duration_seconds,
-      updated_at = excluded.updated_at
-  `);
-  const deletePlaybackResume = database.prepare("DELETE FROM playback_resume WHERE anilist_id = ?");
   const readMangaReadingResume = database.prepare<[number], MangaReadingResumeRow>(`
     SELECT
       anilist_id,
@@ -157,28 +166,21 @@ export function openAppDatabase(path: string): AppDatabase {
     FROM manga_reading_resume
     WHERE anilist_id = ?
   `);
-  const writeMangaReadingResume = database.prepare(`
-    INSERT INTO manga_reading_resume (
-      anilist_id,
-      chapter_id,
-      chapter_number,
-      progress,
-      updated_at
-    ) VALUES (
-      @aniListId,
-      @chapterId,
-      @chapterNumber,
-      @progress,
-      @updatedAt
-    )
-    ON CONFLICT(anilist_id) DO UPDATE SET
-      chapter_id = excluded.chapter_id,
-      chapter_number = excluded.chapter_number,
-      progress = excluded.progress,
+  const readMorePlaybackResume = database.prepare<[string], MorePlaybackResumeRow>(`
+    SELECT tmdb_id, media_type, season, episode, position_seconds, duration_seconds, updated_at
+    FROM more_playback_resume WHERE media_key = ?
+  `);
+  const writeMorePlaybackResume = database.prepare(`
+    INSERT INTO more_playback_resume (
+      media_key, tmdb_id, media_type, season, episode, position_seconds, duration_seconds, updated_at
+    ) VALUES (@mediaKey, @tmdbId, @type, @season, @episode, @positionSeconds, @durationSeconds, @updatedAt)
+    ON CONFLICT(media_key) DO UPDATE SET
+      position_seconds = excluded.position_seconds,
+      duration_seconds = excluded.duration_seconds,
       updated_at = excluded.updated_at
   `);
-  const deleteMangaReadingResume = database.prepare(
-    "DELETE FROM manga_reading_resume WHERE anilist_id = ?",
+  const deleteMorePlaybackResume = database.prepare(
+    "DELETE FROM more_playback_resume WHERE media_key = ?",
   );
   const readAppMeta = database.prepare<[string], { value: string }>(
     "SELECT value FROM app_meta WHERE key = ?",
@@ -193,15 +195,24 @@ export function openAppDatabase(path: string): AppDatabase {
 
   const recommendationRepository = createRecommendationRepository(database);
   const mangaPreferenceRepository = createMangaPreferenceRepository(database);
+  const bingeRepository = createBingeRepository(database);
 
   return {
     ...createReaderSettingsRepository(database),
-    ...createPersonalRepository(database),
     ...createActivityRepository(database),
+    ...createEntryChangeRepository(database),
     ...mangaPreferenceRepository,
     ...recommendationRepository,
+    ...createMoreLibraryRepository(database),
+    ...bingeRepository,
     discovery: createDiscoveryStore(database),
-    backup: createBackupRepository(database),
+    moreDiscovery: createMoreDiscoveryStore(database),
+    animeTmdbLinks: new AnimeTmdbLinks(database),
+    simklLibrary: createSimklLibraryStore(database),
+    simklCatalog: createSimklCatalogStore(database),
+    mangaDexMappings: createMangaDexMappingStore(database),
+    personalization: createPersonalizationStore(database),
+    backup: createBackupRepository(database, bingeRepository),
     updateLaunch: createUpdateLaunchStore(database),
     ready: true,
     getCachedAniListDashboard: () => {
@@ -209,10 +220,8 @@ export function openAppDatabase(path: string): AppDatabase {
       return row ? parseCachedDashboard(row.value) : undefined;
     },
     saveCachedAniListDashboard: (dashboard) => {
-      const serialized = JSON.stringify(dashboard);
-      if (serialized.length > 2_000_000) {
-        throw new Error("AniList dashboard snapshot is too large to persist.");
-      }
+      const serialized = serializeDashboardForCache(dashboard);
+      if (!serialized) throw new Error("AniList dashboard snapshot is too large to persist.");
       writeAppMeta.run(dashboardCacheKey, serialized);
     },
     clearCachedAniListDashboard: () => {
@@ -233,16 +242,6 @@ export function openAppDatabase(path: string): AppDatabase {
           }
         : undefined;
     },
-    savePlaybackResume: (input) => {
-      if (!isValidPlaybackResumeInput(input)) throw new Error("Invalid playback resume state.");
-      writePlaybackResume.run({ ...input, updatedAt: new Date().toISOString() });
-    },
-    clearPlaybackResume: (aniListId) => {
-      if (!Number.isInteger(aniListId) || aniListId <= 0) {
-        throw new Error("Invalid AniList media ID.");
-      }
-      deletePlaybackResume.run(aniListId);
-    },
     getMangaReadingResume: (aniListId) => {
       validateAniListId(aniListId);
       const row = readMangaReadingResume.get(aniListId);
@@ -256,19 +255,46 @@ export function openAppDatabase(path: string): AppDatabase {
           }
         : undefined;
     },
-    saveMangaReadingResume: (input) => {
-      if (!isValidMangaReadingResumeInput(input)) {
-        throw new Error("Invalid manga reading resume state.");
+    getMorePlaybackResume: (input) => {
+      validateMorePlaybackInput(input);
+      const row = readMorePlaybackResume.get(morePlaybackKey(input));
+      return row
+        ? {
+            tmdbId: row.tmdb_id,
+            type: row.media_type,
+            season: row.season ?? undefined,
+            episode: row.episode ?? undefined,
+            positionSeconds: row.position_seconds,
+            durationSeconds: row.duration_seconds,
+            updatedAt: row.updated_at,
+          }
+        : undefined;
+    },
+    saveMorePlaybackResume: (input) => {
+      validateMorePlaybackInput(input);
+      if (
+        !Number.isFinite(input.positionSeconds) ||
+        !Number.isFinite(input.durationSeconds) ||
+        input.positionSeconds < 0 ||
+        input.durationSeconds <= 0 ||
+        input.positionSeconds > input.durationSeconds
+      ) {
+        throw new Error("Invalid More playback resume state.");
       }
-      writeMangaReadingResume.run({
-        ...input,
-        chapterNumber: input.chapterNumber ?? null,
+      writeMorePlaybackResume.run({
+        mediaKey: morePlaybackKey(input),
+        tmdbId: input.tmdbId,
+        type: input.type,
+        season: input.season ?? null,
+        episode: input.episode ?? null,
+        positionSeconds: input.positionSeconds,
+        durationSeconds: input.durationSeconds,
         updatedAt: new Date().toISOString(),
       });
     },
-    clearMangaReadingResume: (aniListId) => {
-      validateAniListId(aniListId);
-      deleteMangaReadingResume.run(aniListId);
+    clearMorePlaybackResume: (input) => {
+      validateMorePlaybackInput(input);
+      deleteMorePlaybackResume.run(morePlaybackKey(input));
     },
     close: () => {
       database.pragma("optimize");
@@ -293,10 +319,42 @@ interface MangaReadingResumeRow {
   updated_at: string;
 }
 
+interface MorePlaybackResumeRow {
+  tmdb_id: number;
+  media_type: "MOVIE" | "TV";
+  season: number | null;
+  episode: number | null;
+  position_seconds: number;
+  duration_seconds: number;
+  updated_at: string;
+}
+
 function validateAniListId(aniListId: number): void {
   if (!Number.isInteger(aniListId) || aniListId <= 0) {
     throw new Error("Invalid AniList media ID.");
   }
+}
+
+function validateMorePlaybackInput(input: MorePlaybackInput): void {
+  if (!Number.isInteger(input.tmdbId) || input.tmdbId <= 0)
+    throw new Error("Invalid TMDB media ID.");
+  if (input.type === "MOVIE") {
+    if (input.season !== undefined || input.episode !== undefined)
+      throw new Error("Movie playback cannot have an episode.");
+    return;
+  }
+  if (
+    input.type !== "TV" ||
+    !Number.isInteger(input.season) ||
+    (input.season ?? 0) <= 0 ||
+    !Number.isInteger(input.episode) ||
+    (input.episode ?? 0) <= 0
+  )
+    throw new Error("TV playback requires a season and episode.");
+}
+
+function morePlaybackKey(input: MorePlaybackInput): string {
+  return `${input.type}:${input.tmdbId}:${input.season ?? 0}:${input.episode ?? 0}`;
 }
 
 function parseCachedDashboard(value: string): AniListDashboard | undefined {

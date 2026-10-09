@@ -21,7 +21,7 @@ describe("trusted IPC sender validation", () => {
 
   it("rejects provider frames, missing frames, and lookalike origins", () => {
     for (const event of [
-      eventFrom("https://megaplay.buzz/stream/ani/1/1/sub"),
+      eventFrom("https://player.example/a/1/1/sub"),
       eventFrom("http://127.0.0.1:41731.evil.example/"),
       eventFrom(),
     ]) {

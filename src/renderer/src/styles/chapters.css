@@ -1,0 +1,242 @@
+/* Manga chapter list: modern toolbar and an in-panel scroll (user request 2026-10-06). */
+.title-page .chapter-browser-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+.title-page .chapter-browser-toolbar .chapter-search {
+  display: flex;
+  flex: 1 1 280px;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--muted);
+  transition:
+    border-color var(--motion-standard) var(--motion-ease),
+    background-color var(--motion-standard) var(--motion-ease);
+}
+.title-page .chapter-browser-toolbar .chapter-search:focus-within {
+  border-color: rgb(255 255 255 / 0.28);
+  background: rgb(255 255 255 / 0.08);
+}
+.title-page .chapter-browser-toolbar .chapter-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.title-page .chapter-browser-toolbar .chapter-search input::placeholder {
+  color: var(--muted);
+}
+.title-page .chapter-browser-toolbar .chapter-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 42px;
+  padding: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  line-height: normal;
+}
+.title-page .chapter-browser-toolbar .chapter-filter > svg {
+  position: absolute;
+  z-index: 1;
+  left: 15px;
+  pointer-events: none;
+}
+.title-page .chapter-browser-toolbar .chapter-filter .ui-select {
+  height: 42px;
+  min-width: 150px;
+  padding: 0 14px 0 38px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.title-page .chapter-browser-toolbar .chapter-filter .ui-select:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.09);
+}
+.title-page .chapter-browser-toolbar .chapter-filter .ui-select-value {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  background: none;
+  height: auto;
+  padding: 0;
+  line-height: normal;
+}
+.title-page .chapter-browser-toolbar > .chapter-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 18px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: normal;
+}
+.title-page .chapter-browser-toolbar > .chapter-sort:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+.title-page .chapter-browser-toolbar > .chapter-sort:focus-visible,
+.title-page .chapter-browser-toolbar .chapter-filter .ui-select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The ledger scrolls in place (and hands the scroll back to the page at either end): a clear
+   border all round, a thin scrollbar inside it, pinned volume headers (user request 2026-10-08). */
+.chapter-scroll-frame {
+  position: relative;
+}
+.title-page .chapter-browser-list.chapter-ledger {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.22) transparent;
+  scrollbar-gutter: stable;
+}
+.title-page .chapter-ledger > .chapter-volume {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: #121513;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.06);
+}
+.chapter-scroll-top {
+  position: absolute;
+  z-index: 3;
+  right: 18px;
+  bottom: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #0b0d0c;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.45);
+  cursor: pointer;
+}
+.chapter-scroll-top:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+@media (max-width: 900px) {
+  .title-page .chapter-browser-toolbar .chapter-filter .ui-select {
+    min-width: 0;
+  }
+}
+
+/* One friendly card when nothing can be listed: why, and the one useful action. */
+.chapter-empty {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-panel);
+}
+.chapter-empty-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--text-soft);
+}
+.chapter-empty--retry .chapter-empty-icon {
+  background: rgb(240 181 74 / 0.12);
+  color: #f0b54a;
+}
+.chapter-empty > div {
+  flex: 1;
+  min-width: 0;
+}
+.chapter-empty strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+}
+.chapter-empty p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.chapter-empty > button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chapter-empty > button:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+.chapter-empty > button.is-primary {
+  border-color: transparent;
+  background: var(--primary);
+}
+.chapter-empty > button.is-primary:hover {
+  background: var(--primary-hover);
+}
+.chapter-empty > button:focus-visible,
+.provider-note-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.provider-note-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+@media (max-width: 700px) {
+  .chapter-empty {
+    flex-wrap: wrap;
+  }
+}

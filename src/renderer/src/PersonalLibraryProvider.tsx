@@ -7,6 +7,12 @@ import {
   type ReactNode,
 } from "react";
 import { createPersonalLibrarySession } from "./personal-library-session";
+import {
+  continueKey,
+  getRemovedFromContinue,
+  isRemovedFromContinue,
+  subscribeContinueRemovals,
+} from "./continue-dismissals";
 import type { ViewerAccess } from "./viewer-access";
 
 const Context = createContext<ReturnType<typeof createPersonalLibrarySession> | null>(null);
@@ -18,7 +24,18 @@ export function PersonalLibraryProvider({
   access: ViewerAccess;
   children: ReactNode;
 }) {
-  const [session] = useState(() => createPersonalLibrarySession(access, window.anistream));
+  const [session] = useState(() =>
+    createPersonalLibrarySession(access, window.anistream, {
+      now: () => Date.now(),
+      visible: () => document.visibilityState === "visible",
+      hidden: ({ media, updatedAt }) =>
+        isRemovedFromContinue(
+          getRemovedFromContinue(),
+          continueKey(media.type, media.id),
+          updatedAt,
+        ),
+    }),
+  );
   useEffect(() => session.setAccess(access), [access, session]);
   useEffect(() => {
     session.activate();
@@ -34,6 +51,7 @@ export function PersonalLibraryProvider({
     };
     const preferencesChanged = () => session.invalidateManga();
     const unsubscribe = window.anistream.onActivityChanged(localChanged);
+    const unsubscribeRemovals = subscribeContinueRemovals(() => session.invalidateHidden());
     window.addEventListener("anistream:activity-updated", localChanged);
     window.addEventListener("anistream:manga-preferences-updated", preferencesChanged);
     window.addEventListener("focus", visible);
@@ -43,6 +61,7 @@ export function PersonalLibraryProvider({
       clearTimeout(timer);
       clearInterval(interval);
       unsubscribe();
+      unsubscribeRemovals();
       window.removeEventListener("anistream:activity-updated", localChanged);
       window.removeEventListener("anistream:manga-preferences-updated", preferencesChanged);
       window.removeEventListener("focus", visible);

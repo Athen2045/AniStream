@@ -1,0 +1,104 @@
+name: Bug report
+description: Something in AniStream doesn't work the way it should.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Please check the
+        [latest release](https://github.com/Athen2045/AniStream/releases) and search
+        [existing issues](https://github.com/Athen2045/AniStream/issues) first.
+
+        **Never paste** AniList tokens, `.env` contents, session or database files, backup files, or
+        `providers.local.json` into an issue. For a security problem, use
+        [private vulnerability reporting](https://github.com/Athen2045/AniStream/security/advisories/new) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: AniStream version
+      description: Shown under Settings → Updates.
+      placeholder: "2.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows x64
+        - macOS (Apple Silicon)
+        - Development build (npm run dev)
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system version
+      placeholder: "Windows 11 24H2 / macOS 15.4"
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Home / discovery
+        - Anime (title page or player)
+        - Manga (title page or reader)
+        - More (movies and shows)
+        - Search and filters
+        - Airing schedule
+        - Up Next and playlists
+        - Profile and AniList sync
+        - Settings, backup, or updates
+        - Installer or app startup
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: account
+    attributes:
+      label: Signed in to AniList?
+      options:
+        - "Yes"
+        - "No, browsing as guest"
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the title, episode, or chapter if it matters.
+      placeholder: |
+        1. Open Manga and search for "…"
+        2. Open the title page
+        3. Click Read
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, recordings, or error text
+      description: Drag files here. Remove anything personal first.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I removed tokens, credentials, and personal library data from this report.
+          required: true
