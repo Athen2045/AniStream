@@ -22,6 +22,14 @@ interface Upload {
 }
 
 /**
+ * The preview is a browser object URL for the picked file or the saved JPEG data URL from the main
+ * process; anything else is refused rather than placed in an image source.
+ */
+function previewSrc(url: string | undefined): string | undefined {
+  return url && /^(blob:|data:image\/jpeg;base64,)/.test(url) ? url : undefined;
+}
+
+/**
  * Edit profile look: which picture to show (when both accounts have one) and the hero. An uploaded
  * hero is checked against `HERO_RULES`, positioned and zoomed here, then saved as a cropped JPEG
  * on this device only.
@@ -163,7 +171,7 @@ export function ProfileLookDialog({
     onClose();
   }
 
-  const customPreview = upload?.url ?? savedImage;
+  const customPreview = previewSrc(upload?.url ?? savedImage);
   return (
     <div
       className="look-scrim"

@@ -3,11 +3,23 @@ import {
   MangaDexClient,
   findExactAniListMapping,
   findLatestNumericChapter,
+  isMangaDexHost,
   normalizeAtHomeNode,
   normalizeChapters,
   parseMangaStatistics,
   parseRateLimitCooldownMs,
 } from "../../src/main/mangadex";
+
+describe("isMangaDexHost", () => {
+  it("accepts only mangadex.org and its subdomains by hostname", () => {
+    expect(isMangaDexHost("https://uploads.mangadex.org")).toBe(true);
+    expect(isMangaDexHost("https://mangadex.org/data")).toBe(true);
+    expect(isMangaDexHost("https://mangadex.org.node.example")).toBe(false);
+    expect(isMangaDexHost("https://node.example/mangadex.org")).toBe(false);
+    expect(isMangaDexHost("https://notmangadex.org")).toBe(false);
+    expect(isMangaDexHost("not a url")).toBe(false);
+  });
+});
 
 describe("MangaDex normalization", () => {
   it("lets a foreground title enter the shared gate before a whole availability batch", async () => {

@@ -356,7 +356,7 @@ export class MangaDexClient {
     }
     // The docs ask for a report for every image (success or failure) served from a base URL
     // outside mangadex.org, i.e. a volunteer MangaDex@Home node.
-    if (!node.baseUrl.includes("mangadex.org")) {
+    if (!isMangaDexHost(node.baseUrl)) {
       this.reportAtHome({
         url: imageUrl.toString(),
         success: Boolean(imageBytes),
@@ -676,6 +676,16 @@ export interface MangaDexClientOptions {
    * skip the title search; the reader still verifies `links.al` on every open and refreshes them.
    */
   mappingStore?: () => MangaDexMappingStore | undefined;
+}
+
+/** True only for mangadex.org itself or its subdomains, judged by the parsed hostname. */
+export function isMangaDexHost(baseUrl: string): boolean {
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase();
+    return hostname === "mangadex.org" || hostname.endsWith(".mangadex.org");
+  } catch {
+    return false;
+  }
 }
 
 function atHomeCacheKey(chapterId: string, forcePort443: boolean): string {

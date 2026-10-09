@@ -253,7 +253,9 @@ describe("TMDB host fallback", () => {
       calls += 1;
       throw new TypeError(`unreachable ${new URL(String(input)).host}`);
     });
-    await expect(client.getTrending("MOVIE", 1)).rejects.toThrow(/api\.themoviedb\.org/);
+    await expect(client.getTrending("MOVIE", 1)).rejects.toThrow(
+      /^unreachable api\.themoviedb\.org$/,
+    );
     expect(calls).toBe(2);
   });
 });
