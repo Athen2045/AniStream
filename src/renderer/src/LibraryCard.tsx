@@ -1,135 +1,165 @@
-import { BookOpen, Pencil, Play } from "lucide-react";
-import { motion } from "framer-motion";
-import { useState } from "react";
-import type { AniListEntry, AniListMedia, UpdateAniListEntryInput } from "../../shared/contracts";
-import { isProgressComplete } from "../../shared/progress";
+import { Pencil, Star } from "lucide-react";
+import type { AniListEntry, AniListMedia } from "../../shared/contracts";
 import { formatMediaLabel } from "./format-label";
-import { motionTransition } from "./motion";
 import { CoverImage } from "./CoverImage";
-import { friendlyRemoteError } from "./remote-error";
+import { titleAccentStyle } from "./title-accent";
+import { statusLabel } from "./profile-library";
+
+type OpenMedia = (media: AniListMedia, action: "details" | "play" | "read") => void;
+
+function progressParts(entry: AniListEntry) {
+  const total = entry.media.totalProgress;
+  return {
+    total,
+    ratio: total ? Math.min(1, entry.progress / total) : undefined,
+    unit: entry.media.type === "ANIME" ? "ep" : "ch",
+    // Manga progress takes the title's cover color; anime keeps the brand green.
+    style: entry.media.type === "MANGA" ? titleAccentStyle(entry.media.coverColor) : undefined,
+  };
+}
+
+/** Grid card: the cover opens details; hovering or focusing reveals the single Edit action. */
 export function LibraryCard({
   entry,
-  reducedMotion,
-  onSave,
   onEdit,
   onOpenMedia,
 }: {
   entry: AniListEntry;
-  reducedMotion: boolean;
-  onSave: (input: UpdateAniListEntryInput) => Promise<void>;
   onEdit: (entry: AniListEntry) => void;
-  onOpenMedia: (media: AniListMedia, action: "details" | "play" | "read") => void;
+  onOpenMedia: OpenMedia;
 }) {
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string>();
-  const progressLabel = entry.media.type === "ANIME" ? "ep" : "ch";
-  const totalProgress = entry.media.totalProgress;
-  const progressRatio = totalProgress ? Math.min(1, entry.progress / totalProgress) : 0;
+  const { total, ratio, unit, style } = progressParts(entry);
   return (
-    <motion.article
-      className="media-card"
-      whileHover={
-        reducedMotion ? undefined : { y: -3, transition: motionTransition(reducedMotion, "fast") }
-      }
-      transition={motionTransition(reducedMotion, "fast")}
+    <article
+      className={`library-card${entry.media.type === "MANGA" ? " library-card--manga" : ""}`}
+      style={style}
     >
-      <div className="cover-wrap">
+      <div className="library-card-art">
         <button
-          className="media-card-cover-action"
+          className="library-card-cover"
           type="button"
           aria-label={`Details for ${entry.media.title}`}
           onClick={() => onOpenMedia(entry.media, "details")}
         >
           <CoverImage src={entry.media.coverUrl} title={entry.media.title} />
         </button>
+        {entry.score ? (
+          <span className="library-score" aria-label={`Your score ${entry.score} out of 10`}>
+            <Star size={11} fill="currentColor" aria-hidden="true" />
+            <b>{entry.score}</b>
+          </span>
+        ) : null}
         <button
-          className="media-card-edit"
+          className="library-card-edit"
           type="button"
-          disabled={saving}
+          aria-label={`Edit ${entry.media.title}`}
+          onClick={() => onEdit(entry)}
+        >
+          <Pencil size={14} aria-hidden="true" />
+          Edit entry
+        </button>
+      </div>
+      <span className="library-progress" aria-hidden="true">
+        <span style={{ transform: `scaleX(${ratio ?? (entry.progress ? 1 : 0)})` }} />
+      </span>
+      <button
+        className="library-card-title"
+        type="button"
+        title={entry.media.title}
+        onClick={() => onOpenMedia(entry.media, "details")}
+      >
+        {entry.media.title}
+      </button>
+      <p className="library-card-meta">
+        <span>
+          {entry.progress}
+          {total ? `/${total}` : ""} {unit} · {formatMediaLabel(entry.media.format)}
+        </span>
+        <span>{updatedAgo(entry.updatedAt)}</span>
+      </p>
+    </article>
+  );
+}
+
+/** List-view row with the same actions as the card. */
+export function LibraryRow({
+  entry,
+  onEdit,
+  onOpenMedia,
+}: {
+  entry: AniListEntry;
+  onEdit: (entry: AniListEntry) => void;
+  onOpenMedia: OpenMedia;
+}) {
+  const { total, ratio, style } = progressParts(entry);
+  const anime = entry.media.type === "ANIME";
+  return (
+    <div className={`library-row${anime ? "" : " library-row--manga"}`} role="row" style={style}>
+      <button
+        className="library-row-thumb"
+        type="button"
+        role="cell"
+        aria-label={`Details for ${entry.media.title}`}
+        onClick={() => onOpenMedia(entry.media, "details")}
+      >
+        <img src={entry.media.coverUrl} alt="" loading="lazy" />
+      </button>
+      <span className="library-row-title" role="cell">
+        <button type="button" onClick={() => onOpenMedia(entry.media, "details")}>
+          {entry.media.title}
+        </button>
+        <small>
+          <em>{formatMediaLabel(entry.media.format)}</em>
+          {(entry.media.genres ?? []).slice(0, 2).join(" · ")}
+        </small>
+      </span>
+      <span className="library-row-progress" role="cell">
+        {anime ? "Ep." : "Ch."} {entry.progress}
+        {total ? ` / ${total}` : " · ongoing"}
+        {ratio !== undefined ? (
+          <span className="library-progress" aria-hidden="true">
+            <span style={{ transform: `scaleX(${ratio})` }} />
+          </span>
+        ) : null}
+      </span>
+      <span className="library-row-score" role="cell">
+        {entry.score ? (
+          <>
+            <Star size={13} fill="currentColor" aria-hidden="true" />
+            <b>{entry.score}</b>
+          </>
+        ) : (
+          <span className="library-row-muted">—</span>
+        )}
+      </span>
+      <span role="cell">
+        <span className={`library-status library-status--${entry.status.toLowerCase()}`}>
+          {statusLabel(entry.status, anime)}
+        </span>
+      </span>
+      <span className="library-row-muted" role="cell">
+        {updatedAgo(entry.updatedAt)}
+      </span>
+      <span role="cell">
+        <button
+          className="library-row-edit"
+          type="button"
           aria-label={`Edit ${entry.media.title}`}
           title="Edit entry"
           onClick={() => onEdit(entry)}
         >
-          <Pencil size={18} aria-hidden="true" />
+          <Pencil size={14} aria-hidden="true" />
         </button>
-        {!isProgressComplete(entry.status, entry.progress, entry.media.totalProgress) ? (
-          <button
-            className="progress-button"
-            type="button"
-            aria-label={`Increase progress for ${entry.media.title}`}
-            disabled={saving}
-            onClick={() => {
-              const next = Math.min(
-                entry.media.totalProgress ?? Number.MAX_SAFE_INTEGER,
-                entry.progress + 1,
-              );
-              setSaving(true);
-              void onSave({ id: entry.id, progress: next })
-                .catch((reason: unknown) =>
-                  setError(
-                    friendlyRemoteError(reason, {
-                      provider: "AniList",
-                      operation: "library changes",
-                      fallback: "Progress could not be saved. Your previous value is unchanged.",
-                    }),
-                  ),
-                )
-                .finally(() => setSaving(false));
-            }}
-          >
-            +1
-          </button>
-        ) : null}
-        <button
-          className="media-card-primary"
-          type="button"
-          aria-label={`${entry.media.type === "ANIME" ? "Watch" : "Read"} ${entry.media.title}`}
-          onClick={() => onOpenMedia(entry.media, entry.media.type === "ANIME" ? "play" : "read")}
-        >
-          {entry.media.type === "ANIME" ? (
-            <Play size={14} aria-hidden="true" />
-          ) : (
-            <BookOpen size={14} aria-hidden="true" />
-          )}
-          {entry.media.type === "ANIME" ? "Watch" : "Read"}
-        </button>
-      </div>
-      <div className="media-card-body">
-        <div className="media-card-topline">
-          <p className="media-meta">{formatMediaLabel(entry.media.format)}</p>
-          <span>{entry.score ? `${entry.score}/10` : "Not rated"}</span>
-        </div>
-        <h3 title={entry.media.title}>
-          <button
-            className="media-card-title-action"
-            type="button"
-            onClick={() => onOpenMedia(entry.media, "details")}
-          >
-            {entry.media.title}
-          </button>
-        </h3>
-        <div className="media-card-footer">
-          <span>
-            {entry.status
-              .toLowerCase()
-              .replace("current", entry.media.type === "ANIME" ? "Watching" : "Reading")}
-          </span>
-          <span>
-            {entry.progress}
-            {entry.media.totalProgress ? ` / ${entry.media.totalProgress}` : ""} {progressLabel}
-          </span>
-        </div>
-        {totalProgress ? (
-          <div className="media-card-progress" aria-hidden="true">
-            <span style={{ transform: `scaleX(${progressRatio})` }} />
-          </div>
-        ) : null}
-      </div>
-      {error ? (
-        <p className="card-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </motion.article>
+      </span>
+    </div>
   );
+}
+
+function updatedAgo(seconds: number): string {
+  const days = Math.max(0, Math.round((Date.now() / 1000 - seconds) / 86_400));
+  if (days === 0) return "today";
+  if (days < 7) return `${days}d ago`;
+  if (days < 35) return `${Math.round(days / 7)}w ago`;
+  if (days < 365) return `${Math.round(days / 30)}mo ago`;
+  return `${Math.round(days / 365)}y ago`;
 }

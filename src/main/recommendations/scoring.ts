@@ -3,6 +3,7 @@ import {
   RANKING_WEIGHTS,
   type RecommendationCandidate,
   type RecommendationItemFeatures,
+  type RecommendationMediaType,
   type RecommendationProfile,
   type RecommendationProfileFeatureKind,
   type RecommendationReasonCode,
@@ -36,7 +37,7 @@ export function scoreRecommendationCandidate(
     explorationBonus * RANKING_WEIGHTS.explorationBonus;
   const result: RecommendationResult = {
     anilistId: features.anilistId,
-    mediaType: features.mediaType,
+    mediaType: features.mediaType as RecommendationMediaType, // Legacy scorer: AniList items only.
     malId: features.malId,
     title: features.normalizedTitle,
     coverUrl: features.coverUrl,

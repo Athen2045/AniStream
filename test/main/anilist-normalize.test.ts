@@ -64,6 +64,21 @@ describe("normalizeCatalogMedia", () => {
     expect(media.nextAiringEpisode).toEqual({ episode: 1123, airingAt: 1893456000 });
   });
 
+  it("keeps only a plain #rrggbb cover color", () => {
+    const withColor = (color: unknown) =>
+      normalizeCatalogMedia(
+        {
+          ...catalogMediaFixture,
+          coverImage: { ...catalogMediaFixture.coverImage, color },
+        },
+        "ANIME",
+      ).coverColor;
+    expect(withColor("#F1C90D")).toBe("#f1c90d");
+    expect(withColor("red; background: url(x)")).toBeUndefined();
+    expect(withColor("#fff")).toBeUndefined();
+    expect(withColor(null)).toBeUndefined();
+  });
+
   it("falls back through userPreferred -> english -> romaji for the title", () => {
     const fixture = clone(catalogMediaFixture) as any;
     delete fixture.title.userPreferred;
@@ -172,6 +187,25 @@ describe("normalizeMediaDetail", () => {
     fixture.studios.edges = [{ isMain: false, node: { name: "Shueisha" } }];
     const detail = normalizeMediaDetail(fixture, "ANIME");
     expect(detail.studios).toEqual(["Shueisha"]);
+  });
+
+  it("keeps valid upcoming airings in episode order and drops malformed rows", () => {
+    const fixture = clone(mediaDetailFixture) as any;
+    fixture.airingSchedule = {
+      nodes: [
+        { episode: 3, airingAt: 1_790_604_800 },
+        { episode: 2, airingAt: 1_790_000_000 },
+        { episode: 0, airingAt: 1_790_000_000 },
+        { episode: 4, airingAt: "soon" },
+        null,
+      ],
+    };
+    expect(normalizeMediaDetail(fixture, "ANIME").upcomingEpisodes).toEqual([
+      { episode: 2, airingAt: 1_790_000_000 },
+      { episode: 3, airingAt: 1_790_604_800 },
+    ]);
+    delete fixture.airingSchedule;
+    expect(normalizeMediaDetail(fixture, "ANIME").upcomingEpisodes).toEqual([]);
   });
 
   it("builds a Dailymotion trailer URL", () => {

@@ -1,0 +1,98 @@
+/* Full-window media chrome (user request 2026-10-06).
+   Electron unions every `-webkit-app-region: drag` element into the window's drag area whatever
+   sits on top, so the app navbar hidden under a player or reader still swallowed clicks on the
+   Back button. While media is open the navbar stops being a drag area. A no-drag control inside a
+   drag area was not reliably cut out (verified with real mouse input 2026-10-06), so each surface
+   uses a drag strip that sits beside its controls and never under them. */
+body:has(.watch-experience--player, .media-reader-surface) .app-navbar {
+  -webkit-app-region: no-drag;
+}
+.media-control-layer button,
+.media-control-layer a,
+.media-control-layer input,
+.media-control-layer .ui-select,
+.reader-title,
+.reader-drawer,
+.reader-popover {
+  -webkit-app-region: no-drag;
+}
+
+/* Windowed players: a strip above the video holds Back, the audio/player tool, and the window
+   buttons, so nothing covers the provider's own controls. Display fullscreen drops the strip. */
+.watch-experience--player:not(:fullscreen) .watch-player-view .anistream-player,
+.watch-experience--player:not(:fullscreen) .watch-player-view > .player-unavailable,
+.watch-experience--player:not(:fullscreen) .watch-player-view > .more-availability {
+  top: var(--app-navbar-height);
+  height: calc(100% - var(--app-navbar-height));
+}
+.watch-experience--player:not(:fullscreen) .media-control-layer--player {
+  height: var(--app-navbar-height);
+  background: #000;
+}
+/* Between Back (left) and the player tool plus window buttons (right). */
+.player-drag-strip {
+  position: absolute;
+  top: 0;
+  right: calc(var(--caption-controls-width) + 52px);
+  left: calc(var(--caption-inset-left) + 44px);
+  height: var(--app-navbar-height);
+  -webkit-app-region: drag;
+}
+.watch-experience--player:fullscreen .player-drag-strip {
+  display: none;
+}
+.watch-experience--player:not(:fullscreen) .watch-player-back {
+  border-color: rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.06);
+}
+.watch-experience--player:not(:fullscreen) .watch-player-back:hover,
+.watch-experience--player:not(:fullscreen) .watch-player-back:focus-visible {
+  background: rgb(255 255 255 / 0.16);
+}
+/* The hover hotspots only exist to wake hidden controls, which windowed players never hide. */
+.watch-experience--player:not(:fullscreen) .media-control-hotspot,
+.watch-experience--player:not(:fullscreen) .media-control-reveal-zone {
+  display: none;
+}
+
+/* Reader: while its controls show, the band between the title chip and the caption buttons
+   drags the window; the chip is capped to the left half so the two never overlap. */
+.reader-top {
+  max-width: calc(50% - var(--caption-inset-left) - 12px);
+}
+.reader-drag-strip {
+  position: absolute;
+  top: 0;
+  right: var(--caption-controls-width);
+  left: 50%;
+  height: var(--app-navbar-height);
+  -webkit-app-region: drag;
+  pointer-events: none;
+}
+.media-reader-surface:fullscreen .reader-drag-strip {
+  display: none;
+}
+
+/* While a player is starting (or the More check failed), its cover reaches the top of the window
+   and the strip above turns transparent so Back and the window buttons float over the artwork
+   (user request 2026-10-09). Once the video shows, the solid strip returns over nothing but black.
+   The cover sits either beside the player or inside it (above the still-loading frame). */
+.watch-experience--player:not(:fullscreen) .watch-player-view > .more-availability {
+  top: 0;
+  height: 100%;
+}
+.watch-experience--player:not(:fullscreen)
+  .anistream-player:has(> .more-availability, > .anime-embed-loading > .player-starting) {
+  overflow: visible;
+}
+.watch-experience--player:not(:fullscreen) .anistream-player > .more-availability,
+.watch-experience--player:not(:fullscreen)
+  .anistream-player
+  > .anime-embed-loading:has(> .player-starting) {
+  top: calc(-1 * var(--app-navbar-height));
+}
+.watch-experience--player:not(:fullscreen)
+  .watch-player-view:has(.more-availability, .anime-embed-loading > .player-starting)
+  .media-control-layer--player {
+  background: transparent;
+}

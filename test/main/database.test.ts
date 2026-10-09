@@ -44,60 +44,6 @@ describe("local reading progress", () => {
     database.close();
   });
 
-  it("persists, updates, and clears manga chapter resume state", () => {
-    const directory = mkdtempSync(join(tmpdir(), "anistream-database-"));
-    temporaryDirectories.push(directory);
-    const databasePath = join(directory, "anistream.sqlite");
-    const database = openAppDatabase(databasePath);
-
-    database.saveMangaReadingResume({
-      aniListId: 30_013,
-      chapterId: "chapter-one",
-      chapterNumber: 1,
-      progress: 0.42,
-    });
-
-    expect(database.getMangaReadingResume(30_013)).toMatchObject({
-      aniListId: 30_013,
-      chapterId: "chapter-one",
-      chapterNumber: 1,
-      progress: 0.42,
-    });
-
-    database.saveMangaReadingResume({
-      aniListId: 30_013,
-      chapterId: "chapter-two",
-      chapterNumber: 2,
-      progress: 0.91,
-    });
-
-    expect(database.getMangaReadingResume(30_013)).toMatchObject({
-      chapterId: "chapter-two",
-      chapterNumber: 2,
-      progress: 0.91,
-    });
-
-    database.clearMangaReadingResume(30_013);
-    expect(database.getMangaReadingResume(30_013)).toBeUndefined();
-    database.close();
-  });
-
-  it("rejects invalid progress rather than writing corrupt state", () => {
-    const directory = mkdtempSync(join(tmpdir(), "anistream-database-"));
-    temporaryDirectories.push(directory);
-    const database = openAppDatabase(join(directory, "anistream.sqlite"));
-
-    expect(() =>
-      database.saveMangaReadingResume({
-        aniListId: 30_013,
-        chapterId: "chapter-one",
-        progress: 1.5,
-      }),
-    ).toThrow(/Invalid manga reading resume state/);
-
-    database.close();
-  });
-
   it("persists manga language and exact scanlation group preferences across restarts", () => {
     const directory = mkdtempSync(join(tmpdir(), "anistream-database-"));
     temporaryDirectories.push(directory);
@@ -106,15 +52,19 @@ describe("local reading progress", () => {
 
     database.saveMangaReaderPreferences({
       aniListId: 30_013,
-      translatedLanguage: "pt-br",
+      translatedLanguage: "ja",
       preferredGroupId: "group-uuid",
     });
+    // Manga is offered in English and Japanese only.
+    expect(() =>
+      database.saveMangaReaderPreferences({ aniListId: 30_013, translatedLanguage: "pt-br" }),
+    ).toThrow();
     database.close();
 
     database = openAppDatabase(databasePath);
     expect(database.getMangaReaderPreferences(30_013)).toMatchObject({
       aniListId: 30_013,
-      translatedLanguage: "pt-br",
+      translatedLanguage: "ja",
       preferredGroupId: "group-uuid",
     });
     database.close();

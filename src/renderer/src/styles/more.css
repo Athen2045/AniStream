@@ -1,0 +1,1349 @@
+/* More (TMDB movies & shows): full-bleed heroes, poster-only rails, and the title page. */
+.more-page,
+.more-title-page {
+  --more-glass: rgb(20 24 21 / 0.55);
+  --more-glass-line: rgb(255 255 255 / 0.13);
+  --more-accent: #2f9a6c;
+  --more-star: #f5c451;
+  position: relative;
+  min-height: 100vh;
+  padding-bottom: 40px;
+}
+
+/* Navbar floats over More artwork, then gains a surface once content scrolls beneath it. */
+html .app-navbar.app-navbar--overlay {
+  border-bottom-color: transparent;
+  background: linear-gradient(180deg, rgb(7 8 7 / 0.82), rgb(7 8 7 / 0.32) 70%, transparent);
+  transition:
+    background-color var(--motion-standard) var(--motion-ease),
+    border-color var(--motion-standard) var(--motion-ease);
+}
+html .app-navbar.app-navbar--overlay.is-scrolled {
+  border-bottom-color: var(--line-subtle);
+  background: rgb(10 12 11 / 0.86);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+/* Hero */
+.more-hero,
+.more-title-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--surface-base);
+}
+.more-hero {
+  height: clamp(560px, 84vh, 820px);
+}
+.more-hero--skeleton {
+  background: linear-gradient(
+    110deg,
+    var(--skeleton-base) 30%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 70%
+  );
+  background-size: 200% 100%;
+  animation: more-shimmer 1.6s linear infinite;
+}
+.more-hero-art {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 25%;
+}
+.more-hero-shade {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(7 8 7 / 0.9) 0%, rgb(7 8 7 / 0.58) 34%, transparent 66%),
+    linear-gradient(0deg, var(--ink) 0%, rgb(7 8 7 / 0.55) 20%, transparent 46%);
+}
+.more-hero-shade--detail {
+  background:
+    linear-gradient(90deg, rgb(7 8 7 / 0.94) 0%, rgb(7 8 7 / 0.72) 36%, rgb(7 8 7 / 0.12) 68%),
+    linear-gradient(0deg, var(--ink) 0%, rgb(7 8 7 / 0.45) 24%, transparent 46%);
+}
+.more-hero-top {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--app-navbar-height) + 22px);
+  left: var(--page-gutter);
+}
+.more-hero-copy {
+  position: absolute;
+  z-index: 1;
+  left: var(--page-gutter);
+  bottom: clamp(96px, 13vh, 140px);
+  width: min(600px, 46vw);
+}
+.more-title-art {
+  margin: 0 0 20px;
+  line-height: 0;
+}
+.more-title-art img {
+  display: block;
+  max-width: min(460px, 100%);
+  max-height: 150px;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 6px 26px rgb(0 0 0 / 0.55));
+}
+.more-title-text {
+  color: var(--text);
+  font-size: clamp(38px, 4.4vw, 64px);
+  font-weight: 800;
+  letter-spacing: -1.4px;
+  line-height: 1.02;
+  text-shadow: 0 4px 26px rgb(0 0 0 / 0.55);
+  text-wrap: balance;
+}
+.more-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+  color: #eef1ef;
+  font-size: 15px;
+  font-weight: 600;
+}
+.more-facts > span:not(.more-cert):not(:first-child)::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin: 0 12px 3px 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.45);
+}
+.more-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.more-score svg {
+  color: var(--more-star);
+}
+.more-cert {
+  padding: 2px 8px;
+  border: 1px solid rgb(255 255 255 / 0.36);
+  border-radius: 5px;
+  font-size: 12.5px;
+}
+.more-hero-overview {
+  display: -webkit-box;
+  margin: 0 0 26px;
+  overflow: hidden;
+  color: #e1e6e3;
+  font-size: 16.5px;
+  line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  text-shadow: 0 1px 12px rgb(0 0 0 / 0.4);
+}
+
+/* Buttons */
+.more-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.more-btn-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 50px;
+  padding: 0 26px 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #0a0b0a;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast);
+}
+.more-btn-play:hover:not(:disabled) {
+  background: #e9ece9;
+}
+.more-btn-play:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.more-btn-play:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.more-btn-pair,
+.more-btn-round,
+.more-back {
+  border: 1px solid var(--more-glass-line);
+  background: var(--more-glass);
+  backdrop-filter: blur(18px) saturate(1.3);
+}
+.more-btn-pair {
+  display: inline-flex;
+  align-items: center;
+  height: 50px;
+  border-radius: 999px;
+}
+.more-btn-pair > span {
+  width: 1px;
+  height: 22px;
+  background: var(--more-glass-line);
+}
+.more-btn-pair button,
+.more-btn-round {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.more-btn-pair button {
+  width: 54px;
+  height: 100%;
+  border-radius: 999px;
+}
+.more-btn-round {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--more-glass-line);
+  border-radius: 50%;
+  background: var(--more-glass);
+}
+.more-btn-pair button:hover,
+.more-btn-round:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+.more-btn-pair button[aria-pressed="true"],
+.more-btn-round[aria-pressed="true"] {
+  color: #7fe0b2;
+}
+.more-poster-tag {
+  font-size: 11.5px;
+}
+.more-plain-top {
+  padding: calc(var(--app-navbar-height) + 22px) var(--page-gutter) 8px;
+}
+
+/* Carousel dots (shared by More and the Anime/Manga catalog hero) */
+.hero-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.more-hero-dots {
+  position: absolute;
+  z-index: 2;
+  right: var(--page-gutter);
+  bottom: clamp(104px, 13.5vh, 148px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hero-dots button {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 99px;
+  background: rgb(255 255 255 / 0.42);
+  cursor: pointer;
+  transition: width var(--motion-standard) var(--motion-ease);
+}
+.hero-dots button.active {
+  width: 30px;
+  background: rgb(255 255 255 / 0.3);
+}
+.hero-dots button.active:not(:has(span)) {
+  background: #fff;
+}
+.hero-dots span {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #fff;
+  transform-origin: left;
+  animation: more-dot-fill linear forwards;
+}
+.hero-dots span.paused {
+  animation-play-state: paused;
+}
+@keyframes more-dot-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes more-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Sections */
+.more-content {
+  position: relative;
+  z-index: 1;
+  padding: 0 var(--page-gutter);
+}
+.more-hero + .more-content {
+  margin-top: -76px;
+}
+.more-page--plain .more-content {
+  padding-top: 18px;
+}
+.more-section {
+  margin-bottom: 44px;
+}
+.more-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 32px;
+  margin-bottom: 14px;
+}
+.more-section-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.more-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.more-link:hover {
+  color: var(--text);
+}
+.more-count {
+  color: var(--muted);
+  font-size: 13px;
+}
+/* The shared carousel portals its arrows into a `.rail-heading`; keep them after "View all". */
+.more-section-head.rail-heading {
+  align-items: center;
+}
+.more-section-head > h2 {
+  margin-right: auto;
+}
+.more-section-head .carousel-navigation {
+  margin-left: 0;
+}
+.more-rail .carousel-viewport {
+  padding: 10px 2px 14px;
+  margin-top: -10px;
+}
+
+/* Poster cards */
+.more-poster {
+  position: relative;
+  flex: 0 0 clamp(158px, 14.2vw, 214px);
+}
+.more-grid .more-poster {
+  flex: none;
+}
+.more-poster-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.38);
+  transition:
+    transform var(--motion-standard) var(--motion-ease),
+    box-shadow var(--motion-standard) var(--motion-ease);
+}
+.more-poster-art img,
+.more-poster-art .cover-image-fallback {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.more-poster-art .cover-image-fallback {
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  color: var(--text-soft);
+  font-weight: 600;
+  text-align: center;
+}
+.more-poster-hit {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.more-poster-rank {
+  position: absolute;
+  z-index: 2;
+  top: 9px;
+  left: 9px;
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: rgb(7 8 7 / 0.72);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.more-poster-info {
+  position: absolute;
+  z-index: 2;
+  inset: auto 0 0;
+  display: grid;
+  gap: 4px;
+  padding: 72px 12px 12px;
+  background: linear-gradient(0deg, rgb(7 8 7 / 0.97) 42%, transparent);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-standard) var(--motion-ease);
+  pointer-events: none;
+}
+.more-poster-info strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.more-poster-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 500;
+}
+.more-poster-meta .more-score {
+  gap: 4px;
+  color: var(--text);
+  font-weight: 700;
+}
+.more-poster-actions {
+  display: flex;
+  gap: 7px;
+  margin-top: 6px;
+}
+.more-mini {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.16);
+  color: var(--text);
+  cursor: pointer;
+}
+.more-mini:hover {
+  background: rgb(255 255 255 / 0.28);
+}
+.more-mini--play,
+.more-mini--play:hover {
+  background: #fff;
+  color: #000;
+}
+.more-mini[aria-pressed="true"] {
+  color: #7fe0b2;
+}
+.more-poster:hover .more-poster-art,
+.more-poster:focus-within .more-poster-art {
+  transform: translateY(-4px);
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 0.85),
+    0 18px 38px rgb(0 0 0 / 0.5);
+}
+.more-poster:hover .more-poster-info,
+.more-poster:focus-within .more-poster-info {
+  opacity: 1;
+  transform: none;
+}
+/* Only the quick actions take clicks; the rest of the poster still opens the title page. */
+.more-poster:hover .more-mini,
+.more-poster:focus-within .more-mini {
+  pointer-events: auto;
+}
+.more-poster-hit:focus-visible,
+.more-mini:focus-visible,
+.more-continue-art:focus-visible,
+.more-episode-art:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.more-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 26px 18px;
+  margin-bottom: 28px;
+}
+
+/* Continue Watching */
+.more-continue {
+  display: grid;
+  flex: 0 0 clamp(250px, 22vw, 320px);
+  gap: 3px;
+}
+.more-continue-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 9px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+}
+.more-continue-art img,
+.more-episode-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--motion-emphasis) var(--motion-ease);
+}
+.more-continue-play,
+.more-episode-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.32);
+  color: #000;
+  opacity: 0;
+  transition: opacity var(--motion-fast);
+}
+.more-continue-play svg,
+.more-episode-play svg {
+  box-sizing: content-box;
+  padding: 15px;
+  border-radius: 50%;
+  background: #fff;
+}
+.more-continue-art:hover .more-continue-play,
+.more-continue-art:focus-visible .more-continue-play,
+.more-episode-art:hover .more-episode-play,
+.more-episode-art:focus-visible .more-episode-play,
+.more-episode.current .more-episode-play {
+  opacity: 1;
+}
+.more-continue-art:hover img,
+.more-episode-art:hover img {
+  transform: scale(1.04);
+}
+.more-progress {
+  position: absolute;
+  inset: auto 0 0;
+  height: 4px;
+  background: rgb(255 255 255 / 0.2);
+}
+.more-progress span {
+  display: block;
+  height: 100%;
+  background: var(--more-accent);
+}
+.more-continue strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.more-continue-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* Title page */
+.more-title-hero {
+  min-height: max(100vh, 760px);
+}
+.more-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px 0 12px;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.more-back:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+.more-title-copy {
+  position: absolute;
+  z-index: 1;
+  left: var(--page-gutter);
+  bottom: 96px;
+  width: min(660px, 50vw);
+}
+.more-title-copy .more-title-art img {
+  max-height: 170px;
+  max-width: min(520px, 100%);
+}
+.more-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: -6px 0 22px;
+  color: #e9ece9;
+  font-size: 16px;
+  font-weight: 600;
+}
+.more-genres span:not(:first-child)::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin: 0 12px 3px 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.45);
+}
+.more-title-copy .more-facts {
+  margin: 24px 0 10px;
+}
+.more-credits {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 14.5px;
+}
+.more-credits strong {
+  color: #e9ece9;
+  font-weight: 600;
+}
+.more-title-overview {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #d6dbd8;
+  font-size: 15.5px;
+  line-height: 1.65;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+.more-info-card {
+  position: absolute;
+  z-index: 1;
+  right: var(--page-gutter);
+  bottom: 96px;
+  display: grid;
+  justify-items: center;
+  gap: 26px;
+  width: min(340px, 28vw);
+}
+.more-info-card dl {
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--more-glass-line);
+  border-radius: 14px;
+  background: rgb(12 15 13 / 0.6);
+  backdrop-filter: blur(22px) saturate(1.3);
+}
+.more-info-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line-subtle);
+  font-size: 13.5px;
+}
+.more-info-card dl div:last-child {
+  border-bottom: 0;
+}
+.more-info-card dt {
+  color: var(--muted);
+}
+.more-info-card dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+}
+.more-brand {
+  max-width: 150px;
+  max-height: 34px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.78;
+}
+.more-brand-text {
+  color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+/* Episodes */
+.more-episodes {
+  position: relative;
+  z-index: 1;
+  margin-top: -24px;
+  padding: 0 var(--page-gutter) 40px;
+}
+.more-episodes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.more-episodes-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+.more-episodes-tools {
+  display: flex;
+  gap: 10px;
+}
+.more-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: #e7ebe8;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.more-chip:hover {
+  background: var(--surface-hover);
+}
+.more-chip--select {
+  padding-right: 14px;
+  border-color: #fff;
+  background: #fff;
+  color: #0a0b0a;
+}
+.more-chip--select:hover {
+  background: #eef0ee;
+}
+.more-episode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 26px 20px;
+}
+.more-episode h3 {
+  margin: 12px 2px 4px;
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.more-episode p {
+  display: -webkit-box;
+  margin: 0 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.more-episode p.more-episode-now {
+  margin-top: 6px;
+  color: var(--more-accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+.more-episode-art {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+.more-episode-art .cover-image-fallback {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted);
+}
+.more-episode.current .more-episode-art {
+  outline: 2px solid var(--more-accent);
+  outline-offset: 3px;
+}
+.more-episode.watched .more-episode-art img {
+  filter: brightness(0.5) saturate(0.7);
+}
+.more-episode-num,
+.more-episode-time {
+  position: absolute;
+  z-index: 1;
+  border-radius: 7px;
+  background: rgb(7 8 7 / 0.74);
+  color: var(--text);
+  font-weight: 700;
+}
+.more-episode-num {
+  top: 10px;
+  left: 10px;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.more-episode-time {
+  right: 10px;
+  bottom: 12px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+}
+.more-episode-check {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--more-accent);
+  color: #fff;
+}
+.more-episode--skeleton .more-episode-art {
+  background: linear-gradient(
+    110deg,
+    var(--skeleton-base) 30%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 70%
+  );
+  background-size: 200% 100%;
+  animation: more-shimmer 1.6s linear infinite;
+}
+
+@media (max-width: 1100px) {
+  .more-hero-copy,
+  .more-title-copy {
+    width: min(600px, 62vw);
+  }
+  .more-info-card {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .more-poster-art,
+  .more-poster-info,
+  .more-continue-art img,
+  .more-episode-art img {
+    transition: none;
+  }
+  .more-hero--skeleton,
+  .more-episode--skeleton .more-episode-art {
+    animation: none;
+  }
+}
+
+/* Unreleased titles: a status pill replaces Play; + and Details stay. */
+.more-release-pill {
+  display: inline-flex;
+  height: 50px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 22px 0 18px;
+  border: 1px solid var(--more-glass-line);
+  border-radius: 999px;
+  background: var(--more-glass);
+  backdrop-filter: blur(18px) saturate(1.3);
+  color: var(--text-soft);
+  font-size: 15px;
+  white-space: nowrap;
+}
+.more-release-pill strong {
+  color: var(--text);
+  font-weight: 700;
+}
+.more-release-pill svg {
+  color: var(--text-soft);
+}
+.more-release-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.4);
+}
+.more-poster-release {
+  color: var(--more-star);
+  font-size: 12px;
+  font-weight: 600;
+}
+.more-poster-caption {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.more-episode.upcoming .more-episode-art {
+  cursor: default;
+}
+.more-episode.upcoming .more-episode-art img {
+  filter: brightness(0.45) saturate(0.6);
+}
+.more-episode.upcoming .more-episode-play {
+  display: none;
+}
+.more-episode p.more-episode-airs {
+  color: var(--more-star);
+}
+
+/* Continue Watching: the lower half becomes a control panel on hover or keyboard focus. */
+.more-continue {
+  position: relative;
+  display: block;
+  padding: 0 0 10px;
+  border-radius: 14px;
+  transition:
+    background-color var(--motion-standard) var(--motion-ease),
+    box-shadow var(--motion-standard) var(--motion-ease),
+    transform var(--motion-standard) var(--motion-ease);
+}
+.more-continue-art {
+  width: 100%;
+  margin-bottom: 0;
+}
+.more-continue-body {
+  position: relative;
+  min-height: 112px;
+  padding: 10px 2px 0;
+}
+.more-continue-rest {
+  display: grid;
+  gap: 3px;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+.more-continue-panel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px 14px 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-standard) var(--motion-ease);
+}
+.more-continue:hover,
+.more-continue:focus-within {
+  z-index: 2;
+  background: var(--surface-raised);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 22px 46px rgb(0 0 0 / 0.55);
+  transform: translateY(-4px);
+}
+.more-continue:hover .more-continue-art,
+.more-continue:focus-within .more-continue-art {
+  border-radius: 14px 14px 0 0;
+}
+.more-continue:hover .more-continue-rest,
+.more-continue:focus-within .more-continue-rest {
+  opacity: 0;
+}
+.more-continue:hover .more-continue-panel,
+.more-continue:focus-within .more-continue-panel {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.more-continue-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.more-circle {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--text);
+  cursor: pointer;
+}
+.more-circle:hover {
+  background: rgb(255 255 255 / 0.16);
+}
+.more-circle--play {
+  border-color: #fff;
+  background: #fff;
+  color: #000;
+}
+.more-circle--play:hover {
+  background: #e9ece9;
+}
+.more-circle[aria-pressed="true"] {
+  color: #7fe0b2;
+}
+.more-circle--end {
+  margin-left: auto;
+}
+.more-circle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.more-continue-label {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.more-continue-label strong {
+  margin-right: 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.more-continue-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.more-continue-track {
+  position: relative;
+  height: 3px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.18);
+}
+.more-continue-track span {
+  display: block;
+  height: 100%;
+  background: #fff;
+}
+@media (prefers-reduced-motion: reduce) {
+  .more-continue,
+  .more-continue-panel {
+    transition: none;
+  }
+}
+
+/* "View all" grids replace the home; Back returns to it (the section filter bar was removed). */
+.more-plain-top .more-back {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  height: 38px;
+  padding: 0 16px 0 12px;
+  border: 1px solid var(--more-glass-line);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.more-plain-top .more-back:hover {
+  background: var(--surface-hover);
+}
+
+/* More player availability check: covers the player while servers are tried in order. */
+.more-availability {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  padding: 40px;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  text-align: center;
+}
+.more-availability-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #000 center / cover no-repeat;
+  filter: grayscale(1) brightness(0.28);
+  transform: scale(1.03);
+}
+.more-availability > :not(.more-availability-backdrop) {
+  position: relative;
+}
+.more-availability-logo {
+  width: 112px;
+  height: 112px;
+  filter: grayscale(1) brightness(1.6);
+}
+.more-availability-logo.is-pulsing {
+  animation: more-availability-pulse 1.6s ease-in-out infinite;
+}
+.more-availability-label {
+  font-size: clamp(1.4rem, 3vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.more-availability h3 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.4vw, 2.6rem);
+  font-weight: 800;
+}
+.more-availability p {
+  max-width: 520px;
+  margin: -6px 0 0;
+  color: rgb(255 255 255 / 0.7);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.more-availability-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+}
+.more-availability-actions button {
+  min-width: 132px;
+  padding: 12px 26px;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+.more-availability-actions button.primary {
+  border-color: transparent;
+  background: #fff;
+  color: #000;
+}
+.more-availability-actions button:hover {
+  filter: brightness(1.12);
+}
+.more-availability-actions button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+@keyframes more-availability-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .more-availability-logo.is-pulsing {
+    animation: none;
+  }
+}
+
+/* "+" save menu (MoreSaveMenu), portalled to <body> so rails never clip it. */
+.more-save-menu {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: 2px;
+  width: 260px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.55);
+}
+.more-save-menu button {
+  display: grid;
+  grid-template-columns: 18px 1fr 18px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text, #fff);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.more-save-menu button:hover:not(:disabled),
+.more-save-menu button:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+.more-save-menu button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.more-save-menu span {
+  display: grid;
+  min-width: 0;
+}
+.more-save-menu strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.more-save-menu small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.more-save-menu button > svg:last-child:not(:first-child) {
+  color: var(--accent);
+}
+
+/* Your rating (MoreRating) on the More title page. */
+.more-rating {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 14px 0 12px;
+}
+.more-rating-label {
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.more-rating-stars {
+  display: flex;
+  gap: 2px;
+}
+.more-rating-stars button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(255 255 255 / 0.22);
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    transform 120ms ease;
+}
+.more-rating-stars button.is-on {
+  color: #f5c518;
+}
+.more-rating-stars button:hover:not(:disabled) {
+  transform: scale(1.12);
+}
+.more-rating-stars button:focus-visible {
+  outline: 2px solid var(--line-strong);
+  outline-offset: 1px;
+}
+.more-rating-value {
+  min-width: 132px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.more-rating-clear,
+.more-rating-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.more-rating-clear:hover,
+.more-rating-link:hover {
+  color: var(--text);
+}
+.more-rating-note {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .more-rating-stars button {
+    transition: none;
+  }
+}
+.more-rating.is-locked .more-rating-stars button {
+  cursor: not-allowed;
+}
+.more-rating.is-locked .more-rating-stars button:hover {
+  transform: none;
+}
+
+/* Interested / Not interested thumbs (TitleFeedback) on More and Anime/Manga title pages. */
+.title-feedback {
+  display: inline-flex;
+  gap: 8px;
+}
+.title-feedback .is-active {
+  border-color: var(--line-strong);
+  background: rgb(255 255 255 / 0.16);
+  color: var(--text);
+}

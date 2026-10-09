@@ -35,6 +35,33 @@ function stage(
 }
 
 describe("readiness session", () => {
+  it("says it is starting, never that it needs attention, before the first check runs", () => {
+    const session = createReadinessSession({
+      mode: "launch",
+      stages: [
+        stage("local", 40, async () => undefined, { shortLabel: "Local data" }),
+        stage("AniList", 60, async () => undefined),
+      ],
+    });
+    const before = session.getSnapshot();
+    expect(before.outcome).toBe("checking");
+    expect(before.activeLabel).toBe("Starting AniStream");
+    expect(before.steps.map((step) => step.shortLabel)).toEqual(["Local data", "Checking AniList"]);
+    session.dispose();
+  });
+
+  it("names the provider behind a failure for the error card", async () => {
+    const session = createReadinessSession({
+      mode: "launch",
+      stages: [
+        stage("AniList", 100, async () => ({ status: "provider-error", provider: "AniList" })),
+      ],
+    });
+    await session.start();
+    expect(session.getSnapshot()).toMatchObject({ outcome: "provider-error", provider: "AniList" });
+    session.dispose();
+  });
+
   it("lets a guest continue when the public AniList catalog is unavailable", async () => {
     const catalog = createLaunchCatalogReadinessStage(async () => {
       throw new Error("AniList is unavailable");
@@ -82,7 +109,7 @@ describe("readiness session", () => {
       mode: "launch",
       stages: [
         stage("local", 80, async () => undefined),
-        stage("playback", 20, async () => ({ status: "degraded", provider: "Anikoto" }), {
+        stage("playback", 20, async () => ({ status: "degraded", provider: "The anime player" }), {
           required: false,
         }),
       ],
@@ -96,7 +123,7 @@ describe("readiness session", () => {
       canContinue: true,
     });
     expect(session.getSnapshot().message).toMatch(
-      /Sorry.*Anikoto.*working on the issue.*try again later/i,
+      /Sorry.*anime player.*working on the issue.*try again later/i,
     );
   });
 

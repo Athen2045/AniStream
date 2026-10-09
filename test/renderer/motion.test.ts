@@ -81,3 +81,18 @@ describe("renderer motion policy", () => {
     expect(wheelDeltaPixels(1, 2, 900)).toBe(765);
   });
 });
+
+describe("section transitions", () => {
+  it("slides toward the chosen tab and treats unknown views as the far end", () => {
+    expect(motionModule.sectionDirection("ANIME", "MANGA")).toBe(1);
+    expect(motionModule.sectionDirection("MORE", "ANIME")).toBe(-1);
+    expect(motionModule.sectionDirection("SEARCH", "MANGA")).toBe(-1);
+    expect(motionModule.sectionDirection("MANGA", "PROFILE")).toBe(1);
+    expect(motionModule.sectionDirection("ANIME", "ANIME")).toBe(1);
+  });
+
+  it("drops indicator springs under reduced motion", () => {
+    expect(motionModule.navIndicatorTransition(true)).toEqual({ duration: 0 });
+    expect(motionModule.navIndicatorTransition(false)).toMatchObject({ type: "spring" });
+  });
+});

@@ -1,0 +1,82 @@
+{
+  "version": 2,
+  "anime": {
+    "database": [
+      {
+        "id": "anilist"
+      },
+      {
+        "id": "mal"
+      },
+      {
+        "id": "kitsu"
+      }
+    ],
+    "media": [
+      {
+        "id": "anime-player",
+        "kind": "indexed-embed",
+        "recentIndexUrl": "https://episode-index.example/recent?limit=100",
+        "seriesUrl": "https://episode-index.example/series/{seriesId}",
+        "episodeEmbedUrl": "https://anime-player.example/embed/{embedId}/{audio}",
+        "aniListEmbedUrl": "https://anime-player.example/anilist/{aniListId}/{episode}/{audio}",
+        "scriptHosts": ["libs.example"],
+        "blockedRequestHosts": ["analytics.example"]
+      }
+    ]
+  },
+  "manga": {
+    "database": [
+      {
+        "id": "anilist"
+      },
+      {
+        "id": "mangadex"
+      },
+      {
+        "id": "mangabaka"
+      },
+      {
+        "id": "mangaupdates"
+      },
+      {
+        "id": "mal"
+      }
+    ],
+    "media": [
+      {
+        "id": "mangadex",
+        "kind": "mangadex"
+      },
+      {
+        "id": "chapter-mirror",
+        "kind": "chapter-mirror",
+        "enabled": false,
+        "label": "Chapter mirror",
+        "mappingSite": "ExampleSite",
+        "chapterListUrl": "https://chapter-mirror.example/series/{seriesId}/chapters",
+        "chapterPagesUrl": "https://chapter-mirror.example/chapters/{chapterId}/pages",
+        "imageHosts": ["images.chapter-mirror.example"]
+      }
+    ]
+  },
+  "more": {
+    "database": [
+      {
+        "id": "tmdb"
+      }
+    ],
+    "media": [
+      {
+        "id": "more-player",
+        "kind": "tmdb-embed",
+        "movieUrl": "https://more-player.example/movie/{tmdbId}",
+        "tvUrl": "https://more-player.example/tv/{tmdbId}/{season}/{episode}",
+        "startAtParam": "start",
+        "stripElectronUserAgent": false,
+        "scriptHosts": ["libs.example"],
+        "blockedScriptPaths": ["/lib/ad.js"]
+      }
+    ]
+  }
+}

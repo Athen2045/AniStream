@@ -1,6 +1,10 @@
 import { shell } from "electron";
+import { AniListUnavailableError, asUnavailable } from "./errors";
 import type {
+  AiringSchedule,
+  AiringScheduleInput,
   AniListAuthState,
+  AniListCatalogMedia,
   AniListCatalogPage,
   AniListDashboard,
   AniListMediaType,
@@ -9,7 +13,19 @@ import type {
 } from "../../shared/contracts";
 import { createBoundedCache } from "./cache";
 import { loadPersonalAiring } from "./personal-airing";
-import { loadRecommendationSeeds } from "./recommendation-seeds";
+import { loadAiringSchedule } from "./airing-schedule";
+import { normalizeFilterOptions } from "./filter-options";
+import {
+  FILTER_KEYS,
+  parseBrowseFilters,
+  type AniListFilterOptions,
+} from "../../shared/anilist-filters";
+import {
+  loadRecommendationSeeds,
+  loadRecommendationTrending,
+  type RecommendationSeedData,
+} from "./recommendation-seeds";
+import type { RecommendationItemFeatures } from "../../shared/recommendations";
 import type { PersonalAiringUpdate } from "../../shared/personal-library";
 import {
   normalizeAiringUpdatesPage,
@@ -17,28 +33,28 @@ import {
   normalizeGroups,
   normalizeListEntry,
   normalizeMediaDetail,
-  normalizeMedia,
   normalizeProfile,
 } from "./normalize";
 import {
   ADD_ENTRY_MUTATION,
   AIRING_UPDATES_QUERY,
   BROWSE_MEDIA_QUERY,
+  FILTER_OPTIONS_QUERY,
   DASHBOARD_QUERY,
   DELETE_ENTRY_MUTATION,
   MEDIA_DETAIL_QUERY,
   MANGA_KIND_HINTS_QUERY,
-  SEARCH_MEDIA_QUERY,
   UPDATE_ENTRY_MUTATION,
   VIEWER_QUERY,
   type AiringUpdatesResponse,
   type BrowseResponse,
+  type FilterOptionsResponse,
   type DashboardResponse,
   type GraphQlEnvelope,
   type MangaKindHintsResponse,
   type MediaDetailResponse,
+  MEDIA_BY_IDS_QUERY,
   type SaveEntryResponse,
-  type SearchResponse,
   type ViewerResponse,
 } from "./queries";
 import { createRequestGate, type RequestGate } from "./request-queue";
@@ -47,7 +63,6 @@ import { parseAniListMangaKindHints, type AniListMangaKindHint } from "../manga-
 import { AuthorizationTransaction } from "./authorization-transaction";
 import type {
   AniListListEntrySummary,
-  AniListMedia,
   AniListMediaDetail,
   AniListProfile,
   LatestAnimeUpdate,
@@ -65,11 +80,14 @@ const REQUESTS_PER_MINUTE = 25;
 const DEFAULT_REQUEST_MIN_INTERVAL_MS = 350;
 const MAX_REQUEST_MIN_INTERVAL_MS = 10_000;
 const BROWSE_CACHE_TTL_MS = 2 * 60_000;
-const SEARCH_CACHE_TTL_MS = 2 * 60_000;
 const DASHBOARD_CACHE_TTL_MS = 30_000;
 const DETAIL_CACHE_TTL_MS = 5 * 60_000;
 // New episodes air continuously; refetch the "latest updates" rail at most every 5 minutes.
 const AIRING_CACHE_TTL_MS = 5 * 60_000;
+// Airing times rarely move within a day; a week's schedule is reused for 30 minutes.
+const SCHEDULE_CACHE_TTL_MS = 30 * 60_000;
+// Genre and tag vocabularies change a few times a year.
+const FILTER_OPTIONS_CACHE_TTL_MS = 24 * 60 * 60_000;
 const LATEST_UPDATE_PAGE_SIZE = 21;
 const MANGA_KIND_CACHE_TTL_MS = 24 * 60 * 60_000;
 // Used only when AniList's 429 response has no Retry-After header to honor.
@@ -82,11 +100,24 @@ const REQUEST_TIMEOUT_MS = 20_000;
 // Warning: this is the public OAuth client ID. Never put a client secret or access token beside it.
 
 export class AniListClient {
-  public getRecommendationSeeds(ids: number[], signal?: AbortSignal): Promise<AniListMedia[]> {
+  public getRecommendationSeeds(
+    ids: number[],
+    signal?: AbortSignal,
+  ): Promise<RecommendationSeedData> {
     return loadRecommendationSeeds(
       (query, variables) =>
         this.publicRequest(query, variables, `recommendation-seeds:${ids.join(",")}`, signal),
       ids,
+    );
+  }
+  public getRecommendationTrending(
+    type: AniListMediaType,
+    signal?: AbortSignal,
+  ): Promise<RecommendationItemFeatures[]> {
+    return loadRecommendationTrending(
+      (query, variables) =>
+        this.publicRequest(query, variables, `recommendation-trending:${type}`, signal),
+      type,
     );
   }
   private readonly personalAiringCache = createBoundedCache<PersonalAiringUpdate[]>({
@@ -105,6 +136,38 @@ export class AniListClient {
     this.personalAiringCache.set(key, result);
     return result;
   }
+  private readonly scheduleCache = createBoundedCache<AiringSchedule>({
+    maxEntries: 12,
+    ttlMs: SCHEDULE_CACHE_TTL_MS,
+  });
+  public async getAiringSchedule(input: AiringScheduleInput): Promise<AiringSchedule> {
+    const ids = input.mediaIds ? [...new Set(input.mediaIds)].sort((a, b) => a - b) : undefined;
+    const key = `${input.start}:${input.end}:${ids ? ids.join(",") : "all"}`;
+    const cached = this.scheduleCache.get(key);
+    if (cached) return cached;
+    const result = await loadAiringSchedule(
+      (query, variables) =>
+        this.publicRequest(query, variables, `schedule:${key}:${String(variables.page)}`),
+      { start: input.start, end: input.end, mediaIds: ids },
+    );
+    this.scheduleCache.set(key, result);
+    return result;
+  }
+  private filterOptions?: { value: AniListFilterOptions; expiresAt: number };
+  public async getFilterOptions(): Promise<AniListFilterOptions> {
+    if (this.filterOptions && this.filterOptions.expiresAt > Date.now())
+      return this.filterOptions.value;
+    const response = await this.publicRequest<FilterOptionsResponse>(
+      FILTER_OPTIONS_QUERY,
+      {},
+      "filter-options",
+    );
+    const value = normalizeFilterOptions(response);
+    if (value.genres.length) {
+      this.filterOptions = { value, expiresAt: Date.now() + FILTER_OPTIONS_CACHE_TTL_MS };
+    }
+    return value;
+  }
   private token?: string;
   private profile?: AniListProfile;
   private readonly authorization: AuthorizationTransaction;
@@ -117,10 +180,6 @@ export class AniListClient {
   private readonly browseCache = createBoundedCache<AniListCatalogPage>({
     maxEntries: 40,
     ttlMs: BROWSE_CACHE_TTL_MS,
-  });
-  private readonly searchCache = createBoundedCache<AniListMedia[]>({
-    maxEntries: 30,
-    ttlMs: SEARCH_CACHE_TTL_MS,
   });
   private readonly dashboardCache = createBoundedCache<AniListDashboard>({
     maxEntries: 2,
@@ -277,7 +336,7 @@ export class AniListClient {
     );
 
     const dashboard = {
-      profile,
+      profile: await this.refreshProfile(profile, response.viewer),
       animeLists: normalizeGroups(response.anime, "ANIME"),
       mangaLists: normalizeGroups(response.manga, "MANGA"),
       fetchedAt: new Date().toISOString(),
@@ -306,28 +365,6 @@ export class AniListClient {
     );
     this.invalidateViewerData();
     return normalizeListEntry(response.SaveMediaListEntry);
-  }
-
-  public async searchMedia(query: string, type: AniListMediaType): Promise<AniListMedia[]> {
-    const trimmedQuery = query.trim();
-    if (trimmedQuery.length < 2 || trimmedQuery.length > 120) {
-      throw new Error("Search with between 2 and 120 characters.");
-    }
-    if (type !== "ANIME" && type !== "MANGA") throw new Error("Invalid media type.");
-    const cacheKey = `search:${type}:${trimmedQuery.toLocaleLowerCase()}`;
-    const cached = this.searchCache.get(cacheKey);
-    if (cached) return cached;
-
-    const response = await this.request<SearchResponse>(
-      SEARCH_MEDIA_QUERY,
-      { query: trimmedQuery, type },
-      cacheKey,
-    );
-    const page = asRecord(response.Page, "AniList returned an invalid search page.");
-    if (!Array.isArray(page.media)) throw new Error("AniList returned invalid search results.");
-    const results = page.media.map((media) => normalizeMedia(media, type));
-    this.searchCache.set(cacheKey, results);
-    return results;
   }
 
   public async browseMedia(
@@ -366,10 +403,15 @@ export class AniListClient {
       throw new Error("Invalid AniList genre filter.");
     }
 
-    const cacheKey = `browse:${input.type}:${input.page}:${perPage}:${sort}:${genre ?? ""}:${query ?? ""}`;
+    const filters = parseBrowseFilters(input.type, { ...input });
+    const filterKey = FILTER_KEYS.map((key) => filters[key] ?? "").join(":");
+    const cacheKey = `browse:${input.type}:${input.page}:${perPage}:${sort}:${genre ?? ""}:${filterKey}:${query ?? ""}`;
     const cached = this.browseCache.get(cacheKey);
     if (cached) return cached;
 
+    // AniList's seasonYear describes anime seasons; a manga's year is its start date.
+    const animeYear = input.type === "ANIME" ? filters.year : undefined;
+    const mangaYear = input.type === "MANGA" ? filters.year : undefined;
     const response = await this.publicRequest<BrowseResponse>(
       BROWSE_MEDIA_QUERY,
       {
@@ -379,6 +421,16 @@ export class AniListClient {
         search: query || undefined,
         genre: genre || undefined,
         sort: [sort],
+        format: filters.format,
+        status: filters.status,
+        season: filters.season,
+        seasonYear: animeYear,
+        // FuzzyDateInt is YYYYMMDD; YYYY0000 marks a year-only date, so bound just outside it.
+        startDateGreater: mangaYear === undefined ? undefined : mangaYear * 10_000 - 1,
+        startDateLesser: mangaYear === undefined ? undefined : (mangaYear + 1) * 10_000,
+        countryOfOrigin: filters.country,
+        tag: filters.tag,
+        averageScoreGreater: filters.minScore,
       },
       cacheKey,
       signal,
@@ -406,6 +458,32 @@ export class AniListClient {
     const updates = normalizeAiringUpdatesPage(response.Page, LATEST_UPDATE_PAGE_SIZE);
     this.airingCache.set(cacheKey, updates);
     return updates;
+  }
+
+  private readonly mediaByIdsCache = createBoundedCache<AniListCatalogMedia[]>({
+    maxEntries: 12,
+    ttlMs: 30 * 60_000,
+  });
+  /** Up to 12 exact titles in the order asked (missing or adult ones are left out). */
+  public async getMediaByIds(
+    ids: number[],
+    type: AniListMediaType,
+  ): Promise<AniListCatalogMedia[]> {
+    const wanted = [...new Set(ids)].slice(0, 12);
+    if (!wanted.length) return [];
+    const key = `${type}:${[...wanted].sort((a, b) => a - b).join(",")}`;
+    let media = this.mediaByIdsCache.get(key);
+    if (!media) {
+      const response = await this.publicRequest<BrowseResponse>(
+        MEDIA_BY_IDS_QUERY,
+        { ids: wanted, type },
+        `media-by-ids:${key}`,
+      );
+      media = normalizeCatalogPage(response.Page, type).items;
+      this.mediaByIdsCache.set(key, media);
+    }
+    const byId = new Map(media.map((item) => [item.id, item]));
+    return wanted.flatMap((id) => byId.get(id) ?? []);
   }
 
   public async getMangaKindHints(ids: number[]): Promise<Map<number, AniListMangaKindHint>> {
@@ -471,6 +549,26 @@ export class AniListClient {
     this.invalidateViewerData();
   }
 
+  /**
+   * The saved profile is only a startup snapshot. Each dashboard load carries the current Viewer,
+   * so a new picture, banner, name or stats from AniList replace it here. A malformed or
+   * different-account Viewer keeps the snapshot.
+   */
+  private async refreshProfile(saved: AniListProfile, viewer: unknown): Promise<AniListProfile> {
+    let current: AniListProfile;
+    try {
+      current = normalizeProfile(viewer);
+    } catch {
+      return saved;
+    }
+    if (current.id !== saved.id || this.profile?.id !== saved.id) return saved;
+    if (JSON.stringify(current) === JSON.stringify(saved)) return saved;
+    this.profile = current;
+    if (this.token) await this.persistToken(this.token).catch(() => undefined);
+    this.emitState({ status: "signed-in", profile: current });
+    return current;
+  }
+
   private async fetchProfile(): Promise<AniListProfile> {
     const response = await this.request<ViewerResponse>(VIEWER_QUERY, {}, "viewer");
     return normalizeProfile(response.Viewer);
@@ -497,6 +595,8 @@ export class AniListClient {
           },
           body: JSON.stringify({ query, variables }),
           signal: deadline,
+        }).catch((error: unknown) => {
+          throw asUnavailable(error);
         });
 
         return this.parseGraphQlResponse<T>(response);
@@ -526,6 +626,8 @@ export class AniListClient {
           headers,
           body: JSON.stringify({ query, variables }),
           signal: deadline,
+        }).catch((error: unknown) => {
+          throw asUnavailable(error);
         });
 
         return this.parseGraphQlResponse<T>(response);
@@ -550,7 +652,7 @@ export class AniListClient {
         ),
       );
       this.requestGate.reportRateLimited(retryAfterMs);
-      throw new Error(
+      throw new AniListUnavailableError(
         "AniList is rate-limiting requests right now. AniStream will pause new requests briefly — please try again shortly.",
       );
     }
@@ -564,6 +666,9 @@ export class AniListClient {
       );
     }
 
+    if (response.status >= 500) {
+      throw new AniListUnavailableError(`AniList is unavailable right now (${response.status}).`);
+    }
     const envelope = (await response.json()) as GraphQlEnvelope<T>;
     if (!response.ok || envelope.errors?.length || !envelope.data) {
       const message = envelope.errors?.[0]?.message;

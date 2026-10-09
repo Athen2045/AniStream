@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type { MangaReaderPreferences, SaveMangaReaderPreferencesInput } from "../shared/contracts";
+import { isMangaLanguage, toMangaLanguage } from "../shared/manga-languages";
 
 export interface MangaPreferenceRepository {
   getMangaReaderPreferences(aniListId: number): MangaReaderPreferences | undefined;
@@ -45,7 +46,8 @@ export function createMangaPreferenceRepository(
     return row
       ? {
           aniListId: row.anilist_id,
-          translatedLanguage: row.translated_language,
+          // Preferences saved before the English/Japanese restriction read as English.
+          translatedLanguage: toMangaLanguage(row.translated_language),
           preferredGroupId: row.preferred_group_id ?? undefined,
           updatedAt: row.updated_at,
         }
@@ -73,7 +75,7 @@ export function isValidMangaReaderPreferences(input: SaveMangaReaderPreferencesI
   return (
     Number.isInteger(input.aniListId) &&
     input.aniListId > 0 &&
-    /^[a-z]{2}(?:-[a-z]{2,4})?$/.test(input.translatedLanguage) &&
+    isMangaLanguage(input.translatedLanguage.toLocaleLowerCase()) &&
     (input.preferredGroupId === undefined || /^[A-Za-z0-9_-]{1,160}$/.test(input.preferredGroupId))
   );
 }

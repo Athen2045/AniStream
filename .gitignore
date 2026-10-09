@@ -3,6 +3,12 @@ out/
 dist/
 /output/
 .env
+# Local streaming-source endpoints (see providers.example.json). Never commit.
+providers.local.json
+# Read-only public-data keys bundled into packaged builds (scripts/write-app-keys.mjs). Never commit.
+app-keys.local.json
+# Exported personal backups (library and activity). Never commit.
+AniStream-backup-*.json
 *.dmg
 *.exe
 *.blockmap
@@ -29,6 +35,12 @@ prototypes/
 /CONTEXT.md
 /API.md
 /AGENTS.md
-/docs/research/
-/docs/superpowers/
+# Maintainer and agent docs (how-to guides, research, plans). Public release notes live in
+# .github/releases/ and README screenshots in assets/screenshots/.
+/docs/
 /spec/
+/.claude/
+/.superpowers/
+
+# Personal library snapshots for the recommendation evaluation harness
+/test/fixtures/personal/

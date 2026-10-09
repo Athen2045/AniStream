@@ -80,10 +80,10 @@
   padding: 7px;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
-  background: var(--surface-overlay);
+  /* Solid app black, so bright heroes behind it never tint the menu. */
+  background: var(--ink);
   color: var(--text);
-  box-shadow: 0 18px 48px rgb(0 0 0 / 0.46);
-  backdrop-filter: blur(20px) saturate(1.08);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.6);
   transform-origin: top right;
   animation: account-menu-in 180ms var(--ease-out, ease) both;
 }
@@ -259,8 +259,7 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .account-menu-panel {
-    background: var(--surface-raised);
-    backdrop-filter: none;
+    background: var(--ink);
   }
 }
 

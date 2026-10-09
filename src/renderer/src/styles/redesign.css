@@ -93,93 +93,20 @@ html[data-platform="win32"] body::-webkit-scrollbar {
 html[data-platform="darwin"] .app-navbar {
   padding-left: 96px;
 }
-.global-search {
-  max-width: 440px;
-}
-.global-search form {
-  border-radius: 6px;
-  background: var(--surface-raised);
-}
+
 .nav-links button {
   font-weight: 600;
 }
 .nav-account button {
   box-shadow: none;
 }
-.search-view-all {
-  width: 100%;
-  min-height: 40px;
-  padding: 12px;
-  text-align: left;
-  color: var(--success);
-  background: transparent;
-  border-top: 1px solid var(--line);
-  cursor: pointer;
-}
-.search-popover [role="option"] {
-  width: 100%;
-}
 .catalog-page {
   padding-top: var(--app-navbar-height);
-}
-.catalog-hero {
-  height: 280px;
-  min-height: 280px;
-  padding: 24px var(--page-gutter);
-  align-items: center;
-  border-bottom: 1px solid var(--line-subtle);
-}
-.catalog-hero-art {
-  object-fit: cover;
-  object-position: center 35%;
-  will-change: auto;
-}
-.catalog-hero::before {
-  background:
-    linear-gradient(90deg, #0a0909 0%, rgb(10 9 9 / 0.86) 30%, rgb(10 9 9 / 0.2) 72%),
-    linear-gradient(0deg, rgb(10 9 9 / 0.6), transparent 45%);
-}
-.catalog-hero-copy {
-  width: min(640px, 56vw);
-  text-shadow: 0 2px 10px rgb(0 0 0 / 0.4);
-}
-.catalog-hero h1 {
-  font-size: 32px;
-  line-height: 1.2;
-  letter-spacing: -0.035em;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .catalog-kicker {
   font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--text-soft);
-}
-.catalog-hero .catalog-kicker {
-  margin-bottom: 8px;
-}
-.catalog-facts {
-  margin-top: 12px;
-  font-size: 12px;
-  gap: 12px;
-}
-.catalog-hero-copy > p:not(.catalog-kicker) {
-  font-size: 13px;
-  line-height: 1.5;
-  margin-top: 12px;
-  -webkit-line-clamp: 2;
-}
-.hero-actions {
-  margin-top: 16px;
-}
-.hero-actions button {
-  min-height: 38px;
-  font-size: 13px;
-  padding-inline: 18px;
-  border-radius: 6px;
-  box-shadow: none;
 }
 .catalog-content {
   width: auto;
@@ -364,75 +291,9 @@ html[data-platform="darwin"] .app-navbar {
 .profile-route-transition {
   padding-top: var(--app-navbar-height);
 }
-.profile-hero {
-  min-height: 216px;
-  padding: 24px var(--page-gutter);
-  grid-template-columns: minmax(0, 680px) 1fr;
-  gap: 12px;
-  align-items: center;
-}
-.profile-summary {
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 24px;
-}
-.profile-summary h1 {
-  font-size: 30px;
-  line-height: 1.25;
-}
-.profile-avatar-frame {
-  width: 96px;
-  height: 96px;
-  padding: 0;
-  background: var(--surface-raised);
-  border: 1px solid var(--line-strong);
-  box-shadow: none;
-}
-.profile-avatar {
-  border: 0;
-}
 .profile-about {
   font-size: 13px;
   margin-top: 8px;
-}
-.profile-kicker {
-  font-weight: 500;
-  font-size: 11px;
-  color: var(--success);
-}
-.profile-stats {
-  grid-column: 1;
-  margin-left: 120px;
-  grid-template-columns: auto auto;
-  justify-content: start;
-  gap: 24px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-.profile-stat-group {
-  display: block;
-  padding: 0;
-}
-.profile-stat-group + .profile-stat-group {
-  padding-left: 24px;
-}
-.profile-stat-group > div {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-.profile-stat-group > div span {
-  color: var(--text);
-  font-size: 13px;
-}
-.profile-stat-group strong {
-  font-size: 16px;
-}
-.profile-stat-group p {
-  margin-top: 4px;
-  font-size: 12px;
 }
 .library-shell {
   width: auto;
@@ -449,21 +310,6 @@ html[data-platform="darwin"] .app-navbar {
   background: var(--ink);
   box-shadow: none;
 }
-.library-toolbar-title {
-  margin: 0 12px 0 0;
-  font-size: 23px;
-  letter-spacing: -0.03em;
-  white-space: nowrap;
-}
-.library-group-select {
-  display: block;
-}
-.library-group-select > span {
-  display: none;
-}
-.library-group-select select {
-  width: 164px;
-}
 .library-search {
   width: auto;
   flex: 1;
@@ -474,69 +320,12 @@ html[data-platform="darwin"] .app-navbar {
 .library-heading {
   margin-bottom: 16px;
 }
-.library-heading-kicker {
-  display: none;
-}
 .library-heading h2 {
   font-size: 18px;
 }
 .media-grid {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 24px 16px;
-}
-.media-card,
-.media-card:hover,
-.media-card:focus-within {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  overflow: visible;
-}
-.cover-wrap {
-  aspect-ratio: 0.72;
-  border-radius: 6px;
-}
-.media-card-body {
-  padding: 10px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.media-card h3 {
-  order: -1;
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
-}
-.media-card-topline {
-  font-size: 11px;
-}
-.media-meta {
-  margin: 0;
-}
-.media-card-footer {
-  margin: 0;
-  font-size: 11px;
-}
-.media-card-footer span:first-child {
-  text-transform: capitalize;
-}
-.media-card-primary {
-  min-height: 32px;
-  margin-top: 0;
-  background: var(--surface-panel);
-  font-size: 12px;
-  box-shadow: none;
-}
-.media-card-edit {
-  opacity: 1;
-  transform: none;
-  width: 32px;
-  height: 32px;
-}
-.media-card-progress {
-  margin: 0;
-  height: 2px;
 }
 .profile-utilities {
   margin-top: 32px;
@@ -583,15 +372,6 @@ html[data-platform="darwin"] .app-navbar {
 }
 .editor-actions .delete-button {
   margin-right: auto;
-}
-.editor-notes summary {
-  color: var(--text-soft);
-  cursor: pointer;
-  font-size: 13px;
-  margin-bottom: 12px;
-}
-.editor-notes textarea {
-  width: 100%;
 }
 .search-page {
   padding: calc(var(--app-navbar-height) + 32px) var(--page-gutter) 64px;
@@ -654,7 +434,7 @@ html[data-platform="darwin"] .app-navbar {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
-.search-filters select {
+.search-filters .ui-select {
   height: 42px;
   color: var(--text);
   background: var(--surface-panel);
@@ -715,70 +495,11 @@ html[data-platform="darwin"] .app-navbar {
 .catalog-search .rail-hover-secondary {
   background: rgb(10 9 9 / 0.84);
 }
-.detail-backdrop {
-  top: var(--app-navbar-height);
-  padding: 24px;
-  background: rgb(0 0 0 / 0.78);
-}
-.detail-modal,
-.detail-modal:has(.watch-experience) {
-  width: min(1100px, calc(100vw - 48px));
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-base);
-}
-.detail-hero {
-  min-height: 260px;
-  padding: 32px;
-  background-size: cover;
-}
-.detail-hero h2 {
-  max-width: 720px;
-  font-size: 30px;
-  line-height: 1.2;
-  letter-spacing: -0.03em;
-}
-.detail-actions {
-  margin-top: 16px;
-}
-.detail-body,
-.detail-modal:has(.watch-experience) .detail-body {
-  padding: 24px 32px 32px;
-}
 .detail-tracker-compact {
   margin-top: 16px;
 }
-.detail-overview {
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid var(--line);
-}
 .episode-browser-heading h2 {
   font-size: 21px;
-}
-.netflix-episode-list > button {
-  border-radius: 7px;
-  padding: 16px;
-}
-.netflix-episode-list > button.is-current {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-}
-.netflix-episode-title {
-  font-size: 14px;
-}
-.netflix-episode-copy p {
-  font-size: 12px;
-  color: var(--muted);
-}
-.watch-player-heading {
-  background: var(--surface-base);
-  border-bottom: 1px solid var(--line);
-}
-.watch-player-back,
-.watch-source-select select {
-  border-radius: 6px;
-  background: var(--surface-panel);
 }
 .provider-note {
   font-size: 12px;
@@ -824,43 +545,14 @@ html[data-platform="darwin"] .app-navbar {
   :root {
     --page-gutter: 24px;
   }
-  .library-toolbar-title {
-    font-size: 20px;
-    margin-right: 0;
-  }
   .library-toolbar {
     grid-template-columns: 1fr;
     gap: 12px;
-  }
-  .library-primary-controls {
-    justify-content: space-between;
-  }
-  .library-secondary-controls {
-    justify-content: stretch;
-  }
-  .library-group-select select {
-    width: 200px;
   }
   .media-grid,
   .search-result-grid,
   .latest-updates-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-  .profile-hero {
-    grid-template-columns: minmax(0, 680px) 1fr;
-    min-height: 216px;
-    padding: 24px var(--page-gutter);
-  }
-  .profile-stats {
-    margin-left: 120px;
-  }
-  .catalog-hero {
-    min-height: 280px;
-    height: 280px;
-    padding: 24px var(--page-gutter);
-  }
-  .catalog-hero h1 {
-    font-size: 28px;
   }
   .search-genre-field {
     width: 180px;
@@ -1037,17 +729,6 @@ html[data-platform="win32"] .catalog-content {
   align-items: center;
   gap: 8px;
 }
-
-.profile-avatar-frame {
-  overflow: hidden;
-}
-.profile-avatar-frame .profile-avatar {
-  width: 96px;
-  height: 96px;
-  min-height: 0;
-  display: block;
-  object-fit: cover;
-}
 .nav-account > .avatar-button {
   width: 32px;
   height: 32px;
@@ -1062,12 +743,6 @@ html[data-platform="win32"] .catalog-content {
   border-radius: 50%;
   object-fit: cover;
 }
-.profile-stat-group p {
-  display: flex;
-  gap: 8px;
-  text-align: left;
-  flex-wrap: wrap;
-}
 .editor-actions {
   display: flex;
   align-items: center;
@@ -1079,46 +754,6 @@ html[data-platform="win32"] .catalog-content {
   min-height: 40px;
   font-size: 13px;
   padding: 10px 16px;
-}
-.media-card h3 {
-  min-height: 38px;
-}
-.media-card-title-action {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.cover-wrap .media-card-primary {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  width: auto;
-  padding: 0 12px;
-  background: rgb(10 9 9 / 0.88);
-  opacity: 0;
-}
-.media-card:hover .media-card-primary,
-.media-card:focus-within .media-card-primary {
-  opacity: 1;
-}
-.search-popover [role="option"] {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  text-align: left;
-  background: transparent;
-  cursor: pointer;
-}
-.search-popover [role="option"]:hover,
-.search-popover [role="option"][aria-selected="true"] {
-  background: var(--surface-hover);
-}
-.search-popover > .search-view-all {
-  display: block;
-  color: var(--success);
 }
 
 .media-rail .rail-heading {
@@ -1153,16 +788,14 @@ html[data-platform="win32"] .catalog-content {
 html[data-platform="win32"] .app-navbar {
   padding-right: max(138px, calc(100vw - env(titlebar-area-width, 100vw) + 12px));
 }
-.modal-suspense-fallback {
-  top: var(--app-navbar-height);
-}
+/* Watch/Read fill the whole app window, navbar included; fullscreen goes display-wide. */
 .watch-experience--player,
 .media-reader-surface {
   position: fixed;
-  inset: var(--app-navbar-height) 0 0;
+  inset: 0;
   width: 100%;
   height: auto;
-  z-index: 1000;
+  z-index: 3000;
   background: var(--ink);
   overflow: hidden;
 }
@@ -1187,26 +820,95 @@ html[data-platform="win32"] .app-navbar {
 .watch-player-view {
   background: var(--surface-base);
 }
+/* Native window controls share the top of full-window media; keep its tools beside them. */
+:root {
+  --caption-controls-width: 0px;
+  --caption-inset-left: 16px;
+  --caption-inset-right: 16px;
+}
+html[data-platform="win32"] {
+  --caption-controls-width: calc(100vw - env(titlebar-area-width, 100vw));
+  --caption-inset-right: calc(var(--caption-controls-width) + 12px);
+}
+html[data-platform="darwin"] {
+  --caption-inset-left: 84px;
+}
+/* Display fullscreen hides the native controls, though the title-bar env() area remains. */
+.watch-experience--player:fullscreen,
+.media-reader-surface:fullscreen {
+  --caption-controls-width: 0px;
+  --caption-inset-left: 16px;
+  --caption-inset-right: 16px;
+}
+/* Player chrome is only a corner Back button and a caption-style tool beside the window
+   controls; the provider's own bar keeps the title and fullscreen. */
+.watch-player-back,
+.media-control-hotspot--back {
+  position: absolute;
+  top: 6px;
+  left: calc(var(--caption-inset-left) - 4px);
+  width: 36px;
+  height: 36px;
+}
 .watch-player-back {
-  top: 10px;
-  left: 16px;
+  display: grid;
+  min-height: 0;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 50%;
+  background: rgb(10 12 11 / 0.6);
+  box-shadow: none;
+  color: var(--text);
   opacity: 1;
+  backdrop-filter: blur(14px);
 }
-.watch-player-heading {
-  top: 13px;
-  max-width: min(45vw, 680px);
+.watch-player-back:hover,
+.watch-player-back:focus-visible {
+  background: rgb(255 255 255 / 0.18);
+  transform: none;
+}
+.watch-player-back:focus-visible,
+.watch-caption-tool:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.watch-caption-tool,
+.media-control-hotspot--caption {
+  position: absolute;
+  top: 0;
+  right: var(--caption-controls-width);
+  width: 46px;
+  height: var(--app-navbar-height);
+}
+.watch-caption-tool {
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #f3f5f7;
+  cursor: pointer;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.8));
+  transition: background-color var(--motion-fast) var(--motion-ease);
 }
-.watch-source-select {
-  top: 10px;
-  right: 16px;
-  border-radius: 6px;
-  min-height: 42px;
+.watch-caption-tool:hover {
+  background: rgb(255 255 255 / 0.1);
 }
-.anikoto-player-notice {
+.watch-caption-tool--text,
+.media-control-hotspot--text {
+  width: 58px;
+}
+.watch-caption-tool--text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.anime-embed-notice {
   position: absolute;
   z-index: 24;
-  top: 12px;
+  top: 52px;
   left: 16px;
   max-width: min(440px, calc(100% - 32px));
   padding: 12px 16px;
@@ -1216,32 +918,15 @@ html[data-platform="win32"] .app-navbar {
   background: var(--surface-panel);
   font-size: 12px;
 }
-.anikoto-player-notice p {
+.anime-embed-notice p {
   margin: 6px 0 10px;
 }
-.anikoto-player-notice button {
+.anime-embed-notice button {
   padding: 8px 12px;
   color: var(--text);
   background: var(--primary-deep);
   border-radius: 6px;
   cursor: pointer;
-}
-.media-fullscreen-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 6px;
-  color: var(--text);
-  background: var(--surface-panel);
-  cursor: pointer;
-}
-.watch-player-view > .media-fullscreen-button {
-  position: absolute;
-  top: 10px;
-  right: 16px;
-  z-index: 30;
 }
 .manga-reader-header {
   position: relative;
@@ -1284,11 +969,15 @@ html[data-platform="win32"] .app-navbar {
 }
 
 /* Playback and reading chrome leave the artwork unobstructed after a short idle period. */
+/* Reveal targets sit under the controls so a visible button always takes its own click. */
 .media-control-reveal-zone {
   position: absolute;
-  z-index: 42;
+  z-index: 31;
   inset: 0 0 auto;
   height: 18px;
+}
+.media-control-hotspot {
+  z-index: 31;
 }
 .media-control-layer {
   opacity: 1;
@@ -1307,12 +996,15 @@ html[data-platform="win32"] .app-navbar {
   position: absolute;
   z-index: 32;
   inset: 0 0 auto;
-  height: 64px;
-  background: linear-gradient(180deg, rgb(8 10 9 / 0.9), transparent);
+  height: var(--app-navbar-height);
+  pointer-events: none;
+}
+.media-control-layer--player[data-visible="true"] > * {
+  pointer-events: auto;
 }
 .media-control-layer--reader {
   position: absolute;
-  z-index: 30;
+  z-index: 32;
   inset: 0 0 auto;
   height: 132px;
   pointer-events: none;
@@ -1324,6 +1016,9 @@ html[data-platform="win32"] .app-navbar {
   position: absolute;
   inset: 0 0 auto;
   width: 100%;
+  min-height: var(--app-navbar-height);
+  padding-right: var(--caption-inset-right);
+  padding-left: var(--caption-inset-left);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1333,4 +1028,199 @@ html[data-platform="win32"] .app-navbar {
   html:not([data-platform="win32"]) .media-control-layer {
     transition: none;
   }
+}
+
+/* The transparent navbar floats over the Anime/Manga hero, which grows by the navbar height so
+   its artwork starts at the top of the window (kept 2026-10-03). */
+.app-shell:has(> .app-navbar--overlay) .catalog-page {
+  padding-top: 0;
+}
+/* Navbar: one underline glides between sections (layoutId), and search collapses to a button. */
+.nav-links button {
+  position: relative;
+}
+.nav-links button.active {
+  border-bottom-color: transparent;
+}
+.nav-underline {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--primary-hover);
+  box-shadow: 0 0 10px rgb(48 144 102 / 0.55);
+}
+.nav-spacer {
+  min-width: 0;
+}
+/* Navbar actions share one glass-circle look: search, schedule, refresh, and account.
+   Hover lifts the glass; open or active turns the circle white with a dark icon. */
+.nav-account {
+  gap: 10px;
+}
+.nav-account > button,
+.nav-account .account-menu-trigger {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line-subtle);
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.22);
+  box-shadow: none;
+  color: var(--text);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+.nav-account > button:hover:not(:disabled),
+.nav-account .account-menu-trigger:hover {
+  border-color: var(--line);
+  background: rgb(255 255 255 / 0.12);
+  color: var(--text);
+}
+.nav-account > button.nav-search-button.active,
+.nav-account > button.nav-schedule-button.active,
+.nav-account .account-menu-trigger[aria-expanded="true"]:not(.account-menu-trigger--member) {
+  border-color: #fff;
+  background: #fff;
+  color: #0b0d0c;
+}
+.nav-account > button:disabled {
+  opacity: 0.6;
+}
+.nav-account > button svg {
+  width: 17px;
+  height: 17px;
+}
+/* The signed-in avatar fills the circle; open or on Profile, it gains a white ring instead. */
+.nav-account .account-menu-trigger--member {
+  padding: 2px;
+  overflow: hidden;
+}
+.nav-account .account-menu-trigger--member > img,
+.nav-account .account-menu-trigger--member > svg:first-child {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+}
+.nav-account .account-menu-trigger--member[aria-expanded="true"],
+.nav-account .account-menu-trigger--member.active {
+  border: 2px solid #fff;
+  padding: 1px;
+  background: rgb(0 0 0 / 0.22);
+  box-shadow: none;
+}
+.nav-account .account-menu-trigger.active:not(.account-menu-trigger--member) {
+  box-shadow: none;
+}
+/* Guest keeps its label, as a glass pill matching the circles. */
+.nav-account .account-menu-trigger--guest {
+  display: inline-flex;
+  width: auto;
+  gap: 7px;
+  padding: 0 12px 0 9px;
+  border-radius: 999px;
+  font-size: 12.5px;
+}
+.nav-account .account-menu-trigger--guest > svg:first-child {
+  width: 18px;
+  height: 18px;
+}
+
+/* Profile joins the transparent navbar: its banner starts at the top of the window and fades into
+   the app's black, like the catalog heroes. */
+.app-shell:has(> .app-navbar--overlay) .profile-route-transition {
+  padding-top: 0;
+}
+
+/* Copyright & DMCA footer at the bottom of Anime, Manga and More, and its policy dialog. */
+.legal-footer {
+  margin: 48px 0 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-subtle);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+.legal-footer p {
+  max-width: 920px;
+  margin: 0;
+}
+.legal-footer .more-attribution {
+  margin: 0 0 6px;
+}
+.legal-footer-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.legal-footer-link:hover,
+.legal-footer-link:focus-visible {
+  color: var(--text);
+}
+.legal-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(80vh, 820px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+}
+.legal-dialog::backdrop {
+  background: rgb(0 0 0 / 0.62);
+}
+.legal-dialog-body {
+  padding: 22px 26px 26px;
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+.legal-dialog-body header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.legal-dialog-body h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.2rem;
+}
+.legal-dialog-body h3 {
+  margin: 20px 0 6px;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.legal-dialog-body p,
+.legal-dialog-body ol {
+  margin: 0 0 8px;
+}
+.legal-dialog-body a {
+  color: var(--text);
+}
+.legal-dialog-lead {
+  margin-top: 12px !important;
+  color: var(--muted);
+}
+.legal-dialog-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
 }

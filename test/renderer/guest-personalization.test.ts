@@ -56,12 +56,12 @@ const dashboard: AniListDashboard = {
   fetchedAt: "2026-08-02T00:00:00.000Z",
 };
 
+const catalogState = vi.hoisted(() => ({ trendingAvailable: true }));
+
 vi.mock("../../src/renderer/src/useCatalogData", () => ({
   useCatalogData: () => ({
-    page: 1,
     latestPage: 1,
-    searchResults: undefined,
-    trending: [trending],
+    trending: catalogState.trendingAvailable ? [trending] : [],
     malTrendingFallback: [],
     trendingLoading: false,
     latestAnime: [],
@@ -71,9 +71,7 @@ vi.mock("../../src/renderer/src/useCatalogData", () => ({
     latestError: undefined,
     mangaAvailability: new Map(),
     availabilityNow: Date.now(),
-    loading: false,
     error: undefined,
-    setSearchPage: vi.fn(),
     setLatestPage: vi.fn(),
   }),
 }));
@@ -106,7 +104,6 @@ function renderCatalog(access: ViewerAccess): string {
         access,
         children: React.createElement(CatalogView, {
           type: "ANIME",
-          searchQuery: "",
           access,
           onSelect: vi.fn(),
           onPrimary: vi.fn(),
@@ -139,6 +136,18 @@ describe("guest personalization boundary", () => {
     expect(markup).not.toContain("Fresh episodes from AniList airing data");
     expect(markup).not.toContain("From your watch/read history · AniList");
     expect(markup).toContain("Add Trending title to your list");
+  });
+
+  it("falls back to Continue titles for the hero when trending is unavailable", () => {
+    catalogState.trendingAvailable = false;
+    try {
+      const markup = renderCatalog(memberAccess);
+      expect(markup).toContain("Continue watching");
+      expect(markup).toContain("<h1>Continue title</h1>");
+      expect(markup).toContain("Continue episode 3");
+    } finally {
+      catalogState.trendingAvailable = true;
+    }
   });
 
   it("keeps public Watch available while hiding detail mutations for guests", () => {

@@ -3,21 +3,34 @@ import { stat } from "node:fs/promises";
 import { createServer, type ServerResponse } from "node:http";
 import { extname, relative, resolve, sep } from "node:path";
 
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' https: data: blob:",
-  "media-src 'self' https: blob:",
-  "connect-src 'self' https: blob:",
-  "frame-src https://megaplay.buzz",
-  "worker-src 'self' blob:",
-  "font-src 'self' data:",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-].join("; ");
+/**
+ * Renderer CSP. Only the configured anime embed origin may be framed; the origins come from the
+ * gitignored provider config, so none are hardcoded here.
+ */
+export function buildContentSecurityPolicy(frameOrigins: readonly string[]): string {
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' https: data: blob: anistream-art:",
+    "media-src 'self' https: blob:",
+    "connect-src 'self' https: blob:",
+    `frame-src ${frameOrigins.length ? frameOrigins.join(" ") : "'none'"}`,
+    "worker-src 'self' blob:",
+    "font-src 'self' data:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+/**
+ * The packaged renderer's preferred loopback port. Chromium keys localStorage by origin, so a
+ * random port per launch silently reset every renderer-saved choice (appearance, autoplay,
+ * Continue removals) on restart. A busy port falls back to a random one for that launch only.
+ */
+export const RENDERER_PORT = 41728;
 
 export interface RendererServer {
   origin: string;
@@ -25,11 +38,16 @@ export interface RendererServer {
   close(): Promise<void>;
 }
 
-export async function startRendererServer(rendererRoot: string): Promise<RendererServer> {
+export async function startRendererServer(
+  rendererRoot: string,
+  options: { frameOrigins: readonly string[]; port?: number } = { frameOrigins: [] },
+): Promise<RendererServer> {
   const root = resolve(rendererRoot);
+  const contentSecurityPolicy = buildContentSecurityPolicy(options.frameOrigins);
   let expectedHost = "";
 
   const server = createServer((request, response) => {
+    response.setHeader("Content-Security-Policy", contentSecurityPolicy);
     if (expectedHost && request.headers.host !== expectedHost) {
       sendText(response, 421, "Misdirected request");
       return;
@@ -87,13 +105,20 @@ export async function startRendererServer(rendererRoot: string): Promise<Rendere
       .catch(() => sendText(response, 404, "Not found"));
   });
 
-  await new Promise<void>((resolveListen, rejectListen) => {
-    server.once("error", rejectListen);
-    server.listen(0, "127.0.0.1", () => {
-      server.off("error", rejectListen);
-      resolveListen();
+  const listen = (port: number) =>
+    new Promise<void>((resolveListen, rejectListen) => {
+      server.once("error", rejectListen);
+      server.listen(port, "127.0.0.1", () => {
+        server.off("error", rejectListen);
+        resolveListen();
+      });
     });
-  });
+  try {
+    await listen(options.port ?? 0);
+  } catch (error) {
+    if (!options.port || (error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+    await listen(0);
+  }
 
   const address = server.address();
   if (!address || typeof address === "string") {
@@ -120,7 +145,6 @@ export async function startRendererServer(rendererRoot: string): Promise<Rendere
 }
 
 function setSecurityHeaders(response: ServerResponse): void {
-  response.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
   response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");

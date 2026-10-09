@@ -27,7 +27,8 @@ describe("ProfileConnectView", () => {
     });
 
     expect(markup).toContain("Make AniStream yours");
-    expect(markup).toContain("Continue with AniList");
+    expect(markup).toContain("Connect AniList");
+    expect(markup).toContain("Connect Simkl");
     expect(markup).toContain('class="profile-connect-app-icon"');
     expect(markup).toContain('aria-label="AniList"');
     expect(markup).not.toContain("No AniList password or Developer API setup is required");
@@ -47,6 +48,21 @@ describe("ProfileConnectView", () => {
 
     expect(markup).toContain("AniList authorization is open in your browser");
     expect(markup).toContain("Finish in your browser");
+    expect(markup).toContain("Open AniList again");
     expect(markup).toContain("Cancel sign-in");
+    expect(markup).not.toContain("Connect AniList");
+  });
+
+  it("offers guest browsing and says the password stays with AniList", () => {
+    const markup = renderProfile({
+      auth: { status: "signed-out" },
+      restoring: false,
+      onConnect: vi.fn(),
+      onCancel: vi.fn(),
+      onBrowse: vi.fn(),
+    });
+
+    expect(markup).toContain("Browse as guest");
+    expect(markup).toContain("AniStream never sees your password");
   });
 });

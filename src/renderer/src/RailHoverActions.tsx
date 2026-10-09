@@ -8,12 +8,15 @@ import { BookOpen, Info, Play, Plus, Check } from "lucide-react";
  */
 export function RailHoverActions({
   title,
+  meta,
   primaryLabel = "Watch",
   library,
   onPlay,
   onInfo,
 }: {
   title: string;
+  /** Shown with the title inside the artwork on hover/focus (More-style poster info). */
+  meta?: string;
   primaryLabel?: "Play" | "Watch" | "Read";
   library?: {
     inLibrary: boolean;
@@ -25,6 +28,12 @@ export function RailHoverActions({
 }): React.JSX.Element {
   return (
     <span className="rail-hover-actions">
+      {meta !== undefined ? (
+        <span className="rail-hover-copy" aria-hidden="true">
+          <strong>{title}</strong>
+          {meta ? <small>{meta}</small> : null}
+        </span>
+      ) : null}
       <button
         type="button"
         className="rail-hover-play"

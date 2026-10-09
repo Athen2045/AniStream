@@ -1,5 +1,34 @@
+/** Profile fields, shared by the sign-in query and the dashboard so the profile stays current. */
+const VIEWER_FIELDS = `
+  fragment AniStreamViewerFields on User {
+    id
+    name
+    about
+    avatar {
+      large
+    }
+    bannerImage
+    siteUrl
+    statistics {
+      anime {
+        count
+        episodesWatched
+        minutesWatched
+      }
+      manga {
+        count
+        chaptersRead
+        volumesRead
+      }
+    }
+  }
+`;
+
 export const DASHBOARD_QUERY = `
   query AniStreamDashboard($userId: Int!) {
+    viewer: Viewer {
+      ...AniStreamViewerFields
+    }
     anime: MediaListCollection(type: ANIME, userId: $userId) {
       lists {
         name
@@ -39,7 +68,9 @@ export const DASHBOARD_QUERY = `
       }
       coverImage {
         large
+        color
       }
+      bannerImage
       format
       status
       episodes
@@ -54,34 +85,15 @@ export const DASHBOARD_QUERY = `
       siteUrl
     }
   }
-`;
+${VIEWER_FIELDS}`;
 
 export const VIEWER_QUERY = `
   query AniStreamViewer {
     Viewer {
-      id
-      name
-      about
-      avatar {
-        large
-      }
-      bannerImage
-      siteUrl
-      statistics {
-        anime {
-          count
-          episodesWatched
-          minutesWatched
-        }
-        manga {
-          count
-          chaptersRead
-          volumesRead
-        }
-      }
+      ...AniStreamViewerFields
     }
   }
-`;
+${VIEWER_FIELDS}`;
 
 export const UPDATE_ENTRY_MUTATION = `
   mutation UpdateAniStreamEntry(
@@ -118,33 +130,6 @@ export const DELETE_ENTRY_MUTATION = `
   }
 `;
 
-export const SEARCH_MEDIA_QUERY = `
-  query SearchAniStreamMedia($query: String!, $type: MediaType!) {
-    Page(page: 1, perPage: 12) {
-      media(search: $query, type: $type) {
-        id
-        type
-        title {
-          userPreferred
-          english
-          romaji
-        }
-        coverImage {
-          large
-        }
-        format
-        status
-        episodes
-        chapters
-        volumes
-        genres
-        averageScore
-        siteUrl
-      }
-    }
-  }
-`;
-
 export const ADD_ENTRY_MUTATION = `
   mutation AddAniStreamEntry($mediaId: Int!) {
     SaveMediaListEntry(mediaId: $mediaId, status: PLANNING) {
@@ -156,7 +141,7 @@ export const ADD_ENTRY_MUTATION = `
   }
 `;
 
-const CATALOG_MEDIA_FIELDS = `
+export const CATALOG_MEDIA_FIELDS = `
   fragment AniStreamCatalogMedia on Media {
     id
     idMal
@@ -169,6 +154,7 @@ const CATALOG_MEDIA_FIELDS = `
     coverImage {
       extraLarge
       large
+      color
     }
     bannerImage
     description(asHtml: false)
@@ -198,6 +184,15 @@ export const BROWSE_MEDIA_QUERY = `
     $search: String
     $genre: String
     $sort: [MediaSort!]!
+    $format: MediaFormat
+    $status: MediaStatus
+    $season: MediaSeason
+    $seasonYear: Int
+    $startDateGreater: FuzzyDateInt
+    $startDateLesser: FuzzyDateInt
+    $countryOfOrigin: CountryCode
+    $tag: String
+    $averageScoreGreater: Int
   ) {
     Page(page: $page, perPage: $perPage) {
       pageInfo {
@@ -206,12 +201,38 @@ export const BROWSE_MEDIA_QUERY = `
         lastPage
         hasNextPage
       }
-      media(type: $type, search: $search, genre: $genre, sort: $sort) {
+      media(
+        type: $type
+        search: $search
+        genre: $genre
+        sort: $sort
+        format: $format
+        status: $status
+        season: $season
+        seasonYear: $seasonYear
+        startDate_greater: $startDateGreater
+        startDate_lesser: $startDateLesser
+        countryOfOrigin: $countryOfOrigin
+        tag: $tag
+        averageScore_greater: $averageScoreGreater
+      ) {
         ...AniStreamCatalogMedia
       }
     }
   }
   ${CATALOG_MEDIA_FIELDS}
+`;
+
+/** Genre and tag vocabularies for the catalog filter drawer; both change rarely. */
+export const FILTER_OPTIONS_QUERY = `
+  query AniStreamFilterOptions {
+    GenreCollection
+    MediaTagCollection {
+      name
+      category
+      isAdult
+    }
+  }
 `;
 
 export const AIRING_UPDATES_QUERY = `
@@ -229,6 +250,24 @@ export const AIRING_UPDATES_QUERY = `
         media {
           ...AniStreamCatalogMedia
         }
+      }
+    }
+  }
+  ${CATALOG_MEDIA_FIELDS}
+`;
+
+/** Exact titles by AniList ID (hero artwork for For You picks); AniList returns them unordered. */
+export const MEDIA_BY_IDS_QUERY = `
+  query AniStreamMediaByIds($ids: [Int], $type: MediaType) {
+    Page(page: 1, perPage: 12) {
+      pageInfo {
+        currentPage
+        perPage
+        lastPage
+        hasNextPage
+      }
+      media(id_in: $ids, type: $type, isAdult: false) {
+        ...AniStreamCatalogMedia
       }
     }
   }
@@ -316,7 +355,7 @@ export const MEDIA_DETAIL_QUERY = `
           }
         }
       }
-      recommendations(page: 1, perPage: 12, sort: RATING_DESC) {
+      recommendations(page: 1, perPage: 25, sort: RATING_DESC) {
         nodes {
           mediaRecommendation {
             ...AniStreamCatalogMedia
@@ -331,6 +370,12 @@ export const MEDIA_DETAIL_QUERY = `
       trailer {
         id
         site
+      }
+      airingSchedule(notYetAired: true, perPage: 25) {
+        nodes {
+          episode
+          airingAt
+        }
       }
       mediaListEntry {
         id
@@ -353,16 +398,18 @@ export interface ViewerResponse {
 }
 
 export interface DashboardResponse {
+  viewer?: unknown;
   anime?: unknown;
   manga?: unknown;
 }
 
-export interface SearchResponse {
+export interface BrowseResponse {
   Page?: unknown;
 }
 
-export interface BrowseResponse {
-  Page?: unknown;
+export interface FilterOptionsResponse {
+  GenreCollection?: unknown;
+  MediaTagCollection?: unknown;
 }
 
 export interface AiringUpdatesResponse {
@@ -379,10 +426,4 @@ export interface MediaDetailResponse {
 
 export interface SaveEntryResponse {
   SaveMediaListEntry?: unknown;
-}
-
-export interface TokenResponse {
-  access_token?: unknown;
-  error?: unknown;
-  message?: unknown;
 }

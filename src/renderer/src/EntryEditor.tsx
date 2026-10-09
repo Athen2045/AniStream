@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { X } from "lucide-react";
+import { Minus, Plus, RefreshCw, X } from "lucide-react";
 import type {
   AniListEntry,
   AniListEntryStatus,
@@ -11,6 +11,18 @@ import { CoverImage } from "./CoverImage";
 import { motionTransition } from "./motion";
 import { friendlyRemoteError } from "./remote-error";
 import { useAppReducedMotion } from "./useAppReducedMotion";
+import { formatMediaLabel } from "./format-label";
+import { statusLabel } from "./profile-library";
+import { usePersonalLibrary } from "./PersonalLibraryProvider";
+
+const STATUSES: AniListEntryStatus[] = [
+  "CURRENT",
+  "COMPLETED",
+  "PAUSED",
+  "DROPPED",
+  "PLANNING",
+  "REPEATING",
+];
 
 export function EntryEditor({
   entry,
@@ -28,6 +40,11 @@ export function EntryEditor({
   const [score, setScore] = useState(entry.score);
   const [notes, setNotes] = useState(entry.notes ?? "");
   const [busy, setBusy] = useState(false);
+  const anime = entry.media.type === "ANIME";
+  // Earlier changes still waiting (or no network) means this save will be queued on the device.
+  const { state: libraryState } = usePersonalLibrary();
+  const offline =
+    libraryState.pending > 0 || (typeof navigator !== "undefined" && navigator.onLine === false);
   const [error, setError] = useState<string>();
   const dialog = useRef<HTMLElement>(null);
   const callbacks = useRef({ busy, onClose });
@@ -124,21 +141,36 @@ export function EntryEditor({
         animate={{ y: 0, opacity: 1 }}
         transition={motionTransition(reducedMotion)}
       >
+        <div className="entry-editor-band" aria-hidden="true">
+          {entry.media.bannerUrl || entry.media.coverUrl ? (
+            <img
+              className={entry.media.bannerUrl ? undefined : "is-cover"}
+              src={entry.media.bannerUrl ?? entry.media.coverUrl}
+              alt=""
+            />
+          ) : null}
+        </div>
+        <button
+          className="entry-editor-close"
+          type="button"
+          aria-label="Close editor"
+          title="Close editor"
+          disabled={busy}
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
         <header className="entry-editor-header">
           <CoverImage src={entry.media.coverUrl} title={entry.media.title} />
           <div>
-            <span>Your library · {entry.media.type === "ANIME" ? "Anime" : "Manga"}</span>
+            <span>
+              {formatMediaLabel(entry.media.format, anime ? "Anime" : "Manga")}
+              {entry.media.totalProgress
+                ? ` · ${entry.media.totalProgress} ${anime ? "episodes" : "chapters"}`
+                : ""}
+            </span>
             <h2 id="entry-editor-title">{entry.media.title}</h2>
           </div>
-          <button
-            type="button"
-            aria-label="Close editor"
-            title="Close editor"
-            disabled={busy}
-            onClick={onClose}
-          >
-            <X size={18} />
-          </button>
         </header>
         <form
           onSubmit={(event) => {
@@ -147,69 +179,63 @@ export function EntryEditor({
           }}
         >
           <fieldset className="entry-editor-fields" disabled={busy}>
-            <label>
-              Status
-              <select
-                value={status}
-                onChange={(event) => setStatus(event.target.value as AniListEntryStatus)}
+            <div className="entry-editor-field">
+              <span id="entry-status-label">Status</span>
+              <div
+                className="entry-status-chips"
+                role="radiogroup"
+                aria-labelledby="entry-status-label"
               >
-                {(
-                  [
-                    "CURRENT",
-                    "PLANNING",
-                    "COMPLETED",
-                    "PAUSED",
-                    "DROPPED",
-                    "REPEATING",
-                  ] as AniListEntryStatus[]
-                ).map((value) => (
-                  <option key={value} value={value}>
-                    {value === "CURRENT"
-                      ? entry.media.type === "ANIME"
-                        ? "Watching"
-                        : "Reading"
-                      : value[0] + value.slice(1).toLowerCase()}
-                  </option>
+                {STATUSES.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={status === value}
+                    className={status === value ? "is-active" : undefined}
+                    onClick={() => setStatus(value)}
+                  >
+                    {statusLabel(value, anime)}
+                  </button>
                 ))}
-              </select>
-            </label>
-            <div className="editor-row">
-              <label>
-                Progress {entry.media.totalProgress ? `/ ${entry.media.totalProgress}` : ""}
-                <input
-                  type="number"
-                  min={0}
-                  max={entry.media.totalProgress}
-                  step={1}
-                  required
-                  value={progress}
-                  onChange={(event) => setProgress(Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Score / 10
-                <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={0.5}
-                  required
-                  value={score}
-                  onChange={(event) => setScore(Number(event.target.value))}
-                />
-              </label>
+              </div>
             </div>
-            <details className="editor-notes" open={notes ? true : undefined}>
-              <summary>Notes (optional)</summary>
-              <label>
-                <span className="sr-only">Notes</span>
-                <textarea
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  rows={4}
-                />
-              </label>
-            </details>
+            <div className="editor-row">
+              <Stepper
+                label={anime ? "Episodes watched" : "Chapters read"}
+                value={progress}
+                min={0}
+                max={entry.media.totalProgress}
+                step={1}
+                onChange={setProgress}
+              />
+              <Stepper
+                label="Your score"
+                value={score}
+                min={0}
+                max={10}
+                step={0.5}
+                onChange={setScore}
+              />
+            </div>
+            <label className="entry-editor-field">
+              <span>Notes</span>
+              <textarea
+                value={notes}
+                placeholder="Add a private note…"
+                onChange={(event) => setNotes(event.target.value)}
+                rows={3}
+              />
+            </label>
+            {offline ? (
+              <p className="entry-editor-offline" role="status">
+                <RefreshCw size={15} aria-hidden="true" />
+                <span>
+                  <b>AniList is unreachable.</b> Saving keeps this change on this device and shows
+                  it right away; AniStream sends it to AniList automatically when it is back.
+                </span>
+              </p>
+            ) : null}
           </fieldset>
           {error ? (
             <p className="error-banner" role="alert">
@@ -223,18 +249,70 @@ export function EntryEditor({
               disabled={busy}
               onClick={() => void submit(true)}
             >
-              Remove
+              Remove from library
             </button>
             <button className="secondary-button" type="button" disabled={busy} onClick={onClose}>
               Cancel
             </button>
-            <button className="save-button" type="submit" disabled={busy}>
-              {busy ? "Saving…" : "Save changes"}
+            <button className="save-button title-primary" type="submit" disabled={busy}>
+              {busy ? "Saving…" : offline ? "Save on this device" : "Save changes"}
             </button>
           </footer>
         </form>
       </motion.section>
     </motion.div>,
     document.body,
+  );
+}
+
+function Stepper({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max?: number;
+  step: number;
+  onChange: (value: number) => void;
+}): React.JSX.Element {
+  const clamp = (next: number) =>
+    Math.min(max ?? Number.MAX_SAFE_INTEGER, Math.max(min, Math.round(next / step) * step));
+  return (
+    <label className="entry-editor-field">
+      <span>{label}</span>
+      <span className="entry-stepper">
+        <button
+          type="button"
+          aria-label={`Decrease ${label.toLocaleLowerCase()}`}
+          disabled={value <= min}
+          onClick={() => onChange(clamp(value - step))}
+        >
+          <Minus size={15} />
+        </button>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          required
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+        {max !== undefined ? <small>/ {max}</small> : null}
+        <button
+          type="button"
+          aria-label={`Increase ${label.toLocaleLowerCase()}`}
+          disabled={max !== undefined && value >= max}
+          onClick={() => onChange(clamp(value + step))}
+        >
+          <Plus size={15} />
+        </button>
+      </span>
+    </label>
   );
 }

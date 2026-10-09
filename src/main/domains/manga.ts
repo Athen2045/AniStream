@@ -6,10 +6,13 @@ import { MangaLatestModule } from "../manga-latest";
 import { registerTrustedIpcHandler } from "../ipc";
 import type { MangaPreferenceRepository } from "../manga-preferences";
 import type { ReaderSettingsRepository } from "../reader-settings";
+import type { MangaMirrorClient } from "../manga-mirror";
 
 export interface MangaDomainDeps {
   mangaDex: MangaDexClient | undefined;
   mangaTitle: MangaTitleModule | undefined;
+  /** Configured chapter mirror (manga `chapter-mirror` media), if any. */
+  mangaMirror?: MangaMirrorClient;
   aniList: AniListClient | undefined;
   mal: MalClient | undefined;
   preferences?: MangaPreferenceRepository;
@@ -22,7 +25,7 @@ export interface MangaDomainDeps {
  */
 export function registerMangaDomain(
   trustedRendererOrigin: string,
-  { mangaDex, mangaTitle, aniList, mal, preferences, readerSettings }: MangaDomainDeps,
+  { mangaDex, mangaTitle, mangaMirror, aniList, mal, preferences, readerSettings }: MangaDomainDeps,
 ): void {
   registerTrustedIpcHandler(trustedRendererOrigin, "reader:settings", () => {
     if (!readerSettings) throw new Error("Reader settings are not ready.");
@@ -82,5 +85,21 @@ export function registerMangaDomain(
   registerTrustedIpcHandler(trustedRendererOrigin, "mangadex:page", async (_event, input) => {
     if (!mangaDex) throw new Error("MangaDex is not ready.");
     return mangaDex.getPage(input);
+  });
+  registerTrustedIpcHandler(
+    trustedRendererOrigin,
+    "mangadex:chapter-readable",
+    async (_event, input) => {
+      if (!mangaDex) throw new Error("MangaDex is not ready.");
+      return mangaDex.isChapterReadable(input.chapterId);
+    },
+  );
+  registerTrustedIpcHandler(trustedRendererOrigin, "manga:mirror-chapter", (_event, input) => {
+    if (!mangaMirror) throw new Error("No chapter mirror is configured.");
+    return mangaMirror.getChapterInfo(input.chapterId);
+  });
+  registerTrustedIpcHandler(trustedRendererOrigin, "manga:mirror-page", (_event, input) => {
+    if (!mangaMirror) throw new Error("No chapter mirror is configured.");
+    return mangaMirror.getPage(input);
   });
 }

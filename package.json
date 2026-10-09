@@ -1,8 +1,8 @@
 {
   "name": "anistream",
-  "version": "0.1.7",
+  "version": "2.0.0",
   "private": true,
-  "description": "Personal anime and manga discovery, playback, reading, and tracker sync for macOS and Windows",
+  "description": "Personal anime, manga, movie, and show discovery with local playback progress for macOS and Windows",
   "author": "Athen2045",
   "main": "./out/main/index.js",
   "type": "module",
@@ -29,8 +29,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "postinstall": "node node_modules/electron/install.js && electron-builder install-app-deps",
-    "package:mac": "npm run build && electron-builder --mac --arm64 --publish never",
-    "package:win": "npm run build && electron-builder --win --x64 --publish never"
+    "package:mac": "npm run build && node scripts/write-app-keys.mjs && electron-builder --mac --arm64 --publish never",
+    "package:win": "npm run build && node scripts/write-app-keys.mjs && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
     "better-sqlite3": "13.0.1",
@@ -44,13 +44,14 @@
     "@babel/eslint-parser": "^8.0.1",
     "@babel/preset-react": "^8.0.1",
     "@babel/preset-typescript": "^8.0.1",
+    "@electron/asar": "^3.4.1",
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "5.2.0",
-    "electron": "43.2.0",
+    "electron": "44.7.0",
     "electron-builder": "26.15.3",
     "electron-vite": "5.0.0",
     "eslint": "^10.8.0",

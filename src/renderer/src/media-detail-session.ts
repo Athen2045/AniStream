@@ -7,6 +7,7 @@ import type {
   MangaDexReaderChapter,
   MangaDexReaderSession,
   MangaEnrichment,
+  MangaChapterFallback,
   MangaReaderPreferences,
   MangaReadingResume,
   MangaTitleSnapshot,
@@ -58,6 +59,8 @@ export interface MediaDetailSessionSnapshot {
   readerSession?: MangaDexReaderSession;
   mangaResume?: MangaReadingResume;
   mangaPreferences?: MangaReaderPreferences;
+  /** Official-site chapters beyond what MangaDex serves in-app, when enabled. */
+  mangaChapterFallback?: MangaChapterFallback;
   loading: boolean;
   loadingReader: boolean;
   savingTracker: boolean;
@@ -120,6 +123,7 @@ export function createMediaDetailSession(options: {
       readerSession: mangaSnapshot.reader,
       mangaResume: mangaSnapshot.resume,
       mangaPreferences: mangaSnapshot.preferences,
+      mangaChapterFallback: mangaSnapshot.chapterFallback,
       ...(error
         ? { error }
         : clearResolvedReaderError && snapshot.detail

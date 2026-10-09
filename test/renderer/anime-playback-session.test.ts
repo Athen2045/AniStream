@@ -4,7 +4,7 @@ import {
   createAnimePlaybackSession,
 } from "../../src/renderer/src/anime-playback-session";
 
-const ORIGIN = "https://megaplay.buzz";
+const ORIGIN = "https://player.example";
 
 describe("AnimePlaybackSession", () => {
   it("never lets a stale checkpoint undercut the requested Continue episode", () => {
@@ -20,6 +20,7 @@ describe("AnimePlaybackSession", () => {
   it("accepts a bare provider error only from the active trusted frame and recovers on progress", () => {
     const session = createAnimePlaybackSession({
       mediaId: 189046,
+      playerOrigin: ORIGIN,
       episode: 1,
       saveResume: vi.fn(),
       clearResume: vi.fn(),
@@ -41,6 +42,7 @@ describe("AnimePlaybackSession", () => {
     try {
       const session = createAnimePlaybackSession({
         mediaId: 42,
+        playerOrigin: ORIGIN,
         episode: 3,
         saveResume: vi.fn(),
         clearResume: vi.fn(),
@@ -68,6 +70,7 @@ describe("AnimePlaybackSession", () => {
     vi.useFakeTimers();
     const session = createAnimePlaybackSession({
       mediaId: 42,
+      playerOrigin: ORIGIN,
       episode: 3,
       saveResume: () => undefined,
       clearResume: () => undefined,
@@ -92,6 +95,7 @@ describe("AnimePlaybackSession", () => {
     const saved: string[] = [];
     const session = createAnimePlaybackSession({
       mediaId: 42,
+      playerOrigin: ORIGIN,
       episode: 3,
       saveResume: () => undefined,
       clearResume: () => {
@@ -112,10 +116,11 @@ describe("AnimePlaybackSession", () => {
     expect(session.getSnapshot().persistenceError).toBeUndefined();
     session.dispose();
   });
-  it("accepts progress only from the expected MegaPlay frame", () => {
+  it("accepts progress only from the expected player frame", () => {
     const saveResume = vi.fn();
     const session = createAnimePlaybackSession({
       mediaId: 42,
+      playerOrigin: ORIGIN,
       episode: 3,
       saveResume,
       clearResume: vi.fn(),
@@ -145,6 +150,7 @@ describe("AnimePlaybackSession", () => {
     const onWatched = vi.fn();
     const session = createAnimePlaybackSession({
       mediaId: 42,
+      playerOrigin: ORIGIN,
       episode: 3,
       saveResume,
       clearResume,
@@ -163,6 +169,7 @@ describe("AnimePlaybackSession", () => {
 
     const completed = createAnimePlaybackSession({
       mediaId: 42,
+      playerOrigin: ORIGIN,
       episode: 3,
       saveResume: vi.fn(),
       clearResume,
@@ -179,6 +186,7 @@ describe("AnimePlaybackSession", () => {
     const onWatched = vi.fn();
     const session = createAnimePlaybackSession({
       mediaId: 42,
+      playerOrigin: ORIGIN,
       episode: 3,
       saveResume: vi.fn(),
       clearResume: vi.fn(),
@@ -202,9 +210,10 @@ describe("AnimePlaybackSession", () => {
     session.dispose();
   });
 
-  it("replaces opaque MegaPlay provider errors with recovery guidance", () => {
+  it("replaces opaque player errors with recovery guidance", () => {
     const session = createAnimePlaybackSession({
       mediaId: 42,
+      playerOrigin: ORIGIN,
       episode: 3,
       saveResume: vi.fn(),
       clearResume: vi.fn(),

@@ -1,7 +1,7 @@
-import type { MangaEnrichment } from "../shared/contracts";
+import type { MangaEnrichment, MangaReadingLink } from "../shared/contracts";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
-import { ProviderTransport } from "./provider-transport";
+import { PROVIDER_USER_AGENT, ProviderTransport } from "./provider-transport";
 
 const BASE_URL = "https://api.mangabaka.org";
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -34,7 +34,7 @@ export class MangaBakaClient {
       timeoutMs: REQUEST_TIMEOUT_MS,
       headers: {
         Accept: "application/json",
-        "User-Agent": "AniStream/0.1.0 (personal macOS app)",
+        "User-Agent": PROVIDER_USER_AGENT,
         ...(this.accessToken ? { "x-api-key": this.accessToken } : {}),
       },
     });
@@ -112,8 +112,49 @@ export function parseMangaBakaEnrichment(payload: unknown, aniListId: number): M
     totalChapters: toPositiveInteger(series.total_chapters),
     mangaUpdatesId: readString(mangaUpdates, ["id"]),
     mangaUpdatesRating: toFiniteNumber(mangaUpdates.rating),
+    readingLinks: readReadingLinks(series.links_v2),
     checkedAt,
   };
+}
+
+/** Link types that point at an official place to read; never piracy, social, retail, or news. */
+const READING_LINK_TYPES = new Set(["webplatform", "publisher"]);
+
+function readReadingLinks(value: unknown): MangaReadingLink[] {
+  if (!Array.isArray(value)) return [];
+  const links: MangaReadingLink[] = [];
+  // Reading platforms first, then publisher pages, keeping the provider's order within each.
+  const ordered = [...value].sort(
+    (left, right) => Number(isPublisherLink(left)) - Number(isPublisherLink(right)),
+  );
+  for (const item of ordered) {
+    if (!isRecord(item) || !READING_LINK_TYPES.has(String(item.type))) continue;
+    const url = safeHttpsUrl(item.url);
+    const site = readString(item, ["name_display", "name"]);
+    if (!url || !site || links.some((link) => link.url === url)) continue;
+    const language = typeof item.language === "string" ? item.language.trim().toLowerCase() : "";
+    links.push({
+      site: site.slice(0, 80),
+      url,
+      language: /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/.test(language) ? language : "unknown",
+    });
+    if (links.length >= 40) break;
+  }
+  return links;
+}
+
+function isPublisherLink(value: unknown): boolean {
+  return isRecord(value) && value.type === "publisher";
+}
+
+function safeHttpsUrl(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > 2_048) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function unavailable(aniListId: number, checkedAt: string, message: string): MangaEnrichment {

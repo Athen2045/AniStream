@@ -62,16 +62,22 @@ function statusText(status: UpdateStatus): string {
       return `Prior startup attempts did not finish. The last stable version was ${status.lastGoodVersion}. Update checks are paused for this launch.`;
   }
 }
-function ReleaseLink({ status }: { status: UpdateStatus }): React.JSX.Element | null {
+function ReleaseLink({
+  status,
+  className,
+}: {
+  status: UpdateStatus;
+  className?: string;
+}): React.JSX.Element | null {
   if (status.kind === "update-available")
     return (
-      <a href={status.releaseUrl} target="_blank" rel="noreferrer">
+      <a className={className} href={status.releaseUrl} target="_blank" rel="noreferrer">
         View release
       </a>
     );
   if (status.kind === "crash-detected")
     return (
-      <a href={status.lastGoodReleaseUrl} target="_blank" rel="noreferrer">
+      <a className={className} href={status.lastGoodReleaseUrl} target="_blank" rel="noreferrer">
         Look for the last stable release
       </a>
     );
@@ -91,6 +97,7 @@ export function UpdateNotice(): React.JSX.Element | null {
     </aside>
   );
 }
+/** Settings → Updates: the installed version and a manual check against GitHub releases. */
 export function AppUpdates(): React.JSX.Element {
   const { session, status, manualPending, error } = useUpdates();
   const retryAt = "retryAt" in status ? status.retryAt : undefined;
@@ -109,43 +116,62 @@ export function AppUpdates(): React.JSX.Element {
   }, [retryAt, now]);
   const coolingDown = Boolean(retryAt && Date.parse(retryAt) > now);
   const unsupported = status.kind === "unavailable" && status.reason === "unsupported-build";
+  const upToDate = status.kind === "up-to-date";
   return (
-    <details className="app-updates">
-      <summary>App updates</summary>
-      {status.currentVersion && <p>Installed version {status.currentVersion}</p>}
-      <p role="status">{error ?? statusText(status)}</p>
-      {checkedAt && (
-        <p className="update-timing">Last check: {new Date(checkedAt).toLocaleString()}</p>
-      )}
-      {coolingDown && (
-        <p className="update-timing">Next check available: {new Date(retryAt!).toLocaleString()}</p>
-      )}
-      <div className="update-actions">
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => {
-            setRefreshSpin((spin) => spin + 1);
-            void session.check();
-          }}
-          disabled={
-            manualPending ||
-            status.kind === "checking" ||
-            status.kind === "crash-detected" ||
-            unsupported ||
-            coolingDown
-          }
-        >
-          <RefreshCw
-            key={refreshSpin}
-            size={16}
-            className={refreshSpin ? "refresh-spin-once" : undefined}
-            aria-hidden="true"
-          />
-          {manualPending || status.kind === "checking" ? "Checking…" : "Check for updates"}
-        </button>
-        <ReleaseLink status={status} />
+    <div className="set-card app-updates">
+      <div className="set-row">
+        <div className="set-text">
+          <strong>
+            {status.kind === "update-available"
+              ? `AniStream ${status.version} is available`
+              : status.currentVersion
+                ? `AniStream ${status.currentVersion}`
+                : "AniStream"}
+          </strong>
+          <span role="status" className={upToDate && !error ? "set-ok" : undefined}>
+            {error ??
+              (status.kind === "update-available" && status.currentVersion
+                ? `You’re on ${status.currentVersion}. The release page has the installer.`
+                : statusText(status))}
+          </span>
+          {checkedAt && (
+            <span className="update-timing">
+              Last check: {new Date(checkedAt).toLocaleString()}
+            </span>
+          )}
+          {coolingDown && (
+            <span className="update-timing">
+              Next check available: {new Date(retryAt!).toLocaleString()}
+            </span>
+          )}
+        </div>
+        <div className="update-actions">
+          <ReleaseLink status={status} className="set-button set-button--primary" />
+          <button
+            type="button"
+            className="set-button"
+            onClick={() => {
+              setRefreshSpin((spin) => spin + 1);
+              void session.check();
+            }}
+            disabled={
+              manualPending ||
+              status.kind === "checking" ||
+              status.kind === "crash-detected" ||
+              unsupported ||
+              coolingDown
+            }
+          >
+            <RefreshCw
+              key={refreshSpin}
+              size={15}
+              className={refreshSpin ? "refresh-spin-once" : undefined}
+              aria-hidden="true"
+            />
+            {manualPending || status.kind === "checking" ? "Checking…" : "Check for updates"}
+          </button>
+        </div>
       </div>
-    </details>
+    </div>
   );
 }

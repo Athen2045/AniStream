@@ -15,6 +15,8 @@ export interface ReadinessStageResult {
 export interface ReadinessStage {
   id: string;
   label: string;
+  /** One or two words for the step dots ("AniList", "Session"); defaults to `label`. */
+  shortLabel?: string;
   weight: number;
   required: boolean;
   provider?: string;
@@ -25,6 +27,7 @@ export interface ReadinessStage {
 export interface ReadinessStepSnapshot {
   id: string;
   label: string;
+  shortLabel: string;
   weight: number;
   state: ReadinessStepState;
   message?: string;
@@ -38,6 +41,8 @@ export interface ReadinessSnapshot {
   steps: readonly ReadinessStepSnapshot[];
   outcome: ReadinessOutcome;
   message?: string;
+  /** The service behind the failure shown, when one is named. */
+  provider?: string;
   canContinue: boolean;
 }
 
@@ -58,6 +63,7 @@ export function createLaunchCatalogReadinessStage(run: () => Promise<void>): Rea
   return {
     id: "catalog",
     label: "Loading AniList trending titles",
+    shortLabel: "AniList",
     weight: 40,
     required: false,
     provider: "AniList",
@@ -101,6 +107,7 @@ function safeFailureMessage(
 function calculateOutcome(steps: readonly MutableStep[]): {
   outcome: ReadinessOutcome;
   message?: string;
+  provider?: string;
   canContinue: boolean;
 } {
   if (steps.some((step) => step.state === "active" || step.state === "pending")) {
@@ -121,6 +128,7 @@ function calculateOutcome(steps: readonly MutableStep[]): {
   return {
     outcome,
     message: representative.message,
+    provider: representative.definition.provider,
     canContinue:
       outcome === "degraded" ||
       failed.every((step) => step.canContinue === true || !step.definition.required),
@@ -148,6 +156,7 @@ export function createReadinessSession({
     definition,
     id: definition.id,
     label: definition.label,
+    shortLabel: definition.shortLabel ?? definition.label,
     weight: definition.weight,
     state: "pending",
   }));
@@ -169,12 +178,18 @@ export function createReadinessSession({
       attempt,
       mode,
       progress,
+      // Before the first check starts every step is pending: that is starting, not a problem.
       activeLabel:
         active?.label ??
-        (result.outcome === "ready" ? "AniStream is ready" : "Readiness check needs attention"),
-      steps: steps.map(({ id, label, weight, state, message }) => ({
+        (result.outcome === "ready"
+          ? "AniStream is ready"
+          : result.outcome === "checking"
+            ? "Starting AniStream"
+            : "Readiness check needs attention"),
+      steps: steps.map(({ id, label, shortLabel, weight, state, message }) => ({
         id,
         label,
+        shortLabel,
         weight,
         state,
         message,

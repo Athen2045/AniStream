@@ -4,6 +4,7 @@ import { CoverImage } from "./CoverImage";
 import { RailHoverActions } from "./RailHoverActions";
 import { formatMediaLabel } from "./format-label";
 import { friendlyRemoteError } from "./remote-error";
+import { titleAccentStyle } from "./title-accent";
 
 export function CatalogCard({
   media,
@@ -23,7 +24,10 @@ export function CatalogCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   return (
-    <article className="rail-card catalog-result-card">
+    <article
+      className="rail-card catalog-result-card"
+      style={media.type === "MANGA" ? titleAccentStyle(media.coverColor) : undefined}
+    >
       <span className="rail-art">
         <button
           className="rail-art-hit"
@@ -39,6 +43,15 @@ export function CatalogCard({
         ) : null}
         <RailHoverActions
           title={media.title}
+          meta={[
+            formatMediaLabel(media.format),
+            media.totalProgress
+              ? `${media.totalProgress} ${media.type === "ANIME" ? "eps" : "ch"}`
+              : undefined,
+            media.averageScore ? `${media.averageScore}%` : undefined,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
           primaryLabel={media.type === "ANIME" ? "Watch" : "Read"}
           onPlay={() => onPrimary(media)}
           onInfo={() => onSelect(media)}

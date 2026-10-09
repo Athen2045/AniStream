@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import type { BackupTitle, LocalBackup, RestoreSummary } from "../shared/local-backup";
 import { parseLocalBackup } from "./backup-validation";
+import type { BingeRepository, BingeRestorePlan } from "./binge-repository";
 
 export interface BackupRepository {
   snapshot(): LocalBackup;
@@ -8,7 +9,10 @@ export interface BackupRepository {
   restore(backup: LocalBackup): RestoreSummary;
 }
 
-export function createBackupRepository(db: Database.Database): BackupRepository {
+export function createBackupRepository(
+  db: Database.Database,
+  binge: Pick<BingeRepository, "exportBingeBackup" | "planBingeRestore" | "writeBingeRestore">,
+): BackupRepository {
   const meta = db.prepare<[string], { value: string }>("SELECT value FROM app_meta WHERE key = ?");
   const existingTitle = db.prepare<[number, number, number], { id: number }>(`
     SELECT media_id AS id FROM local_activity_v1 WHERE media_id = ?
@@ -17,9 +21,6 @@ export function createBackupRepository(db: Database.Database): BackupRepository 
   `);
   const existingPreference = db.prepare(
     "SELECT 1 FROM manga_reader_preferences_v1 WHERE anilist_id = ?",
-  );
-  const existingAcknowledgement = db.prepare(
-    "SELECT 1 FROM release_acknowledgements WHERE key = ?",
   );
 
   const snapshot = db.transaction((): LocalBackup => {
@@ -124,14 +125,18 @@ export function createBackupRepository(db: Database.Database): BackupRepository 
         )
         .all()
         .map((row) => ({ ...row, preferredGroupId: row.preferredGroupId ?? undefined })),
-      releaseAcknowledgements: db
-        .prepare("SELECT key, unit FROM release_acknowledgements ORDER BY key LIMIT 1001")
-        .all(),
+      // Release notices were removed; the empty list keeps exports restorable by older versions.
+      releaseAcknowledgements: [],
       readerSettings: settings ? JSON.parse(settings.value) : null,
+      upNext: binge.exportBingeBackup(),
     });
   });
 
-  function plan(input: LocalBackup): { backup: LocalBackup; summary: RestoreSummary } {
+  function plan(input: LocalBackup): {
+    backup: LocalBackup;
+    upNext: BingeRestorePlan;
+    summary: RestoreSummary;
+  } {
     const parsed = parseLocalBackup(input);
     const backup: LocalBackup = {
       ...parsed,
@@ -143,33 +148,25 @@ export function createBackupRepository(db: Database.Database): BackupRepository 
       mangaPreferences: parsed.mangaPreferences.filter(
         (row) => !existingPreference.get(row.aniListId),
       ),
-      releaseAcknowledgements: parsed.releaseAcknowledgements.filter(
-        (row) => !existingAcknowledgement.get(row.key),
-      ),
       readerSettings: meta.get("reader.settings.v1") ? null : parsed.readerSettings,
     };
-    const currentAcknowledgements = db
-      .prepare<[], { count: number }>("SELECT COUNT(*) AS count FROM release_acknowledgements")
-      .get()!.count;
-    if (currentAcknowledgements + backup.releaseAcknowledgements.length > 1000)
-      throw new Error(
-        "This backup would exceed the 1,000 saved release notices supported by AniStream.",
-      );
+    // Older backups have no Up Next section; nothing is added or kept for them.
+    const upNext = binge.planBingeRestore(parsed.upNext ?? { queue: [], playlists: [] });
     const summary: RestoreSummary = {
       titles: backup.titles.length,
       mangaPreferences: backup.mangaPreferences.length,
-      releaseAcknowledgements: backup.releaseAcknowledgements.length,
       readerSettings: backup.readerSettings !== null,
+      upNextItems: upNext.queue.length,
+      playlists: upNext.playlists.length,
       keptExisting:
+        upNext.kept +
         parsed.titles.length -
         backup.titles.length +
         parsed.mangaPreferences.length -
         backup.mangaPreferences.length +
-        parsed.releaseAcknowledgements.length -
-        backup.releaseAcknowledgements.length +
         Number(parsed.readerSettings !== null && backup.readerSettings === null),
     };
-    return { backup, summary };
+    return { backup, upNext, summary };
   }
 
   const insertActivity = db.prepare(`INSERT INTO local_activity_v1
@@ -184,9 +181,8 @@ export function createBackupRepository(db: Database.Database): BackupRepository 
   const insertPreference = db.prepare(
     "INSERT INTO manga_reader_preferences_v1 VALUES (@aniListId, @translatedLanguage, @preferredGroupId, @updatedAt)",
   );
-  const insertAcknowledgement = db.prepare("INSERT INTO release_acknowledgements VALUES (?, ?, ?)");
   const restore = db.transaction((input: LocalBackup): RestoreSummary => {
-    const { backup, summary } = plan(input);
+    const { backup, upNext, summary } = plan(input);
     for (const row of backup.titles) {
       if (row.activity) {
         const activity = row.activity;
@@ -212,12 +208,11 @@ export function createBackupRepository(db: Database.Database): BackupRepository 
     }
     for (const row of backup.mangaPreferences)
       insertPreference.run({ ...row, preferredGroupId: row.preferredGroupId ?? null });
-    for (const row of backup.releaseAcknowledgements)
-      insertAcknowledgement.run(row.key, row.unit, Date.now());
     if (backup.readerSettings)
       db.prepare("INSERT INTO app_meta VALUES ('reader.settings.v1', ?)").run(
         JSON.stringify(backup.readerSettings),
       );
+    binge.writeBingeRestore(upNext);
     return summary;
   });
   return {

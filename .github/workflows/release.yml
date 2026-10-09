@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version from package.json, for example 0.1.4"
+        description: "Version from package.json, for example 2.0.0"
         required: true
         type: string
+      dry_run:
+        description: "Release candidate: build and verify both installers from the selected branch without publishing"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -17,16 +22,18 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate main release candidate
+    name: Validate release candidate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
       commit_sha: ${{ steps.commit.outputs.sha }}
     steps:
-      - name: Check out protected main
+      # A real release always builds protected main. A dry run builds the branch the workflow was
+      # started from (for example develop) so both installers can be tested before merging.
+      - name: Check out release source
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.dry_run && github.ref || 'main' }}
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -80,9 +87,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Write local provider configuration
+        # Streaming-source endpoints are not in the repository; they come from a secret.
+        uses: ./.github/actions/write-provider-config
+        with:
+          providers-json: ${{ secrets.ANISTREAM_PROVIDERS_JSON }}
+          required: "true"
+
       - name: Build unsigned Windows installer
         run: npm run package:win
         env:
+          # Read-only public-data keys bundled into the package (scripts/write-app-keys.mjs).
+          ANISTREAM_TMDB_ACCESS_TOKEN: ${{ secrets.ANISTREAM_TMDB_ACCESS_TOKEN }}
+          ANISTREAM_MAL_CLIENT_ID: ${{ secrets.ANISTREAM_MAL_CLIENT_ID }}
+          ANISTREAM_APP_KEYS_REQUIRED: "true"
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Verify Windows artifact
@@ -124,9 +142,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Write local provider configuration
+        # Streaming-source endpoints are not in the repository; they come from a secret.
+        uses: ./.github/actions/write-provider-config
+        with:
+          providers-json: ${{ secrets.ANISTREAM_PROVIDERS_JSON }}
+          required: "true"
+
       - name: Build unsigned Apple Silicon DMG
         run: npm run package:mac
         env:
+          # Read-only public-data keys bundled into the package (scripts/write-app-keys.mjs).
+          ANISTREAM_TMDB_ACCESS_TOKEN: ${{ secrets.ANISTREAM_TMDB_ACCESS_TOKEN }}
+          ANISTREAM_MAL_CLIENT_ID: ${{ secrets.ANISTREAM_MAL_CLIENT_ID }}
+          ANISTREAM_APP_KEYS_REQUIRED: "true"
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Verify macOS artifact
@@ -140,8 +169,33 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  candidate:
+    name: Summarize release candidate
+    if: ${{ inputs.dry_run }}
+    needs: [validate, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write run summary
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ needs.validate.outputs.commit_sha }}
+        run: |
+          {
+            echo "## AniStream $VERSION release candidate"
+            echo
+            echo "Built from \`$REF_NAME\` at \`$COMMIT_SHA\`. Nothing was published or tagged."
+            echo
+            echo "Download the installers from this run's **Artifacts** section:"
+            echo
+            echo "- \`AniStream-release-win-x64-$VERSION\`"
+            echo "- \`AniStream-release-mac-arm64-$VERSION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   publish:
     name: Publish approved GitHub release
+    if: ${{ !inputs.dry_run }}
     needs: [validate, windows, macos]
     runs-on: ubuntu-latest
     environment: production
@@ -166,15 +220,41 @@ jobs:
           name: AniStream-release-mac-arm64-${{ inputs.version }}
           path: dist
 
+      - name: Write SHA-256 checksums
+        # The installers are unsigned, so publish checksums that downloads can be verified against.
+        working-directory: dist
+        shell: bash
+        run: |
+          sha256sum "AniStream Setup "*.exe AniStream-*.dmg > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - name: Create tag and GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           token: ${{ github.token }}
           tag_name: v${{ inputs.version }}
           target_commitish: ${{ needs.validate.outputs.commit_sha }}
-          body_path: docs/releases/v${{ inputs.version }}.md
+          body_path: .github/releases/v${{ inputs.version }}.md
+          make_latest: "true"
           files: |
             dist/AniStream Setup *.exe
             dist/AniStream Setup *.exe.blockmap
             dist/*.dmg
+            dist/SHA256SUMS.txt
           fail_on_unmatched_files: true
+
+      - name: Write run summary
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          {
+            echo "## Published AniStream v$VERSION"
+            echo
+            echo "https://github.com/$REPOSITORY/releases/tag/v$VERSION"
+            echo
+            echo '```'
+            cat dist/SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

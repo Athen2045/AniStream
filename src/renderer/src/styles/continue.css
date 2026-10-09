@@ -1,0 +1,96 @@
+/* Continue rows: remove a title (X) and the Undo toast (user request 2026-10-06). */
+.continue-card .rail-art {
+  position: relative;
+}
+.continue-remove {
+  position: absolute;
+  z-index: 6;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 50%;
+  background: rgb(10 12 11 / 0.72);
+  color: #fff;
+  opacity: 0;
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition:
+    opacity var(--motion-standard) var(--motion-ease),
+    background-color var(--motion-standard) var(--motion-ease),
+    color var(--motion-standard) var(--motion-ease);
+}
+.continue-card:hover .continue-remove,
+.continue-card:focus-within .continue-remove,
+.more-continue:hover .continue-remove,
+.more-continue:focus-within .continue-remove {
+  opacity: 1;
+}
+.continue-remove:hover,
+.continue-remove:focus-visible {
+  background: #fff;
+  color: #0b0d0c;
+}
+.continue-remove:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.continue-book .continue-remove {
+  top: 8px;
+  right: 8px;
+}
+
+.continue-toast-region {
+  position: fixed;
+  z-index: 60;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.continue-toast {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  max-width: min(640px, calc(100vw - 32px));
+  padding: 10px 10px 10px 18px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 14px;
+  background: rgb(22 26 23 / 0.94);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+}
+.continue-toast p {
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.continue-toast strong {
+  color: #fff;
+  font-weight: 700;
+}
+.continue-toast button {
+  flex: none;
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #0b0d0c;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.continue-toast button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

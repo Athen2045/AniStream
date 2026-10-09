@@ -26,17 +26,15 @@ export type CatalogDataApi = Pick<
 
 export interface CatalogDataContext {
   type: AniListMediaType;
-  searchQuery: string;
   availabilityMedia: MangaDexAvailabilityInput[];
   trackAvailabilityNow?: boolean;
+  /** False when the viewer turned Latest Updates off: the grid's pages are not requested. */
+  latest?: boolean;
 }
 
 export interface CatalogDataSnapshot {
   type: AniListMediaType;
-  searchQuery: string;
-  page: number;
   latestPage: number;
-  searchResults?: AniListCatalogPage;
   trending: AniListCatalogPage["items"];
   malTrendingFallback: MalRankingItem[];
   trendingLoading: boolean;
@@ -47,7 +45,6 @@ export interface CatalogDataSnapshot {
   latestError?: string;
   mangaAvailability: Map<number, MangaDexChapterAvailability>;
   availabilityNow?: number;
-  loading: boolean;
   error?: string;
 }
 
@@ -64,7 +61,6 @@ export interface CatalogDataModule {
   deactivate(): void;
   getSnapshot(): CatalogDataSnapshot;
   subscribe(listener: () => void): () => void;
-  setSearchPage(page: number): void;
   setLatestPage(page: number): void;
   refreshAvailability(): void;
   dispose(): void;
@@ -93,8 +89,6 @@ export function createCatalogDataModule(
 ): CatalogDataModule {
   let snapshot: CatalogDataSnapshot = {
     type: "ANIME",
-    searchQuery: "",
-    page: 1,
     latestPage: 1,
     trending: [],
     malTrendingFallback: [],
@@ -103,12 +97,10 @@ export function createCatalogDataModule(
     latestManga: [],
     latestLoading: true,
     mangaAvailability: new Map(),
-    loading: true,
   };
   let active = false;
   let disposed = false;
   let requestIdentity = 0;
-  let searchRequestIdentity: number | undefined;
   let latestRequestIdentity: number | undefined;
   let availabilityRequestIdentity: number | undefined;
   const trendingRequestIdentity: Partial<Record<AniListMediaType, number>> = {};
@@ -126,6 +118,7 @@ export function createCatalogDataModule(
   let availabilityTimer: unknown;
   let removeVisibilityListener: (() => void) | undefined;
   let clockEnabled = false;
+  let latestEnabled = true;
   let clockTimer: unknown;
 
   const publish = (next: Partial<CatalogDataSnapshot>): void => {
@@ -135,15 +128,13 @@ export function createCatalogDataModule(
   };
 
   const invalidateViewRequests = (): void => {
-    searchRequestIdentity = undefined;
     latestRequestIdentity = undefined;
     const type = snapshot.type;
     trendingRequestIdentity[type] = undefined;
     fallbackRequestIdentity[type] = undefined;
   };
 
-  const isCurrentView = (type: AniListMediaType, searchQuery: string): boolean =>
-    !disposed && snapshot.type === type && snapshot.searchQuery === searchQuery;
+  const isCurrentView = (type: AniListMediaType): boolean => !disposed && snapshot.type === type;
 
   const loadFallback = (type: AniListMediaType): void => {
     if (fallbackByType[type] !== undefined || fallbackRequestIdentity[type] !== undefined) return;
@@ -152,7 +143,7 @@ export function createCatalogDataModule(
     void api
       .getMalTrendingFallback(type)
       .then((ranking) => {
-        if (fallbackRequestIdentity[type] !== identity || !isCurrentView(type, "")) {
+        if (fallbackRequestIdentity[type] !== identity || !isCurrentView(type)) {
           return;
         }
         fallbackByType[type] = ranking;
@@ -187,14 +178,22 @@ export function createCatalogDataModule(
         sort: "TRENDING_DESC",
       })
       .then((result) => {
-        if (trendingRequestIdentity[type] !== identity || !isCurrentView(type, "")) return;
+        if (trendingRequestIdentity[type] !== identity || !isCurrentView(type)) return;
         const trending = result.items.slice(0, TRENDING_LIMIT);
+        if (!trending.length) {
+          // AniList can answer an empty trending page while degraded; show MAL instead of a blank.
+          trendingFailedByType.add(type);
+          trendingByType[type] = [];
+          publish({ trending: [] });
+          loadFallback(type);
+          return;
+        }
         trendingFailedByType.delete(type);
         trendingByType[type] = trending;
         publish({ trending });
       })
       .catch((reason: unknown) => {
-        if (trendingRequestIdentity[type] !== identity || !isCurrentView(type, "")) return;
+        if (trendingRequestIdentity[type] !== identity || !isCurrentView(type)) return;
         trendingFailedByType.add(type);
         trendingByType[type] = [];
         publish({
@@ -210,57 +209,12 @@ export function createCatalogDataModule(
       .finally(() => {
         if (trendingRequestIdentity[type] !== identity) return;
         trendingRequestIdentity[type] = undefined;
-        if (isCurrentView(type, "")) publish({ trendingLoading: false });
-      });
-  };
-
-  const loadSearch = (): void => {
-    const { type, searchQuery, page } = snapshot;
-    if (!searchQuery) return;
-    const identity = ++requestIdentity;
-    searchRequestIdentity = identity;
-    void api
-      .browseAniList({ type, page, perPage: 24, query: searchQuery, sort: "POPULARITY_DESC" })
-      .then((result) => {
-        if (
-          searchRequestIdentity === identity &&
-          isCurrentView(type, searchQuery) &&
-          snapshot.page === page
-        ) {
-          publish({ searchResults: result });
-        }
-      })
-      .catch((reason: unknown) => {
-        if (
-          searchRequestIdentity === identity &&
-          isCurrentView(type, searchQuery) &&
-          snapshot.page === page
-        ) {
-          publish({
-            error: friendlyRemoteError(reason, {
-              provider: "AniList",
-              operation: "search results",
-              retained: Boolean(snapshot.searchResults?.items.length),
-              fallback: "Search is unavailable right now. Try again shortly.",
-            }),
-          });
-        }
-      })
-      .finally(() => {
-        if (
-          searchRequestIdentity === identity &&
-          isCurrentView(type, searchQuery) &&
-          snapshot.page === page
-        ) {
-          searchRequestIdentity = undefined;
-          publish({ loading: false });
-        }
+        if (isCurrentView(type)) publish({ trendingLoading: false });
       });
   };
 
   const loadLatest = (): void => {
-    const { type, searchQuery, latestPage } = snapshot;
-    if (searchQuery) return;
+    const { type, latestPage } = snapshot;
     const identity = ++requestIdentity;
     latestRequestIdentity = identity;
     const request =
@@ -271,7 +225,7 @@ export function createCatalogDataModule(
       .then((result) => {
         if (
           latestRequestIdentity !== identity ||
-          !isCurrentView(type, "") ||
+          !isCurrentView(type) ||
           snapshot.latestPage !== latestPage
         ) {
           return;
@@ -290,7 +244,7 @@ export function createCatalogDataModule(
       .catch((reason: unknown) => {
         if (
           latestRequestIdentity === identity &&
-          isCurrentView(type, "") &&
+          isCurrentView(type) &&
           snapshot.latestPage === latestPage
         ) {
           publish({
@@ -310,7 +264,7 @@ export function createCatalogDataModule(
       .finally(() => {
         if (
           latestRequestIdentity === identity &&
-          isCurrentView(type, "") &&
+          isCurrentView(type) &&
           snapshot.latestPage === latestPage
         ) {
           latestRequestIdentity = undefined;
@@ -393,28 +347,26 @@ export function createCatalogDataModule(
   return {
     activate(context) {
       if (disposed) return;
-      const viewChanged =
-        !active || snapshot.type !== context.type || snapshot.searchQuery !== context.searchQuery;
+      const viewChanged = !active || snapshot.type !== context.type;
       active = true;
+      const wantLatest = context.latest !== false;
+      const latestTurnedOn = wantLatest && !latestEnabled;
+      latestEnabled = wantLatest;
 
       if (viewChanged) {
         invalidateViewRequests();
         snapshot = {
           ...snapshot,
           type: context.type,
-          searchQuery: context.searchQuery,
-          page: 1,
           latestPage: 1,
-          searchResults: undefined,
           trending: trendingByType[context.type] ?? [],
           malTrendingFallback: fallbackByType[context.type] ?? [],
-          trendingLoading: !context.searchQuery && trendingByType[context.type] === undefined,
+          trendingLoading: trendingByType[context.type] === undefined,
           latestAnime: latestByType[context.type].anime,
           latestManga: latestByType[context.type].manga,
           latestPageInfo: undefined,
           latestLoading: true,
           latestError: undefined,
-          loading: true,
           error: undefined,
         };
         listeners.forEach((listener) => listener());
@@ -423,10 +375,12 @@ export function createCatalogDataModule(
       configureClock(Boolean(context.trackAvailabilityNow));
       configureAvailability(context);
 
-      if (context.searchQuery) {
-        if (viewChanged) loadSearch();
-      } else if (viewChanged) {
+      if (viewChanged) {
         loadTrending(context.type);
+        if (latestEnabled) loadLatest();
+      } else if (latestTurnedOn) {
+        latestRequestIdentity = undefined;
+        publish({ latestLoading: true, latestError: undefined });
         loadLatest();
       }
     },
@@ -446,14 +400,8 @@ export function createCatalogDataModule(
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    setSearchPage(page) {
-      if (disposed || !snapshot.searchQuery || page === snapshot.page) return;
-      searchRequestIdentity = undefined;
-      publish({ page, loading: true, error: undefined });
-      loadSearch();
-    },
     setLatestPage(page) {
-      if (disposed || snapshot.searchQuery || page === snapshot.latestPage) return;
+      if (disposed || page === snapshot.latestPage) return;
       latestRequestIdentity = undefined;
       publish({ latestPage: page, latestLoading: true, latestError: undefined });
       loadLatest();

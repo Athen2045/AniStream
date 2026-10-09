@@ -26,7 +26,7 @@ const babelOptions = {
 
 export default [
   {
-    ignores: ["dist/**", "out/**", "node_modules/**", "**/*.tsbuildinfo"],
+    ignores: ["dist/**", "out/**", "node_modules/**", "prototypes/**", "**/*.tsbuildinfo"],
   },
   js.configs.recommended,
   {

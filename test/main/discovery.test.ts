@@ -3,7 +3,9 @@ import { openAppDatabase } from "../../src/main/database";
 import { DiscoveryService } from "../../src/main/recommendations/discovery-service";
 import { discoveryEvidence } from "../../src/main/recommendations/discovery-evidence";
 import { loadRecommendationSeeds } from "../../src/main/anilist/recommendation-seeds";
+import type { RecommendationSeedData } from "../../src/main/anilist/recommendation-seeds";
 import type { AniListMedia, AniListMediaType } from "../../src/shared/contracts";
+import type { RecommendationItemFeatures } from "../../src/shared/recommendations";
 
 const now = Date.now();
 const media = (id: number, type: AniListMediaType = "ANIME"): AniListMedia => ({
@@ -15,16 +17,42 @@ const media = (id: number, type: AniListMediaType = "ANIME"): AniListMedia => ({
   siteUrl: `https://anilist.co/anime/${id}`,
   averageScore: 80,
 });
-function setup() {
+const features = (id: number): RecommendationItemFeatures => ({
+  anilistId: id,
+  mediaType: "ANIME",
+  normalizedTitle: `Title ${id}`,
+  titleTokens: [],
+  synonyms: [],
+  genres: ["Drama"],
+  tags: [],
+  creators: [],
+  averageScore: 80,
+  updatedAt: now,
+});
+function setup(extra: Partial<ConstructorParameters<typeof DiscoveryService>[0]> = {}) {
   const db = openAppDatabase(":memory:");
   for (let id = 1; id <= 5; id++)
     db.recordActivity({ media: media(id), unit: 1, state: "completed" });
   let owner = 0;
-  const seeds = vi.fn(async (ids: number[]) => ids.map((id) => media(id)));
-  const browse = vi.fn(async () => ({
-    items: [media(1), media(10), media(11)].map((row) => ({ ...row, genres: row.genres ?? [] })),
-    pageInfo: { currentPage: 1, perPage: 30, lastPage: 1, hasNextPage: false },
+  // Every history seed points at neighbor 20 (graph candidate) and at history title 1 (excluded).
+  const seeds = vi.fn(async (ids: number[]): Promise<RecommendationSeedData> => ({
+    seeds: ids.map((id) => ({
+      ...features(id),
+      recommendations: [
+        { id: 20, mediaType: "ANIME", rating: 40 },
+        { id: 1, mediaType: "ANIME", rating: 5 },
+      ],
+      relations: [],
+    })),
+    neighbors: [features(20)],
   }));
+  // Trending carries one library title (1) that must stay excluded.
+  const browse = vi.fn(
+    async (
+      _type: AniListMediaType,
+      _signal?: AbortSignal,
+    ): Promise<RecommendationItemFeatures[]> => [features(1), features(10), features(11)],
+  );
   const impression = vi.spyOn(db.discovery, "impression");
   const service = new DiscoveryService({
     store: db.discovery,
@@ -32,8 +60,9 @@ function setup() {
     owner: () => owner,
     dashboard: () => undefined,
     seeds,
-    browse,
+    trending: browse,
     now: () => now,
+    ...extra,
   });
   return {
     db,
@@ -48,10 +77,62 @@ function setup() {
 }
 
 describe("live local discovery", () => {
+  it("recommends the first season instead of dropping a sequel whose prequel was never started", async () => {
+    // Every seed points at 20 (a second season); its prequel 30 is fetched on demand.
+    const seeds = vi.fn(async (ids: number[]): Promise<RecommendationSeedData> =>
+      ids.includes(30)
+        ? { seeds: [{ ...features(30), startedOn: 20180400, relations: [] }], neighbors: [] }
+        : {
+            seeds: ids.map((id) => ({
+              ...features(id),
+              recommendations: [{ id: 20, mediaType: "ANIME", rating: 40 }],
+              relations: [],
+            })),
+            neighbors: [
+              {
+                ...features(20),
+                startedOn: 20200100,
+                relations: [{ id: 30, mediaType: "ANIME", relationType: "PREQUEL" }],
+              },
+            ],
+          },
+    );
+    const { db, service } = setup({ seeds });
+    try {
+      const feed = await service.getForYou("ANIME");
+      const ids = [...feed.items, ...(feed.rows ?? []).flatMap((row) => row.items)].map(
+        (row) => row.anilistId,
+      );
+      expect(ids).toContain(30);
+      expect(ids).not.toContain(20);
+      expect(seeds).toHaveBeenLastCalledWith([30], expect.anything());
+      // The first season inherits the sequel's "similar to" link from the watched titles.
+      expect(feed.items.find((row) => row.anilistId === 30)?.reasonCodes).toContain("similar-to");
+    } finally {
+      db.close();
+    }
+  });
+  it("hides anime exactly linked to a More title the viewer really watched", async () => {
+    const { db, service } = setup({
+      links: () => ({
+        tmdbKeysFor: (id) => (id === 10 ? ["TV:55"] : []),
+        aniListIdsFor: () => [],
+      }),
+      watchedMore: () => new Set(["TV:55"]),
+    });
+    try {
+      const ids = (await service.getForYou("ANIME")).items.map((row) => row.anilistId);
+      expect(ids).toContain(11);
+      expect(ids).not.toContain(10);
+    } finally {
+      service.dispose();
+      db.close();
+    }
+  });
   it("rejects a pending result after the viewer changes without writing its features", async () => {
     const { db, service, seeds, browse, setOwner } = setup();
     const write = vi.spyOn(db.discovery, "saveFeatures");
-    let finish: (items: AniListMedia[]) => void = () => undefined;
+    let finish: (data: RecommendationSeedData) => void = () => undefined;
     seeds.mockReturnValueOnce(
       new Promise((resolve) => {
         finish = resolve;
@@ -60,7 +141,7 @@ describe("live local discovery", () => {
     try {
       const pending = service.getForYou("ANIME");
       setOwner(42);
-      finish([media(1)]);
+      finish({ seeds: [features(1)], neighbors: [] });
       await expect(pending).rejects.toThrow(/Viewer changed/);
       expect(write).not.toHaveBeenCalled();
       expect(browse).not.toHaveBeenCalled();
@@ -81,10 +162,14 @@ describe("live local discovery", () => {
       });
       expect(db.discovery.events(0)).toEqual([]);
       const feed = await service.getForYou("ANIME");
-      expect(feed.items.map((row) => row.anilistId)).toEqual([10, 11]);
+      // Graph neighbor 20 ranks first and names its seed; library titles (1) stay excluded.
+      expect(feed.items.map((row) => row.anilistId)).toEqual([20, 10, 11]);
+      expect(feed.items[0]).toMatchObject({ reasonCodes: expect.arrayContaining(["similar-to"]) });
+      expect(feed.items[0].relatedTitle).toMatch(/^Title [1-5]$/);
       expect(seeds).toHaveBeenCalledTimes(1);
-      expect(browse).toHaveBeenCalledTimes(2);
-      expect(browse.mock.calls[0][0]).toMatchObject({ page: 1, perPage: 20, type: "ANIME" });
+      // One trending request: genre pages were dropped (no measured recall, unwatched sequels).
+      expect(browse).toHaveBeenCalledTimes(1);
+      expect(browse.mock.calls[0][0]).toBe("ANIME");
       expect(impression).not.toHaveBeenCalled();
       service.impressions({ requestId: feed.requestId!, anilistIds: [10] });
       expect(impression).toHaveBeenCalledOnce();
@@ -92,7 +177,7 @@ describe("live local discovery", () => {
         service.impressions({ requestId: feed.requestId!, anilistIds: [999] }),
       ).toThrow();
       await service.getForYou("ANIME");
-      expect(browse).toHaveBeenCalledTimes(2);
+      expect(browse).toHaveBeenCalledTimes(1);
       expect(seeds).toHaveBeenCalledTimes(1);
     } finally {
       service.dispose();
@@ -104,10 +189,12 @@ describe("live local discovery", () => {
     try {
       const feed = await service.getForYou("ANIME");
       service.feedback({ requestId: feed.requestId!, anilistId: 10, action: "dismiss" });
-      expect((await service.getForYou("ANIME")).items.map((row) => row.anilistId)).toEqual([11]);
+      expect((await service.getForYou("ANIME")).items.map((row) => row.anilistId)).toEqual([
+        20, 11,
+      ]);
       expect(db.discovery.events(0).some((row) => row.eventType === "dismissed")).toBe(true);
       service.feedback({ requestId: feed.requestId!, anilistId: 10, action: "undo" });
-      expect((await service.getForYou("ANIME")).items).toHaveLength(2);
+      expect((await service.getForYou("ANIME")).items).toHaveLength(3);
       setOwner(42);
       expect(db.discovery.events(42)).toEqual([]);
       expect(() =>
@@ -127,10 +214,10 @@ describe("live local discovery", () => {
       owner: () => 0,
       dashboard: () => undefined,
       seeds: vi.fn(),
-      browse,
+      trending: browse,
     });
     try {
-      for (let id = 1; id <= 5; id++)
+      for (let id = 1; id <= 3; id++)
         db.discovery.feedback(
           0,
           { anilistId: id, mediaType: "ANIME", title: "Preview", score: 50, reasonCodes: [] },
@@ -149,8 +236,12 @@ describe("live local discovery", () => {
       seeds.mockRejectedValueOnce(new Error("429"));
       expect((await service.getForYou("ANIME")).status).toBe("unavailable");
       expect(browse).not.toHaveBeenCalled();
+      // A trending failure keeps cached graph candidates visible and explains the partial result.
       browse.mockRejectedValueOnce(new Error("timeout"));
-      expect((await service.getForYou("ANIME")).status).toBe("unavailable");
+      const partial = await service.getForYou("ANIME");
+      expect(partial.status).toBe("ready");
+      expect(partial.items.map((row) => row.anilistId)).toEqual([20]);
+      expect(partial.message).toMatch(/taking longer/i);
       expect(browse).toHaveBeenCalledOnce();
     } finally {
       service.dispose();
@@ -170,7 +261,7 @@ describe("live local discovery", () => {
       const pending = service.getForYou("ANIME");
       await vi.advanceTimersByTimeAsync(15_001);
       const result = await pending;
-      expect(result.status).toBe("unavailable");
+      expect(result.items.map((row) => row.anilistId)).toEqual([20]);
       expect(result.message).toMatch(/taking longer|try again/i);
     } finally {
       service.dispose();
@@ -210,12 +301,12 @@ describe("AniList recommendation seed edge", () => {
         request,
         Array.from({ length: 80 }, (_, index) => index + 1),
       ),
-    ).toEqual([]);
+    ).toEqual({ seeds: [], neighbors: [] });
     expect(request.mock.calls[0][1].ids).toHaveLength(24);
   });
   it("does no work for empty IDs and reports malformed and provider failures", async () => {
     const request = vi.fn(async () => ({}));
-    expect(await loadRecommendationSeeds(request, [])).toEqual([]);
+    expect(await loadRecommendationSeeds(request, [])).toEqual({ seeds: [], neighbors: [] });
     expect(request).not.toHaveBeenCalled();
     await expect(loadRecommendationSeeds(request, [1])).rejects.toThrow(/invalid/);
     request.mockRejectedValueOnce(new Error("429"));

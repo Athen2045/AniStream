@@ -1,3 +1,4 @@
+import { Download, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { RestorePreview, RestoreSummary } from "../../shared/local-backup";
 
@@ -5,7 +6,8 @@ function additions(summary: RestoreSummary): number {
   return (
     summary.titles +
     summary.mangaPreferences +
-    summary.releaseAcknowledgements +
+    summary.upNextItems +
+    summary.playlists +
     Number(summary.readerSettings)
   );
 }
@@ -17,35 +19,37 @@ function Summary({
   summary: RestoreSummary;
   restored?: boolean;
 }): React.JSX.Element {
+  const upNext = summary.upNextItems + summary.playlists;
   return (
-    <ul className="local-data-summary">
-      <li>
-        {summary.titles} {summary.titles === 1 ? "title" : "titles"} with local history or resume
-        points
-      </li>
-      <li>
-        {summary.mangaPreferences} manga language/group{" "}
-        {summary.mangaPreferences === 1 ? "preference" : "preferences"}
-      </li>
-      <li>
-        {summary.releaseAcknowledgements} dismissed release{" "}
-        {summary.releaseAcknowledgements === 1 ? "notice" : "notices"}
-      </li>
-      <li>
+    <>
+      <ul className="set-counts">
+        <li>
+          <strong>{summary.titles}</strong>
+          {summary.titles === 1 ? "title" : "titles"} with history or resume points
+        </li>
+        <li>
+          <strong>{upNext}</strong>
+          Up Next {upNext === 1 ? "title or playlist" : "titles and playlists"}
+        </li>
+        <li>
+          <strong>{summary.mangaPreferences}</strong>
+          manga language/group {summary.mangaPreferences === 1 ? "preference" : "preferences"}
+        </li>
+      </ul>
+      <p className="set-hint">
         Reader layout and image quality:{" "}
         {summary.readerSettings
           ? restored
             ? "saved settings restored"
-            : "add saved settings"
+            : "saved settings added"
           : "current settings kept"}
-      </li>
-      <li>
-        {summary.keptExisting} existing {summary.keptExisting === 1 ? "item" : "items"} kept
-      </li>
-    </ul>
+        . {summary.keptExisting} existing {summary.keptExisting === 1 ? "item" : "items"} kept.
+      </p>
+    </>
   );
 }
 
+/** Settings → Backup: export this device's local data, or add what a backup has that is missing. */
 export function LocalDataSettings(): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<RestorePreview | null>(null);
@@ -84,125 +88,126 @@ export function LocalDataSettings(): React.JSX.Element {
       if (mounted.current) setBusy(false);
     }
   }
+  const exportBackup = (): Promise<void> =>
+    run(async () => {
+      const saved = await window.anistream.exportLocalBackup();
+      if (mounted.current) setMessage(saved ? "Backup saved." : "Export canceled.");
+    });
+  const chooseRestore = (): Promise<void> =>
+    run(async () => {
+      const next = await window.anistream.prepareLocalRestore();
+      if (!mounted.current) {
+        if (next) await window.anistream.cancelLocalRestore(next.token);
+        return;
+      }
+      token.current = next?.token;
+      setPreview(next);
+      if (!next) setMessage("Restore canceled.");
+    });
+  const restore = (current: RestorePreview): Promise<void> =>
+    run(async () => {
+      let restored: RestoreSummary;
+      try {
+        restored = await window.anistream.restoreLocalBackup(current.token);
+      } finally {
+        token.current = undefined;
+        if (mounted.current) {
+          setPreview(null);
+          requestAnimationFrame(() => restoreButton.current?.focus());
+        }
+      }
+      if (mounted.current) {
+        setResult(restored);
+        setMessage(
+          additions(restored)
+            ? "Restore complete. New reader preferences apply the next time you open a chapter."
+            : "Nothing added. All items already have local data.",
+        );
+      }
+    });
+  const cancelRestore = (current: RestorePreview): Promise<void> =>
+    run(async () => {
+      await window.anistream.cancelLocalRestore(current.token);
+      token.current = undefined;
+      setPreview(null);
+      setMessage("Restore canceled.");
+      requestAnimationFrame(() => restoreButton.current?.focus());
+    });
+
   return (
-    <details className="local-data-settings">
-      <summary>Local progress and backups</summary>
-      <div className="local-data-content">
-        <p>
-          Keep a copy of this device’s watch/read history, resume points, reader preferences, and
-          dismissed release notices.
-        </p>
-        <p className="muted">
-          Includes locally recorded activity across sign-ins. Account connections, AniList lists,
-          For You feedback, and catalog caches are excluded. The JSON file is unencrypted.
-        </p>
-        <div className="local-data-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={busy || !!preview}
-            onClick={() =>
-              void run(async () => {
-                const saved = await window.anistream.exportLocalBackup();
-                if (mounted.current) setMessage(saved ? "Backup saved." : "Export canceled.");
-              })
-            }
-          >
-            Export backup
-          </button>
-          <button
-            ref={restoreButton}
-            type="button"
-            className="secondary-button"
-            disabled={busy || !!preview}
-            onClick={() =>
-              void run(async () => {
-                const next = await window.anistream.prepareLocalRestore();
-                if (!mounted.current) {
-                  if (next) await window.anistream.cancelLocalRestore(next.token);
-                  return;
-                }
-                token.current = next?.token;
-                setPreview(next);
-                if (!next) setMessage("Restore canceled.");
-              })
-            }
-          >
-            Choose backup to restore
-          </button>
+    <div className="set-card local-data-settings">
+      <div className="set-row">
+        <div className="set-text">
+          <strong>Back up this device</strong>
+          <span>
+            History, resume points, Up Next, and reader preferences, saved as an unencrypted JSON
+            file. Your AniList lists are already kept on AniList.
+          </span>
         </div>
-        {busy ? <p role="status">Working…</p> : null}
-        {preview ? (
-          <section className="local-data-review" aria-labelledby="backup-review-title">
-            <h3 ref={reviewHeading} tabIndex={-1} id="backup-review-title">
-              Review restore
-            </h3>
-            <p>Backup from {new Date(preview.exportedAt).toLocaleString()}.</p>
-            <Summary summary={preview.summary} />
-            <p>
-              Only missing items will be added. Existing progress and saved preferences stay as they
-              are. Imported history stays local and is not queued for AniList sync. Counts are
-              checked again when you restore.
-            </p>
-            <div className="local-data-actions">
-              <button
-                type="button"
-                className="primary-button"
-                disabled={busy || additions(preview.summary) === 0}
-                onClick={() =>
-                  void run(async () => {
-                    let restored: RestoreSummary;
-                    try {
-                      restored = await window.anistream.restoreLocalBackup(preview.token);
-                    } finally {
-                      token.current = undefined;
-                      if (mounted.current) {
-                        setPreview(null);
-                        requestAnimationFrame(() => restoreButton.current?.focus());
-                      }
-                    }
-                    if (mounted.current) {
-                      setResult(restored);
-                      setMessage(
-                        additions(restored)
-                          ? "Restore complete. New reader preferences apply the next time you open a chapter."
-                          : "Nothing added. All items already have local data.",
-                      );
-                    }
-                  })
-                }
-              >
-                Add missing items
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    await window.anistream.cancelLocalRestore(preview.token);
-                    token.current = undefined;
-                    setPreview(null);
-                    setMessage("Restore canceled.");
-                    requestAnimationFrame(() => restoreButton.current?.focus());
-                  })
-                }
-              >
-                Cancel restore
-              </button>
-            </div>
-          </section>
-        ) : null}
-        <p role="status" aria-live="polite">
-          {message}
-        </p>
-        {result ? <Summary summary={result} restored /> : null}
-        {error ? (
-          <p className="error-banner" role="alert">
-            {error}
-          </p>
-        ) : null}
+        <button
+          type="button"
+          className="set-button"
+          disabled={busy || !!preview}
+          onClick={() => void exportBackup()}
+        >
+          <Download size={15} aria-hidden="true" />
+          Export
+        </button>
+        <button
+          ref={restoreButton}
+          type="button"
+          className="set-button"
+          disabled={busy || !!preview}
+          onClick={() => void chooseRestore()}
+        >
+          <Upload size={15} aria-hidden="true" />
+          Restore
+        </button>
       </div>
-    </details>
+      {preview ? (
+        <section className="set-review" aria-labelledby="backup-review-title">
+          <h3 ref={reviewHeading} tabIndex={-1} id="backup-review-title">
+            Adds only what’s missing
+          </h3>
+          <p className="set-hint">
+            Backup from {new Date(preview.exportedAt).toLocaleString()}. Progress and preferences
+            already on this device stay as they are, and restored history is not sent to AniList.
+          </p>
+          <Summary summary={preview.summary} />
+          <div className="set-review-actions">
+            <button
+              type="button"
+              className="set-button set-button--primary"
+              disabled={busy || additions(preview.summary) === 0}
+              onClick={() => void restore(preview)}
+            >
+              Add {additions(preview.summary)} {additions(preview.summary) === 1 ? "item" : "items"}
+            </button>
+            <button
+              type="button"
+              className="set-button set-button--quiet"
+              disabled={busy}
+              onClick={() => void cancelRestore(preview)}
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {/* Always present so screen readers hear each result. */}
+      <p className="set-status" role="status" aria-live="polite">
+        {busy ? "Working…" : message}
+      </p>
+      {result ? (
+        <div className="set-feedback">
+          <Summary summary={result} restored />
+        </div>
+      ) : null}
+      {error ? (
+        <p className="error-banner set-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

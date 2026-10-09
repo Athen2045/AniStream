@@ -70,27 +70,6 @@ button:not(:disabled):active {
     0 3px 12px rgb(0 0 0 / 0.16);
 }
 
-.global-search form {
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 9px;
-  background: rgb(11 13 16 / 0.78);
-  box-shadow: inset 0 1px rgb(255 255 255 / 0.03);
-  transition:
-    background-color 180ms var(--ease-out, ease),
-    border-color 180ms var(--ease-out, ease),
-    box-shadow 180ms var(--ease-out, ease);
-}
-
-.global-search form:focus-within {
-  border-color: var(--focus-ring);
-  background: var(--surface-base);
-  box-shadow:
-    0 0 0 3px var(--highlight-soft),
-    var(--control-shadow);
-}
-
-.session-button,
 .avatar-button {
   transition:
     background-color 180ms var(--ease-out, ease),
@@ -99,24 +78,9 @@ button:not(:disabled):active {
     transform 180ms var(--ease-out, ease);
 }
 
-.session-button:hover,
 .avatar-button:hover {
   transform: translateY(-1px);
 }
-
-.session-button.active {
-  box-shadow:
-    inset 0 -2px var(--primary),
-    0 5px 16px rgb(0 0 0 / 0.16);
-}
-
-.hero-actions,
-.detail-actions {
-  gap: 9px;
-}
-
-.play-action,
-.info-action,
 .primary-button,
 .secondary-button,
 .save-button,
@@ -135,16 +99,12 @@ button:not(:disabled):active {
     transform 180ms var(--ease-out, ease),
     opacity 180ms var(--ease-out, ease);
 }
-
-.play-action,
 .primary-button,
 .save-button,
 .add-title-button,
 .catalog-search button {
   box-shadow: var(--control-shadow-primary);
 }
-
-.play-action:hover,
 .primary-button:hover,
 .save-button:hover,
 .add-title-button:hover,
@@ -153,23 +113,17 @@ button:not(:disabled):active {
   box-shadow: 0 13px 28px rgb(42 131 95 / 0.27);
   transform: translateY(-2px);
 }
-
-.info-action,
 .secondary-button {
   border: 1px solid var(--line);
   background: rgb(255 255 255 / 0.07);
   box-shadow: inset 0 1px rgb(255 255 255 / 0.04);
 }
-
-.info-action:hover,
 .secondary-button:hover {
   border-color: var(--line-strong);
   background: var(--surface-raised);
   box-shadow: var(--control-shadow);
   transform: translateY(-2px);
 }
-
-.round-action,
 .rail-hover-play,
 .rail-hover-secondary,
 .carousel-edge > span {
@@ -180,16 +134,6 @@ button:not(:disabled):active {
     transform 180ms var(--ease-out, ease),
     color 180ms var(--ease-out, ease);
 }
-
-.round-action {
-  border-color: var(--line-strong);
-  border-radius: 50%;
-  background: var(--surface-glass);
-  box-shadow: 0 8px 18px rgb(0 0 0 / 0.2);
-  cursor: pointer;
-}
-
-.round-action:hover,
 .rail-hover-secondary:hover,
 .carousel-edge:hover > span {
   border-color: var(--focus-ring);
@@ -238,8 +182,6 @@ button:not(:disabled):active {
     inset 0 1px rgb(255 255 255 / 0.07),
     0 5px 14px rgb(0 0 0 / 0.16);
 }
-
-.detail-close,
 .manga-reader-close {
   border: 1px solid var(--line);
   border-radius: 50%;
@@ -250,31 +192,11 @@ button:not(:disabled):active {
     border-color 180ms var(--ease-out, ease),
     transform 180ms var(--ease-out, ease);
 }
-
-.detail-close:hover,
 .manga-reader-close:hover {
   border-color: var(--line-strong);
   background: var(--surface-hover);
   transform: rotate(4deg) scale(1.04);
 }
-
-.media-tabs {
-  border-radius: 11px;
-  background: rgb(23 26 31 / 0.78);
-  box-shadow: inset 0 1px rgb(255 255 255 / 0.03);
-}
-
-.media-tabs button,
-.media-tab-indicator {
-  border-radius: 8px;
-}
-
-.media-tabs button {
-  min-height: 36px;
-  padding-inline: 14px;
-}
-
-.library-group-select select,
 .library-sort,
 .library-search {
   min-height: var(--control-height);
@@ -285,9 +207,7 @@ button:not(:disabled):active {
     border-color 180ms var(--ease-out, ease),
     box-shadow 180ms var(--ease-out, ease);
 }
-
 .library-search:focus-within,
-.library-group-select select:focus-visible,
 .library-sort:focus-visible {
   border-color: var(--focus-ring);
   box-shadow: 0 0 0 3px var(--highlight-soft);
@@ -307,8 +227,8 @@ button:not(:disabled):active {
 }
 
 button:disabled,
-select:disabled,
-input:disabled {
+input:disabled,
+.ui-select:disabled {
   cursor: not-allowed;
 }
 
@@ -316,12 +236,9 @@ input:disabled {
   .carousel-edge > span,
   .rail-hover-secondary,
   .watch-player-back,
-  .watch-source-select,
   .manga-reader-chapter-chip,
   .manga-reader-header button,
   .profile-connect-panel,
-  .profile-stats,
-  .media-card-edit,
   .entry-editor-backdrop,
   .entry-editor,
   .manga-reader-chapter-chip button,
@@ -329,11 +246,6 @@ input:disabled {
   .detail-tracker-compact label,
   .detail-tracker-compact button {
     background: var(--surface-raised);
-    backdrop-filter: none;
-  }
-
-  .detail-backdrop {
-    background: rgb(4 4 14 / 0.96);
     backdrop-filter: none;
   }
 
@@ -352,55 +264,11 @@ input:disabled {
     animation-iteration-count: 1 !important;
   }
 
-  html:not([data-platform="win32"]) .media-card:hover .cover-wrap img {
-    transform: none;
-  }
-
   html:not([data-platform="win32"]) .catalog-content > section,
   html:not([data-platform="win32"]) .media-rail .rail-card,
-  html:not([data-platform="win32"]) .latest-update-card,
-  html:not([data-platform="win32"]) .browse-card {
+  html:not([data-platform="win32"]) .latest-update-card {
     animation: none !important;
   }
-}
-.media-card-cover-action {
-  display: block;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.media-card-title-action {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.media-card-primary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  width: 100%;
-  min-height: 36px;
-  margin-top: 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.media-card-primary:hover {
-  background: var(--surface-hover);
 }
 .personal-library {
   margin-bottom: 38px;
@@ -437,25 +305,120 @@ input:disabled {
   font-size: 0.78rem;
   line-height: 1.5;
 }
-.anikoto-player-loading.anikoto-player-error {
+.anime-embed-loading.anime-embed-error {
   inset: auto 20px 56px;
   gap: 8px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
 }
-.detail-relation-action {
-  display: grid;
-  gap: 8px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
+
+/* Themed dropdown (Select.tsx). Contexts restyle the trigger; the menu is shared everywhere. */
+.ui-select {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text);
   cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.ui-select:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.ui-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-select-chevron {
+  flex: none;
+  margin-right: -2px;
+  opacity: 0.7;
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.ui-select.is-open .ui-select-chevron {
+  transform: rotate(180deg);
+}
+.ui-select:disabled {
+  opacity: 0.55;
+}
+.ui-select-menu {
+  position: fixed;
+  z-index: 4000;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgb(16 19 17 / 0.97);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.55),
+    0 2px 8px rgb(0 0 0 / 0.3);
+  backdrop-filter: blur(18px) saturate(1.2);
+  color: var(--text-soft);
+  font-size: 14px;
+  list-style: none;
+  overscroll-behavior: contain;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+  scrollbar-width: thin;
+  animation: ui-select-in var(--motion-fast) var(--motion-ease);
+}
+.ui-select-menu li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ui-select-menu li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-select-menu li.is-active {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--text);
+}
+.ui-select-menu li[aria-selected="true"] {
+  color: var(--text);
+  font-weight: 600;
+}
+.ui-select-menu li svg {
+  flex: none;
+  color: var(--primary-hover);
+}
+@keyframes ui-select-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-select-menu {
+    animation: none;
+  }
 }
 
-.detail-relation-action:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 4px;
+/* Settings → Reduce motion: same treatment as the system preference, on every platform. */
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+html[data-motion="reduce"] .catalog-content > section,
+html[data-motion="reduce"] .media-rail .rail-card,
+html[data-motion="reduce"] .latest-update-card {
+  animation: none !important;
 }

@@ -53,11 +53,20 @@ jobs:
         # --legacy-peer-deps: see ci.yml -- eslint-plugin-react/eslint peer-range lag, harmless.
         run: npm ci --legacy-peer-deps
 
+      - name: Write local provider configuration
+        # Streaming-source endpoints are not in the repository; they come from a secret.
+        uses: ./.github/actions/write-provider-config
+        with:
+          providers-json: ${{ secrets.ANISTREAM_PROVIDERS_JSON }}
+
       - name: Build unsigned Apple Silicon package
-        # electron-builder is build-only here. Publishing is intentionally owned by
-        # the dedicated GitHub Release step below, which receives github.token.
+        # electron-builder is build-only here. Publishing is owned by the
+        # Promote production release workflow (release.yml).
         run: npm run package:mac
         env:
+          # Read-only public-data keys bundled into the package (scripts/write-app-keys.mjs).
+          ANISTREAM_TMDB_ACCESS_TOKEN: ${{ secrets.ANISTREAM_TMDB_ACCESS_TOKEN }}
+          ANISTREAM_MAL_CLIENT_ID: ${{ secrets.ANISTREAM_MAL_CLIENT_ID }}
           # No Developer ID Application certificate is installed for this personal
           # build; disable electron-builder's local keychain identity search so the
           # packaging step stays deterministic and explicitly unsigned.

@@ -25,7 +25,6 @@ function setup() {
   let visible = true;
   const bridge = {
     getLocalActivity: vi.fn(async () => activity),
-    getReleaseAcknowledgements: vi.fn(async () => []),
     getPersonalAnimeUpdates: vi.fn(async () => [{ aniListId: 1, episode: 3, airedAt: 1000 }]),
     getMangaDexAvailability: vi.fn(async () => [
       {
@@ -36,8 +35,8 @@ function setup() {
         checkedAt: new Date(1500000).toISOString(),
       },
     ]),
-    acknowledgeRelease: vi.fn(async () => undefined),
     retryActivitySync: vi.fn(async () => activity),
+    getPendingAniListChanges: vi.fn(async () => 0),
   };
   const session = createPersonalLibrarySession({ kind: "guest" }, bridge, {
     now: () => now,
@@ -55,7 +54,7 @@ function setup() {
   };
 }
 
-describe("shared personal library and notifications", () => {
+describe("shared personal library and catch-up releases", () => {
   it("clears tracker-only titles and ignores their pending updates after sign-out", async () => {
     const { session, bridge } = setup();
     bridge.getLocalActivity.mockResolvedValue([]);
@@ -119,6 +118,33 @@ describe("shared personal library and notifications", () => {
     await Promise.resolve();
     expect(session.getSnapshot().continuing.ANIME).toEqual([]);
     expect(session.getSnapshot().releases).toEqual([]);
+    session.dispose();
+  });
+
+  it("retries progress queued offline automatically, at most every five minutes", async () => {
+    const { session, bridge, advance } = setup();
+    bridge.getLocalActivity.mockResolvedValue([{ ...activity[0], syncStatus: "pending" }]);
+    const member = {
+      kind: "member",
+      dashboard: {
+        profile: { id: 10 },
+        animeLists: [],
+        mangaLists: [],
+        fetchedAt: new Date().toISOString(),
+      },
+      libraryEntries: new Map(),
+      refreshLibrary: vi.fn(async () => undefined),
+    } as unknown as ViewerAccess;
+    session.setAccess(member);
+    session.activate();
+    await vi.waitFor(() => expect(bridge.retryActivitySync).toHaveBeenCalledTimes(1));
+
+    await session.refresh();
+    expect(bridge.retryActivitySync).toHaveBeenCalledTimes(1);
+
+    advance(5 * 60_000);
+    session.invalidateLocal();
+    await vi.waitFor(() => expect(bridge.retryActivitySync).toHaveBeenCalledTimes(2));
     session.dispose();
   });
 
@@ -203,31 +229,6 @@ describe("shared personal library and notifications", () => {
     visible(true);
     await session.refresh();
     expect(bridge.getPersonalAnimeUpdates).toHaveBeenCalledTimes(3);
-    session.dispose();
-  });
-
-  it("marks one release seen durably without changing progress or losing the other type", async () => {
-    const { session, bridge } = setup();
-    session.activate();
-    await session.refresh();
-    const progress = session.getSnapshot().continuing;
-    expect(await session.acknowledge(session.getSnapshot().releases[0])).toBe(true);
-    expect(bridge.acknowledgeRelease).toHaveBeenCalledWith({ key: "MANGA:2:en", unit: 4 });
-    await session.refresh();
-    expect(session.getSnapshot().releases.map((item) => item.kind)).toEqual(["aired"]);
-    expect(session.getSnapshot().continuing).toEqual(progress);
-    expect(bridge.retryActivitySync).not.toHaveBeenCalled();
-    session.dispose();
-  });
-
-  it("preserves unread state on save failure", async () => {
-    const { session, bridge } = setup();
-    bridge.acknowledgeRelease.mockRejectedValue(new Error("disk"));
-    session.activate();
-    await session.refresh();
-    expect(await session.acknowledge(session.getSnapshot().releases[0])).toBe(false);
-    expect(session.getSnapshot().releases).toHaveLength(2);
-    expect(session.getSnapshot().error).toContain("Could not mark");
     session.dispose();
   });
 

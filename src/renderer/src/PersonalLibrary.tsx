@@ -5,6 +5,9 @@ import { CoverImage } from "./CoverImage";
 import { RailHoverActions } from "./RailHoverActions";
 import { usePersonalLibrary } from "./PersonalLibraryProvider";
 import { AniListSourceIcon } from "./AniListSourceIcon";
+import { titleAccentStyle } from "./title-accent";
+import { cachedArtworkUrl } from "../../shared/artwork";
+import { ContinueRemoveButton } from "./ContinueRemoveButton";
 
 export function PersonalLibrary({
   type,
@@ -22,11 +25,14 @@ export function PersonalLibrary({
   if (!continuing.length && !state.pending) return null;
   const label = type === "ANIME" ? "Continue Watching" : "Continue Reading";
   return (
-    <section className="personal-library media-rail" aria-label={label}>
+    <section
+      className={`personal-library media-rail${type === "ANIME" ? " continue-watching" : " continue-reading"}`}
+      aria-label={label}
+    >
       {state.pending ? (
         <div className="personal-sync" role="status">
           <span>
-            {state.pending} title{state.pending === 1 ? "" : "s"} saved locally · AniList sync
+            {state.pending} change{state.pending === 1 ? "" : "s"} saved locally · AniList sync
             pending
           </span>
           <button type="button" onClick={() => void session.retrySync()} disabled={state.syncing}>
@@ -55,34 +61,69 @@ export function PersonalLibrary({
             </span>
           </div>
           <ContentCarousel label={label}>
-            {continuing.map((item) => (
-              <article className="rail-card continue-card" key={item.media.id}>
-                <span className="rail-art">
-                  <button
-                    type="button"
-                    className="rail-art-hit"
-                    onClick={() => onPrimary(item.media, item.targetUnit)}
-                    aria-label={`${item.label}: ${item.media.title}`}
-                  />
-                  <CoverImage src={item.media.coverUrl} title={item.media.title} />
-                  <RailHoverActions
-                    title={item.media.title}
-                    primaryLabel={type === "ANIME" ? "Watch" : "Read"}
-                    onPlay={() => onPrimary(item.media, item.targetUnit)}
-                    onInfo={() => onSelect(item.media)}
-                  />
-                </span>
-                <button
-                  className="card-title-button"
-                  type="button"
-                  title={item.media.title}
-                  onClick={() => onSelect(item.media)}
+            {continuing.map((item) => {
+              const media = { ...item.media, genres: item.media.genres ?? [] };
+              const total = item.media.totalProgress;
+              const ratio = total ? Math.min(1, item.progress / total) : 0;
+              // Anime cards are wide strips cut from the 1900×400 banner (cover when absent);
+              // manga cards are books tinted with the title's own cover color.
+              const strip = type === "ANIME";
+              const art = strip
+                ? (item.media.bannerUrl ?? item.media.coverUrl)
+                : item.media.coverUrl;
+              return (
+                <article
+                  className={`rail-card continue-card${strip ? " continue-strip" : " continue-book"}`}
+                  key={item.media.id}
+                  style={strip ? undefined : titleAccentStyle(item.media.coverColor)}
                 >
-                  {item.media.title}
-                </button>
-                <span>{item.label}</span>
-              </article>
-            ))}
+                  <span
+                    className={`rail-art${strip && !item.media.bannerUrl ? " continue-strip-cover" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className="rail-art-hit"
+                      onClick={() => onPrimary(media, item.targetUnit)}
+                      aria-label={`${item.label}: ${item.media.title}`}
+                    />
+                    <CoverImage src={cachedArtworkUrl(art)} title={item.media.title} />
+                    {strip && ratio > 0 ? (
+                      <span className="continue-progress" aria-hidden="true">
+                        <span style={{ transform: `scaleX(${ratio})` }} />
+                      </span>
+                    ) : null}
+                    <RailHoverActions
+                      title={item.media.title}
+                      primaryLabel={strip ? "Watch" : "Read"}
+                      onPlay={() => onPrimary(media, item.targetUnit)}
+                      onInfo={() => onSelect(media)}
+                    />
+                    <ContinueRemoveButton
+                      section={type}
+                      id={item.media.id}
+                      title={item.media.title}
+                    />
+                  </span>
+                  {!strip ? (
+                    <span className="continue-progress continue-progress--book" aria-hidden="true">
+                      <span style={{ transform: `scaleX(${ratio})` }} />
+                    </span>
+                  ) : null}
+                  <button
+                    className="card-title-button"
+                    type="button"
+                    title={item.media.title}
+                    onClick={() => onSelect(media)}
+                  >
+                    {item.media.title}
+                  </button>
+                  <span>
+                    {item.label}
+                    {total && item.progress > 0 ? ` · ${item.progress}/${total}` : ""}
+                  </span>
+                </article>
+              );
+            })}
           </ContentCarousel>
         </>
       ) : null}

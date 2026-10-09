@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import { openAppDatabase } from "../../src/main/database";
 import { ipcArgValidators } from "../../src/main/ipc-validation";
-import { DEFAULT_READER_SETTINGS } from "../../src/shared/reader-settings";
+import { DEFAULT_READER_SETTINGS, parseReaderSettings } from "../../src/shared/reader-settings";
 import { createBoundedCache } from "../../src/main/anilist/cache";
 
 it("persists global reader settings across reopen without changing title preferences", () => {
@@ -18,7 +18,12 @@ it("persists global reader settings across reopen without changing title prefere
       translatedLanguage: "ja",
       preferredGroupId: "group-a",
     });
-    const settings = { width: 720, fit: "original", quality: "data-saver" } as const;
+    const settings = {
+      width: 720,
+      fit: "original",
+      quality: "data-saver",
+      standardPortOnly: true,
+    } as const;
     db.saveReaderSettings(settings);
     db.close();
     db = openAppDatabase(path);
@@ -34,6 +39,18 @@ it("persists global reader settings across reopen without changing title prefere
     for (const suffix of ["", "-wal", "-shm"]) if (existsSync(path + suffix)) rmSync(path + suffix);
     rmdirSync(dir);
   }
+});
+
+it("reads settings saved before the standard-port option as off", () => {
+  expect(parseReaderSettings({ width: 960, fit: "width", quality: "data" })).toEqual({
+    width: 960,
+    fit: "width",
+    quality: "data",
+    standardPortOnly: false,
+  });
+  expect(() =>
+    parseReaderSettings({ width: 960, fit: "width", quality: "data", standardPortOnly: "yes" }),
+  ).toThrow();
 });
 
 it("rejects invalid reader settings and unexpected argument counts at IPC", () => {

@@ -16,6 +16,47 @@ describe("createRequestGate", () => {
     expect(a).toBe(b);
   });
 
+  it("re-runs a shared request for a caller who did not cancel when its owner cancels", async () => {
+    const gate = createRequestGate({ requestsPerMinute: 25 });
+    const owner = new AbortController();
+    const joiner = new AbortController();
+    let calls = 0;
+    const work = (signal: AbortSignal) => async (): Promise<string> => {
+      calls += 1;
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, 20);
+        signal.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(new DOMException("cancelled", "AbortError"));
+        });
+      });
+      return "data";
+    };
+
+    const first = gate.run("same-key", work(owner.signal), owner.signal);
+    const second = gate.run("same-key", work(joiner.signal), joiner.signal);
+    // Cancel once the owner's request is actually running, not while it waits for a slot.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    owner.abort();
+
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    await expect(second).resolves.toBe("data");
+    expect(calls).toBe(2);
+  });
+
+  it("does not retry a shared request that failed for another reason", async () => {
+    const gate = createRequestGate({ requestsPerMinute: 25 });
+    let calls = 0;
+    const failing = async (): Promise<string> => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      throw new DOMException("Provider request timed out.", "TimeoutError");
+    };
+    const results = await Promise.allSettled([gate.run("key", failing), gate.run("key", failing)]);
+    expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+    expect(calls).toBe(1);
+  });
+
   it("never merges calls with no dedupe key", async () => {
     const gate = createRequestGate({ requestsPerMinute: 25 });
     let calls = 0;
