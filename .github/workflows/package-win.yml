@@ -17,10 +17,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: "npm"
@@ -29,7 +29,7 @@ jobs:
         run: npm run check:branding
 
       - name: Cache Electron and electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~\AppData\Local\electron\Cache
@@ -77,7 +77,7 @@ jobs:
           npm run check:win-installer -- "dist/AniStream.Setup.$version.exe"
 
       - name: Upload Windows installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: AniStream-win-x64-nsis-unsigned
           path: |

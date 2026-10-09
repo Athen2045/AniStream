@@ -31,13 +31,13 @@ jobs:
       # A real release always builds protected main. A dry run builds the branch the workflow was
       # started from (for example develop) so both installers can be tested before merging.
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.dry_run && github.ref || 'main' }}
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: "npm"
@@ -74,12 +74,12 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Check out validated main commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.commit_sha }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: "npm"
@@ -113,7 +113,7 @@ jobs:
           npm run check:win-installer -- "dist/AniStream.Setup.$version.exe"
 
       - name: Upload Windows release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: AniStream-release-win-x64-${{ inputs.version }}
           path: |
@@ -130,12 +130,12 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Check out validated main commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.commit_sha }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: "npm"
@@ -163,7 +163,7 @@ jobs:
         run: npm run check:mac-package
 
       - name: Upload macOS release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: AniStream-release-mac-arm64-${{ inputs.version }}
           path: dist/*.dmg
@@ -205,18 +205,18 @@ jobs:
     steps:
       # This job is the only place allowed to create the tag or mutate a release.
       - name: Check out validated release notes
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.commit_sha }}
 
       - name: Download Windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: AniStream-release-win-x64-${{ inputs.version }}
           path: dist
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: AniStream-release-mac-arm64-${{ inputs.version }}
           path: dist
