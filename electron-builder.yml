@@ -34,5 +34,8 @@ win:
         - x64
   icon: assets/app-icon/AniStream.ico
 nsis:
+  # Matches the name GitHub serves (it turns spaces into dots), so latest.yml points at a real
+  # asset for in-app updates. Installed versions already accept this name.
+  artifactName: AniStream.Setup.${version}.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true

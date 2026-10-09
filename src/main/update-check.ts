@@ -138,6 +138,7 @@ export class UpdateChecker {
               ...times,
               version: release.version,
               releaseUrl: release.releaseUrl,
+              canInstall: release.canInstall,
             }
           : { kind: "up-to-date", ...times },
       );

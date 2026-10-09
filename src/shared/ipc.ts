@@ -69,7 +69,7 @@ import type {
 } from "./contracts";
 import type { MoreBrowseInput } from "./more-filters";
 import type { ReaderSettings } from "./reader-settings";
-import type { UpdateStatus } from "./update-check";
+import type { UpdatePreferences, UpdateStatus } from "./update-check";
 import type { RestorePreview, RestoreSummary } from "./local-backup";
 import type { PersonalAiringUpdate } from "./personal-library";
 import type { BingeChange, BingeState } from "./binge";
@@ -90,6 +90,14 @@ import type {
 export interface IpcInvokeChannelMap {
   "app:update-status": { args: []; result: UpdateStatus };
   "app:check-updates": { args: []; result: UpdateStatus };
+  "app:download-update": { args: []; result: UpdateStatus };
+  "app:cancel-update-download": { args: []; result: UpdateStatus };
+  "app:install-update": { args: []; result: boolean };
+  "app:update-preferences": { args: []; result: UpdatePreferences };
+  "app:set-update-preferences": {
+    args: [preferences: Omit<UpdatePreferences, "supported">];
+    result: UpdatePreferences;
+  };
   "backup:export": { args: []; result: boolean };
   "backup:prepare": { args: []; result: RestorePreview | null };
   "backup:restore": { args: [token: string]; result: RestoreSummary };

@@ -617,3 +617,38 @@
     opacity: 0.35;
   }
 }
+
+/* In-app update download (Windows). */
+.app-updates .update-progress {
+  width: min(320px, 100%);
+  height: 6px;
+  margin: 6px 0 2px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  appearance: none;
+  background: rgb(255 255 255 / 0.1);
+}
+.app-updates .update-progress::-webkit-progress-bar {
+  background: rgb(255 255 255 / 0.1);
+}
+.app-updates .update-progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.25s ease-out;
+}
+.update-notice .update-notice-action {
+  gap: 6px;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--primary);
+  font-weight: 600;
+}
+.update-notice .update-notice-action:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+.update-notice .update-notice-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { createUpdateSession } from "../../src/renderer/src/update-session";
-import type { UpdateStatus } from "../../src/shared/update-check";
+import type { UpdatePreferences, UpdateStatus } from "../../src/shared/update-check";
 
 const idle: UpdateStatus = { kind: "idle", currentVersion: "0.1.3" };
 const available: UpdateStatus = {
@@ -10,6 +10,12 @@ const available: UpdateStatus = {
   releaseUrl: "https://github.com/Athen2045/AniStream/releases/tag/v0.1.4",
   checkedAt: "2026-09-09T00:00:00Z",
   retryAt: "2026-09-09T00:01:00Z",
+  canInstall: true,
+};
+const preferences: UpdatePreferences = {
+  supported: true,
+  autoDownload: true,
+  installOnQuit: false,
 };
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -28,6 +34,22 @@ function setup() {
       callback = listener;
       return unsubscribe;
     }),
+    downloadUpdate: vi.fn(async (): Promise<UpdateStatus> => ({
+      kind: "downloading",
+      currentVersion: "0.1.3",
+      version: "0.1.4",
+      releaseUrl: available.kind === "update-available" ? available.releaseUrl : "",
+      percent: 0,
+      transferredBytes: 0,
+      totalBytes: 0,
+    })),
+    cancelUpdateDownload: vi.fn(async () => available),
+    installUpdate: vi.fn(async () => true),
+    getUpdatePreferences: vi.fn(async () => preferences),
+    setUpdatePreferences: vi.fn(async (next: Omit<UpdatePreferences, "supported">) => ({
+      supported: true,
+      ...next,
+    })),
   };
   return {
     bridge,
@@ -111,4 +133,75 @@ it("ignores late work after disposal and reactivation", async () => {
   manual.resolve(available);
   await pending;
   expect(session.getSnapshot()).toMatchObject({ status: idle, manualPending: false });
+});
+
+const ready: UpdateStatus = {
+  kind: "ready-to-install",
+  currentVersion: "0.1.3",
+  version: "0.1.4",
+  releaseUrl: "https://github.com/Athen2045/AniStream/releases/tag/v0.1.4",
+};
+
+it("loads update preferences and saves changes", async () => {
+  const { bridge, session } = setup();
+  await session.activate();
+  await vi.waitFor(() => expect(session.getSnapshot().preferences).toEqual(preferences));
+  await session.setPreferences({ autoDownload: false, installOnQuit: true });
+  expect(bridge.setUpdatePreferences).toHaveBeenCalledWith({
+    autoDownload: false,
+    installOnQuit: true,
+  });
+  expect(session.getSnapshot().preferences).toEqual({
+    supported: true,
+    autoDownload: false,
+    installOnQuit: true,
+  });
+});
+
+it("reports a failed preference save without dropping the previous value", async () => {
+  const { bridge, session } = setup();
+  bridge.setUpdatePreferences.mockRejectedValueOnce(new Error("no"));
+  await session.activate();
+  await vi.waitFor(() => expect(session.getSnapshot().preferences).toEqual(preferences));
+  await session.setPreferences({ autoDownload: false, installOnQuit: false });
+  expect(session.getSnapshot().preferences).toEqual(preferences);
+  expect(session.getSnapshot().preferencesError).toBe("The setting could not be saved.");
+});
+
+it("starts one download at a time and applies the returned status", async () => {
+  const { bridge, session } = setup();
+  await session.activate();
+  const pending = deferred<UpdateStatus>();
+  bridge.downloadUpdate.mockImplementationOnce(() => pending.promise);
+  const first = session.download();
+  void session.download();
+  expect(bridge.downloadUpdate).toHaveBeenCalledTimes(1);
+  expect(session.getSnapshot().actionPending).toBe(true);
+  pending.resolve(ready);
+  await first;
+  expect(session.getSnapshot()).toMatchObject({ status: ready, actionPending: false });
+});
+
+it("explains when install is refused or the bridge fails", async () => {
+  const { bridge, session } = setup();
+  await session.activate();
+  bridge.installUpdate.mockResolvedValueOnce(false);
+  await session.install();
+  expect(session.getSnapshot().error).toBe("The update is not ready to install yet.");
+  bridge.installUpdate.mockRejectedValueOnce(new Error("ipc"));
+  await session.install();
+  expect(session.getSnapshot().error).toBe("AniStream could not start the installer. Try again.");
+});
+
+it("brings a dismissed notice back when the download becomes ready", async () => {
+  const { session, emit } = setup();
+  await session.activate();
+  emit(available);
+  session.dismiss();
+  expect(session.getSnapshot().dismissed).toBe(true);
+  emit(ready);
+  expect(session.getSnapshot().dismissed).toBe(false);
+  session.dismiss();
+  emit(ready);
+  expect(session.getSnapshot().dismissed).toBe(true);
 });

@@ -303,3 +303,71 @@ it("rejects unexpected arguments on both update IPC endpoints", () => {
     expect(() => ipcArgValidators[channel](["https://evil.test"])).toThrow();
   }
 });
+
+const asset = (id: number, name: string, patch: Record<string, unknown> = {}) => ({
+  id,
+  name,
+  state: "uploaded",
+  size: 456,
+  ...patch,
+});
+
+it("offers in-app install only with latest.yml and the dotted installer", () => {
+  const base = release();
+  const withManifest = {
+    ...base,
+    assets: [asset(2, "AniStream.Setup.0.1.4.exe"), asset(3, "latest.yml")],
+  };
+  expect(parseTargetRelease(withManifest, "win-x64")).toMatchObject({
+    kind: "release",
+    canInstall: true,
+  });
+  // Spaced local name: GitHub never serves it, so latest.yml could not point at it.
+  const spaced = {
+    ...base,
+    assets: [asset(2, "AniStream Setup 0.1.4.exe"), asset(3, "latest.yml")],
+  };
+  expect(parseTargetRelease(spaced, "win-x64")).toMatchObject({ canInstall: false });
+  const noManifest = { ...base, assets: [asset(2, "AniStream.Setup.0.1.4.exe")] };
+  expect(parseTargetRelease(noManifest, "win-x64")).toMatchObject({ canInstall: false });
+  const emptyManifest = {
+    ...base,
+    assets: [asset(2, "AniStream.Setup.0.1.4.exe"), asset(3, "latest.yml", { size: 0 })],
+  };
+  expect(parseTargetRelease(emptyManifest, "win-x64")).toMatchObject({ canInstall: false });
+  const mac = { ...base, assets: [...base.assets, asset(3, "latest.yml")] };
+  expect(parseTargetRelease(mac, "mac-arm64")).toMatchObject({ canInstall: false });
+});
+
+it("passes canInstall through the checker status", async () => {
+  const data = {
+    ...release(),
+    assets: [asset(2, "AniStream.Setup.0.1.4.exe"), asset(3, "latest.yml")],
+  };
+  const transport = vi.fn<typeof fetch>().mockResolvedValue(json(data));
+  expect(await setup(transport, { target: "win-x64" }).check()).toMatchObject({
+    kind: "update-available",
+    version: "0.1.4",
+    canInstall: true,
+  });
+});
+
+it("validates update preference arguments strictly", () => {
+  const validate = ipcArgValidators["app:set-update-preferences"];
+  expect(validate([{ autoDownload: false, installOnQuit: true }])).toEqual([
+    { autoDownload: false, installOnQuit: true },
+  ]);
+  expect(() => validate([{ autoDownload: "yes", installOnQuit: true }])).toThrow();
+  expect(() => validate([{ autoDownload: true }])).toThrow();
+  expect(() => validate([{ autoDownload: true, installOnQuit: false, extra: 1 }])).toThrow();
+  expect(() => validate([])).toThrow();
+  for (const channel of [
+    "app:download-update",
+    "app:cancel-update-download",
+    "app:install-update",
+    "app:update-preferences",
+  ] as const) {
+    expect(ipcArgValidators[channel]([])).toEqual([]);
+    expect(() => ipcArgValidators[channel](["x"])).toThrow();
+  }
+});

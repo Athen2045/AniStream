@@ -18,6 +18,11 @@ function invoke<Channel extends IpcInvokeChannel>(
 const bridge: AniStreamBridge = {
   getUpdateStatus: () => invoke("app:update-status"),
   checkForUpdates: () => invoke("app:check-updates"),
+  downloadUpdate: () => invoke("app:download-update"),
+  cancelUpdateDownload: () => invoke("app:cancel-update-download"),
+  installUpdate: () => invoke("app:install-update"),
+  getUpdatePreferences: () => invoke("app:update-preferences"),
+  setUpdatePreferences: (preferences) => invoke("app:set-update-preferences", preferences),
   onUpdateStatusChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, state: UpdateStatus): void =>
       callback(state);

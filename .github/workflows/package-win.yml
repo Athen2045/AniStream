@@ -74,14 +74,15 @@ jobs:
         shell: pwsh
         run: |
           $version = node -p "require('./package.json').version"
-          npm run check:win-installer -- "dist/AniStream Setup $version.exe"
+          npm run check:win-installer -- "dist/AniStream.Setup.$version.exe"
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: AniStream-win-x64-nsis-unsigned
           path: |
-            dist/AniStream Setup *.exe
-            dist/AniStream Setup *.exe.blockmap
+            dist/AniStream.Setup.*.exe
+            dist/AniStream.Setup.*.exe.blockmap
+            dist/latest.yml
           retention-days: 14
           if-no-files-found: error

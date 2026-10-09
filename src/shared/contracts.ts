@@ -890,6 +890,15 @@ export interface UpdateAniListEntryInput {
 export interface AniStreamBridge {
   getUpdateStatus(): Promise<import("./update-check").UpdateStatus>;
   checkForUpdates(): Promise<import("./update-check").UpdateStatus>;
+  /** Windows: start or retry downloading the offered release. */
+  downloadUpdate(): Promise<import("./update-check").UpdateStatus>;
+  cancelUpdateDownload(): Promise<import("./update-check").UpdateStatus>;
+  /** Windows: quit and install the downloaded release; false when nothing is ready. */
+  installUpdate(): Promise<boolean>;
+  getUpdatePreferences(): Promise<import("./update-check").UpdatePreferences>;
+  setUpdatePreferences(
+    preferences: Omit<import("./update-check").UpdatePreferences, "supported">,
+  ): Promise<import("./update-check").UpdatePreferences>;
   onUpdateStatusChanged(
     callback: (state: import("./update-check").UpdateStatus) => void,
   ): () => void;
