@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { openAppDatabase } from "../../src/main/database";
 import type { MoreHistoryEntry } from "../../src/main/more-library";
-import type { HybridHistoryItem } from "../../src/main/recommendations/hybrid";
+import type { HybridHistoryItem } from "../../src/main/recommendations/engine";
 import {
   MoreDiscoveryService,
   moreAffinity,

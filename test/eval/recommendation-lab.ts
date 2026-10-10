@@ -1,15 +1,7 @@
 // Offline recommendation lab: fixture types, user-affinity model, and candidate rankers.
 // Rankers here are experiments; the winner is ported into src/main/recommendations.
-import type { AniListDashboard, AniListMedia } from "../../src/shared/contracts";
 import type { RecommendationItemFeatures } from "../../src/shared/recommendations";
-import { discoveryEvidence } from "../../src/main/recommendations/discovery-evidence";
-import { buildRecommendationProfile } from "../../src/main/recommendations/profile";
-import {
-  filterRecommendationCandidates,
-  scoreRecommendationCandidate,
-  selectRecommendations,
-} from "../../src/main/recommendations/scoring";
-import { rankHybrid } from "../../src/main/recommendations/hybrid";
+import { rankHybrid } from "../../src/main/recommendations/engine";
 
 export type MediaType = "ANIME" | "MANGA";
 
@@ -88,42 +80,6 @@ export function affinity(entry: FixtureEntry, userMean: number): number | undefi
   return value;
 }
 
-// ---------------------------------------------------------------------------------------------
-// Baseline: the production pipeline (genre-only features, production evidence and scoring).
-
-function toAniListMedia(media: FixtureMedia): AniListMedia {
-  return {
-    id: media.id,
-    type: media.type,
-    title: media.title.userPreferred ?? media.title.romaji ?? String(media.id),
-    genres: media.genres ?? [],
-    averageScore: media.averageScore ?? undefined,
-    popularity: media.popularity ?? undefined,
-    status: media.status,
-  } as unknown as AniListMedia;
-}
-
-function productionDashboard(input: RankInput): AniListDashboard {
-  const group = (type: MediaType) => [
-    {
-      entries: input.history
-        .filter((entry) => input.fixture.media[entry.mediaId]?.type === type)
-        .map((entry) => ({
-          media: toAniListMedia(input.fixture.media[entry.mediaId]),
-          status: entry.status,
-          score: entry.score,
-          progress: entry.progress,
-          updatedAt: entry.updatedAt,
-        })),
-    },
-  ];
-  return {
-    profile: { id: 1 },
-    animeLists: group("ANIME"),
-    mangaLists: group("MANGA"),
-  } as unknown as AniListDashboard;
-}
-
 export function genreOnlyFeatures(media: FixtureMedia, now: number): RecommendationItemFeatures {
   return {
     anilistId: media.id,
@@ -141,80 +97,32 @@ export function genreOnlyFeatures(media: FixtureMedia, now: number): Recommendat
   };
 }
 
-export function richFeatures(media: FixtureMedia, now: number): RecommendationItemFeatures {
-  return {
-    ...genreOnlyFeatures(media, now),
-    tags: (media.tags ?? [])
-      .filter((tag) => tag.rank >= 40 && !tag.isMediaSpoiler)
-      .map((tag) => ({ id: tag.id, name: tag.name, rank: tag.rank })),
-    creators: [
-      ...(media.studios?.nodes ?? []).map((studio) => ({
-        id: studio.id,
-        name: studio.name,
-        role: "STUDIO" as const,
-      })),
-      ...creatorStaff(media).map((staff) => ({
-        id: staff.node.id,
-        name: staff.node.name.full,
-        role: "STAFF" as const,
-      })),
-    ],
-  };
-}
-
-function productionRanker(features: typeof genreOnlyFeatures, sortAll: boolean): Ranker {
-  return (input) => {
-    const evidence = discoveryEvidence([], productionDashboard(input));
-    const itemFeatures = evidence.media.map((media) =>
-      features(input.fixture.media[media.id], input.now),
-    );
-    const profile = buildRecommendationProfile(evidence.events, itemFeatures, input.now);
-    const scored = filterRecommendationCandidates(
-      input.pool.map((media) => ({ features: features(media, input.now) })),
-      new Set(),
-    ).map((candidate) => scoreRecommendationCandidate(candidate, profile, input.now));
-    if (sortAll)
-      return scored
-        .sort((a, b) => b.rawScore - a.rawScore || a.anilistId - b.anilistId)
-        .map((row) => row.anilistId);
-    const top = selectRecommendations(scored, 10).map((row) => row.anilistId);
-    const topSet = new Set(top);
-    return [
-      ...top,
-      ...scored
-        .filter((row) => !topSet.has(row.anilistId))
-        .sort((a, b) => b.rawScore - a.rawScore)
-        .map((row) => row.anilistId),
-    ];
-  };
-}
-
-export const currentRanker = productionRanker(genreOnlyFeatures, false);
-export const currentRichRanker = productionRanker(richFeatures, false);
-
 export const popularityRanker: Ranker = (input) =>
   [...input.pool]
     .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0) || a.id - b.id)
     .map((media) => media.id);
 
-/** The production candidate pool: Trending + SCORE_DESC pages of the top two profile genres. */
-export function productionPool(
+/** Browse pool: Trending + SCORE_DESC pages of the viewer's top genres (by list affinity). */
+export function genrePool(
   input: Omit<RankInput, "pool">,
   excluded: Set<number>,
   genreCount = 2,
 ): FixtureMedia[] {
-  const evidence = discoveryEvidence([], productionDashboard({ ...input, pool: [] }));
-  const itemFeatures = evidence.media.map((media) =>
-    genreOnlyFeatures(input.fixture.media[media.id], input.now),
-  );
-  const profile = buildRecommendationProfile(evidence.events, itemFeatures, input.now);
-  const genres = Object.entries(profile.features)
-    .filter(([key]) => key.startsWith("genre:"))
-    .map(([key, value]) => ({ key, weight: value.positiveWeight - value.negativeWeight * 1.15 }))
-    .filter((row) => row.weight > 0)
-    .sort((a, b) => b.weight - a.weight)
+  const userMean = meanScore(input.history);
+  const weights = new Map<string, number>();
+  for (const entry of input.history) {
+    const value = affinity(entry, userMean);
+    if (!value) continue;
+    for (const genre of input.fixture.media[entry.mediaId]?.genres ?? []) {
+      const key = genre.toLocaleLowerCase().replace(/\s+/g, "-");
+      weights.set(key, (weights.get(key) ?? 0) + (value > 0 ? value : value * 1.15));
+    }
+  }
+  const genres = [...weights.entries()]
+    .filter(([, weight]) => weight > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, genreCount)
-    .map((row) => row.key.slice("genre:".length));
+    .map(([key]) => key);
   const ids = input.fixture.browse
     .filter(
       (page) =>
@@ -378,7 +286,7 @@ export function hybridPool(
     for (const node of media.recommendations?.nodes ?? [])
       if (node.mediaRecommendation?.type === input.type) ids.add(node.mediaRecommendation.id);
   }
-  for (const media of productionPool(input, excluded, genreCount)) ids.add(media.id);
+  for (const media of genrePool(input, excluded, genreCount)) ids.add(media.id);
   return [...ids]
     .filter((id) => !excluded.has(id))
     .map((id) => input.fixture.media[id])

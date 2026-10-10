@@ -4,7 +4,7 @@ import {
   loadRecommendationTrending,
 } from "../../src/main/anilist/recommendation-seeds";
 import { openAppDatabase } from "../../src/main/database";
-import { historyAffinities } from "../../src/main/recommendations/discovery-evidence";
+import { historyAffinities } from "../../src/main/recommendations/engine";
 import {
   buildSeedRows,
   pickHybrid,
@@ -16,7 +16,7 @@ import {
   rankHybrid,
   selectHybrid,
   type HybridHistoryItem,
-} from "../../src/main/recommendations/hybrid";
+} from "../../src/main/recommendations/engine";
 import type { AniListDashboard, AniListEntry } from "../../src/shared/contracts";
 import type { RecommendationItemFeatures } from "../../src/shared/recommendations";
 

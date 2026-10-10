@@ -11,9 +11,9 @@ import {
   rankHybrid,
   tasteRetrieval,
   type HybridHistoryItem,
-} from "../../src/main/recommendations/hybrid";
-import { createMoreDiscoveryStore } from "../../src/main/recommendations/more-discovery-store";
-import { normalizeHiddenTags } from "../../src/main/recommendations/personalization-store";
+} from "../../src/main/recommendations/engine";
+import { createMoreDiscoveryStore } from "../../src/main/recommendations/stores/more-discovery-store";
+import { normalizeHiddenTags } from "../../src/main/recommendations/stores/personalization-store";
 import type { AniListMedia } from "../../src/shared/contracts";
 import type { RecommendationItemFeatures } from "../../src/shared/recommendations";
 

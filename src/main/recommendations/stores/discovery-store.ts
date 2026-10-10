@@ -3,7 +3,7 @@ import type {
   RecommendationEvent,
   RecommendationItemFeatures,
   RecommendationResult,
-} from "../../shared/recommendations";
+} from "../../../shared/recommendations";
 
 export interface DiscoveryStore {
   features(ids: number[]): RecommendationItemFeatures[];

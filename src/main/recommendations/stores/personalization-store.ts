@@ -4,7 +4,7 @@ import type {
   TitleFeedbackRef,
   TitleFeedbackValue,
   TimeToPlaySummary,
-} from "../../shared/contracts";
+} from "../../../shared/contracts";
 
 export interface TitleFeedbackRow extends TitleFeedbackRef {
   value: Exclude<TitleFeedbackValue, null>;

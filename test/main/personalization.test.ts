@@ -6,7 +6,7 @@ import {
   MoreDiscoveryService,
   moreAffinity,
 } from "../../src/main/recommendations/more-discovery-service";
-import { createPersonalizationStore } from "../../src/main/recommendations/personalization-store";
+import { createPersonalizationStore } from "../../src/main/recommendations/stores/personalization-store";
 import {
   collaborativeEdges,
   createSimklCatalogStore,

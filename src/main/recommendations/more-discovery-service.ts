@@ -12,7 +12,7 @@ import {
 } from "../../shared/recommendations";
 import type { AnimeTmdbLinkIndex } from "../anime-tmdb-links";
 import type { MoreHistoryEntry } from "../more-library";
-import type { TitleFeedbackRow } from "./personalization-store";
+import type { TitleFeedbackRow } from "./stores/personalization-store";
 import type { MoreRecommendationSeed } from "../tmdb";
 import {
   adjustScores,
@@ -28,8 +28,8 @@ import {
   themeRowHybrid,
   type HybridHistoryItem,
   type HybridPick,
-} from "./hybrid";
-import type { MoreDiscoveryStore } from "./more-discovery-store";
+} from "./engine";
+import type { MoreDiscoveryStore } from "./stores/more-discovery-store";
 
 interface Dependencies {
   store: MoreDiscoveryStore;

@@ -19,9 +19,9 @@ import type {
   SaveMorePlaybackResumeInput,
   PlaybackResume,
 } from "../shared/contracts";
-import type { RecommendationRepository } from "./recommendations/repository";
-import { createRecommendationRepository } from "./recommendations/repository";
-import { createDiscoveryStore, type DiscoveryStore } from "./recommendations/discovery-store";
+import type { RecommendationRepository } from "./recommendations/stores/repository";
+import { createRecommendationRepository } from "./recommendations/stores/repository";
+import { createDiscoveryStore, type DiscoveryStore } from "./recommendations/stores/discovery-store";
 import { createSimklLibraryStore, type SimklLibraryStore } from "./simkl/library";
 import { createSimklCatalogStore, type SimklCatalogStore } from "./simkl/collaborative";
 import { createMangaDexMappingStore, type MangaDexMappingStore } from "./mangadex-mappings";
@@ -29,12 +29,12 @@ import { createSnapshotStore, type SnapshotStore } from "./field-snapshots";
 import {
   createPersonalizationStore,
   type PersonalizationStore,
-} from "./recommendations/personalization-store";
+} from "./recommendations/stores/personalization-store";
 import { AnimeTmdbLinks } from "./anime-tmdb-links";
 import {
   createMoreDiscoveryStore,
   type MoreDiscoveryStore,
-} from "./recommendations/more-discovery-store";
+} from "./recommendations/stores/more-discovery-store";
 import {
   createMangaPreferenceRepository,
   type MangaPreferenceRepository,

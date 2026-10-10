@@ -13,9 +13,9 @@ import {
 } from "../../shared/recommendations";
 import type { RecommendationSeedData } from "../anilist/recommendation-seeds";
 import type { AnimeTmdbLinkIndex } from "../anime-tmdb-links";
-import type { DiscoveryStore } from "./discovery-store";
-import type { TitleFeedbackRow } from "./personalization-store";
-import { discoveryEvidence, recommendationFeatures } from "./discovery-evidence";
+import type { DiscoveryStore } from "./stores/discovery-store";
+import type { TitleFeedbackRow } from "./stores/personalization-store";
+import { discoveryEvidence, recommendationFeatures } from "./engine";
 import {
   buildSeedRows,
   buildThemeRow,
@@ -32,7 +32,7 @@ import {
   rowStrength,
   selectHybrid,
   type HybridHistoryItem,
-} from "./hybrid";
+} from "./engine";
 
 /** Titles watched/read (any section) before For You starts; matches the hero (user 2026-10-08). */
 const MIN_TITLES = 3;

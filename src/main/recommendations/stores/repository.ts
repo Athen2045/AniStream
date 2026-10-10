@@ -4,7 +4,7 @@ import type {
   RecommendationImpression,
   RecommendationItemFeatures,
   RecommendationResult,
-} from "../../shared/recommendations";
+} from "../../../shared/recommendations";
 
 export interface RecommendationRepository {
   recordRecommendationEvent(event: RecommendationEvent): void;

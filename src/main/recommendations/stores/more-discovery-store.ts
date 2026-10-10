@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
-import type { MoreMediaType } from "../../shared/contracts";
-import type { RecommendationItemFeatures } from "../../shared/recommendations";
-import { itemKey } from "./hybrid";
+import type { MoreMediaType } from "../../../shared/contracts";
+import type { RecommendationItemFeatures } from "../../../shared/recommendations";
+import { itemKey } from "../engine";
 
 /** Local cache of TMDB recommendation features and the viewer's More "Not interested" choices. */
 export interface MoreDiscoveryStore {
