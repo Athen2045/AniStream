@@ -1,3 +1,5 @@
+import type { FieldSnapshots } from "../field-snapshots";
+import { isUsableMorePage } from "../home-fields";
 import type { AppDatabase } from "../database";
 import { registerTrustedIpcHandler } from "../ipc";
 import type { MorePlayerFrameUserAgent } from "../more-player-frame-ua";
@@ -16,16 +18,24 @@ export interface MoreDomainDeps {
   frameUserAgent: () => MorePlayerFrameUserAgent | undefined;
   /** The optional Simkl connection; "+" choices are mirrored there when it can write. */
   tracker?: () => SimklService | undefined;
+  /** Saved Trending copies (shown at once, refreshed in the background for the next launch). */
+  snapshots?: FieldSnapshots;
 }
 
 const MORE_LIKE_THIS_LIMIT = 6;
 
 export function registerMoreDomain(
   trustedRendererOrigin: string,
-  { tmdb, database, players, frameUserAgent, tracker }: MoreDomainDeps,
+  { tmdb, database, players, frameUserAgent, tracker, snapshots }: MoreDomainDeps,
 ): void {
   registerTrustedIpcHandler(trustedRendererOrigin, "more:trending", (_event, type, page) =>
-    tmdb.getTrending(type, page),
+    snapshots && page === 1
+      ? snapshots.get({
+          key: `more-trending:${type}`,
+          load: () => tmdb.getTrending(type, page),
+          usable: isUsableMorePage,
+        })
+      : tmdb.getTrending(type, page),
   );
   registerTrustedIpcHandler(trustedRendererOrigin, "more:browse", (_event, input) =>
     tmdb.browse(input),
@@ -141,9 +151,11 @@ export function registerMoreDomain(
       }
     },
   );
-  registerTrustedIpcHandler(trustedRendererOrigin, "more:title-progress", (_event, input) =>
-    library().getMoreTitleProgress(input),
-  );
+  registerTrustedIpcHandler(trustedRendererOrigin, "more:title-progress", (_event, input) => {
+    // Loaded when a title page opens: the title no longer counts as shown-but-ignored.
+    database?.moreDiscovery.markOpened(`${input.type}:${input.tmdbId}`);
+    return library().getMoreTitleProgress(input);
+  });
   registerTrustedIpcHandler(trustedRendererOrigin, "more:watchlist-set", (_event, title, saved) =>
     library().setMoreWatchlist(title, saved),
   );

@@ -96,10 +96,14 @@ const bridge: AniStreamBridge = {
   getMorePlaybackResume: (input) => invoke("more:resume", input),
   saveMorePlaybackResume: (input) => invoke("more:save-resume", input),
   clearMorePlaybackResume: (input) => invoke("more:clear-resume", input),
-  getForYou: (type) => invoke("discovery:for-you", type),
+  getForYou: (type, fresh) =>
+    fresh === undefined
+      ? invoke("discovery:for-you", type)
+      : invoke("discovery:for-you", type, fresh),
   recordDiscoveryFeedback: (input) => invoke("discovery:feedback", input),
   recordDiscoveryImpressions: (input) => invoke("discovery:impressions", input),
-  getMoreForYou: () => invoke("more:for-you"),
+  getMoreForYou: (fresh) =>
+    fresh === undefined ? invoke("more:for-you") : invoke("more:for-you", fresh),
   recordMoreDiscoveryFeedback: (input) => invoke("more:for-you-feedback", input),
   onAniListAuthChanged: (callback: (state: AniListAuthState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AniListAuthState): void => {
@@ -117,6 +121,7 @@ const bridge: AniStreamBridge = {
   getSimklRows: () => invoke("more:simkl-rows"),
   getPersonalizationSettings: () => invoke("personalization:settings"),
   setActivitySignals: (on) => invoke("personalization:set-activity", on),
+  setHiddenTags: (names) => invoke("personalization:set-hidden-tags", names),
   recordTimeToPlay: (section, seconds) => invoke("personalization:time-to-play", section, seconds),
   getTitleFeedback: (ref) => invoke("personalization:feedback", ref),
   setTitleFeedback: (ref, value) => invoke("personalization:set-feedback", ref, value),

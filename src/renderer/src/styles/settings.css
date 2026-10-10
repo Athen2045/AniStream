@@ -652,3 +652,31 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* Hidden genres & tags: chips under the hint, the Add menu on the right. */
+.set-row--stack {
+  align-items: flex-start;
+}
+.hidden-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.hidden-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.hidden-tag-chip:hover,
+.hidden-tag-chip:focus-visible {
+  border-color: var(--line-strong);
+}

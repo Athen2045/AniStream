@@ -354,3 +354,36 @@ describe("More search filters", () => {
     expect(urls.length).toBe(before);
   });
 });
+
+describe("TMDB film series and catalog genres", () => {
+  it("reads a collection's films tagged with it, and names catalog genres", async () => {
+    const urls: string[] = [];
+    const client = new TmdbClient("test-token", async (input) => {
+      const url = String(input);
+      urls.push(url);
+      const body = url.includes("/genre/")
+        ? { genres: [{ id: 28, name: "Action" }] }
+        : url.includes("/collection/")
+          ? {
+              id: 70,
+              parts: [{ id: 5, title: "Part 1", release_date: "2010-01-01", genre_ids: [28] }],
+            }
+          : {
+              page: 1,
+              total_pages: 1,
+              total_results: 1,
+              results: [{ id: 9, name: "Show", genre_ids: [10759, 16] }],
+            };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    expect(await client.getCollection(70)).toEqual([
+      expect.objectContaining({ anilistId: 5, collectionId: 70, genres: ["Action"] }),
+    ]);
+    expect(urls.some((url) => url.includes("/3/collection/70"))).toBe(true);
+    const trending = await client.getTrending("TV", 1);
+    expect(trending.items[0].genres).toEqual(["Action", "Adventure", "Animation"]);
+  });
+});

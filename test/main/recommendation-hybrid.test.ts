@@ -93,9 +93,9 @@ describe("hybrid ranker", () => {
     expect(ranked.map((row) => row.features.anilistId)).toEqual([11, 10]);
   });
 
-  it("caps any one seed at three picks and labels the seed title", () => {
+  it("fades repeats of one seed instead of cutting them off, and labels the seed title", () => {
     const seed = item(1, {
-      recommendations: [10, 11, 12, 13].map((id) => ({
+      recommendations: [10, 11, 12, 13, 14, 15].map((id) => ({
         id,
         mediaType: "ANIME" as const,
         rating: 9,
@@ -105,14 +105,15 @@ describe("hybrid ranker", () => {
     const ranked = rankHybrid({
       section: "ANIME",
       history,
-      candidates: [10, 11, 12, 13, 14].map((id) => item(id)),
+      candidates: [10, 11, 12, 13, 14, 15, 20].map((id) => item(id)),
       now,
     });
-    const picked = selectHybrid(ranked, history, 4);
-    expect(picked.map((row) => row.anilistId)).toEqual([10, 11, 12, 14]);
+    // Same-seed picks lose a little more each time (X's diversity decay), so the unrelated title
+    // overtakes the fifth one rather than waiting behind every neighbour.
+    const picked = selectHybrid(ranked, history, 6);
+    expect(picked.map((row) => row.anilistId)).toEqual([10, 11, 12, 13, 20, 14]);
     expect(picked[0]).toMatchObject({ relatedTo: 1, relatedTitle: "Title 1" });
-    expect(picked[3].relatedTo).toBeUndefined();
-    expect(selectHybrid(ranked, history, 5).map((row) => row.anilistId)).toContain(13);
+    expect(picked[4].relatedTo).toBeUndefined();
   });
 });
 
@@ -597,7 +598,7 @@ describe("More: movies and shows together", () => {
     });
     const tv = (picks: { features: RecommendationItemFeatures }[]) =>
       picks.filter((pick) => pick.features.mediaType === "TV").length;
-    expect(tv(pickHybrid(scored, seeds, 10))).toBe(0);
+    expect(tv(pickHybrid(scored, seeds, 10))).toBeLessThan(3);
     const balanced = pickHybrid(scored, seeds, 10, { minPerType: 3 });
     expect(tv(balanced)).toBe(3);
     expect(balanced).toHaveLength(10);

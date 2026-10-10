@@ -39,7 +39,8 @@ export function createDiscoverySession(
     snapshot = { ...snapshot, ...changes };
     listeners.forEach((listener) => listener());
   };
-  const load = async (): Promise<void> => {
+  /** `fresh` rebuilds the feed; without it the main process may answer with its saved feed. */
+  const load = async (fresh = true): Promise<void> => {
     if (disposed || snapshot.busy) return;
     if (flight) return flight;
     const current = ++generation;
@@ -47,7 +48,7 @@ export function createDiscoverySession(
     const request = (async () => {
       try {
         const feed = await withTimeout(
-          api().getForYou(type),
+          api().getForYou(type, fresh),
           options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
         );
         if (disposed || current !== generation) return;
@@ -104,11 +105,14 @@ export function createDiscoverySession(
       };
     },
     load,
-    /** Loads unless a feed arrived within `maxAgeMs` (the hero and the rail share one session). */
+    /**
+     * Loads unless a feed arrived within `maxAgeMs` (the hero and the rail share one session). The
+     * first load may use the saved feed; an aged one is rebuilt.
+     */
     ensure(maxAgeMs: number): Promise<void> {
       if (flight) return flight;
       if (snapshot.feed && Date.now() - loadedAt < maxAgeMs) return Promise.resolve();
-      return load();
+      return load(Boolean(snapshot.feed));
     },
     async explore(item: RecommendationResult): Promise<void> {
       const requestId = snapshot.feed?.requestId;
@@ -211,4 +215,28 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
   }
+}
+
+const sharedSessions = new Map<string, ReturnType<typeof createDiscoverySession>>();
+
+/**
+ * One For You session per section and viewer for the whole app session, so switching sections
+ * keeps the feed on screen instead of loading it again. Sessions of another viewer are dropped.
+ */
+export function sharedDiscoverySession(
+  key: string,
+  type: AniListMediaType,
+): ReturnType<typeof createDiscoverySession> {
+  const viewer = key.split(":")[1];
+  for (const [other, session] of sharedSessions)
+    if (other.split(":")[1] !== viewer) {
+      session.dispose();
+      sharedSessions.delete(other);
+    }
+  let session = sharedSessions.get(key);
+  if (!session) {
+    session = createDiscoverySession(type);
+    sharedSessions.set(key, session);
+  }
+  return session;
 }

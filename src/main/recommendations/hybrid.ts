@@ -13,7 +13,36 @@ import {
 } from "../../shared/recommendations";
 
 const DAY_MS = 86_400_000;
-const MAX_PER_SEED = 3;
+/**
+ * Soft diversity (X's author-diversity scorer: (1 - floor) * decay^n + floor for the n-th repeat).
+ * Repeats of a seed, a franchise or a studio fade instead of being cut off at a fixed count.
+ */
+const SEED_FADE = { decay: 0.6, floor: 0.35 };
+const FRANCHISE_FADE = { decay: 0.4, floor: 0.15 };
+const STUDIO_FADE = { decay: 0.75, floor: 0.5 };
+const MAX_PER_FRANCHISE_IN_ROW = 2;
+/** Top-ranked titles the diverse selection considers. */
+const SELECTION_POOL = 120;
+/** Calibration smoothing (Steck's alpha): keeps unseen genres from an infinite divergence. */
+const CALIBRATION_ALPHA = 0.01;
+/** Ignored picks: shown on this many days without being opened before they start to fade. */
+const IGNORED_FREE_DAYS = 2;
+const IGNORED_FADE = 0.8;
+const IGNORED_FLOOR = 0.35;
+/** Freshness (YouTube): titles airing now, or released within this window, rank a little higher. */
+const AIRING_BOOST = 1.12;
+const RECENT_BOOST = 1.08;
+const RECENT_DAYS = 180;
+/** "In-network": the released next entry of a liked title. */
+const CONTINUATION_BOOST = 1.25;
+/** Relations that keep two titles in one franchise for diversity. */
+const FRANCHISE_RELATIONS = new Set<RecommendationRelation["relationType"]>([
+  "PREQUEL",
+  "SEQUEL",
+  "PARENT",
+  "SIDE_STORY",
+  "SPIN_OFF",
+]);
 const MIN_TAG_RANK = 40;
 /** Zero-based rail position of the exploration pick (the seventh card). */
 const EXPLORE_SLOT = 6;
@@ -120,6 +149,20 @@ export interface PickOptions {
   /** Each media type gets at least this many picks when one ranks in the top `balanceWithin`. */
   minPerType?: number;
   balanceWithin?: number;
+  /**
+   * Calibration strength in [0, 1] (Netflix, Steck 2018): how much the rail should follow the
+   * viewer's genre mix instead of filling up with their single strongest taste. 0 turns it off.
+   */
+  calibrate?: number;
+}
+
+/** Score changes applied after ranking (`adjustScores`). */
+export interface ScoreAdjustments {
+  now: number;
+  /** Days each title (item key) was shown without being opened since. */
+  ignored?: ReadonlyMap<string, number>;
+  /** Released next entries of liked titles (item keys), the "in-network" source. */
+  continuation?: ReadonlySet<string>;
 }
 
 /** In-place Fisher–Yates shuffle. */
@@ -210,20 +253,7 @@ export function pickHybrid(
   limit = 10,
   options: PickOptions = {},
 ): HybridPick[] {
-  const perSeed = new Map<string, number>();
-  const picked: HybridScored[] = [];
-  const deferred: HybridScored[] = [];
-  for (const row of scored) {
-    if (picked.length >= limit) break;
-    const count = row.seedKey === undefined ? 0 : (perSeed.get(row.seedKey) ?? 0);
-    if (count >= MAX_PER_SEED) {
-      deferred.push(row);
-      continue;
-    }
-    if (row.seedKey !== undefined) perSeed.set(row.seedKey, count + 1);
-    picked.push(row);
-  }
-  for (const row of deferred) if (picked.length < limit) picked.push(row);
+  const picked = selectDiverse(scored, history, limit, options.calibrate ?? 0);
   if (options.minPerType) balanceTypes(picked, scored, options.minPerType, options.balanceWithin);
 
   const explore = limit > EXPLORE_SLOT ? explorationPick(scored, picked) : undefined;
@@ -280,6 +310,20 @@ export function seedRowsHybrid(
     .sort((a, b) => b.occurredAt - a.occurredAt || compareItems(a.features, b.features));
   shuffle(seeds, random);
   const commonOrigin = mostCommon(scored.map((row) => row.features.origin));
+  const franchise = franchiseKeys([
+    ...history.map((row) => row.features),
+    ...scored.map((row) => row.features),
+  ]);
+  const franchiseCap = (list: HybridScored[]): HybridScored[] => {
+    const counts = new Map<string, number>();
+    return list.filter((row) => {
+      const key = franchise.get(itemKey(row.features));
+      if (!key) return true;
+      const count = counts.get(key) ?? 0;
+      counts.set(key, count + 1);
+      return count < MAX_PER_FRANCHISE_IN_ROW;
+    });
+  };
   for (const seed of seeds) {
     if (rows.length >= maxRows) break;
     // A row follows its seed's origin: a Malayalam film seeds Malayalam titles. Titles of unknown
@@ -291,12 +335,12 @@ export function seedRowsHybrid(
         ? origin === commonOrigin
         : row.features.origin === origin);
     const neighbors = new Set((seed.features.recommendations ?? []).map(edgeKey));
-    const items = scored
-      .filter(
+    const items = franchiseCap(
+      scored.filter(
         (row) =>
           neighbors.has(itemKey(row.features)) && !used.has(itemKey(row.features)) && fits(row),
-      )
-      .slice(0, perRow);
+      ),
+    ).slice(0, perRow);
     const seedVector = space.vector(seed.features);
     if (items.length < perRow) {
       const taken = new Set(items.map((row) => itemKey(row.features)));
@@ -310,7 +354,8 @@ export function seedRowsHybrid(
         .sort(
           (a, b) => b.similarity - a.similarity || compareItems(a.row.features, b.row.features),
         );
-      items.push(...similar.slice(0, perRow - items.length).map(({ row }) => row));
+      items.push(...similar.map(({ row }) => row));
+      items.splice(0, items.length, ...franchiseCap(items).slice(0, perRow));
     }
     if (crossType > 0) {
       const seedType = seed.features.mediaType;
@@ -383,10 +428,11 @@ function balanceTypes(
         }
       if (drop < 0) break;
       picked.splice(drop, 1);
-      picked.push(row);
+      // The newcomer takes its score's place; the rest keep their selection order.
+      const at = picked.findIndex((pick) => pick.rawScore < row.rawScore);
+      picked.splice(at < 0 ? picked.length : at, 0, row);
     }
   }
-  picked.sort((a, b) => b.rawScore - a.rawScore);
 }
 
 /**
@@ -556,8 +602,28 @@ export function selectHybrid(
   scored: HybridScored[],
   history: HybridHistoryItem[],
   limit = 10,
+  options: PickOptions = {},
 ): RecommendationResult[] {
-  return pickHybrid(scored, history, limit).map(toAniListResult);
+  return pickHybrid(scored, history, limit, options).map(toAniListResult);
+}
+
+/** Picks for a fixed set of titles (the continuation row), strongest first, as rail results. */
+export function continuationPicks(
+  scored: HybridScored[],
+  history: HybridHistoryItem[],
+  keys: ReadonlySet<string>,
+  shown: ReadonlySet<string>,
+  limit: number,
+): HybridPick[] {
+  const context = pickContext(history);
+  return scored
+    .filter((row) => keys.has(itemKey(row.features)) && !shown.has(itemKey(row.features)))
+    .slice(0, limit)
+    .map((row) => toPick(row, context, false));
+}
+
+export function toAniListResults(picks: HybridPick[]): RecommendationResult[] {
+  return picks.map(toAniListResult);
 }
 
 /** AniList "Because you watched/read X" rows. */
@@ -872,4 +938,221 @@ function addScaled(target: Vector, source: Vector, scale: number): void {
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+}
+
+/**
+ * Score changes after ranking, in one place (user request 2026-10-10, from X, YouTube and
+ * Netflix): titles shown on several days without being opened fade; titles airing now or
+ * released recently rise a little; the released next entry of a liked title rises more.
+ */
+export function adjustScores(scored: HybridScored[], adjust: ScoreAdjustments): HybridScored[] {
+  return scored
+    .map((row) => {
+      const key = itemKey(row.features);
+      let multiplier = 1;
+      const ignored = adjust.ignored?.get(key) ?? 0;
+      if (ignored > IGNORED_FREE_DAYS)
+        multiplier *= Math.max(IGNORED_FLOOR, IGNORED_FADE ** (ignored - IGNORED_FREE_DAYS));
+      multiplier *= freshness(row.features, adjust.now);
+      if (adjust.continuation?.has(key)) multiplier *= CONTINUATION_BOOST;
+      return multiplier === 1 ? row : { ...row, rawScore: row.rawScore * multiplier };
+    })
+    .sort((a, b) => b.rawScore - a.rawScore || compareItems(a.features, b.features));
+}
+
+function freshness(item: RecommendationItemFeatures, now: number): number {
+  if (item.status === "RELEASING") return AIRING_BOOST;
+  if (item.status === "NOT_YET_RELEASED") return 1;
+  const started =
+    item.startedOn !== undefined
+      ? Date.UTC(
+          Math.floor(item.startedOn / 10_000),
+          Math.max(0, (Math.floor(item.startedOn / 100) % 100) - 1),
+          Math.max(1, item.startedOn % 100),
+        )
+      : item.releaseDate
+        ? Date.parse(item.releaseDate)
+        : NaN;
+  if (!Number.isFinite(started) || started > now) return 1;
+  return now - started <= RECENT_DAYS * DAY_MS ? RECENT_BOOST : 1;
+}
+
+/**
+ * Franchise groups by exact relations (sequels, prequels, parents, side stories, spin-offs) and,
+ * for movies, TMDB collections: two titles share a key when any chain of these links joins them.
+ * Titles with no franchise link are left out.
+ */
+export function franchiseKeys(items: RecommendationItemFeatures[]): Map<string, string> {
+  const parent = new Map<string, string>();
+  const find = (key: string): string => {
+    let root = key;
+    while (parent.has(root) && parent.get(root) !== root) root = parent.get(root)!;
+    parent.set(key, root);
+    return root;
+  };
+  const union = (a: string, b: string): void => {
+    if (!parent.has(b)) parent.set(b, b);
+    const left = find(a);
+    const right = find(b);
+    if (left !== right) parent.set(left, right);
+  };
+  const linked = new Set<string>();
+  for (const item of items) {
+    const key = itemKey(item);
+    if (!parent.has(key)) parent.set(key, key);
+    for (const relation of item.relations ?? [])
+      if (FRANCHISE_RELATIONS.has(relation.relationType) && relation.mediaType === item.mediaType) {
+        union(key, edgeKey(relation));
+        linked.add(key);
+      }
+    if (item.collectionId) {
+      union(key, `collection:${item.collectionId}`);
+      linked.add(key);
+    }
+  }
+  const groups = new Map<string, string>();
+  for (const item of items) {
+    const key = itemKey(item);
+    if (linked.has(key)) groups.set(key, find(key));
+  }
+  return groups;
+}
+
+function studioKey(item: RecommendationItemFeatures): string | undefined {
+  const studio = item.creators.find(
+    (creator) => creator.role === "STUDIO" || creator.role === "COMPANY",
+  );
+  return studio ? creatorKey(studio) : undefined;
+}
+
+function fade({ decay, floor }: { decay: number; floor: number }, repeats: number): number {
+  return (1 - floor) * decay ** repeats + floor;
+}
+
+/** A genre mix from titles, each title's weight split evenly across its genres. */
+function genreMix(
+  items: Array<{ features: RecommendationItemFeatures; weight: number }>,
+): Map<string, number> {
+  const mix = new Map<string, number>();
+  let total = 0;
+  for (const { features, weight } of items) {
+    if (weight <= 0 || !features.genres.length) continue;
+    const share = weight / features.genres.length;
+    for (const genre of features.genres) mix.set(genre, (mix.get(genre) ?? 0) + share);
+    total += weight;
+  }
+  if (total > 0) for (const [genre, value] of mix) mix.set(genre, value / total);
+  return mix;
+}
+
+/** KL(target || picked), with the picked mix smoothed toward the target (Steck 2018). */
+function divergence(target: Map<string, number>, picked: Map<string, number>): number {
+  let sum = 0;
+  for (const [genre, p] of target) {
+    if (p <= 0) continue;
+    const q = (1 - CALIBRATION_ALPHA) * (picked.get(genre) ?? 0) + CALIBRATION_ALPHA * p;
+    sum += p * Math.log(p / q);
+  }
+  return sum;
+}
+
+/**
+ * Greedy rail selection: each step takes the title with the best faded score (repeats of a seed,
+ * franchise or studio fade) blended with how well the rail then matches the genre mix the viewer
+ * likes. Without calibration it is the faded score alone.
+ */
+function selectDiverse(
+  scored: HybridScored[],
+  history: HybridHistoryItem[],
+  limit: number,
+  calibrate: number,
+): HybridScored[] {
+  const pool = scored.slice(0, SELECTION_POOL);
+  const franchise = franchiseKeys(pool.map((row) => row.features));
+  const target = calibrate
+    ? genreMix(history.map((row) => ({ features: row.features, weight: row.affinity })))
+    : new Map<string, number>();
+  const maxScore = Math.max(1e-9, ...pool.map((row) => row.rawScore));
+  const picked: HybridScored[] = [];
+  const seeds = new Map<string, number>();
+  const franchises = new Map<string, number>();
+  const studios = new Map<string, number>();
+  const remaining = new Set(pool);
+  const count = (map: Map<string, number>, key: string | undefined): void => {
+    if (key) map.set(key, (map.get(key) ?? 0) + 1);
+  };
+  while (picked.length < limit && remaining.size) {
+    let best: HybridScored | undefined;
+    let bestValue = -Infinity;
+    for (const row of remaining) {
+      const franchiseKey = franchise.get(itemKey(row.features));
+      const studio = studioKey(row.features);
+      const faded =
+        (row.rawScore / maxScore) *
+        (row.seedKey ? fade(SEED_FADE, seeds.get(row.seedKey) ?? 0) : 1) *
+        (franchiseKey ? fade(FRANCHISE_FADE, franchises.get(franchiseKey) ?? 0) : 1) *
+        (studio ? fade(STUDIO_FADE, studios.get(studio) ?? 0) : 1);
+      let value = faded;
+      if (calibrate && target.size) {
+        const mix = genreMix(
+          [...picked, row].map((pick) => ({ features: pick.features, weight: 1 })),
+        );
+        value = (1 - calibrate) * faded - calibrate * divergence(target, mix);
+      }
+      if (value > bestValue) {
+        best = row;
+        bestValue = value;
+      }
+    }
+    if (!best) break;
+    remaining.delete(best);
+    picked.push(best);
+    count(seeds, best.seedKey);
+    count(franchises, franchise.get(itemKey(best.features)));
+    count(studios, studioKey(best.features));
+  }
+  return picked;
+}
+
+/**
+ * Candidate retrieval from the local feature cache by taste (a small on-device stand-in for the
+ * retrieval stage of X and YouTube): the cached titles closest to the liked titles, pushed away
+ * from disliked ones. No provider requests.
+ */
+export function tasteRetrieval(
+  history: HybridHistoryItem[],
+  pool: RecommendationItemFeatures[],
+  limit: number,
+): RecommendationItemFeatures[] {
+  if (!pool.length || !history.length) return [];
+  const space = new ContentSpace([...history.map((row) => row.features), ...pool]);
+  const profile: Vector = new Map();
+  for (const row of history)
+    addScaled(
+      profile,
+      space.vector(row.features),
+      row.affinity > 0 ? row.affinity : row.affinity * 0.5,
+    );
+  const known = new Set(history.map((row) => itemKey(row.features)));
+  return pool
+    .filter((item) => !known.has(itemKey(item)))
+    .map((item) => ({ item, similarity: dot(profile, space.vector(item)) }))
+    .filter(({ similarity }) => similarity > 0)
+    .sort((a, b) => b.similarity - a.similarity || compareItems(a.item, b.item))
+    .slice(0, limit)
+    .map(({ item }) => item);
+}
+
+/** A tag counts toward hiding only when it is central to the title (AniList rank). */
+const HIDDEN_TAG_MIN_RANK = 50;
+
+/** Genres or tags the viewer chose to hide (Settings); `hidden` holds lower-cased names. */
+export function isHidden(item: RecommendationItemFeatures, hidden: ReadonlySet<string>): boolean {
+  if (!hidden.size) return false;
+  return (
+    item.genres.some((genre) => hidden.has(genre.toLocaleLowerCase())) ||
+    item.tags.some(
+      (tag) => (tag.rank ?? 100) >= HIDDEN_TAG_MIN_RANK && hidden.has(tag.name.toLocaleLowerCase()),
+    )
+  );
 }

@@ -70,6 +70,11 @@ export interface RecommendationItemFeatures {
   malScore?: number;
   popularity?: number;
   status?: string;
+  /**
+   * TMDB collection (a film series) for movies; groups a franchise like AniList relations.
+   * 0 means the film belongs to none.
+   */
+  collectionId?: number;
   /** AniList start date as YYYYMMDD (unknown month/day are 00); orders seasons by release. */
   startedOn?: number;
   format?: string;

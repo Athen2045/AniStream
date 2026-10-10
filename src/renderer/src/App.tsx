@@ -592,6 +592,11 @@ function AppContent(): React.JSX.Element {
                   transition={motionTransition(reducedMotion)}
                 >
                   <MoreView
+                    viewer={
+                      viewerAccess.kind === "member"
+                        ? String(viewerAccess.dashboard.profile.id)
+                        : "guest"
+                    }
                     selection={
                       selectedMore
                         ? {

@@ -57,6 +57,7 @@ import { UpdateService } from "./update-service";
 import { trackUpdateWindowHealth } from "./update-window-health";
 import { startDevTiming } from "./dev-performance";
 import { ArtworkCache } from "./artwork-cache";
+import { FieldSnapshots } from "./field-snapshots";
 import { PROVIDER_USER_AGENT } from "./provider-transport";
 import { ARTWORK_SCHEME, artworkSourceFromCacheUrl } from "../shared/artwork";
 
@@ -399,9 +400,12 @@ void app
         setCaptionControlsVisible(mainWindow, process.platform, visible);
     });
 
+    // Saved Trending / For You copies; background refreshes run one at a time after startup.
+    const fieldSnapshots = new FieldSnapshots({ store: () => database?.fieldSnapshots });
     registerTrackerDomain(trustedRendererOrigin, {
       aniList,
       database,
+      snapshots: fieldSnapshots,
       onChanged: () => {
         if (mainWindow && !mainWindow.isDestroyed())
           sendTypedIpcEvent(mainWindow.webContents, "activity:changed", undefined);
@@ -418,6 +422,7 @@ void app
       players: providerConfig.more.media,
       frameUserAgent: () => morePlayerFrameUa,
       tracker: () => simklService,
+      snapshots: fieldSnapshots,
     });
     registerMangaDomain(trustedRendererOrigin, {
       readerSettings: database,
@@ -463,6 +468,7 @@ void app
       aniList,
       tmdb,
       simklSync,
+      fieldSnapshots,
     );
 
     // Register every IPC handler before the renderer can invoke the preload bridge.

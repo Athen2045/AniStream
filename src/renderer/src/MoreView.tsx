@@ -25,6 +25,7 @@ import type { MoreRecommendation } from "../../shared/discovery";
 import { startBrowsing } from "./play-timer";
 import { HERO_SLIDES, mixHeroPicks, withTrendingSlide } from "./hero-picks";
 import { usePersonalHero } from "./usePersonalHero";
+import { hasHiddenGenre, useHiddenTags } from "./hidden-tags";
 import { LegalFooter } from "./LegalFooter";
 
 /** Home rails, or the full grid behind one rail's "View all". */
@@ -49,25 +50,31 @@ export interface MoreSelection {
   backLabel?: string;
 }
 
+/** Trending rails for the whole app session; More remounts each time it is opened. */
+const appTrending: { movies?: MoreCatalogPage; shows?: MoreCatalogPage } = {};
+
 export function MoreView({
   selection,
+  viewer,
   onSelect,
   onPrimary,
   onCloseTitle,
 }: {
   selection?: MoreSelection;
+  /** The signed-in AniList account ID, or "guest"; More For You belongs to this viewer. */
+  viewer: string;
   onSelect: (item: MoreCatalogItem) => void;
   onPrimary: (item: MoreCatalogItem) => void;
   onCloseTitle: () => void;
 }): React.JSX.Element {
   const reducedMotion = useAppReducedMotion();
   const [filter, setFilter] = useState<MoreFilter>("ALL");
-  const [moviePage, setMoviePage] = useState<MoreCatalogPage>();
-  const [tvPage, setTvPage] = useState<MoreCatalogPage>();
+  const [moviePage, setMoviePage] = useState<MoreCatalogPage | undefined>(appTrending.movies);
+  const [tvPage, setTvPage] = useState<MoreCatalogPage | undefined>(appTrending.shows);
   const [gridPage, setGridPage] = useState(1);
   const [grid, setGrid] = useState<{ key: string; page?: MoreCatalogPage; error?: string }>();
   const [library, setLibrary] = useState<MoreLibrary>(EMPTY_LIBRARY);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!appTrending.movies || !appTrending.shows);
   const [error, setError] = useState<string>();
   const [configurationMissing, setConfigurationMissing] = useState(false);
   const [refreshAttempt, setRefreshAttempt] = useState(0);
@@ -76,12 +83,16 @@ export function MoreView({
   useEffect(() => startBrowsing("MORE"), []);
 
   useEffect(() => {
+    // Returning to More shows the rails it already has; Retry (refreshAttempt) still reloads.
+    if (refreshAttempt === 0 && appTrending.movies && appTrending.shows) return;
     let active = true;
     void Promise.all([
       window.anistream.getMoreTrending("MOVIE", 1),
       window.anistream.getMoreTrending("TV", 1),
     ])
       .then(([movies, shows]) => {
+        appTrending.movies = movies;
+        appTrending.shows = shows;
         if (!active) return;
         setMoviePage(movies);
         setTvPage(shows);
@@ -223,17 +234,30 @@ export function MoreView({
     };
   }, []);
   const preferences = useAppPreferences();
+  const hiddenTags = useHiddenTags();
   // Trending mixes TMDB and Simkl, alternating, and never shows the same title twice.
   const trendingMovies = useMemo(
-    () => mixTrending("Movies", moviePage?.items ?? [], simklRows, "MOVIE"),
-    [moviePage, simklRows],
+    () =>
+      mixTrending(
+        "Movies",
+        (moviePage?.items ?? []).filter((item) => !hasHiddenGenre(item.genres, hiddenTags)),
+        simklRows,
+        "MOVIE",
+      ),
+    [hiddenTags, moviePage, simklRows],
   );
   const trendingShows = useMemo(
-    () => mixTrending("Shows", tvPage?.items ?? [], simklRows, "TV"),
-    [tvPage, simklRows],
+    () =>
+      mixTrending(
+        "Shows",
+        (tvPage?.items ?? []).filter((item) => !hasHiddenGenre(item.genres, hiddenTags)),
+        simklRows,
+        "TV",
+      ),
+    [hiddenTags, tvPage, simklRows],
   );
   const removals = useContinueRemovals();
-  const forYou = useMoreForYou(preferences.forYou);
+  const forYou = useMoreForYou(preferences.forYou, viewer);
   // From three movies/shows watched, the hero mixes For You with "Because you watched" picks.
   const personalHero = usePersonalHero<MoreCatalogItem>({
     section: "MORE",
@@ -267,8 +291,10 @@ export function MoreView({
   });
 
   const heroItems = useMemo(() => {
-    const movies = (moviePage?.items ?? []).filter((item) => item.backdropUrl);
-    const shows = (tvPage?.items ?? []).filter((item) => item.backdropUrl);
+    const visible = (item: MoreCatalogItem): boolean =>
+      Boolean(item.backdropUrl) && !hasHiddenGenre(item.genres, hiddenTags);
+    const movies = (moviePage?.items ?? []).filter(visible);
+    const shows = (tvPage?.items ?? []).filter(visible);
     if (filter === "MOVIE") return movies.slice(0, HERO_SIZE);
     if (filter === "TV") return shows.slice(0, HERO_SIZE);
     const mixed: MoreCatalogItem[] = [];
@@ -288,7 +314,15 @@ export function MoreView({
       moreKey,
       (item) => watched.has(moreKey(item)),
     ).items;
-  }, [completedKeys, filter, library.continueWatching, moviePage, personalHero, tvPage]);
+  }, [
+    completedKeys,
+    filter,
+    hiddenTags,
+    library.continueWatching,
+    moviePage,
+    personalHero,
+    tvPage,
+  ]);
 
   if (selection) {
     return (
@@ -579,12 +613,20 @@ function MoreForYouRails({
         ) : null}
       </section>
       {rows.map((row) => {
-        const heading = row.theme
-          ? `Because you like ${row.theme}`
-          : `Because you watched ${row.seedTitle}`;
+        const heading = row.continuation
+          ? "Next in film series you watched"
+          : row.theme
+            ? `Because you like ${row.theme}`
+            : `Because you watched ${row.seedTitle}`;
         return (
           <section
-            key={row.theme ? `theme:${row.theme}` : `${row.seedType}:${row.seedId}`}
+            key={
+              row.continuation
+                ? "next"
+                : row.theme
+                  ? `theme:${row.theme}`
+                  : `${row.seedType}:${row.seedId}`
+            }
             className="more-section more-rail"
             aria-label={heading}
           >

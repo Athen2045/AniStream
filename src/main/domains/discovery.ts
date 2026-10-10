@@ -6,6 +6,13 @@ import { MoreDiscoveryService } from "../recommendations/more-discovery-service"
 import type { TmdbClient } from "../tmdb";
 import { mergeMoreHistory } from "../more-library";
 import type { SimklService } from "../simkl/service";
+import type { FieldSnapshots } from "../field-snapshots";
+import {
+  isUsableDiscoveryFeed,
+  isUsableMoreFeed,
+  withoutDiscoveryTitle,
+  withoutMoreTitle,
+} from "../home-fields";
 
 export function registerDiscoveryDomain(
   origin: string,
@@ -13,6 +20,7 @@ export function registerDiscoveryDomain(
   aniList: AniListClient,
   tmdb?: TmdbClient,
   simkl?: SimklService,
+  snapshots?: FieldSnapshots,
 ): () => void {
   const owner = (): number => {
     const state = aniList.getState();
@@ -46,14 +54,34 @@ export function registerDiscoveryDomain(
     dashboard: () => database.getCachedAniListDashboard(),
     seeds: (ids, signal) => aniList.getRecommendationSeeds(ids, signal),
     trending: (type, signal) => aniList.getRecommendationTrending(type, signal),
+    hiddenTags: () => personalization.hiddenTags(),
   });
-  registerTrustedIpcHandler(origin, "discovery:for-you", async (_event, type) => {
-    await prepareLinks();
-    return service.getForYou(type);
+  // A saved feed is shown until the viewer acts (watching, a choice, Refresh asks for `fresh`).
+  registerTrustedIpcHandler(origin, "discovery:for-you", async (_event, type, fresh) => {
+    const load = async () => {
+      await prepareLinks();
+      return service.getForYou(type);
+    };
+    const viewer = owner();
+    if (!snapshots || !viewer) return load();
+    return snapshots.get(
+      {
+        key: `for-you:${viewer}:${type}`,
+        load,
+        usable: isUsableDiscoveryFeed,
+        adopt: (feed) => service.adopt(feed),
+      },
+      fresh === true,
+    );
   });
-  registerTrustedIpcHandler(origin, "discovery:feedback", (_event, input) =>
-    service.feedback(input),
-  );
+  registerTrustedIpcHandler(origin, "discovery:feedback", (_event, input) => {
+    service.feedback(input);
+    if (input.action !== "dismiss" || !snapshots) return;
+    for (const type of ["ANIME", "MANGA"] as const)
+      snapshots.update(`for-you:${owner()}:${type}`, (value) =>
+        withoutDiscoveryTitle(value, input.anilistId),
+      );
+  });
   registerTrustedIpcHandler(origin, "discovery:impressions", (_event, input) =>
     service.impressions(input),
   );
@@ -83,19 +111,53 @@ export function registerDiscoveryDomain(
       if (!tmdb) throw new Error("TMDB is not configured.");
       return tmdb.getRecommendationsByKeyword(type, keyword);
     },
+    collection: (id) => {
+      if (!tmdb) throw new Error("TMDB is not configured.");
+      return tmdb.getCollection(id);
+    },
+    hiddenTags: () => personalization.hiddenTags(),
   });
-  registerTrustedIpcHandler(origin, "more:for-you", async () => {
+  registerTrustedIpcHandler(origin, "more:for-you", async (_event, fresh) => {
     // A due Simkl check runs in the background; its finish tells the renderer to reload.
     void simkl?.syncIfStale();
-    await prepareLinks();
-    return more.getForYou();
+    const load = async () => {
+      await prepareLinks();
+      return more.getForYou();
+    };
+    if (!snapshots) return load();
+    return snapshots.get(
+      {
+        key: `more-for-you:${owner()}`,
+        load,
+        usable: isUsableMoreFeed,
+        adopt: (feed) => more.adopt(feed),
+      },
+      fresh === true,
+    );
   });
-  registerTrustedIpcHandler(origin, "more:for-you-feedback", (_event, input) =>
-    more.feedback(input),
-  );
+  registerTrustedIpcHandler(origin, "more:for-you-feedback", (_event, input) => {
+    more.feedback(input);
+    if (input.action !== "dismiss" || !snapshots) return;
+    snapshots.update(`more-for-you:${owner()}`, (value) =>
+      withoutMoreTitle(value, input.type, input.tmdbId),
+    );
+  });
   const settings = () => ({
     activitySignals: personalization.activitySignals(),
     timeToPlay: personalization.timeToPlay(),
+    hiddenTags: personalization.hiddenTags(),
+  });
+  registerTrustedIpcHandler(origin, "personalization:set-hidden-tags", (_event, names) => {
+    personalization.setHiddenTags(names);
+    // Saved feeds may hold newly hidden titles; the next view rebuilds them.
+    const viewer = owner();
+    for (const key of [
+      `for-you:${viewer}:ANIME`,
+      `for-you:${viewer}:MANGA`,
+      `more-for-you:${viewer}`,
+    ])
+      snapshots?.forget(key);
+    return settings();
   });
   registerTrustedIpcHandler(origin, "personalization:settings", settings);
   registerTrustedIpcHandler(origin, "personalization:set-activity", (_event, on) => {

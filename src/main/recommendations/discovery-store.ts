@@ -7,6 +7,13 @@ import type {
 
 export interface DiscoveryStore {
   features(ids: number[]): RecommendationItemFeatures[];
+  /** The most recently saved feature rows (the local corpus for taste retrieval). */
+  cachedFeatures(limit: number): RecommendationItemFeatures[];
+  /**
+   * Days each title was on screen in For You since `since` without being opened from there
+   * afterwards (impressions after its last "explore").
+   */
+  ignoredDays(owner: number, since: number): Map<number, number>;
   saveFeatures(items: RecommendationItemFeatures[]): void;
   events(owner: number): RecommendationEvent[];
   feedback(
@@ -59,6 +66,33 @@ export function createDiscoveryStore(db: Database.Database): DiscoveryStore {
           return [];
         }
       });
+    },
+    cachedFeatures(limit) {
+      return db
+        .prepare<[number], { features: string }>(
+          "SELECT features FROM discovery_features_v1 ORDER BY updated_at DESC LIMIT ?",
+        )
+        .all(Math.min(limit, MAX_FEATURE_READ))
+        .flatMap((row) => {
+          try {
+            return [JSON.parse(row.features) as RecommendationItemFeatures];
+          } catch {
+            return [];
+          }
+        });
+    },
+    ignoredDays(owner, since) {
+      const rows = db
+        .prepare<[number, number], { media_id: number; days: number }>(
+          `SELECT i.media_id, COUNT(DISTINCT i.shown_at / 86400000) AS days
+          FROM discovery_impressions_v1 i
+          LEFT JOIN discovery_feedback_v1 f ON f.owner = i.owner AND f.media_id = i.media_id
+          WHERE i.owner = ? AND i.shown_at >= ?
+            AND (f.explored_at IS NULL OR i.shown_at > f.explored_at)
+          GROUP BY i.media_id`,
+        )
+        .all(owner, since);
+      return new Map(rows.map((row) => [row.media_id, row.days]));
     },
     saveFeatures(items) {
       db.transaction(() => {
