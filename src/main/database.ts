@@ -21,7 +21,10 @@ import type {
 } from "../shared/contracts";
 import type { RecommendationRepository } from "./recommendations/stores/repository";
 import { createRecommendationRepository } from "./recommendations/stores/repository";
-import { createDiscoveryStore, type DiscoveryStore } from "./recommendations/stores/discovery-store";
+import {
+  createDiscoveryStore,
+  type DiscoveryStore,
+} from "./recommendations/stores/discovery-store";
 import { createSimklLibraryStore, type SimklLibraryStore } from "./simkl/library";
 import { createSimklCatalogStore, type SimklCatalogStore } from "./simkl/collaborative";
 import { createMangaDexMappingStore, type MangaDexMappingStore } from "./mangadex-mappings";
