@@ -336,6 +336,16 @@ function titleFeedbackRef(value: unknown): {
   return { type, id: asPositiveInt(input.id) };
 }
 
+function updatePreferencesArgs(
+  value: unknown[],
+): [{ autoDownload: boolean; installOnQuit: boolean }] {
+  const [raw] = argsOfLength(value, 1);
+  const input = asRecord(raw);
+  if (Object.keys(input).some((key) => key !== "autoDownload" && key !== "installOnQuit")) fail();
+  if (typeof input.autoDownload !== "boolean" || typeof input.installOnQuit !== "boolean") fail();
+  return [{ autoDownload: input.autoDownload, installOnQuit: input.installOnQuit }];
+}
+
 function noArgs(value: unknown[]): [] {
   argsOfLength(value, 0);
   return [];
@@ -399,6 +409,11 @@ export const ipcArgValidators: IpcArgValidatorMap = {
   "anime:provider-readiness": noArgs,
   "app:update-status": noArgs,
   "app:check-updates": noArgs,
+  "app:download-update": noArgs,
+  "app:cancel-update-download": noArgs,
+  "app:install-update": noArgs,
+  "app:update-preferences": noArgs,
+  "app:set-update-preferences": updatePreferencesArgs,
   "anilist:auth-state": noArgs,
   "anilist:login": noArgs,
   "simkl:status": noArgs,
@@ -586,6 +601,12 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     if (typeof on !== "boolean") fail();
     return [on];
   },
+  "personalization:set-hidden-tags": (value) => {
+    const [names] = argsOfLength(value, 1);
+    if (!Array.isArray(names) || names.length > 200) fail();
+    if (!names.every((name) => typeof name === "string" && name.length <= 200)) fail();
+    return [names as string[]];
+  },
   "personalization:time-to-play": (value) => {
     const [section, seconds] = argsOfLength(value, 2);
     if (section !== "ANIME" && section !== "MANGA" && section !== "MORE") fail();
@@ -693,6 +714,11 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     return [morePlaybackInput(input)];
   },
   "discovery:for-you": (value) => {
+    if (value.length === 2) {
+      const [type, fresh] = argsOfLength(value, 2);
+      if (typeof fresh !== "boolean") fail();
+      return [asMediaType(type), fresh as boolean];
+    }
     const [type] = argsOfLength(value, 1);
     return [asMediaType(type)];
   },
@@ -710,7 +736,12 @@ export const ipcArgValidators: IpcArgValidatorMap = {
       },
     ];
   },
-  "more:for-you": noArgs,
+  "more:for-you": (value) => {
+    if (value.length === 0) return [];
+    const [fresh] = argsOfLength(value, 1);
+    if (typeof fresh !== "boolean") fail();
+    return [fresh as boolean];
+  },
   "more:for-you-feedback": (value) => {
     const [raw] = argsOfLength(value, 1);
     const input = asRecord(raw);

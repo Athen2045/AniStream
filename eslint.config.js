@@ -83,5 +83,23 @@ export default [
       "react-hooks/set-state-in-effect": "warn",
     },
   },
+  {
+    // The recommendation engine stays pure: it may import only itself and src/shared, so it can
+    // be tested deterministically and never reaches the network, the database or Electron.
+    files: ["src/main/recommendations/engine/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex: "^(?!\\./|\\.\\./\\.\\./\\.\\./shared/)",
+              message: "The engine imports only engine files and src/shared.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   prettierConfig,
 ];

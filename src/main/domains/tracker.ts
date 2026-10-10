@@ -4,18 +4,22 @@ import { registerTrustedIpcHandler } from "../ipc";
 import { AniListUnavailableError, asUnavailable, isAniListUnavailable } from "../anilist/errors";
 import { applyEntryChanges, findEntry, summarize, type PendingEntryChange } from "../entry-changes";
 import type { AniListDashboard } from "../../shared/contracts";
+import type { FieldSnapshots } from "../field-snapshots";
+import { isTrendingRequest, isUsableAniListPage } from "../home-fields";
 
 export interface TrackerDomainDeps {
   aniList: AniListClient | undefined;
   database: AppDatabase | undefined;
   /** Tells the renderer that queued library edits changed (sent or added). */
   onChanged?: () => void;
+  /** Saved Trending copies (shown at once, refreshed in the background for the next launch). */
+  snapshots?: FieldSnapshots;
 }
 
 /** AniList auth, profile, dashboard, and list-entry mutations. */
 export function registerTrackerDomain(
   trustedRendererOrigin: string,
-  { aniList, database, onChanged = () => undefined }: TrackerDomainDeps,
+  { aniList, database, onChanged = () => undefined, snapshots }: TrackerDomainDeps,
 ): void {
   const owner = (): number | undefined => {
     const state = aniList?.getState();
@@ -115,6 +119,13 @@ export function registerTrackerDomain(
   });
   registerTrustedIpcHandler(trustedRendererOrigin, "anilist:browse", async (_event, input) => {
     if (!aniList) throw new Error("AniList is not ready.");
+    const client = aniList;
+    if (snapshots && isTrendingRequest(input))
+      return snapshots.get({
+        key: `anilist-trending:${input.type}:${input.perPage ?? "default"}`,
+        load: () => client.browseMedia(input),
+        usable: isUsableAniListPage,
+      });
     return aniList.browseMedia(input);
   });
   registerTrustedIpcHandler(

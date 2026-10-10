@@ -5,14 +5,11 @@ import { join } from "node:path";
 import { describe, it } from "vitest";
 import {
   affinity,
-  currentRanker,
-  currentRichRanker,
   hybridPool,
   hybridRanker,
   meanScore,
   popularityRanker,
   shippedRanker,
-  productionPool,
   type Fixture,
   type FixtureEntry,
   type FixtureMedia,
@@ -142,8 +139,6 @@ describe.skipIf(!fixtureFile)("For You offline evaluation", () => {
     };
 
     const rankingRankers: Record<string, Ranker> = {
-      current: currentRanker,
-      "current+rich": currentRichRanker,
       hybrid: hybridRanker(),
       shipped: shippedRanker,
       popularity: popularityRanker,
@@ -177,13 +172,6 @@ describe.skipIf(!fixtureFile)("For You offline evaluation", () => {
         }
 
         // B. End to end: each design retrieves its own pool.
-        const currentPool = productionPool(base, excluded);
-        record(
-          get("B current"),
-          currentRanker({ ...base, pool: currentPool }),
-          target.mediaId,
-          fixture,
-        );
         const newPool = hybridPool(base, excluded);
         const rankedNew = hybridRanker()({ ...base, pool: newPool });
         record(get("B hybrid"), rankedNew, target.mediaId, fixture);

@@ -8,7 +8,12 @@ import type {
   MoreSeason,
   MoreSeasonDetail,
 } from "../shared/contracts";
-import { moreGenreId, type MoreBrowseInput, type MoreSort } from "../shared/more-filters";
+import {
+  MORE_GENRES,
+  moreGenreId,
+  type MoreBrowseInput,
+  type MoreSort,
+} from "../shared/more-filters";
 import type {
   RecommendationCreator,
   RecommendationItemFeatures,
@@ -290,6 +295,25 @@ export class TmdbClient {
     });
   }
 
+  /**
+   * The films of one TMDB collection (a film series), as candidates tagged with the collection,
+   * for "the next film in a series you watched" (user request 2026-10-10).
+   */
+  public async getCollection(id: number): Promise<RecommendationItemFeatures[]> {
+    if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid TMDB collection.");
+    const [genres, payload] = await Promise.all([
+      this.genreNames("MOVIE"),
+      this.requestJson(`/collection/${id}`),
+    ]);
+    if (!isRecord(payload) || !Array.isArray(payload.parts))
+      throw new Error("TMDB returned an invalid collection.");
+    const now = Date.now();
+    return payload.parts.slice(0, 40).flatMap((value) => {
+      const features = candidateFeatures(value, "MOVIE", genres, now);
+      return features ? [{ ...features, collectionId: id }] : [];
+    });
+  }
+
   /** Trending titles of the week as recommendation candidates (genre names resolved). */
   public async getRecommendationTrending(
     type: MoreMediaType,
@@ -431,6 +455,16 @@ function parseRecommendationSeed(
 ): MoreRecommendationSeed {
   const seed = candidateFeatures(value, type, genreNames, now);
   if (!seed || !isRecord(value)) throw new Error("TMDB returned an invalid title detail.");
+  // A film series (TMDB collection) groups a franchise and finds the next film; 0 records that
+  // the film belongs to none, so cached seeds are not refetched to ask again.
+  if (type === "MOVIE")
+    seed.collectionId =
+      isRecord(value.belongs_to_collection) &&
+      typeof value.belongs_to_collection.id === "number" &&
+      Number.isInteger(value.belongs_to_collection.id) &&
+      value.belongs_to_collection.id > 0
+        ? value.belongs_to_collection.id
+        : 0;
   if (Array.isArray(value.genres))
     seed.genres = sharedGenres(
       value.genres.flatMap((genre) =>
@@ -580,6 +614,15 @@ function parseCatalogPage(payload: unknown, type: MoreMediaType, page: number): 
   };
 }
 
+function catalogGenres(ids: unknown, type: MoreMediaType): string[] {
+  if (!Array.isArray(ids)) return [];
+  const names = new Set<string>();
+  for (const id of ids)
+    for (const genre of MORE_GENRES)
+      if ((type === "MOVIE" ? genre.movie : genre.tv) === id) names.add(genre.name);
+  return [...names];
+}
+
 function parseCatalogItem(value: unknown, type: MoreMediaType): MoreCatalogItem | undefined {
   if (
     !isRecord(value) ||
@@ -605,7 +648,8 @@ function parseCatalogItem(value: unknown, type: MoreMediaType): MoreCatalogItem 
     year: releaseDate ? Number(releaseDate.slice(0, 4)) : undefined,
     score: boundedNumber(value.vote_average, 0, 10),
     voteCount: boundedInteger(value.vote_count, 0, 100_000_000),
-    genres: [],
+    // Names from TMDB genre IDs (the search filter vocabulary), so hidden genres can apply.
+    genres: catalogGenres(value.genre_ids, type),
     siteUrl: `https://www.themoviedb.org/${type === "MOVIE" ? "movie" : "tv"}/${id}`,
   };
 }

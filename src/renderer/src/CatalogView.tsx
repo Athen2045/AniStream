@@ -24,11 +24,12 @@ import { titleAccentStyle } from "./title-accent";
 import { usePersonalLibrary } from "./PersonalLibraryProvider";
 import { cachedArtworkUrl } from "../../shared/artwork";
 import { startBrowsing } from "./play-timer";
-import { createDiscoverySession } from "./discovery-session";
+import { sharedDiscoverySession } from "./discovery-session";
 import type { DiscoveryFeed } from "../../shared/discovery";
 import { HERO_SLIDES, mixHeroPicks, withTrendingSlide } from "./hero-picks";
 import { usePersonalHero } from "./usePersonalHero";
 import { LegalFooter } from "./LegalFooter";
+import { hasHiddenGenre, useHiddenTags } from "./hidden-tags";
 
 const NO_AVAILABILITY_MEDIA: [] = [];
 const HERO_SIZE = 6;
@@ -60,7 +61,7 @@ export function CatalogView({
   const preferences = useAppPreferences();
   const {
     latestPage,
-    trending,
+    trending: allTrending,
     malTrendingFallback,
     trendingLoading,
     latestAnime,
@@ -76,6 +77,12 @@ export function CatalogView({
     trackAvailabilityNow: false,
     latest: preferences.latestUpdates,
   });
+  // Genres hidden in Settings stay out of Trending and the hero.
+  const hiddenTags = useHiddenTags();
+  const trending = useMemo(
+    () => allTrending.filter((media) => !hasHiddenGenre(media.genres, hiddenTags)),
+    [allTrending, hiddenTags],
+  );
 
   const { state: libraryState } = usePersonalLibrary();
   const continuing = libraryState.continuing[type];
@@ -86,14 +93,14 @@ export function CatalogView({
       ? `${type}:${access.dashboard.profile.id}`
       : undefined;
   const forYouSession = useMemo(
-    () => (forYouKey ? createDiscoverySession(type) : undefined),
+    () => (forYouKey ? sharedDiscoverySession(forYouKey, type) : undefined),
     [forYouKey, type],
   );
   useEffect(() => {
     if (!forYouSession) return;
     forYouSession.activate();
-    void forYouSession.ensure(60_000);
-    return () => forYouSession.dispose();
+    // Shared for the app session: returning to this section shows the feed it already has.
+    void forYouSession.ensure(Number.POSITIVE_INFINITY);
   }, [forYouSession]);
   const forYouFeedSnapshot = (): DiscoveryFeed | undefined => forYouSession?.getSnapshot().feed;
   const forYouFeed = useSyncExternalStore(

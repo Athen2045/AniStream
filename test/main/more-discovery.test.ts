@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { openAppDatabase } from "../../src/main/database";
 import type { MoreHistoryEntry } from "../../src/main/more-library";
-import type { HybridHistoryItem } from "../../src/main/recommendations/hybrid";
+import type { HybridHistoryItem } from "../../src/main/recommendations/engine";
 import {
   MoreDiscoveryService,
   moreAffinity,
@@ -59,6 +59,8 @@ function setup(history: MoreHistoryEntry[], aniListTaste: HybridHistoryItem[] = 
   const seed = vi.fn(async (id: number, type: MoreMediaType): Promise<MoreRecommendationSeed> => ({
     seed: {
       ...title(id, type),
+      // TMDB records "no film series" as 0, so the seed is not refetched to ask again.
+      ...(type === "MOVIE" ? { collectionId: 0 } : {}),
       recommendations: [1, ...Array.from({ length: 8 }, (_, index) => 100 + index)].map(
         (target, index) => ({ id: target, mediaType: "MOVIE" as const, rating: 15 - index }),
       ),
@@ -133,7 +135,9 @@ describe("More For You", () => {
       expect(seed).toHaveBeenCalledTimes(2);
       const ids = feed.items.map((row) => row.item.id);
       expect(ids).not.toContain(1);
-      expect(ids.slice(0, 3).every((id) => id >= 100 && id < 108)).toBe(true);
+      // Neighbours lead; repeats of one seed fade, so an unrelated title may join early.
+      expect(ids.slice(0, 2).every((id) => id >= 100 && id < 108)).toBe(true);
+      expect(ids.filter((id) => id >= 100 && id < 108).length).toBeGreaterThanOrEqual(6);
       expect(feed.items[0].relatedTitle).toMatch(/^MOVIE [12]$/);
 
       service.feedback({
@@ -344,5 +348,57 @@ describe("TMDB recommendation adapter", () => {
       recommendations: [{ id: 155, mediaType: "MOVIE", rating: 15 }],
     });
     expect(neighbors).toEqual([expect.objectContaining({ anilistId: 155, genres: ["Sci-Fi"] })]);
+  });
+});
+
+describe("next film in a series the viewer liked", () => {
+  it("adds the next released film of a liked film's collection as its own row", async () => {
+    const db = openAppDatabase(":memory:");
+    try {
+      // Watched: film 1 and film 2, both part 1 of collections 70 and 80.
+      const seed = vi.fn(
+        async (id: number, type: MoreMediaType): Promise<MoreRecommendationSeed> => ({
+          seed: {
+            ...title(id, type),
+            collectionId: id === 1 ? 70 : 80,
+            releaseDate: "2010-01-01",
+            recommendations: [500, 501].map((target) => ({
+              id: target,
+              mediaType: "MOVIE" as const,
+              rating: 10,
+            })),
+          },
+          neighbors: [title(500), title(501)],
+        }),
+      );
+      const part = (id: number, date: string, collectionId: number) =>
+        title(id, "MOVIE", { releaseDate: date, collectionId });
+      const collection = vi.fn(async (id: number) =>
+        id === 70
+          ? [part(1, "2010-01-01", 70), part(11, "2013-01-01", 70), part(12, "2016-01-01", 70)]
+          : [part(2, "2010-01-01", 80), part(21, "2014-01-01", 80), part(22, "2999-01-01", 80)],
+      );
+      const service = new MoreDiscoveryService({
+        store: db.moreDiscovery,
+        history: () => [watched(1), watched(2)],
+        aniListTaste: () => [],
+        seed,
+        trending: async () => [],
+        collection,
+        now: () => now,
+      });
+      const feed = await service.getForYou();
+      const next = [
+        ...feed.items,
+        ...(feed.rows?.find((row) => row.continuation)?.items ?? []),
+      ].map((entry) => entry.item.id);
+      // The next film of each series; never a later one, an unreleased one, or one already seen.
+      expect(next).toEqual(expect.arrayContaining([11, 21]));
+      expect(next).not.toContain(12);
+      expect(next).not.toContain(22);
+      expect(collection).toHaveBeenCalledTimes(2);
+    } finally {
+      db.close();
+    }
   });
 });

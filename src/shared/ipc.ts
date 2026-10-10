@@ -69,7 +69,7 @@ import type {
 } from "./contracts";
 import type { MoreBrowseInput } from "./more-filters";
 import type { ReaderSettings } from "./reader-settings";
-import type { UpdateStatus } from "./update-check";
+import type { UpdatePreferences, UpdateStatus } from "./update-check";
 import type { RestorePreview, RestoreSummary } from "./local-backup";
 import type { PersonalAiringUpdate } from "./personal-library";
 import type { BingeChange, BingeState } from "./binge";
@@ -90,6 +90,14 @@ import type {
 export interface IpcInvokeChannelMap {
   "app:update-status": { args: []; result: UpdateStatus };
   "app:check-updates": { args: []; result: UpdateStatus };
+  "app:download-update": { args: []; result: UpdateStatus };
+  "app:cancel-update-download": { args: []; result: UpdateStatus };
+  "app:install-update": { args: []; result: boolean };
+  "app:update-preferences": { args: []; result: UpdatePreferences };
+  "app:set-update-preferences": {
+    args: [preferences: Omit<UpdatePreferences, "supported">];
+    result: UpdatePreferences;
+  };
   "backup:export": { args: []; result: boolean };
   "backup:prepare": { args: []; result: RestorePreview | null };
   "backup:restore": { args: [token: string]; result: RestoreSummary };
@@ -178,6 +186,10 @@ export interface IpcInvokeChannelMap {
   "more:simkl-rows": { args: []; result: SimklRow[] };
   "personalization:settings": { args: []; result: PersonalizationSettings };
   "personalization:set-activity": { args: [on: boolean]; result: PersonalizationSettings };
+  "personalization:set-hidden-tags": {
+    args: [names: string[]];
+    result: PersonalizationSettings;
+  };
   "personalization:time-to-play": {
     args: [section: PersonalizationSection, seconds: number];
     result: void;
@@ -222,12 +234,15 @@ export interface IpcInvokeChannelMap {
   "more:resume": { args: [input: MorePlaybackInput]; result: MorePlaybackResume | undefined };
   "more:save-resume": { args: [input: SaveMorePlaybackResumeInput]; result: void };
   "more:clear-resume": { args: [input: MorePlaybackInput]; result: void };
-  "discovery:for-you": { args: [type: AniListMediaType]; result: DiscoveryFeed };
+  "discovery:for-you": {
+    args: [type: AniListMediaType, fresh?: boolean];
+    result: DiscoveryFeed;
+  };
   "reader:settings": { args: []; result: ReaderSettings };
   "reader:save-settings": { args: [input: ReaderSettings]; result: ReaderSettings };
   "discovery:feedback": { args: [input: DiscoveryFeedback]; result: void };
   "discovery:impressions": { args: [input: DiscoveryImpressionInput]; result: void };
-  "more:for-you": { args: []; result: MoreDiscoveryFeed };
+  "more:for-you": { args: [fresh?: boolean]; result: MoreDiscoveryFeed };
   "more:for-you-feedback": { args: [input: MoreDiscoveryFeedback]; result: void };
   "simkl:status": { args: []; result: SimklStatus };
   "simkl:connect": { args: []; result: void };

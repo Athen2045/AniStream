@@ -5,6 +5,7 @@ import {
   MonitorPlay,
   SlidersHorizontal,
   UserRound,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { PersonalizationSettings, SimklStatus } from "../../shared/contracts";
@@ -25,6 +26,8 @@ import type { ReaderSettings } from "../../shared/reader-settings";
 import { AppUpdates } from "./AppUpdates";
 import { LocalDataSettings } from "./LocalDataSettings";
 import { Select } from "./Select";
+import { saveHiddenTags, useHiddenTagNames } from "./hidden-tags";
+import { MORE_GENRES } from "../../shared/more-filters";
 import { setAppPreference, useAppPreferences } from "./app-preferences";
 import { useOptionalBinge } from "./BingeProvider";
 import { createReaderSettingsSession } from "./reader-settings-session";
@@ -171,6 +174,7 @@ export function SettingsView({
                 />
               </Row>
               <ActivitySignalsRow />
+              <HiddenTagsRow />
               <Row
                 title="Rotating highlights"
                 hint="The featured title at the top of Anime, Manga, and More changes on its own."
@@ -679,6 +683,82 @@ function ActivitySignalsRow(): React.JSX.Element {
         }}
       />
     </Row>
+  );
+}
+
+/**
+ * Genres and tags the viewer never wants recommended (X's muted keywords): kept out of For You,
+ * the hero and trending in every section. Search still finds them.
+ */
+function HiddenTagsRow(): React.JSX.Element {
+  const hidden = useHiddenTagNames();
+  const [vocabulary, setVocabulary] = useState<string[]>([]);
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    let alive = true;
+    void window.anistream
+      .getAniListFilterOptions()
+      .then((options) => options)
+      .catch(() => undefined)
+      .then((options) => {
+        if (!alive) return;
+        const names = new Set<string>([
+          ...(options?.genres ?? []),
+          ...MORE_GENRES.map((genre) => genre.name),
+          ...(options?.tags ?? []).map((tag) => tag.name),
+        ]);
+        setVocabulary([...names].sort((a, b) => a.localeCompare(b)));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const taken = new Set(hidden.map((name) => name.toLocaleLowerCase()));
+  const save = (next: string[]): void => {
+    setError(undefined);
+    void saveHiddenTags(next).catch(() => setError("The list could not be saved."));
+  };
+  return (
+    <div className="set-row set-row--stack">
+      <div className="set-text">
+        <strong>Hidden genres &amp; tags</strong>
+        <span>
+          Titles with these genres or tags stay out of For You, the hero and trending in every
+          section. Search still finds them.{error ? ` ${error}` : ""}
+        </span>
+        {hidden.length ? (
+          <div className="hidden-tag-chips" aria-label="Hidden genres and tags">
+            {hidden.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className="hidden-tag-chip"
+                aria-label={`Show ${name} again`}
+                onClick={() => save(hidden.filter((entry) => entry !== name))}
+              >
+                {name}
+                <X size={13} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <Select
+        ariaLabel="Hide a genre or tag"
+        className="filter-pill"
+        value=""
+        disabled={!vocabulary.length}
+        options={[
+          { value: "", label: "Add genre or tag" },
+          ...vocabulary
+            .filter((name) => !taken.has(name.toLocaleLowerCase()))
+            .map((name) => ({ value: name, label: name })),
+        ]}
+        onChange={(name) => {
+          if (name) save([...hidden, name]);
+        }}
+      />
+    </div>
   );
 }
 

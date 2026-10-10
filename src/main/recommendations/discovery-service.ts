@@ -13,20 +13,26 @@ import {
 } from "../../shared/recommendations";
 import type { RecommendationSeedData } from "../anilist/recommendation-seeds";
 import type { AnimeTmdbLinkIndex } from "../anime-tmdb-links";
-import type { DiscoveryStore } from "./discovery-store";
-import type { TitleFeedbackRow } from "./personalization-store";
-import { discoveryEvidence, recommendationFeatures } from "./discovery-evidence";
+import type { DiscoveryStore } from "./stores/discovery-store";
+import type { TitleFeedbackRow } from "./stores/personalization-store";
+import { discoveryEvidence, recommendationFeatures } from "./engine";
 import {
   buildSeedRows,
   buildThemeRow,
+  adjustScores,
+  continuationPicks,
   eligibilityFilter,
   firstSeason,
+  isHidden,
+  itemKey,
+  tasteRetrieval,
+  toAniListResults,
   rankHybrid,
   redirectEdges,
   rowStrength,
   selectHybrid,
   type HybridHistoryItem,
-} from "./hybrid";
+} from "./engine";
 
 /** Titles watched/read (any section) before For You starts; matches the hero (user 2026-10-08). */
 const MIN_TITLES = 3;
@@ -44,6 +50,8 @@ interface Dependencies {
   links?: () => AnimeTmdbLinkIndex;
   /** More titles really watched (`MOVIE:id` / `TV:id`); their anime stays out of For You. */
   watchedMore?: () => ReadonlySet<string>;
+  /** Genres and tags the viewer hid in Settings. */
+  hiddenTags?: () => string[];
   now?: () => number;
   providerTimeoutMs?: number;
 }
@@ -53,6 +61,14 @@ const MAX_SEEDS = 48;
 const SEED_PAGE_SIZE = 24;
 const SEED_TTL_MS = 7 * 86_400_000;
 const INTERESTED_AFFINITY = 0.5;
+/** Ignored-pick memory: impressions from this many days count (user request 2026-10-10). */
+const IGNORED_WINDOW_MS = 30 * 86_400_000;
+/** Cached titles taste retrieval reads, and how many it adds as candidates. */
+const RETRIEVAL_CORPUS = 1_500;
+const RETRIEVAL_LIMIT = 40;
+/** How strongly the main rail follows the viewer's genre mix (0 = off). */
+const CALIBRATION = 0.3;
+const CONTINUATION_ROW_MIN = 2;
 const HALF_LIFE_MS = HYBRID_WEIGHTS.halfLifeDays * 86_400_000;
 interface CandidatePool {
   items: RecommendationItemFeatures[];
@@ -83,6 +99,18 @@ export class DiscoveryService {
     const load = this.load(type, owner).finally(() => this.pending.delete(key));
     this.pending.set(key, load);
     return load;
+  }
+
+  /** Accepts feedback for a feed saved in an earlier session, as if it had just been loaded. */
+  adopt(feed: DiscoveryFeed): void {
+    const owner = this.deps.owner();
+    if (!feed.requestId || !owner) return;
+    this.requests.set(feed.requestId, {
+      owner,
+      items: [...feed.items, ...(feed.rows ?? []).flatMap((row) => row.items)],
+      expiresAt: this.now() + 60 * 60_000,
+    });
+    if (this.requests.size > 32) this.requests.delete(this.requests.keys().next().value!);
   }
 
   feedback(input: DiscoveryFeedback): void {
@@ -333,20 +361,52 @@ export class DiscoveryService {
       history.map((row) => row.features),
       evidence.watched,
     );
+    const hidden = new Set(
+      (this.deps.hiddenTags?.() ?? []).map((name) => name.toLocaleLowerCase()),
+    );
     const allowed = (row: RecommendationItemFeatures): boolean =>
       row.mediaType === type &&
       !row.isAdult &&
       !evidence.excluded.has(row.anilistId) &&
       !dismissed.has(row.anilistId) &&
-      !watchedInMore(row);
-    const raw = [...[...neighborIds].flatMap((id) => known.get(id) ?? []), ...pool.items];
+      !watchedInMore(row) &&
+      !isHidden(row, hidden);
+    // "In-network" source: released sequels of titles the viewer liked (and has not started).
+    const continuationIds = new Set<number>();
+    for (const item of history)
+      if (item.affinity >= 0.5 && item.features.mediaType === type)
+        for (const relation of item.features.relations ?? [])
+          if (
+            relation.relationType === "SEQUEL" &&
+            relation.mediaType === type &&
+            !evidence.watched.has(relation.id)
+          )
+            continuationIds.add(relation.id);
+    // Taste retrieval over the local cache: candidates no graph edge or trending list reached.
+    const retrieved = tasteRetrieval(
+      history,
+      this.deps.store.cachedFeatures(RETRIEVAL_CORPUS).filter(allowed),
+      RETRIEVAL_LIMIT,
+    );
+    const raw = [
+      ...[...neighborIds].flatMap((id) => known.get(id) ?? []),
+      ...pool.items,
+      ...retrieved,
+    ];
+    const continuationRows = () =>
+      [...continuationIds].flatMap((id) => {
+        const row = known.get(id);
+        return row && row.status !== "NOT_YET_RELEASED" ? [row] : [];
+      });
     // A later season whose prequel was never started is recommended as its first season instead
     // (release order, exact AniList relations only), inheriting its "similar to" links.
     const gather = () => {
       const candidates = new Map<number, RecommendationItemFeatures>();
       const redirects = new Map<number, number>();
-      const missing = new Set<number>();
-      for (const row of raw) {
+      const missing = new Set<number>(
+        [...continuationIds].filter((id) => !known.has(id)).slice(0, 8),
+      );
+      for (const row of [...raw, ...continuationRows()]) {
         if (!allowed(row) || candidates.has(row.anilistId)) continue;
         if (eligible(row)) {
           candidates.set(row.anilistId, row);
@@ -391,22 +451,65 @@ export class DiscoveryService {
     }
     const { candidates } = gathered;
     const ranked = redirectEdges(history, gathered.redirects);
-    const scored = rankHybrid({
-      section: type,
-      history: ranked,
-      candidates: [...candidates.values()],
-      now,
-    });
-    const items = selectHybrid(scored, ranked, 10);
+    const continuation = new Set(
+      continuationRows()
+        .filter((row) => candidates.has(row.anilistId))
+        .map((row) => itemKey(row)),
+    );
+    const ignored = new Map(
+      [...this.deps.store.ignoredDays(owner, now - IGNORED_WINDOW_MS)].map(([id, days]) => [
+        `${type}:${id}`,
+        days,
+      ]),
+    );
+    const scored = adjustScores(
+      rankHybrid({
+        section: type,
+        history: ranked,
+        candidates: [...candidates.values()],
+        now,
+      }),
+      { now, ignored, continuation },
+    );
+    // With enough of them, next seasons keep their own row instead of flickering into the rail.
+    const ownRow = continuation.size >= CONTINUATION_ROW_MIN;
+    const items = selectHybrid(
+      ownRow ? scored.filter((row) => !continuation.has(itemKey(row.features))) : scored,
+      ranked,
+      10,
+      { calibrate: CALIBRATION },
+    );
     const shown = new Set(items.map((row) => row.anilistId));
+    // Released next seasons of liked shows get their own row (when the main rail left some).
+    const nextUp = continuationPicks(
+      scored,
+      ranked,
+      continuation,
+      new Set([...shown].map((id) => `${type}:${id}`)),
+      10,
+    );
+    const continuationRow =
+      nextUp.length >= CONTINUATION_ROW_MIN
+        ? {
+            seedId: 0,
+            seedTitle: "",
+            continuation: true,
+            items: toAniListResults(nextUp),
+          }
+        : undefined;
+    for (const pick of nextUp) shown.add(pick.features.anilistId);
     const seedRows = buildSeedRows(scored, ranked, type, shown);
     for (const row of seedRows) for (const item of row.items) shown.add(item.anilistId);
     const themeRow = buildThemeRow(scored, ranked, type, shown);
     // Strongest row first, so the best match is the first thing the viewer sees.
-    const rows = (themeRow ? [...seedRows, themeRow] : seedRows)
-      .map((row) => ({ row, strength: rowStrength(row.items) }))
-      .sort((a, b) => b.strength - a.strength)
-      .map(({ row }) => row);
+    const rows = [
+      // The continuation row leads: the most dependable picks (X's in-network source).
+      ...(continuationRow ? [continuationRow] : []),
+      ...(themeRow ? [...seedRows, themeRow] : seedRows)
+        .map((row) => ({ row, strength: rowStrength(row.items) }))
+        .sort((a, b) => b.strength - a.strength)
+        .map(({ row }) => row),
+    ];
     const requestId = randomUUID();
     for (const [id, request] of this.requests)
       if (request.expiresAt <= now || request.owner !== owner) this.requests.delete(id);

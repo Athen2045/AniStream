@@ -4,7 +4,7 @@ import type {
   TitleFeedbackRef,
   TitleFeedbackValue,
   TimeToPlaySummary,
-} from "../../shared/contracts";
+} from "../../../shared/contracts";
 
 export interface TitleFeedbackRow extends TitleFeedbackRef {
   value: Exclude<TitleFeedbackValue, null>;
@@ -25,9 +25,28 @@ export interface PersonalizationStore {
   setActivitySignals(on: boolean): void;
   recordTimeToPlay(section: PersonalizationSection, seconds: number, now: number): void;
   timeToPlay(): TimeToPlaySummary[];
+  /** Genres and tags the viewer hid from recommendations and trending (Settings). */
+  hiddenTags(): string[];
+  setHiddenTags(names: string[]): void;
+}
+
+/** Hidden genre/tag names: trimmed, unique case-insensitively, at most 60 of 60 characters. */
+export function normalizeHiddenTags(names: readonly unknown[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of names) {
+    if (typeof raw !== "string") continue;
+    const name = raw.trim().slice(0, 60);
+    if (!name || seen.has(name.toLocaleLowerCase())) continue;
+    seen.add(name.toLocaleLowerCase());
+    result.push(name);
+    if (result.length >= 60) break;
+  }
+  return result;
 }
 
 const ACTIVITY_KEY = "personalization.activity-signals.v1";
+const HIDDEN_TAGS_KEY = "personalization.hidden-tags.v1";
 const MAX_FEEDBACK = 5_000;
 const MAX_MEASUREMENTS = 300;
 /** Median of the most recent sessions per section. */
@@ -106,6 +125,16 @@ export function createPersonalizationStore(db: Database.Database): Personalizati
           `DELETE FROM time_to_play_v1 WHERE id NOT IN (SELECT id FROM time_to_play_v1 ORDER BY id DESC LIMIT ${MAX_MEASUREMENTS})`,
         ).run();
       })(),
+    hiddenTags: () => {
+      try {
+        const value: unknown = JSON.parse(readMeta.get(HIDDEN_TAGS_KEY)?.value ?? "[]");
+        return Array.isArray(value) ? normalizeHiddenTags(value) : [];
+      } catch {
+        return [];
+      }
+    },
+    setHiddenTags: (names) =>
+      writeMeta.run(HIDDEN_TAGS_KEY, JSON.stringify(normalizeHiddenTags(names))),
     timeToPlay: () =>
       SECTIONS.flatMap((section) => {
         const values = db

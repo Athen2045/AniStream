@@ -181,4 +181,47 @@ describe("catalog data request lifecycle", () => {
 
     catalog.dispose();
   });
+
+  it("shows Trending from the shared cache when a section remounts, without another request", async () => {
+    const shared = { trending: {}, fallback: {} };
+    const browseAniList = vi.fn(async () => catalogPage(media(7, "ANIME")));
+    const first = createCatalogDataModule(api({ browseAniList }), undefined, shared);
+    first.activate({ type: "ANIME", availabilityMedia: [] });
+    await settle();
+    first.dispose();
+
+    const remounted = createCatalogDataModule(api({ browseAniList }), undefined, shared);
+    remounted.activate({ type: "ANIME", availabilityMedia: [] });
+    expect(remounted.getSnapshot()).toMatchObject({ trendingLoading: false });
+    expect(remounted.getSnapshot().trending.map((item) => item.id)).toEqual([7]);
+    expect(browseAniList).toHaveBeenCalledTimes(1);
+    remounted.dispose();
+  });
+
+  it("keeps AniList's empty Trending and the MAL stand-in for the session", async () => {
+    const shared = { trending: {}, fallback: {} };
+    const browseAniList = vi.fn(async () => ({ ...catalogPage(media(1, "MANGA")), items: [] }));
+    const getMalTrendingFallback = vi.fn(async () => [{ malId: 5, title: "Stand-in" }] as never);
+    const first = createCatalogDataModule(
+      api({ browseAniList, getMalTrendingFallback }),
+      undefined,
+      shared,
+    );
+    first.activate({ type: "MANGA", availabilityMedia: [] });
+    await settle();
+    await settle();
+    first.dispose();
+
+    const remounted = createCatalogDataModule(
+      api({ browseAniList, getMalTrendingFallback }),
+      undefined,
+      shared,
+    );
+    remounted.activate({ type: "MANGA", availabilityMedia: [] });
+    expect(remounted.getSnapshot()).toMatchObject({ trending: [], trendingLoading: false });
+    expect(remounted.getSnapshot().malTrendingFallback).toHaveLength(1);
+    expect(browseAniList).toHaveBeenCalledTimes(1);
+    expect(getMalTrendingFallback).toHaveBeenCalledTimes(1);
+    remounted.dispose();
+  });
 });

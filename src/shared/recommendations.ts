@@ -70,6 +70,11 @@ export interface RecommendationItemFeatures {
   malScore?: number;
   popularity?: number;
   status?: string;
+  /**
+   * TMDB collection (a film series) for movies; groups a franchise like AniList relations.
+   * 0 means the film belongs to none.
+   */
+  collectionId?: number;
   /** AniList start date as YYYYMMDD (unknown month/day are 00); orders seasons by release. */
   startedOn?: number;
   format?: string;
@@ -106,35 +111,6 @@ export interface RecommendationEdge {
   rating: number;
 }
 
-export type RecommendationProfileFeatureKind =
-  "tag" | "genre" | "creator" | "title-token" | "format";
-
-export interface RecommendationProfileFeature {
-  positiveWeight: number;
-  negativeWeight: number;
-  evidenceCount: number;
-  lastSeenAt: number;
-}
-
-export interface RecommendationProfile {
-  version: 1;
-  updatedAt: number;
-  features: Record<string, RecommendationProfileFeature>;
-  preferredMediaMix: {
-    anime: number;
-    manga: number;
-  };
-}
-
-export interface RecommendationCandidate {
-  features: RecommendationItemFeatures;
-  relationStrength?: number;
-  relatedTo?: number;
-  completed?: boolean;
-  current?: boolean;
-  dismissed?: boolean;
-}
-
 export type RecommendationReasonCode =
   | "matches-tag"
   | "matches-genre"
@@ -163,43 +139,6 @@ export interface RecommendationImpression extends RecommendationResult {
   position: number;
   shownAt: number;
 }
-
-export interface ScoredRecommendationCandidate extends RecommendationResult {
-  candidate: RecommendationCandidate;
-  rawScore: number;
-}
-
-export const EVENT_WEIGHTS = {
-  explored: 0.25,
-  searchedAndOpened: 0.45,
-  started: 0.75,
-  progressed: 0.9,
-  completed: 1.25,
-  ratedHigh: 1.5,
-  ratedMedium: 0.15,
-  ratedLow: -1.25,
-  skipped: -0.6,
-  dismissed: -1.5,
-  saved: 1,
-} as const;
-
-export const FEATURE_PROPAGATION_WEIGHTS = {
-  tag: 1,
-  genre: 0.7,
-  creator: 0.85,
-  titleToken: 0.35,
-  format: 0.25,
-} as const;
-
-export const RANKING_WEIGHTS = {
-  preferenceMatch: 0.42,
-  relationMatch: 0.18,
-  creatorMatch: 0.12,
-  qualitySignal: 0.1,
-  mediaTypeFit: 0.08,
-  freshness: 0.05,
-  explorationBonus: 0.05,
-} as const;
 
 /**
  * Hybrid For You weights. Chosen with the offline leave-one-out harness (test/eval, 2026-10-04):

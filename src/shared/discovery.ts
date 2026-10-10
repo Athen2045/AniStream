@@ -25,6 +25,8 @@ export interface DiscoveryRow {
   seedTitle: string;
   /** Set on a "Because you like <theme>" row; seedId/seedTitle then describe no single title. */
   theme?: string;
+  /** The "next seasons of shows you watched" row (released sequels of liked titles). */
+  continuation?: boolean;
   items: RecommendationResult[];
 }
 
@@ -42,6 +44,8 @@ export interface MoreDiscoveryRow {
   seedId: number;
   /** Set on a "Because you like <theme>" row. */
   theme?: string;
+  /** The "next in film series you watched" row. */
+  continuation?: boolean;
   items: MoreRecommendation[];
 }
 

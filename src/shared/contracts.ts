@@ -855,6 +855,8 @@ export interface PersonalizationSettings {
   /** Learn from how the viewer watches (starts, finishes, abandons, time to play). */
   activitySignals: boolean;
   timeToPlay: TimeToPlaySummary[];
+  /** Genres and tags kept out of For You, the hero and trending rails. */
+  hiddenTags: string[];
 }
 
 export type MoreTitleStatusAction = "planning" | "unplanned" | "completed";
@@ -890,10 +892,20 @@ export interface UpdateAniListEntryInput {
 export interface AniStreamBridge {
   getUpdateStatus(): Promise<import("./update-check").UpdateStatus>;
   checkForUpdates(): Promise<import("./update-check").UpdateStatus>;
+  /** Windows: start or retry downloading the offered release. */
+  downloadUpdate(): Promise<import("./update-check").UpdateStatus>;
+  cancelUpdateDownload(): Promise<import("./update-check").UpdateStatus>;
+  /** Windows: quit and install the downloaded release; false when nothing is ready. */
+  installUpdate(): Promise<boolean>;
+  getUpdatePreferences(): Promise<import("./update-check").UpdatePreferences>;
+  setUpdatePreferences(
+    preferences: Omit<import("./update-check").UpdatePreferences, "supported">,
+  ): Promise<import("./update-check").UpdatePreferences>;
   onUpdateStatusChanged(
     callback: (state: import("./update-check").UpdateStatus) => void,
   ): () => void;
-  getForYou(type: AniListMediaType): Promise<DiscoveryFeed>;
+  /** `fresh` rebuilds the feed (viewer action); otherwise the saved feed may be shown. */
+  getForYou(type: AniListMediaType, fresh?: boolean): Promise<DiscoveryFeed>;
   getReaderSettings(): Promise<ReaderSettings>;
   exportLocalBackup(): Promise<boolean>;
   prepareLocalRestore(): Promise<RestorePreview | null>;
@@ -902,7 +914,7 @@ export interface AniStreamBridge {
   saveReaderSettings(input: ReaderSettings): Promise<ReaderSettings>;
   recordDiscoveryFeedback(input: DiscoveryFeedback): Promise<void>;
   recordDiscoveryImpressions(input: DiscoveryImpressionInput): Promise<void>;
-  getMoreForYou(): Promise<MoreDiscoveryFeed>;
+  getMoreForYou(fresh?: boolean): Promise<MoreDiscoveryFeed>;
   recordMoreDiscoveryFeedback(input: MoreDiscoveryFeedback): Promise<void>;
   onActivityChanged(callback: () => void): () => void;
   getPersonalAnimeUpdates(mediaIds: number[]): Promise<PersonalAiringUpdate[]>;
@@ -984,6 +996,7 @@ export interface AniStreamBridge {
   getSimklRows(): Promise<SimklRow[]>;
   getPersonalizationSettings(): Promise<PersonalizationSettings>;
   setActivitySignals(on: boolean): Promise<PersonalizationSettings>;
+  setHiddenTags(names: string[]): Promise<PersonalizationSettings>;
   recordTimeToPlay(section: PersonalizationSection, seconds: number): Promise<void>;
   getTitleFeedback(ref: TitleFeedbackRef): Promise<TitleFeedbackValue>;
   setTitleFeedback(ref: TitleFeedbackRef, value: TitleFeedbackValue): Promise<void>;

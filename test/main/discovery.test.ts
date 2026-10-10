@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { openAppDatabase } from "../../src/main/database";
 import { DiscoveryService } from "../../src/main/recommendations/discovery-service";
-import { discoveryEvidence } from "../../src/main/recommendations/discovery-evidence";
+import { discoveryEvidence } from "../../src/main/recommendations/engine";
 import { loadRecommendationSeeds } from "../../src/main/anilist/recommendation-seeds";
 import type { RecommendationSeedData } from "../../src/main/anilist/recommendation-seeds";
 import type { AniListMedia, AniListMediaType } from "../../src/shared/contracts";

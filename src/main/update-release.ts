@@ -43,7 +43,7 @@ export function parseRelease(
   value: unknown,
   target: UpdateTarget,
 ):
-  | { kind: "release"; version: string; releaseUrl: string }
+  | { kind: "release"; version: string; releaseUrl: string; canInstall: boolean }
   | { kind: "invalid-response" | "no-compatible-release" } {
   if (
     !record(value) ||
@@ -71,17 +71,28 @@ export function parseRelease(
     )
       return { kind: "invalid-response" };
   }
+  const uploaded = (name: string): boolean =>
+    (value.assets as Record<string, unknown>[]).some(
+      (asset) => asset.name === name && asset.state === "uploaded" && positiveInteger(asset.size),
+    );
+  const dottedInstaller = `AniStream.Setup.${version}.exe`;
   if (
-    !value.assets.some(
-      (asset: Record<string, unknown>) =>
-        (target === "mac-arm64"
-          ? asset.name === `AniStream-${version}-arm64.dmg`
-          : asset.name === `AniStream.Setup.${version}.exe` ||
-            asset.name === `AniStream Setup ${version}.exe`) &&
-        asset.state === "uploaded" &&
-        positiveInteger(asset.size),
-    )
+    target === "mac-arm64"
+      ? !uploaded(`AniStream-${version}-arm64.dmg`)
+      : !uploaded(dottedInstaller) && !uploaded(`AniStream Setup ${version}.exe`)
   )
     return { kind: "no-compatible-release" };
-  return { kind: "release", version, releaseUrl: value.html_url as string };
+  // In-app installation follows latest.yml, whose installer URL must be the exact name GitHub
+  // serves. Older releases without it keep the manual "View release" path.
+  const canInstall =
+    target === "win-x64" && uploaded(dottedInstaller) && uploaded(WINDOWS_UPDATE_MANIFEST);
+  return { kind: "release", version, releaseUrl: value.html_url as string, canInstall };
+}
+
+/** electron-builder's Windows update manifest, published beside the installer. */
+export const WINDOWS_UPDATE_MANIFEST = "latest.yml";
+
+/** The pinned per-release download base the Windows updater reads `latest.yml` from. */
+export function releaseDownloadBase(version: string): string {
+  return `${RELEASE_REPOSITORY}/releases/download/v${version}`;
 }

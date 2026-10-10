@@ -9,7 +9,7 @@ if (process.platform !== "win32") {
 }
 
 const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
-const installerPath = resolve(process.argv[2] ?? `dist/AniStream Setup ${packageVersion}.exe`);
+const installerPath = resolve(process.argv[2] ?? `dist/AniStream.Setup.${packageVersion}.exe`);
 await access(installerPath);
 
 const workspace = await mkdtemp(join(tmpdir(), "anistream-installer-"));

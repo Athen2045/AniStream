@@ -30,25 +30,31 @@ export function ForYouRail({
   const [refreshSpin, setRefreshSpin] = useState(0);
   useEffect(() => {
     let visible = false;
+    // Scrolling to the rail or returning to the window only fills an empty rail; the viewer's own
+    // activity rebuilds a feed older than a minute.
+    const show = (): void => {
+      if (visible && document.visibilityState === "visible")
+        void session.ensure(Number.POSITIVE_INFINITY);
+    };
     const load = (): void => {
       if (visible && document.visibilityState === "visible") void session.ensure(60_000);
     };
     const observer = new IntersectionObserver(
       (entries) => {
         visible = entries.some((entry) => entry.isIntersecting);
-        if (visible) load();
+        if (visible) show();
       },
       { rootMargin: "200px" },
     );
     if (section.current) observer.observe(section.current);
     window.addEventListener("anistream:activity-updated", load);
-    document.addEventListener("visibilitychange", load);
+    document.addEventListener("visibilitychange", show);
     const unsubscribe = window.anistream.onActivityChanged(load);
     return () => {
       observer.disconnect();
       unsubscribe();
       window.removeEventListener("anistream:activity-updated", load);
-      document.removeEventListener("visibilitychange", load);
+      document.removeEventListener("visibilitychange", show);
     };
   }, [session]);
   const items = state.feed?.items ?? [];
@@ -139,12 +145,16 @@ export function ForYouRail({
         ) : null}
       </section>
       {rows.map((row) => {
-        const heading = row.theme
-          ? `Because you like ${row.theme}`
-          : `Because you ${verb} ${row.seedTitle}`;
+        const heading = row.continuation
+          ? type === "MANGA"
+            ? "New from series you read"
+            : "Next seasons of shows you watched"
+          : row.theme
+            ? `Because you like ${row.theme}`
+            : `Because you ${verb} ${row.seedTitle}`;
         return (
           <section
-            key={`${state.feed?.requestId}:row:${row.theme ? `theme:${row.theme}` : row.seedId}`}
+            key={`${state.feed?.requestId}:row:${row.continuation ? "next" : row.theme ? `theme:${row.theme}` : row.seedId}`}
             className="media-rail for-you-preview"
             aria-label={heading}
           >

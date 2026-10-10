@@ -83,9 +83,17 @@ const defaultRuntime: CatalogDataRuntime = {
   },
 };
 
+/** Trending pages that loaded successfully; shared by every module given the same object. */
+export interface CatalogTrendingCache {
+  /** An empty list is AniList's own empty answer; the MAL ranking then stands in. */
+  trending: Partial<Record<AniListMediaType, AniListCatalogPage["items"]>>;
+  fallback: Partial<Record<AniListMediaType, MalRankingItem[]>>;
+}
+
 export function createCatalogDataModule(
   api: CatalogDataApi,
   runtime: CatalogDataRuntime = defaultRuntime,
+  shared: CatalogTrendingCache = { trending: {}, fallback: {} },
 ): CatalogDataModule {
   let snapshot: CatalogDataSnapshot = {
     type: "ANIME",
@@ -108,6 +116,7 @@ export function createCatalogDataModule(
   const trendingByType: Partial<Record<AniListMediaType, AniListCatalogPage["items"]>> = {};
   const trendingFailedByType = new Set<AniListMediaType>();
   const fallbackByType: Partial<Record<AniListMediaType, MalRankingItem[]>> = {};
+  const fallbackFor = (type: AniListMediaType) => fallbackByType[type] ?? shared.fallback[type];
   const latestByType: Record<AniListMediaType, LatestCache> = {
     ANIME: { anime: [], manga: [] },
     MANGA: { anime: [], manga: [] },
@@ -137,7 +146,7 @@ export function createCatalogDataModule(
   const isCurrentView = (type: AniListMediaType): boolean => !disposed && snapshot.type === type;
 
   const loadFallback = (type: AniListMediaType): void => {
-    if (fallbackByType[type] !== undefined || fallbackRequestIdentity[type] !== undefined) return;
+    if (fallbackFor(type) !== undefined || fallbackRequestIdentity[type] !== undefined) return;
     const identity = ++requestIdentity;
     fallbackRequestIdentity[type] = identity;
     void api
@@ -147,6 +156,7 @@ export function createCatalogDataModule(
           return;
         }
         fallbackByType[type] = ranking;
+        shared.fallback[type] = ranking;
         publish({ malTrendingFallback: ranking });
       })
       .catch(() => {
@@ -159,10 +169,12 @@ export function createCatalogDataModule(
       });
   };
 
+  const trendingFor = (type: AniListMediaType) => trendingByType[type] ?? shared.trending[type];
+
   const loadTrending = (type: AniListMediaType): void => {
-    const cached = trendingByType[type];
+    const cached = trendingFor(type);
     if (cached !== undefined) {
-      if (trendingFailedByType.has(type)) loadFallback(type);
+      if (trendingFailedByType.has(type) || !cached.length) loadFallback(type);
       return;
     }
     if (trendingRequestIdentity[type] !== undefined) return;
@@ -178,8 +190,11 @@ export function createCatalogDataModule(
         sort: "TRENDING_DESC",
       })
       .then((result) => {
-        if (trendingRequestIdentity[type] !== identity || !isCurrentView(type)) return;
         const trending = result.items.slice(0, TRENDING_LIMIT);
+        // Kept even if the viewer already switched sections, so returning shows it at once.
+        // AniList's empty answer is kept too (with the MAL stand-in), so it is not re-asked.
+        shared.trending[type] = trending;
+        if (trendingRequestIdentity[type] !== identity || !isCurrentView(type)) return;
         if (!trending.length) {
           // AniList can answer an empty trending page while degraded; show MAL instead of a blank.
           trendingFailedByType.add(type);
@@ -359,9 +374,9 @@ export function createCatalogDataModule(
           ...snapshot,
           type: context.type,
           latestPage: 1,
-          trending: trendingByType[context.type] ?? [],
-          malTrendingFallback: fallbackByType[context.type] ?? [],
-          trendingLoading: trendingByType[context.type] === undefined,
+          trending: trendingFor(context.type) ?? [],
+          malTrendingFallback: fallbackFor(context.type) ?? [],
+          trendingLoading: trendingFor(context.type) === undefined,
           latestAnime: latestByType[context.type].anime,
           latestManga: latestByType[context.type].manga,
           latestPageInfo: undefined,

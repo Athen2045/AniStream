@@ -1,6 +1,9 @@
-import type { AniListDashboard, AniListEntry, AniListMedia } from "../../shared/contracts";
-import type { LocalActivity } from "../../shared/activity";
-import type { RecommendationEvent, RecommendationItemFeatures } from "../../shared/recommendations";
+import type { AniListDashboard, AniListEntry, AniListMedia } from "../../../shared/contracts";
+import type { LocalActivity } from "../../../shared/activity";
+import type {
+  RecommendationEvent,
+  RecommendationItemFeatures,
+} from "../../../shared/recommendations";
 
 /** One history title and how much the viewer appears to like it, in [-1, 1]. */
 export interface HistoryAffinity {

@@ -73,14 +73,15 @@ jobs:
         run: |
           npm run check:packaged-preload -- dist/win-unpacked/resources/app.asar
           $version = node -p "require('./package.json').version"
-          npm run check:win-installer -- "dist/AniStream Setup $version.exe"
+          npm run check:win-installer -- "dist/AniStream.Setup.$version.exe"
 
       - name: Upload development installer
         uses: actions/upload-artifact@v4
         with:
           name: AniStream-dev-win-x64-${{ github.sha }}
           path: |
-            dist/AniStream Setup *.exe
-            dist/AniStream Setup *.exe.blockmap
+            dist/AniStream.Setup.*.exe
+            dist/AniStream.Setup.*.exe.blockmap
+            dist/latest.yml
           retention-days: 14
           if-no-files-found: error

@@ -110,15 +110,16 @@ jobs:
           npm run check:packaged-build -- dist/win-unpacked/resources/app.asar
           npm run check:packaged-preload -- dist/win-unpacked/resources/app.asar
           $version = node -p "require('./package.json').version"
-          npm run check:win-installer -- "dist/AniStream Setup $version.exe"
+          npm run check:win-installer -- "dist/AniStream.Setup.$version.exe"
 
       - name: Upload Windows release artifact
         uses: actions/upload-artifact@v4
         with:
           name: AniStream-release-win-x64-${{ inputs.version }}
           path: |
-            dist/AniStream Setup *.exe
-            dist/AniStream Setup *.exe.blockmap
+            dist/AniStream.Setup.*.exe
+            dist/AniStream.Setup.*.exe.blockmap
+            dist/latest.yml
           retention-days: 30
           if-no-files-found: error
 
@@ -220,12 +221,24 @@ jobs:
           name: AniStream-release-mac-arm64-${{ inputs.version }}
           path: dist
 
+      - name: Verify Windows update manifest
+        # In-app updates follow latest.yml; it must name this tag's exact installer.
+        working-directory: dist
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          test -f latest.yml || { echo "::error::latest.yml is missing."; exit 1; }
+          grep -qx "version: $VERSION" latest.yml || { echo "::error::latest.yml does not describe version $VERSION."; exit 1; }
+          grep -qx "path: AniStream.Setup.$VERSION.exe" latest.yml || { echo "::error::latest.yml does not point at AniStream.Setup.$VERSION.exe."; exit 1; }
+          test -f "AniStream.Setup.$VERSION.exe" || { echo "::error::The installer named in latest.yml is missing."; exit 1; }
+
       - name: Write SHA-256 checksums
         # The installers are unsigned, so publish checksums that downloads can be verified against.
         working-directory: dist
         shell: bash
         run: |
-          sha256sum "AniStream Setup "*.exe AniStream-*.dmg > SHA256SUMS.txt
+          sha256sum AniStream.Setup.*.exe AniStream-*.dmg > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create tag and GitHub Release
@@ -237,8 +250,9 @@ jobs:
           body_path: .github/releases/v${{ inputs.version }}.md
           make_latest: "true"
           files: |
-            dist/AniStream Setup *.exe
-            dist/AniStream Setup *.exe.blockmap
+            dist/AniStream.Setup.*.exe
+            dist/AniStream.Setup.*.exe.blockmap
+            dist/latest.yml
             dist/*.dmg
             dist/SHA256SUMS.txt
           fail_on_unmatched_files: true

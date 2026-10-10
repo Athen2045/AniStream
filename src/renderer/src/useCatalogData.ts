@@ -4,7 +4,11 @@ import {
   createCatalogDataModule,
   type CatalogDataModule,
   type CatalogDataSnapshot,
+  type CatalogTrendingCache,
 } from "./catalog-data";
+
+/** Trending survives section switches for the whole app session (the page remounts per section). */
+const appTrending: CatalogTrendingCache = { trending: {}, fallback: {} };
 
 export interface UseCatalogDataInput {
   type: AniListMediaType;
@@ -19,7 +23,9 @@ export interface CatalogData extends CatalogDataSnapshot {
 }
 
 export function useCatalogData(input: UseCatalogDataInput): CatalogData {
-  const [controller] = useState<CatalogDataModule>(() => createCatalogDataModule(window.anistream));
+  const [controller] = useState<CatalogDataModule>(() =>
+    createCatalogDataModule(window.anistream, undefined, appTrending),
+  );
   const { availabilityMedia, trackAvailabilityNow, type, latest = true } = input;
   const snapshot = useSyncExternalStore(
     controller.subscribe,

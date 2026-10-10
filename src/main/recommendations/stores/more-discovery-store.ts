@@ -1,11 +1,22 @@
 import type Database from "better-sqlite3";
-import type { MoreMediaType } from "../../shared/contracts";
-import type { RecommendationItemFeatures } from "../../shared/recommendations";
-import { itemKey } from "./hybrid";
+import type { MoreMediaType } from "../../../shared/contracts";
+import type { RecommendationItemFeatures } from "../../../shared/recommendations";
+import { itemKey } from "../engine";
 
 /** Local cache of TMDB recommendation features and the viewer's More "Not interested" choices. */
 export interface MoreDiscoveryStore {
   features(keys: string[]): RecommendationItemFeatures[];
+  /** The most recently saved feature rows (the local corpus for taste retrieval). */
+  cachedFeatures(limit: number): RecommendationItemFeatures[];
+  /** Records the For You titles a load put on screen (first cards of each rail), once a day. */
+  recordShown(keys: string[], now: number): void;
+  /** Opening a title's page resets its ignored count. */
+  markOpened(key: string): void;
+  /** Days each title was shown since `since` without its page being opened. */
+  ignoredDays(since: number): Map<string, number>;
+  /** The films of a TMDB collection saved at or after `since`, if any. */
+  collection(id: number, since: number): RecommendationItemFeatures[] | undefined;
+  saveCollection(id: number, films: RecommendationItemFeatures[], now: number): void;
   saveFeatures(items: RecommendationItemFeatures[]): void;
   dismissed(): Array<{ type: MoreMediaType; tmdbId: number; updatedAt: number }>;
   setDismissed(type: MoreMediaType, tmdbId: number, dismissed: boolean, now: number): void;
@@ -15,10 +26,18 @@ const MAX_READ = 2_000;
 const MAX_WRITE = 1_000;
 const MAX_ROWS = 3_000;
 const MAX_DISMISSED = 500;
+const MAX_SHOWN = 5_000;
+const MAX_COLLECTIONS = 300;
 
 export function createMoreDiscoveryStore(db: Database.Database): MoreDiscoveryStore {
   db.exec(`CREATE TABLE IF NOT EXISTS more_discovery_features_v1 (
     item_key TEXT PRIMARY KEY, features TEXT NOT NULL, updated_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS more_discovery_collections_v1 (
+    collection_id INTEGER PRIMARY KEY, films TEXT NOT NULL, saved_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS more_discovery_shown_v1 (
+    item_key TEXT NOT NULL, day INTEGER NOT NULL, PRIMARY KEY (item_key, day)
   );
   CREATE TABLE IF NOT EXISTS more_discovery_dismissed_v1 (
     media_type TEXT NOT NULL CHECK (media_type IN ('MOVIE', 'TV')),
@@ -38,6 +57,59 @@ export function createMoreDiscoveryStore(db: Database.Database): MoreDiscoverySt
     }
   };
   return {
+    cachedFeatures(limit) {
+      return db
+        .prepare<[number], { features: string }>(
+          "SELECT features FROM more_discovery_features_v1 ORDER BY updated_at DESC LIMIT ?",
+        )
+        .all(Math.min(limit, MAX_READ))
+        .flatMap((row) => parse(row.features) ?? []);
+    },
+    recordShown(keys, now) {
+      const day = Math.floor(now / 86_400_000);
+      db.transaction(() => {
+        const insert = db.prepare("INSERT OR IGNORE INTO more_discovery_shown_v1 VALUES (?, ?)");
+        for (const key of new Set(keys)) insert.run(key, day);
+        db.prepare(
+          `DELETE FROM more_discovery_shown_v1 WHERE rowid NOT IN (SELECT rowid FROM more_discovery_shown_v1 ORDER BY day DESC LIMIT ${MAX_SHOWN})`,
+        ).run();
+      })();
+    },
+    collection(id, since) {
+      const row = db
+        .prepare<[number, number], { films: string }>(
+          "SELECT films FROM more_discovery_collections_v1 WHERE collection_id=? AND saved_at>=?",
+        )
+        .get(id, since);
+      if (!row) return undefined;
+      try {
+        const films: unknown = JSON.parse(row.films);
+        return Array.isArray(films) ? (films as RecommendationItemFeatures[]) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    saveCollection(id, films, now) {
+      db.transaction(() => {
+        db.prepare(
+          "INSERT INTO more_discovery_collections_v1 VALUES (?, ?, ?) ON CONFLICT(collection_id) DO UPDATE SET films=excluded.films, saved_at=excluded.saved_at",
+        ).run(id, JSON.stringify(films.slice(0, 40)), now);
+        db.prepare(
+          `DELETE FROM more_discovery_collections_v1 WHERE rowid NOT IN (SELECT rowid FROM more_discovery_collections_v1 ORDER BY saved_at DESC LIMIT ${MAX_COLLECTIONS})`,
+        ).run();
+      })();
+    },
+    markOpened(key) {
+      db.prepare("DELETE FROM more_discovery_shown_v1 WHERE item_key=?").run(key);
+    },
+    ignoredDays(since) {
+      const rows = db
+        .prepare<[number], { item_key: string; days: number }>(
+          "SELECT item_key, COUNT(*) AS days FROM more_discovery_shown_v1 WHERE day >= ? GROUP BY item_key",
+        )
+        .all(Math.floor(since / 86_400_000));
+      return new Map(rows.map((row) => [row.item_key, row.days]));
+    },
     features(keys) {
       return [...new Set(keys)].slice(0, MAX_READ).flatMap((key) => {
         const row = read.get(key);
@@ -63,6 +135,8 @@ export function createMoreDiscoveryStore(db: Database.Database): MoreDiscoverySt
                 recommendations: cached.recommendations,
                 tags: cached.tags,
                 creators: cached.creators,
+                // Neighbour lists do not carry the film series; keep the seed's.
+                collectionId: item.collectionId ?? cached.collectionId,
               };
           }
           write.run(key, JSON.stringify(row), row.updatedAt);

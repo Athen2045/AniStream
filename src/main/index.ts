@@ -52,9 +52,12 @@ import { protocolRegistrationArgs } from "./protocol-registration";
 import { UpdateChecker } from "./update-check";
 import { UpdateLaunch } from "./update-launch";
 import { updateTarget } from "./update-release";
+import { WindowsUpdateInstaller, type UpdaterAdapter } from "./update-install";
+import { UpdateService } from "./update-service";
 import { trackUpdateWindowHealth } from "./update-window-health";
 import { startDevTiming } from "./dev-performance";
 import { ArtworkCache } from "./artwork-cache";
+import { FieldSnapshots } from "./field-snapshots";
 import { PROVIDER_USER_AGENT } from "./provider-transport";
 import { ARTWORK_SCHEME, artworkSourceFromCacheUrl } from "../shared/artwork";
 
@@ -79,7 +82,7 @@ let simkl: SimklClient | undefined;
 let simklService: SimklService | undefined;
 let morePlayerFrameUa: MorePlayerFrameUserAgent | undefined;
 let rendererServer: RendererServer | undefined;
-let updateChecker: UpdateChecker | undefined;
+let updateService: UpdateService | undefined;
 let updateLaunch: UpdateLaunch | undefined;
 const protocolCallbacks = new ProtocolCallbackRouter();
 
@@ -327,20 +330,55 @@ void app
     database = await databasePromise;
     const target = updateTarget(app.isPackaged, process.platform, process.arch);
     updateLaunch = new UpdateLaunch(database.updateLaunch, app.getVersion(), target !== undefined);
-    updateChecker = new UpdateChecker({
+    // The service is assigned before any check can run, so these callbacks always reach it.
+    let service: UpdateService | undefined;
+    const checker = new UpdateChecker({
       currentVersion: app.getVersion(),
       target,
       recovery: updateLaunch.recovery,
+      onChange: () => service?.handleChange(),
+    });
+    const updatePreferences = database.updatePreferences;
+    // In-app download/install is Windows x64 only; macOS keeps the release link (Squirrel.Mac
+    // requires a signed app).
+    const installer =
+      target === "win-x64"
+        ? new WindowsUpdateInstaller({
+            factory: createWindowsUpdater,
+            installOnQuit: updatePreferences.read().installOnQuit,
+            onChange: () => service?.handleChange(),
+          })
+        : undefined;
+    service = new UpdateService({
+      checker,
+      installer,
+      preferences: updatePreferences,
       onChange: (state) => {
         if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed())
           sendTypedIpcEvent(mainWindow.webContents, "app:update-status-changed", state);
       },
     });
-    const checker = updateChecker;
+    updateService = service;
+    const updates = service;
     registerTrustedIpcHandler(trustedRendererOrigin, "app:update-status", () =>
-      checker.getStatus(),
+      updates.getStatus(),
     );
-    registerTrustedIpcHandler(trustedRendererOrigin, "app:check-updates", () => checker.check());
+    registerTrustedIpcHandler(trustedRendererOrigin, "app:check-updates", () => updates.check());
+    registerTrustedIpcHandler(trustedRendererOrigin, "app:download-update", () =>
+      updates.download(),
+    );
+    registerTrustedIpcHandler(trustedRendererOrigin, "app:cancel-update-download", () =>
+      updates.cancelDownload(),
+    );
+    registerTrustedIpcHandler(trustedRendererOrigin, "app:install-update", () => updates.install());
+    registerTrustedIpcHandler(trustedRendererOrigin, "app:update-preferences", () =>
+      updates.getPreferences(),
+    );
+    registerTrustedIpcHandler(
+      trustedRendererOrigin,
+      "app:set-update-preferences",
+      (_event, preferences) => updates.setPreferences(preferences),
+    );
     mangaTitle = new MangaTitleModule({
       mangaBaka,
       mangaUpdates,
@@ -362,9 +400,12 @@ void app
         setCaptionControlsVisible(mainWindow, process.platform, visible);
     });
 
+    // Saved Trending / For You copies; background refreshes run one at a time after startup.
+    const fieldSnapshots = new FieldSnapshots({ store: () => database?.fieldSnapshots });
     registerTrackerDomain(trustedRendererOrigin, {
       aniList,
       database,
+      snapshots: fieldSnapshots,
       onChanged: () => {
         if (mainWindow && !mainWindow.isDestroyed())
           sendTypedIpcEvent(mainWindow.webContents, "activity:changed", undefined);
@@ -381,6 +422,7 @@ void app
       players: providerConfig.more.media,
       frameUserAgent: () => morePlayerFrameUa,
       tracker: () => simklService,
+      snapshots: fieldSnapshots,
     });
     registerMangaDomain(trustedRendererOrigin, {
       readerSettings: database,
@@ -426,6 +468,7 @@ void app
       aniList,
       tmdb,
       simklSync,
+      fieldSnapshots,
     );
 
     // Register every IPC handler before the renderer can invoke the preload bridge.
@@ -463,13 +506,30 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  updateChecker?.dispose();
+  updateService?.dispose();
   updateLaunch?.dispose();
   disposeDiscovery?.();
   disposeActivity?.();
   database?.close();
   void rendererServer?.close();
 });
+
+/** electron-updater, loaded only in packaged Windows builds and pinned to one release's assets. */
+async function createWindowsUpdater(feedUrl: string) {
+  const { NsisUpdater, CancellationToken } = await import("electron-updater");
+  const updater = new NsisUpdater({ provider: "generic", url: feedUrl });
+  // Keep the console quiet: no per-request info logging, only problems.
+  updater.logger = {
+    info: () => undefined,
+    warn: (message: unknown) => console.warn("AniStream updater:", message),
+    error: (message: unknown) => console.error("AniStream updater:", message),
+  };
+  // NsisUpdater's typed emitter and CancellationToken class are wider than the adapter slice.
+  return {
+    updater: updater as unknown as UpdaterAdapter,
+    createToken: () => new CancellationToken(),
+  };
+}
 
 function isAnimeSourceEnabled(): boolean {
   const configured = process.env.ANISTREAM_ANIME_SOURCE_ENABLED?.trim().toLocaleLowerCase();

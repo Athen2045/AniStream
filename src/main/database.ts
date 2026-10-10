@@ -1,6 +1,10 @@
 import Database from "better-sqlite3";
 import { serializeDashboardForCache } from "./dashboard-cache";
 import { createUpdateLaunchStore, type UpdateLaunchStore } from "./update-launch-store";
+import {
+  createUpdatePreferencesStore,
+  type UpdatePreferencesStore,
+} from "./update-preferences-store";
 import { createBackupRepository, type BackupRepository } from "./backup-repository";
 import { createReaderSettingsRepository, type ReaderSettingsRepository } from "./reader-settings";
 import { createActivityRepository, type ActivityRepository } from "./activity/repository";
@@ -15,21 +19,25 @@ import type {
   SaveMorePlaybackResumeInput,
   PlaybackResume,
 } from "../shared/contracts";
-import type { RecommendationRepository } from "./recommendations/repository";
-import { createRecommendationRepository } from "./recommendations/repository";
-import { createDiscoveryStore, type DiscoveryStore } from "./recommendations/discovery-store";
+import type { RecommendationRepository } from "./recommendations/stores/repository";
+import { createRecommendationRepository } from "./recommendations/stores/repository";
+import {
+  createDiscoveryStore,
+  type DiscoveryStore,
+} from "./recommendations/stores/discovery-store";
 import { createSimklLibraryStore, type SimklLibraryStore } from "./simkl/library";
 import { createSimklCatalogStore, type SimklCatalogStore } from "./simkl/collaborative";
 import { createMangaDexMappingStore, type MangaDexMappingStore } from "./mangadex-mappings";
+import { createSnapshotStore, type SnapshotStore } from "./field-snapshots";
 import {
   createPersonalizationStore,
   type PersonalizationStore,
-} from "./recommendations/personalization-store";
+} from "./recommendations/stores/personalization-store";
 import { AnimeTmdbLinks } from "./anime-tmdb-links";
 import {
   createMoreDiscoveryStore,
   type MoreDiscoveryStore,
-} from "./recommendations/more-discovery-store";
+} from "./recommendations/stores/more-discovery-store";
 import {
   createMangaPreferenceRepository,
   type MangaPreferenceRepository,
@@ -51,9 +59,11 @@ export interface AppDatabase
   readonly simklLibrary: SimklLibraryStore;
   readonly simklCatalog: SimklCatalogStore;
   readonly mangaDexMappings: MangaDexMappingStore;
+  readonly fieldSnapshots: SnapshotStore;
   readonly personalization: PersonalizationStore;
   readonly backup: BackupRepository;
   readonly updateLaunch: UpdateLaunchStore;
+  readonly updatePreferences: UpdatePreferencesStore;
   getCachedAniListDashboard(): AniListDashboard | undefined;
   saveCachedAniListDashboard(dashboard: AniListDashboard): void;
   clearCachedAniListDashboard(): void;
@@ -211,9 +221,11 @@ export function openAppDatabase(path: string): AppDatabase {
     simklLibrary: createSimklLibraryStore(database),
     simklCatalog: createSimklCatalogStore(database),
     mangaDexMappings: createMangaDexMappingStore(database),
+    fieldSnapshots: createSnapshotStore(database),
     personalization: createPersonalizationStore(database),
     backup: createBackupRepository(database, bingeRepository),
     updateLaunch: createUpdateLaunchStore(database),
+    updatePreferences: createUpdatePreferencesStore(database),
     ready: true,
     getCachedAniListDashboard: () => {
       const row = readAppMeta.get(dashboardCacheKey);

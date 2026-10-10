@@ -12,9 +12,13 @@ import {
 } from "../../shared/recommendations";
 import type { AnimeTmdbLinkIndex } from "../anime-tmdb-links";
 import type { MoreHistoryEntry } from "../more-library";
-import type { TitleFeedbackRow } from "./personalization-store";
+import type { TitleFeedbackRow } from "./stores/personalization-store";
 import type { MoreRecommendationSeed } from "../tmdb";
 import {
+  adjustScores,
+  continuationPicks,
+  isHidden,
+  tasteRetrieval,
   itemKey,
   pickHybrid,
   rankHybrid,
@@ -24,8 +28,8 @@ import {
   themeRowHybrid,
   type HybridHistoryItem,
   type HybridPick,
-} from "./hybrid";
-import type { MoreDiscoveryStore } from "./more-discovery-store";
+} from "./engine";
+import type { MoreDiscoveryStore } from "./stores/more-discovery-store";
 
 interface Dependencies {
   store: MoreDiscoveryStore;
@@ -56,11 +60,26 @@ interface Dependencies {
   links?: () => AnimeTmdbLinkIndex;
   /** AniList titles the viewer has started; their TMDB entries stay out of More. */
   watchedAniList?: () => ReadonlySet<number>;
+  /** Genres and tags the viewer hid in Settings. */
+  hiddenTags?: () => string[];
+  /** The films of one TMDB collection (film series), for the next film in a liked series. */
+  collection?: (id: number) => Promise<RecommendationItemFeatures[]>;
   now?: () => number;
   providerTimeoutMs?: number;
 }
 
 const PROVIDER_DEADLINE_MS = 12_000;
+/** Shown-but-ignored memory, taste retrieval and calibration (user request 2026-10-10). */
+const IGNORED_WINDOW_MS = 30 * 86_400_000;
+const RETRIEVAL_CORPUS = 1_500;
+const RETRIEVAL_LIMIT = 40;
+const CALIBRATION = 0.3;
+/** Cards per rail counted as shown (what fits on screen at the default window size). */
+const SHOWN_PER_RAIL = 7;
+/** Film-series lookups per load; each is saved for a week. */
+const MAX_COLLECTION_FETCHES = 3;
+const COLLECTION_TTL_MS = 7 * 86_400_000;
+const CONTINUATION_ROW_MIN = 2;
 /** TMDB has one request per seed; keep each load small and let the cache converge. */
 const SEEDS_PER_LOAD = 4;
 /** Extra seeds fetched in the background after a load, so themes cover more of the history. */
@@ -112,6 +131,16 @@ export class MoreDiscoveryService {
       this.pending = undefined;
     });
     return this.pending;
+  }
+
+  /** Accepts feedback for a feed saved in an earlier session, as if it had just been loaded. */
+  adopt(feed: MoreDiscoveryFeed): void {
+    if (!feed.requestId) return;
+    const key = (row: MoreRecommendation): string => `${row.item.type}:${row.item.id}`;
+    this.requests.set(feed.requestId, {
+      keys: new Set([...feed.items, ...(feed.rows ?? []).flatMap((row) => row.items)].map(key)),
+      expiresAt: this.now() + 60 * 60_000,
+    });
   }
 
   feedback(input: MoreDiscoveryFeedback): void {
@@ -225,22 +254,30 @@ export class MoreDiscoveryService {
     );
     let message: string | undefined;
     const halfLife = HYBRID_WEIGHTS.halfLifeDays * 86_400_000;
-    const stale = evidence
+    const strongest = evidence
       .map(({ entry, affinity }) => ({
         entry,
         weight: affinity * Math.pow(0.5, Math.max(0, now - Date.parse(entry.updatedAt)) / halfLife),
       }))
       .sort((a, b) => b.weight - a.weight)
-      .slice(0, MAX_SEEDS)
-      .filter(({ entry }) => {
-        const row = features.get(`${entry.type}:${entry.tmdbId}`);
-        // Seeds cached before origin was recorded refresh too, so their rows can follow it.
-        return (
-          !row?.recommendations || row.updatedAt < now - SEED_TTL_MS || row.origin === undefined
-        );
-      });
+      .slice(0, MAX_SEEDS);
+    const cachedSeed = (entry: MoreHistoryEntry) => features.get(`${entry.type}:${entry.tmdbId}`);
+    const stale = strongest.filter(({ entry }) => {
+      const row = cachedSeed(entry);
+      // Seeds cached before origin was recorded refresh too, so their rows can follow it.
+      return !row?.recommendations || row.updatedAt < now - SEED_TTL_MS || row.origin === undefined;
+    });
+    // Films cached before their series was recorded learn it in the background only, so the
+    // backfill never slows a load.
+    const backfill = strongest.filter(({ entry }) => {
+      const row = cachedSeed(entry);
+      return row?.mediaType === "MOVIE" && row.collectionId === undefined;
+    });
     const missing = stale.slice(0, SEEDS_PER_LOAD);
-    const later = stale.slice(SEEDS_PER_LOAD, SEEDS_PER_LOAD + BACKGROUND_SEEDS);
+    const later = [
+      ...stale.slice(SEEDS_PER_LOAD),
+      ...backfill.filter((row) => !stale.some((s) => s.entry === row.entry)),
+    ].slice(0, BACKGROUND_SEEDS);
     for (const { entry } of missing) {
       try {
         const hydrated = await this.deps.seed(entry.tmdbId, entry.type, signal);
@@ -391,27 +428,88 @@ export class MoreDiscoveryService {
       links!
         .aniListIdsFor(row.mediaType as MoreMediaType, row.anilistId)
         .some((id) => watchedAniList.has(id));
+    const hidden = new Set(
+      (this.deps.hiddenTags?.() ?? []).map((name) => name.toLocaleLowerCase()),
+    );
+    const allowed = (row: RecommendationItemFeatures): boolean =>
+      !row.isAdult && !excluded.has(itemKey(row)) && !watchedAsAnime(row) && !isHidden(row, hidden);
+
+    // "In-network" source: the next released film of a film series the viewer liked.
+    const continuationItems: RecommendationItemFeatures[] = [];
+    const today = new Date(now).toISOString().slice(0, 10);
+    let collectionFetches = 0;
+    const collections = new Set<number>();
+    for (const { entry } of evidence) {
+      const collectionId = features.get(`${entry.type}:${entry.tmdbId}`)?.collectionId;
+      if (!collectionId || collections.has(collectionId) || !this.deps.collection) continue;
+      collections.add(collectionId);
+      // Saved on disk for a week: film series change rarely.
+      let films = this.deps.store.collection(collectionId, now - COLLECTION_TTL_MS);
+      if (!films) {
+        if (message || collectionFetches >= MAX_COLLECTION_FETCHES) continue;
+        collectionFetches += 1;
+        try {
+          films = await this.deps.collection(collectionId);
+          this.deps.store.saveCollection(collectionId, films, now);
+        } catch {
+          continue;
+        }
+      }
+      const parts = films
+        .filter((part) => part.releaseDate && part.releaseDate <= today)
+        .sort((a, b) => a.releaseDate!.localeCompare(b.releaseDate!));
+      const lastWatched = parts.reduce(
+        (latest, part, index) => (excluded.has(itemKey(part)) ? index : latest),
+        -1,
+      );
+      const next = parts.slice(lastWatched + 1).find((part) => !excluded.has(itemKey(part)));
+      if (next && lastWatched >= 0) continuationItems.push(next);
+    }
+    // Taste retrieval over the local cache: candidates no edge, list or pool reached.
+    const retrieved = tasteRetrieval(
+      history,
+      this.deps.store.cachedFeatures(RETRIEVAL_CORPUS).filter(allowed),
+      RETRIEVAL_LIMIT,
+    );
+
     const candidates = new Map<string, RecommendationItemFeatures>();
     for (const row of [
       ...[...neighborKeys].flatMap((key) => known.get(key) ?? []),
       ...trending,
       ...languagePool,
       ...themePool,
+      ...retrieved,
+      ...continuationItems,
     ]) {
       const key = itemKey(row);
-      if (!row.isAdult && !excluded.has(key) && !candidates.has(key) && !watchedAsAnime(row))
-        candidates.set(key, row);
+      if (!candidates.has(key) && allowed(row)) candidates.set(key, row);
     }
+    const continuation = new Set(
+      continuationItems.map((row) => itemKey(row)).filter((key) => candidates.has(key)),
+    );
     this.deps.store.saveFeatures(trending.filter((row) => !known.has(itemKey(row))));
 
-    const scored = rankHybrid({
-      section: "MORE",
+    const scored = adjustScores(
+      rankHybrid({
+        section: "MORE",
+        history,
+        candidates: [...candidates.values()],
+        now,
+      }),
+      { now, ignored: this.deps.store.ignoredDays(now - IGNORED_WINDOW_MS), continuation },
+    );
+    // With enough of them, next films keep their own row instead of flickering into the rail.
+    const ownRow = continuation.size >= CONTINUATION_ROW_MIN;
+    const picks = pickHybrid(
+      ownRow ? scored.filter((row) => !continuation.has(itemKey(row.features))) : scored,
       history,
-      candidates: [...candidates.values()],
-      now,
-    });
-    const picks = pickHybrid(scored, history, 10, { minPerType: MIN_PER_TYPE });
+      10,
+      { minPerType: MIN_PER_TYPE, calibrate: CALIBRATION },
+    );
     const shown = new Set(picks.map((pick) => itemKey(pick.features)));
+    const nextUp = continuationPicks(scored, history, continuation, shown, 10);
+    const continuationRow = nextUp.length >= CONTINUATION_ROW_MIN ? nextUp : [];
+    for (const pick of continuationRow) shown.add(itemKey(pick.features));
     const rows = personal
       ? seedRowsHybrid(scored, history, "MORE", shown, { crossType: CROSS_TYPE_PER_ROW })
       : [];
@@ -421,6 +519,13 @@ export class MoreDiscoveryService {
       : undefined;
     if (!message && later.length) void this.warm(later.map(({ entry }) => entry));
     const items = picks.map(toRecommendation);
+    // What this load put on screen, for the shown-but-ignored fade on later loads.
+    this.deps.store.recordShown(
+      [picks, continuationRow, ...rows.map((row) => row.items), themeRow?.items ?? []].flatMap(
+        (list) => list.slice(0, SHOWN_PER_RAIL).map((pick) => itemKey(pick.features)),
+      ),
+      now,
+    );
     const requestId = randomUUID();
     for (const [id, request] of this.requests)
       if (request.expiresAt <= now) this.requests.delete(id);
@@ -428,6 +533,7 @@ export class MoreDiscoveryService {
       keys: new Set([
         ...picks.map((pick) => itemKey(pick.features)),
         ...rows.flatMap((row) => row.items.map((pick) => itemKey(pick.features))),
+        ...continuationRow.map((pick) => itemKey(pick.features)),
         ...(themeRow?.items ?? []).map((pick) => itemKey(pick.features)),
       ]),
       expiresAt: now + 60 * 60_000,
@@ -437,34 +543,48 @@ export class MoreDiscoveryService {
       status: message && !items.length ? "unavailable" : "ready",
       basis: personal ? "more" : "anime-taste",
       items,
-      // Strongest row first: the viewer should find something within seconds, not after scrolling.
+      // The next film of a series leads; then strongest row first, so the viewer finds
+      // something within seconds, not after scrolling.
       rows: [
-        ...rows.map((row) => ({
-          strength: rowStrength(row.items),
-          row: {
-            seedTitle: row.seed.normalizedTitle,
-            seedType: row.seed.mediaType as MoreMediaType,
-            seedId: row.seed.anilistId,
-            items: row.items.map(toRecommendation),
-          },
-        })),
-        ...(themeRow
+        ...(continuationRow.length
           ? [
               {
-                strength: rowStrength(themeRow.items),
-                row: {
-                  seedTitle: themeRow.theme,
-                  seedType: "MOVIE" as const,
-                  seedId: 0,
-                  theme: themeRow.theme,
-                  items: themeRow.items.map(toRecommendation),
-                },
+                seedTitle: "",
+                seedType: "MOVIE" as const,
+                seedId: 0,
+                continuation: true,
+                items: continuationRow.map(toRecommendation),
               },
             ]
           : []),
-      ]
-        .sort((a, b) => b.strength - a.strength)
-        .map(({ row }) => row),
+        ...[
+          ...rows.map((row) => ({
+            strength: rowStrength(row.items),
+            row: {
+              seedTitle: row.seed.normalizedTitle,
+              seedType: row.seed.mediaType as MoreMediaType,
+              seedId: row.seed.anilistId,
+              items: row.items.map(toRecommendation),
+            },
+          })),
+          ...(themeRow
+            ? [
+                {
+                  strength: rowStrength(themeRow.items),
+                  row: {
+                    seedTitle: themeRow.theme,
+                    seedType: "MOVIE" as const,
+                    seedId: 0,
+                    theme: themeRow.theme,
+                    items: themeRow.items.map(toRecommendation),
+                  },
+                },
+              ]
+            : []),
+        ]
+          .sort((a, b) => b.strength - a.strength)
+          .map(({ row }) => row),
+      ],
       requestId,
       message:
         message ??
