@@ -187,8 +187,11 @@ export class MoreDiscoveryService {
     }
   }
 
-  private async loadWithinDeadline(signal: AbortSignal): Promise<MoreDiscoveryFeed> {
-    const now = this.now();
+  /**
+   * Every More title the viewer has a signal for (watching, tracker, title-page choice) with its
+   * affinity in [-1, 1].
+   */
+  private scoredHistory(now: number): Array<{ entry: MoreHistoryEntry; affinity: number }> {
     const activity = this.deps.activitySignals?.() ?? true;
     const choices = new Map(
       (this.deps.feedback?.() ?? [])
@@ -221,10 +224,35 @@ export class MoreDiscoveryService {
     const meanRating = ratings.length
       ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
       : undefined;
-    const affinities = watched.map((entry) => ({
+    return watched.map((entry) => ({
       entry,
       affinity: moreAffinity(entry, meanRating, { now, activity }),
     }));
+  }
+
+  /**
+   * The viewer's More taste as ranker history from cached features only (no provider requests),
+   * for the taste map.
+   */
+  tasteHistory(): HybridHistoryItem[] {
+    const now = this.now();
+    const scored = this.scoredHistory(now).filter(({ affinity }) => affinity !== 0);
+    const features = new Map(
+      this.deps.store
+        .features(scored.map(({ entry }) => `${entry.type}:${entry.tmdbId}`))
+        .map((row) => [itemKey(row), row]),
+    );
+    return scored.flatMap(({ entry, affinity }) => {
+      const item = features.get(`${entry.type}:${entry.tmdbId}`);
+      return item ? [{ features: item, affinity, occurredAt: Date.parse(entry.updatedAt) }] : [];
+    });
+  }
+
+  private async loadWithinDeadline(signal: AbortSignal): Promise<MoreDiscoveryFeed> {
+    const now = this.now();
+    const activity = this.deps.activitySignals?.() ?? true;
+    const affinities = this.scoredHistory(now);
+    const watched = affinities.map(({ entry }) => entry);
     const evidence = affinities.filter(({ affinity }) => affinity > 0);
     // Disliked titles push the taste profile away when their features are already cached.
     const disliked = affinities.filter(({ affinity }) => affinity < 0);

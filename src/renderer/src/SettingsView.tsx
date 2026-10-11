@@ -32,6 +32,7 @@ import { setAppPreference, useAppPreferences } from "./app-preferences";
 import { useOptionalBinge } from "./BingeProvider";
 import { createReaderSettingsSession } from "./reader-settings-session";
 import type { ViewerAccess } from "./viewer-access";
+import { TasteMapDialog } from "./TasteMapDialog";
 
 const SECTIONS = [
   { id: "account", label: "Account", icon: UserRound },
@@ -175,6 +176,7 @@ export function SettingsView({
               </Row>
               <ActivitySignalsRow />
               <HiddenTagsRow />
+              <TasteMapRow />
               <Row
                 title="Rotating highlights"
                 hint="The featured title at the top of Anime, Manga, and More changes on its own."
@@ -690,6 +692,21 @@ function ActivitySignalsRow(): React.JSX.Element {
  * Genres and tags the viewer never wants recommended (X's muted keywords): kept out of For You,
  * the hero and trending in every section. Search still finds them.
  */
+function TasteMapRow(): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <Row
+      title="Your taste map"
+      hint="What AniStream has learned you like, as a map of linked titles and tastes. Built on this device; nothing is sent anywhere."
+    >
+      <button type="button" className="set-button" onClick={() => setOpen(true)}>
+        Open map
+      </button>
+      {open ? <TasteMapDialog onClose={() => setOpen(false)} /> : null}
+    </Row>
+  );
+}
+
 function HiddenTagsRow(): React.JSX.Element {
   const hidden = useHiddenTagNames();
   const [vocabulary, setVocabulary] = useState<string[]>([]);

@@ -122,6 +122,7 @@ const bridge: AniStreamBridge = {
   getPersonalizationSettings: () => invoke("personalization:settings"),
   setActivitySignals: (on) => invoke("personalization:set-activity", on),
   setHiddenTags: (names) => invoke("personalization:set-hidden-tags", names),
+  getTasteMap: () => invoke("discovery:taste-map"),
   recordTimeToPlay: (section, seconds) => invoke("personalization:time-to-play", section, seconds),
   getTitleFeedback: (ref) => invoke("personalization:feedback", ref),
   setTitleFeedback: (ref, value) => invoke("personalization:set-feedback", ref, value),

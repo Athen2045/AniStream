@@ -13,6 +13,7 @@ import "./styles/profile.css";
 import "./styles/schedule.css";
 import "./styles/upnext.css";
 import "./styles/settings.css";
+import "./styles/taste-map.css";
 import "./styles/continue.css";
 import "./styles/chapters.css";
 import "./styles/reader.css";

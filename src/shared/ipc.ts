@@ -71,6 +71,7 @@ import type { MoreBrowseInput } from "./more-filters";
 import type { ReaderSettings } from "./reader-settings";
 import type { UpdatePreferences, UpdateStatus } from "./update-check";
 import type { RestorePreview, RestoreSummary } from "./local-backup";
+import type { TasteMap } from "./taste-map";
 import type { PersonalAiringUpdate } from "./personal-library";
 import type { BingeChange, BingeState } from "./binge";
 import type { LocalActivity, RecordActivityInput } from "./activity";
@@ -241,6 +242,7 @@ export interface IpcInvokeChannelMap {
   "reader:settings": { args: []; result: ReaderSettings };
   "reader:save-settings": { args: [input: ReaderSettings]; result: ReaderSettings };
   "discovery:feedback": { args: [input: DiscoveryFeedback]; result: void };
+  "discovery:taste-map": { args: []; result: TasteMap };
   "discovery:impressions": { args: [input: DiscoveryImpressionInput]; result: void };
   "more:for-you": { args: [fresh?: boolean]; result: MoreDiscoveryFeed };
   "more:for-you-feedback": { args: [input: MoreDiscoveryFeedback]; result: void };
