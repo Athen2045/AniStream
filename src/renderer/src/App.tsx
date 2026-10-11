@@ -30,8 +30,6 @@ import {
   sectionVariants,
 } from "./motion";
 import { PersonalLibraryProvider } from "./PersonalLibraryProvider";
-import { ProfileView } from "./ProfileView";
-import { SimklProfileView } from "./SimklProfile";
 import { TitlePageFallback } from "./TitlePageFallback";
 import type { ProfileSyncSource } from "./ProfileSyncChip";
 import { choosePicture, useProfileLook, useSimklProfile, useSimklStatus } from "./profile-look";
@@ -47,12 +45,9 @@ import { useAppReducedMotion } from "./useAppReducedMotion";
 import { useSmoothDocumentScroll } from "./useSmoothDocumentScroll";
 import { ReadinessScreen } from "./ReadinessScreen";
 import { NavbarAccountMenu } from "./NavbarAccountMenu";
-import { SettingsView } from "./SettingsView";
 import { ContinueUndoToast } from "./ContinueRemoveButton";
 import { getAppPreferences, useAppPreferences } from "./app-preferences";
-import { ScheduleView } from "./ScheduleView";
 import { BingeProvider, useBinge } from "./BingeProvider";
-import { UpNextView } from "./UpNextView";
 import { bingeAnimeMedia, bingeMoreItem } from "./binge-session";
 import type { BingeItem } from "../../shared/binge";
 import type { MorePlayTarget } from "./more-format";
@@ -71,6 +66,18 @@ const loadMediaDetailModal = () => import("./MediaDetailModal");
 const MediaDetailModal = lazy(() =>
   loadMediaDetailModal().then((module) => ({ default: module.MediaDetailModal })),
 );
+// Views opened from the navbar or account menu, not at launch: each loads as its own chunk.
+const ProfileView = lazy(() => import("./ProfileView").then((m) => ({ default: m.ProfileView })));
+const SimklProfileView = lazy(() =>
+  import("./SimklProfile").then((m) => ({ default: m.SimklProfileView })),
+);
+const SettingsView = lazy(() =>
+  import("./SettingsView").then((m) => ({ default: m.SettingsView })),
+);
+const ScheduleView = lazy(() =>
+  import("./ScheduleView").then((m) => ({ default: m.ScheduleView })),
+);
+const UpNextView = lazy(() => import("./UpNextView").then((m) => ({ default: m.UpNextView })));
 /** Once launch settles, the title page's code loads quietly so opening a title never waits on it. */
 const MEDIA_DETAIL_PREFETCH_DELAY_MS = 1_500;
 
@@ -653,7 +660,9 @@ function AppContent(): React.JSX.Element {
                   exit={reducedMotion ? undefined : "exit"}
                   transition={motionTransition(reducedMotion)}
                 >
-                  <UpNextView />
+                  <Suspense fallback={null}>
+                    <UpNextView />
+                  </Suspense>
                 </motion.div>
               ) : view === "SCHEDULE" ? (
                 <motion.div
@@ -665,13 +674,15 @@ function AppContent(): React.JSX.Element {
                   exit={reducedMotion ? undefined : "exit"}
                   transition={motionTransition(reducedMotion)}
                 >
-                  <ScheduleView
-                    access={viewerAccess}
-                    onOpenMedia={(media) => openMedia(media, "details")}
-                    onContinue={(media) =>
-                      openMedia(media, media.type === "ANIME" ? "play" : "read")
-                    }
-                  />
+                  <Suspense fallback={null}>
+                    <ScheduleView
+                      access={viewerAccess}
+                      onOpenMedia={(media) => openMedia(media, "details")}
+                      onContinue={(media) =>
+                        openMedia(media, media.type === "ANIME" ? "play" : "read")
+                      }
+                    />
+                  </Suspense>
                 </motion.div>
               ) : view === "SETTINGS" ? (
                 <motion.div
@@ -683,12 +694,14 @@ function AppContent(): React.JSX.Element {
                   exit={reducedMotion ? undefined : "exit"}
                   transition={motionTransition(reducedMotion)}
                 >
-                  <SettingsView
-                    access={viewerAccess}
-                    onSignIn={openProfile}
-                    onOpenProfile={openProfile}
-                    onLogout={() => void viewerSession.logout()}
-                  />
+                  <Suspense fallback={null}>
+                    <SettingsView
+                      access={viewerAccess}
+                      onSignIn={openProfile}
+                      onOpenProfile={openProfile}
+                      onLogout={() => void viewerSession.logout()}
+                    />
+                  </Suspense>
                 </motion.div>
               ) : viewerAccess.kind === "member" ? (
                 <motion.div
@@ -700,38 +713,40 @@ function AppContent(): React.JSX.Element {
                   exit={reducedMotion ? undefined : "exit"}
                   transition={motionTransition(reducedMotion, "emphasis")}
                 >
-                  <ProfileView
-                    dashboard={viewerAccess.dashboard}
-                    mediaType={mediaType}
-                    shelves={shelves}
-                    activeShelfKey={activeShelf?.key ?? ""}
-                    formatFilter={formatFilter}
-                    onFormatFilter={setFormatFilter}
-                    visibleEntries={visibleEntries}
-                    listQuery={listQuery}
-                    librarySort={librarySort}
-                    adding={adding}
-                    error={error}
-                    onSwitchType={switchMediaType}
-                    onSelectShelf={(key) => {
-                      setSelectedGroup(key);
-                      setFormatFilter("");
-                    }}
-                    onListQuery={setListQuery}
-                    onLibrarySort={setLibrarySort}
-                    onToggleAdding={() => setAdding((value) => !value)}
-                    onEdit={(entry) =>
-                      setEditingEntry({ entry, viewerId: viewerAccess.dashboard.profile.id })
-                    }
-                    access={viewerAccess}
-                    onLibrary={manageLibrary}
-                    onOpenMedia={(media, action) => openMedia({ ...media, genres: [] }, action)}
-                    simkl={simklProfile}
-                    simklStatus={simklStatus}
-                    simklStatsLoading={simklProfileState.statsLoading}
-                    syncSources={profileSyncSources}
-                    onOpenMore={openMoreFromProfile}
-                  />
+                  <Suspense fallback={null}>
+                    <ProfileView
+                      dashboard={viewerAccess.dashboard}
+                      mediaType={mediaType}
+                      shelves={shelves}
+                      activeShelfKey={activeShelf?.key ?? ""}
+                      formatFilter={formatFilter}
+                      onFormatFilter={setFormatFilter}
+                      visibleEntries={visibleEntries}
+                      listQuery={listQuery}
+                      librarySort={librarySort}
+                      adding={adding}
+                      error={error}
+                      onSwitchType={switchMediaType}
+                      onSelectShelf={(key) => {
+                        setSelectedGroup(key);
+                        setFormatFilter("");
+                      }}
+                      onListQuery={setListQuery}
+                      onLibrarySort={setLibrarySort}
+                      onToggleAdding={() => setAdding((value) => !value)}
+                      onEdit={(entry) =>
+                        setEditingEntry({ entry, viewerId: viewerAccess.dashboard.profile.id })
+                      }
+                      access={viewerAccess}
+                      onLibrary={manageLibrary}
+                      onOpenMedia={(media, action) => openMedia({ ...media, genres: [] }, action)}
+                      simkl={simklProfile}
+                      simklStatus={simklStatus}
+                      simklStatsLoading={simklProfileState.statsLoading}
+                      syncSources={profileSyncSources}
+                      onOpenMore={openMoreFromProfile}
+                    />
+                  </Suspense>
                 </motion.div>
               ) : simklStatus && simklAuth ? (
                 <motion.div
@@ -743,13 +758,15 @@ function AppContent(): React.JSX.Element {
                   exit={reducedMotion ? undefined : "exit"}
                   transition={motionTransition(reducedMotion, "emphasis")}
                 >
-                  <SimklProfileView
-                    profile={simklProfile}
-                    status={simklStatus}
-                    statsLoading={simklProfileState.statsLoading}
-                    syncSources={profileSyncSources}
-                    onOpenMore={openMoreFromProfile}
-                  />
+                  <Suspense fallback={null}>
+                    <SimklProfileView
+                      profile={simklProfile}
+                      status={simklStatus}
+                      statsLoading={simklProfileState.statsLoading}
+                      syncSources={profileSyncSources}
+                      onOpenMore={openMoreFromProfile}
+                    />
+                  </Suspense>
                 </motion.div>
               ) : (
                 <motion.div

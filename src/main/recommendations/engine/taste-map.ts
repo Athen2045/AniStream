@@ -24,7 +24,16 @@ import type {
   TasteMapNode,
   TasteTrend,
 } from "../../../shared/taste-map";
-import { compareItems, ContentSpace, dot, edgeKey, itemKey, type Vector } from "./content";
+import {
+  compareItems,
+  ContentSpace,
+  dot,
+  edgeKey,
+  itemKey,
+  packedDot,
+  packVectors,
+  type Vector,
+} from "./content";
 import { NOT_A_THEME, themeLabel } from "./rows";
 import type { HybridHistoryItem } from "./types";
 
@@ -101,6 +110,17 @@ export function buildTasteMap(
   );
 }
 
+/**
+ * Changes whenever the map could: any history row or its features, or the hour (recency decay).
+ * Lets a caller reuse the last map instead of rebuilding it on every open.
+ */
+export function tasteMapFingerprint(history: HybridHistoryItem[], now: number): string {
+  const rows = history.map(
+    (row) => `${itemKey(row.features)}:${row.affinity}:${row.occurredAt}:${row.features.updatedAt}`,
+  );
+  return `${Math.floor(now / 3_600_000)}|${rows.join(",")}`;
+}
+
 /** One row per title (strongest signal, latest time), liked only, weighted, strongest first. */
 function likedTitles(history: HybridHistoryItem[], now: number): Title[] {
   const halfLife = HYBRID_WEIGHTS.halfLifeDays * DAY_MS;
@@ -142,17 +162,22 @@ function linkTitles(
     kinds.set(pairKey(a, b), kind);
   };
 
-  // Each title's strongest content neighbours.
+  // Each title's strongest content neighbours. The all-pairs pass dominates the build, so it runs
+  // on packed vectors and computes each (symmetric) pair once.
+  const packed = packVectors(vectors);
+  const near: Array<Array<{ b: number; similarity: number }>> = titles.map(() => []);
   for (let a = 0; a < titles.length; a += 1) {
-    const near: Array<{ b: number; similarity: number }> = [];
-    for (let b = 0; b < titles.length; b += 1) {
-      if (a === b) continue;
-      const similarity = dot(vectors[a], vectors[b]);
-      if (similarity >= MIN_SIMILARITY) near.push({ b, similarity });
+    for (let b = a + 1; b < titles.length; b += 1) {
+      const similarity = packedDot(packed[a], packed[b]);
+      if (similarity < MIN_SIMILARITY) continue;
+      near[a].push({ b, similarity });
+      near[b].push({ b: a, similarity });
     }
-    near.sort((x, y) => y.similarity - x.similarity || x.b - y.b);
-    for (const { b, similarity } of near.slice(0, NEIGHBORS)) link(a, b, similarity, "similar");
   }
+  near.forEach((list, a) => {
+    list.sort((x, y) => y.similarity - x.similarity || x.b - y.b);
+    for (const { b, similarity } of list.slice(0, NEIGHBORS)) link(a, b, similarity, "similar");
+  });
 
   // Provider recommendations between two liked titles.
   titles.forEach((title, a) => {

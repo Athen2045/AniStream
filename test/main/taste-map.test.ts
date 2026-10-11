@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildTasteMap, type HybridHistoryItem } from "../../src/main/recommendations/engine";
-import { louvain } from "../../src/main/recommendations/engine/taste-map";
+import { louvain, tasteMapFingerprint } from "../../src/main/recommendations/engine/taste-map";
+import {
+  ContentSpace,
+  dot,
+  packedDot,
+  packVectors,
+} from "../../src/main/recommendations/engine/content";
 import type { RecommendationItemFeatures } from "../../src/shared/recommendations";
 
 const now = Date.UTC(2026, 9, 10);
@@ -104,5 +110,24 @@ describe("taste graph", () => {
     const history = [1, 2, 3, 11, 12].map((id) => liked(id > 10 ? sports(id) : mystery(id)));
     expect(buildTasteMap(history, now)).toEqual(buildTasteMap([...history].reverse(), now));
     expect(buildTasteMap([liked(item(1), -1)], now)).toMatchObject({ nodes: [], titles: 0 });
+  });
+
+  it("packs vectors without changing their dot products", () => {
+    const items = [mystery(1), sports(2), item(3, { genres: ["Mystery", "Sports"] }), item(4)];
+    const space = new ContentSpace(items);
+    const vectors = items.map((entry) => space.vector(entry));
+    const packed = packVectors(vectors);
+    for (let a = 0; a < items.length; a += 1)
+      for (let b = 0; b < items.length; b += 1)
+        expect(packedDot(packed[a], packed[b])).toBeCloseTo(dot(vectors[a], vectors[b]), 12);
+  });
+
+  it("fingerprints history so an unchanged map can be reused within the hour", () => {
+    const history = [liked(mystery(1)), liked(sports(2))];
+    const same = tasteMapFingerprint(history, now);
+    expect(tasteMapFingerprint([...history], now + 60_000)).toBe(same);
+    expect(tasteMapFingerprint(history, now + 3_600_000)).not.toBe(same);
+    expect(tasteMapFingerprint([liked(mystery(1)), liked(sports(2), 0.5)], now)).not.toBe(same);
+    expect(tasteMapFingerprint([liked(mystery(1))], now)).not.toBe(same);
   });
 });

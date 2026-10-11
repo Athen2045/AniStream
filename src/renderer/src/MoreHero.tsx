@@ -7,6 +7,7 @@ import type { MoreCardActions } from "./MorePosterCard";
 import { formatDuration, formatScore, moreKey, releaseState } from "./more-format";
 import { ReleasePill } from "./ReleasePill";
 import { useAppPreferences } from "./app-preferences";
+import { useDocumentVisible } from "./useDocumentVisible";
 
 const ROTATE_MS = 9_000;
 
@@ -27,7 +28,10 @@ export function MoreHero({
   children?: React.ReactNode;
 }): React.JSX.Element | null {
   const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
+  const [held, setPaused] = useState(false);
+  // A minimized window rests the rotation like hovering does.
+  const visible = useDocumentVisible();
+  const paused = held || !visible;
   const [details, setDetails] = useState<Record<string, MoreDetail>>({});
   const active = items[Math.min(index, items.length - 1)];
 

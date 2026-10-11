@@ -2,7 +2,7 @@ import { Check, ListChecks, ListEnd, ListPlus, ListStart, Plus } from "lucide-re
 import { useEffect, useId, useRef, useState } from "react";
 import { bingeItemKey, type BingeItem } from "../../shared/binge";
 import { useOptionalBinge } from "./BingeProvider";
-import { NameForm } from "./UpNextView";
+import { NameForm } from "./UpNextNameForm";
 import { useAppPreferences } from "./app-preferences";
 
 /**
