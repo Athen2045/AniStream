@@ -1,6 +1,7 @@
 import type { AniListBrowseFilters, AniListFilterOptions } from "./anilist-filters";
 import type { ReaderSettings } from "./reader-settings";
 import type { RestorePreview, RestoreSummary } from "./local-backup";
+import type { TasteMap } from "./taste-map";
 import type { PersonalAiringUpdate } from "./personal-library";
 import type { LocalActivity, RecordActivityInput } from "./activity";
 import type {
@@ -997,6 +998,8 @@ export interface AniStreamBridge {
   getPersonalizationSettings(): Promise<PersonalizationSettings>;
   setActivitySignals(on: boolean): Promise<PersonalizationSettings>;
   setHiddenTags(names: string[]): Promise<PersonalizationSettings>;
+  /** The viewer's taste as a clustered graph, built on the device from local history. */
+  getTasteMap(): Promise<TasteMap>;
   recordTimeToPlay(section: PersonalizationSection, seconds: number): Promise<void>;
   getTitleFeedback(ref: TitleFeedbackRef): Promise<TitleFeedbackValue>;
   setTitleFeedback(ref: TitleFeedbackRef, value: TitleFeedbackValue): Promise<void>;

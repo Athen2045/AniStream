@@ -2,6 +2,7 @@ import type { AniListClient } from "../anilist";
 import type { AppDatabase } from "../database";
 import { registerTrustedIpcHandler } from "../ipc";
 import { DiscoveryService } from "../recommendations/discovery-service";
+import { buildTasteMap } from "../recommendations/engine";
 import { MoreDiscoveryService } from "../recommendations/more-discovery-service";
 import type { TmdbClient } from "../tmdb";
 import { mergeMoreHistory } from "../more-library";
@@ -147,6 +148,10 @@ export function registerDiscoveryDomain(
     timeToPlay: personalization.timeToPlay(),
     hiddenTags: personalization.hiddenTags(),
   });
+  // Built on demand from local history only (no provider requests); about 60 ms for 300 titles.
+  registerTrustedIpcHandler(origin, "discovery:taste-map", () =>
+    buildTasteMap([...service.tasteHistory(), ...more.tasteHistory()], Date.now()),
+  );
   registerTrustedIpcHandler(origin, "personalization:set-hidden-tags", (_event, names) => {
     personalization.setHiddenTags(names);
     // Saved feeds may hold newly hidden titles; the next view rebuilds them.

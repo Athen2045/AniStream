@@ -10,6 +10,7 @@
  *   signals      ignored-pick fade, freshness, continuation boost
  *   picks        rail selection (soft diversity + calibration from `diversity`) and card reasons
  *   rows         "Because you watched X" and "Because you like <theme>" rows
+ *   taste-map    the viewer's taste as a clustered, compressed graph (Settings > taste map)
  */
 export {
   discoveryEvidence,
@@ -23,6 +24,7 @@ export { eligibilityFilter, firstSeason, isHidden, redirectEdges } from "./eligi
 export { rankHybrid } from "./rank";
 export { adjustScores } from "./signals";
 export { franchiseKeys } from "./diversity";
+export { buildTasteMap } from "./taste-map";
 export { continuationPicks, pickHybrid, selectHybrid, toAniListResults } from "./picks";
 export {
   buildSeedRows,

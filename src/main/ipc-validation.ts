@@ -596,6 +596,7 @@ export const ipcArgValidators: IpcArgValidatorMap = {
   },
   "more:simkl-rows": noArgs,
   "personalization:settings": noArgs,
+  "discovery:taste-map": noArgs,
   "personalization:set-activity": (value) => {
     const [on] = argsOfLength(value, 1);
     if (typeof on !== "boolean") fail();

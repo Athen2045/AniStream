@@ -1,0 +1,182 @@
+/* Settings > Your taste map: a full-window graph dialog (Obsidian-style graph view). */
+.taste-map-dialog {
+  --taste-anime: #4fb286;
+  --taste-manga: #d49a4a;
+  --taste-more: #6f9fe0;
+  --taste-node: #c3cac6;
+  --taste-line: #7d8681;
+  --taste-label: #d5dbd7;
+  width: min(1320px, calc(100vw - 48px));
+  height: min(860px, calc(100vh - 48px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-base);
+  color: var(--text-secondary);
+}
+.taste-map-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.taste-map-dialog::backdrop {
+  background: rgb(0 0 0 / 0.66);
+}
+.taste-map-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.taste-map-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.15rem;
+}
+.taste-map-head p {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+}
+.taste-map-body {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+.taste-map-canvas {
+  position: relative;
+  min-height: 0;
+}
+.taste-map-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+.taste-map-canvas canvas:active {
+  cursor: grabbing;
+}
+.taste-map-card {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  max-width: min(420px, calc(100% - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-glass);
+  pointer-events: none;
+}
+.taste-map-card img {
+  width: 42px;
+  height: 60px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+.taste-map-card strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.88rem;
+}
+.taste-map-card span {
+  font-size: 0.78rem;
+}
+.taste-map-side {
+  overflow-y: auto;
+  padding: 14px 14px 18px;
+  border-left: 1px solid var(--line);
+  background: var(--surface-panel);
+}
+.taste-map-side h3 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 0.86rem;
+}
+.taste-map-side ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.taste-map-cluster {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  column-gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.taste-map-cluster:hover,
+.taste-map-cluster[aria-pressed="true"] {
+  background: var(--surface-raised);
+}
+.taste-map-cluster[aria-pressed="true"] {
+  border-color: var(--line);
+}
+.taste-map-cluster:focus-visible {
+  outline: 2px solid var(--primary-hover);
+  outline-offset: 1px;
+}
+.taste-map-dot {
+  grid-row: span 2;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+}
+.taste-map-dot--anime {
+  background: var(--taste-anime);
+}
+.taste-map-dot--manga {
+  background: var(--taste-manga);
+}
+.taste-map-dot--more {
+  background: var(--taste-more);
+}
+.taste-map-cluster-name {
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.taste-map-cluster-meta {
+  font-size: 0.74rem;
+}
+.taste-map-trend--growing {
+  color: var(--taste-anime);
+}
+.taste-map-trend--fading {
+  color: var(--muted);
+}
+.taste-map-hint {
+  margin: 14px 2px 0;
+  font-size: 0.74rem;
+}
+.taste-map-empty {
+  margin: auto;
+  padding: 40px;
+  font-size: 0.9rem;
+}
+@media (max-width: 860px) {
+  .taste-map-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) 180px;
+  }
+  .taste-map-side {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}

@@ -37,7 +37,7 @@ const CROSS_TYPE_SLOTS = [2, 5, 8];
  * TMDB keywords that describe production or source rather than a theme a viewer follows
  * ("aftercreditsstinger", "sequel", "based on comic"); never offered as a theme row.
  */
-const NOT_A_THEME = new Set([
+export const NOT_A_THEME = new Set([
   "aftercreditsstinger",
   "duringcreditsstinger",
   "sequel",
@@ -301,7 +301,7 @@ export function buildThemeRow(
 }
 
 /** TMDB keywords arrive lower-case ("time travel"); AniList tags are already titled. */
-function themeLabel(name: string): string {
+export function themeLabel(name: string): string {
   return name === name.toLocaleLowerCase()
     ? name.replace(
         /(^|[\s-])(\p{L})/gu,
