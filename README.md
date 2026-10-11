@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/Athen2045/AniStream/releases/latest">Download</a> |
-  <a href=".github/releases/v2.0.0.md">Release notes</a> |
+  <a href=".github/releases/v2.0.1.md">Release notes</a> |
   <a href="CHANGELOG.md">Changelog</a> |
   <a href="LEGAL.md">Copyright</a>
 </p>
@@ -70,17 +70,17 @@ Download the installer for your platform from the
 
 | Platform | File                        | Requires                           |
 | -------- | --------------------------- | ---------------------------------- |
-| Windows  | `AniStream.Setup.2.0.0.exe` | Windows 10 or 11, x64              |
-| macOS    | `AniStream-2.0.0-arm64.dmg` | macOS 12 or newer on Apple Silicon |
+| Windows  | `AniStream.Setup.2.0.1.exe` | Windows 10 or 11, x64              |
+| macOS    | `AniStream-2.0.1-arm64.dmg` | macOS 12 or newer on Apple Silicon |
 
 Both installers are unsigned. On Windows, select **More info → Run anyway** if SmartScreen warns
 you. On macOS, open **System Settings → Privacy & Security** and choose **Open Anyway** after the
 first launch. Each release includes a `SHA256SUMS.txt` file to verify your download.
 
-**Updating from 0.1.x?** Install 2.0.0 over your existing copy. Your progress, settings, and
+**Updating from 0.1.x or 2.0.0?** Install 2.0.1 over your existing copy. Your progress, settings, and
 AniList session are kept.
 
-**Updates after 2.0.0:** on Windows, AniStream checks GitHub when it starts, downloads a new
+**Updates after 2.0.1:** on Windows, AniStream checks GitHub when it starts, downloads a new
 release in the background, and shows **Restart to update** when it is ready. Nothing installs
 until you choose it, and your data is never touched. Turn off background downloads, or choose to
 install when you quit, in **Settings → Updates**. Each download is checked against the release's

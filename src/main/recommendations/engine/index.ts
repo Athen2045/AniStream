@@ -24,7 +24,7 @@ export { eligibilityFilter, firstSeason, isHidden, redirectEdges } from "./eligi
 export { rankHybrid } from "./rank";
 export { adjustScores } from "./signals";
 export { franchiseKeys } from "./diversity";
-export { buildTasteMap } from "./taste-map";
+export { buildTasteMap, tasteMapFingerprint } from "./taste-map";
 export { continuationPicks, pickHybrid, selectHybrid, toAniListResults } from "./picks";
 export {
   buildSeedRows,

@@ -8,6 +8,17 @@ files:
   - package.json
 asarUnpack:
   - node_modules/better-sqlite3/**
+# Electron fuses: the shipped binary cannot be run as plain Node.js, take NODE_OPTIONS, or open a
+# main-process inspector, and it only loads its own integrity-checked app.asar. Nothing in the app
+# relies on these (no ELECTRON_RUN_AS_NODE, process.fork, or file:// pages). Cookie encryption is
+# left off: it is a one-way change to existing cookie stores.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
 # Local streaming-source endpoints and read-only public-data keys (both gitignored). Each is
 # included only when it exists; release workflows write them from repository secrets.
 extraResources:

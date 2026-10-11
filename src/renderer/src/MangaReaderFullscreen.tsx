@@ -30,7 +30,7 @@ import {
 } from "react";
 import { createReaderSettingsSession } from "./reader-settings-session";
 import { Select } from "./Select";
-import { Pills, Toggle } from "./SettingsView";
+import { Pills, Toggle } from "./SettingsControls";
 import type { ReaderSettings } from "../../shared/reader-settings";
 import type {
   AniListCatalogMedia,

@@ -17,5 +17,8 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react()],
+    // electron-vite leaves output unminified; the renderer is the one bundle worth shrinking
+    // (less to parse and keep compiled at launch). Main and preload stay readable.
+    build: { minify: "esbuild" },
   },
 });
