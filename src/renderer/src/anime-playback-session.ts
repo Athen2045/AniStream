@@ -48,7 +48,16 @@ export function chooseInitialAnimeEpisode(input: {
   savedEpisode?: number;
   completedProgress: number;
   totalEpisodes?: number;
+  /**
+   * A specific episode was chosen (an episode tile, Downloads, Up Next, a Continue card): play
+   * exactly that one. Without it the request is a minimum and progress may move it forward.
+   */
+  exact?: boolean;
 }): number {
+  if (input.exact) {
+    const chosen = Math.max(1, input.requestedEpisode);
+    return input.totalEpisodes ? Math.min(input.totalEpisodes, chosen) : chosen;
+  }
   const progressTarget = Math.max(1, input.requestedEpisode, input.completedProgress + 1);
   const selected =
     input.savedEpisode !== undefined && input.savedEpisode >= progressTarget

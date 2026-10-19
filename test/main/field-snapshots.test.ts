@@ -146,3 +146,21 @@ describe("field snapshots", () => {
     expect(isTrendingRequest({ type: "ANIME", page: 1, sort: "SCORE_DESC" })).toBe(false);
   });
 });
+
+describe("field snapshot key scope", () => {
+  it("never serves a copy saved under another scope (title language)", async () => {
+    const store = createSnapshotStore(new Database(":memory:"));
+    let scope = "";
+    const snapshots = () =>
+      new FieldSnapshots({ store: () => store, keyScope: () => scope, setTimer: () => undefined });
+    await snapshots().get(field(async () => page([1])));
+    scope = "titles-en";
+    const english = vi.fn(async () => page([2]));
+    // A fresh launch in English ignores the romaji-era copy and loads live.
+    expect(await snapshots().get(field(english))).toEqual(page([2]));
+    expect(english).toHaveBeenCalledTimes(1);
+    expect(store.read("titles-en:anilist-trending:ANIME:20")?.value).toEqual(page([2]));
+    scope = "";
+    expect(await snapshots().get(field(async () => page([3])))).toEqual(page([1]));
+  });
+});

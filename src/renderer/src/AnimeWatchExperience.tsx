@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { PlayerStarting } from "./PlayerStarting";
+import { OwnAnimePlayer } from "./player/OwnAnimePlayer";
 import { Check, ChevronDown, ChevronLeft, Clock3, LoaderCircle, Play } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useMediaFullscreen } from "./useMediaFullscreen";
@@ -17,7 +18,10 @@ import {
 import type {
   AniListCatalogMedia,
   AniListMediaDetail,
+  AnimeEpisodeArt,
   AnimeEpisodeCatalog,
+  AnimeEpisodeRange,
+  AnimeEpisodeRanges,
   AnimePlaybackCandidate,
   AnimePlaybackResult,
   AnimeProviderEpisode,
@@ -29,6 +33,11 @@ import { saveAnimeActivity } from "./local-activity";
 import { episodeAiringLabel, unairedEpisode } from "./airing";
 import { AutoplayNext, useNextUp } from "./AutoplayNext";
 import { EpisodeQueueToggle } from "./UpNextButton";
+import { EpisodeDownloadToggle } from "./DownloadButtons";
+import { useOptionalDownloads } from "./DownloadsProvider";
+import { useOnline } from "./useOnline";
+import { cachedArtworkUrl } from "../../shared/artwork";
+import { downloadKey } from "../../shared/downloads";
 import { animeBingeItem } from "./binge-session";
 import { formatMediaLabel } from "./format-label";
 import { motionTransition } from "./motion";
@@ -36,26 +45,37 @@ import { useAutoHideMediaControls } from "./useAutoHideMediaControls";
 import { useCaptionControlsVisibility } from "./useCaptionControlsVisibility";
 import { friendlyPlaybackError, friendlyRemoteError } from "./remote-error";
 import {
-  buildAnimeSeasonChain,
+  buildAnimeSeries,
+  createSeriesLoader,
   inferMediaDisplayedPartNumber,
   inferMediaDisplayedSeasonNumber,
+  isSeasonEntry,
   type AnimeSeasonChoice,
+  type AnimeSeries,
 } from "./anime-season-chain";
 import { playStarted } from "./play-timer";
 
 const EPISODES_PAGE_SIZE = 12;
+/** Matches the main process: shorter entries are never split into arcs or seasons. */
+const MIN_RANGE_EPISODES = 50;
 
 type WatchView = "episodes" | "player";
 
 export function AnimeWatchExperience({
   media,
   initialEpisode,
+  exactEpisode = false,
   autoPlayRequest = 0,
   onEpisodeWatched,
   onNavigate,
+  hideEpisodes = false,
 }: {
   media: AniListCatalogMedia | AniListMediaDetail;
   initialEpisode: number;
+  /** Movies: no episode list on the page; the player still opens from the title's Play. */
+  hideEpisodes?: boolean;
+  /** `initialEpisode` was chosen explicitly, so progress must not move it forward. */
+  exactEpisode?: boolean;
   autoPlayRequest?: number;
   onEpisodeWatched: (episode: number) => Promise<void>;
   onNavigate?: (media: AniListCatalogMedia) => void;
@@ -86,6 +106,7 @@ export function AnimeWatchExperience({
   const [playbackAttempt, setPlaybackAttempt] = useState(0);
   const [catalogMedia] = useState(media);
   const [catalogInitialEpisode] = useState(initialEpisode);
+  const [catalogExactEpisode] = useState(exactEpisode);
   const [resolvedSeasonNumber, setResolvedSeasonNumber] = useState<number>();
   const displayedSeasonNumber = resolvedSeasonNumber ?? inferMediaDisplayedSeasonNumber(media) ?? 1;
   const {
@@ -113,8 +134,9 @@ export function AnimeWatchExperience({
   }, [catalogMedia]);
 
   const fallback = useMemo(() => fallbackSeason(catalogMedia), [catalogMedia]);
-  // TMDB episode stills (exact link, aligned by air date) replace the episode artwork when found.
-  const [episodeArt, setEpisodeArt] = useState<ReadonlyMap<number, string>>(new Map());
+  // Episode-art sources (exact links): a still replaces the tile artwork, and a real title and
+  // synopsis fill in where the episode list has only "Episode N".
+  const [episodeArt, setEpisodeArt] = useState<ReadonlyMap<number, AnimeEpisodeArt>>(new Map());
   const listedSeasons = catalog?.seasons.length ? catalog.seasons : [fallback];
   const lastEpisode = Math.max(
     0,
@@ -126,8 +148,8 @@ export function AnimeWatchExperience({
       ? listed.map((season) => ({
           ...season,
           episodes: season.episodes.map((episode) => {
-            const still = episodeArt.get(episode.number);
-            return still ? { ...episode, thumbnailUrl: still } : episode;
+            const extra = episodeArt.get(episode.number);
+            return extra ? withEpisodeArt(episode, extra) : episode;
           }),
         }))
       : listed;
@@ -138,8 +160,38 @@ export function AnimeWatchExperience({
     seasonContainingEpisode(seasons, activeEpisode) ??
     seasons[0];
   const allEpisodes = useMemo(() => seasons.flatMap((season) => season.episodes), [seasons]);
-  // Stills follow the episodes on screen: long series load the TMDB seasons around this tab.
-  const artFocus = activeSeason?.episodes[0]?.number ?? catalogInitialEpisode;
+  // Long runners listed as one season are browsed by story arc (or TheTVDB season).
+  // Both are keyed, so a different title or a newly played episode simply stops matching.
+  const rangesKey = `${catalogMedia.id}:${lastEpisode}`;
+  const [loadedRanges, setLoadedRanges] = useState<{ key: string; ranges?: AnimeEpisodeRanges }>();
+  const [rangeChoice, setRangeChoice] = useState<{ episode: number; start: number }>();
+  const singleListedSeason = listedSeasons.length === 1;
+  useEffect(() => {
+    if (loadingCatalog || !singleListedSeason || lastEpisode < MIN_RANGE_EPISODES) return;
+    let active = true;
+    window.anistream
+      .getAnimeEpisodeRanges({ aniListId: catalogMedia.id, episodes: lastEpisode })
+      .then((ranges) => {
+        if (active) setLoadedRanges({ key: `${catalogMedia.id}:${lastEpisode}`, ranges });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [catalogMedia.id, lastEpisode, loadingCatalog, singleListedSeason]);
+  const episodeRanges =
+    singleListedSeason && loadedRanges?.key === rangesKey ? loadedRanges.ranges : undefined;
+  // Playing another episode brings the list back to the range that holds it.
+  const selectedRangeStart =
+    rangeChoice?.episode === activeEpisode.number ? rangeChoice.start : undefined;
+  const setSelectedRangeStart = (start: number): void =>
+    setRangeChoice({ episode: activeEpisode.number, start });
+  const activeRange = episodeRanges
+    ? (episodeRanges.ranges.find((range) => range.start === selectedRangeStart) ??
+      rangeContaining(episodeRanges.ranges, activeEpisode.number))
+    : undefined;
+  // Stills follow the episodes on screen: long series load the art around this tab or range.
+  const artFocus = activeRange?.start ?? activeSeason?.episodes[0]?.number ?? catalogInitialEpisode;
   useEffect(() => {
     if (loadingCatalog || lastEpisode < 1) return;
     let active = true;
@@ -152,8 +204,7 @@ export function AnimeWatchExperience({
       .then((art) => {
         if (active && art.length)
           setEpisodeArt(
-            (known) =>
-              new Map([...known, ...art.map((row) => [row.number, row.stillUrl] as const)]),
+            (known) => new Map([...known, ...art.map((row) => [row.number, row] as const)]),
           );
       })
       .catch(() => undefined);
@@ -173,6 +224,13 @@ export function AnimeWatchExperience({
     // The end-of-episode prompt never offers an episode that has not aired yet.
     return next && !unairedEpisode(media, next.number) ? next : undefined;
   }, [activeIndex, allEpisodes, media]);
+  const previousEpisode = activeIndex > 0 ? allEpisodes[activeIndex - 1] : undefined;
+  // The own player (trial 2026-10-18): chosen by hand, or used when the embed has no source.
+  const [ownPlayerChosen, setOwnPlayerChosen] = useState(false);
+  // A downloaded episode plays from the downloads folder in the own player (works offline).
+  const downloads = useOptionalDownloads();
+  const downloadedEpisode =
+    downloads?.byEpisode.get(downloadKey(media.id, activeEpisode.number))?.status === "done";
   const embedSources = useMemo(
     () => playback?.candidates.filter((candidate) => candidate.kind === "embed") ?? [],
     [playback],
@@ -240,6 +298,7 @@ export function AnimeWatchExperience({
         savedEpisode: saved?.episode,
         completedProgress: completed,
         totalEpisodes: catalogMedia.totalProgress,
+        exact: catalogExactEpisode,
       });
       const usableResume = saved?.episode === wantedEpisode ? saved : undefined;
       const nextSeasons = nextCatalog.seasons.length ? nextCatalog.seasons : [fallback];
@@ -260,10 +319,12 @@ export function AnimeWatchExperience({
     return () => {
       active = false;
     };
-  }, [catalogAttempt, fallback, catalogInitialEpisode, catalogMedia, titles]);
+  }, [catalogAttempt, fallback, catalogExactEpisode, catalogInitialEpisode, catalogMedia, titles]);
 
   useEffect(() => {
     if (view !== "player") return;
+    // A downloaded episode plays from disk; the main player is not asked at all.
+    if (downloadedEpisode) return;
     let active = true;
 
     void window.anistream
@@ -299,7 +360,15 @@ export function AnimeWatchExperience({
     return () => {
       active = false;
     };
-  }, [activeEpisode.id, activeEpisode.number, media.id, media.title, playbackAttempt, view]);
+  }, [
+    activeEpisode.id,
+    activeEpisode.number,
+    downloadedEpisode,
+    media.id,
+    media.title,
+    playbackAttempt,
+    view,
+  ]);
 
   const commitPendingEpisode = useCallback((): void => {
     const pending = pendingEpisodeRef.current;
@@ -418,24 +487,29 @@ export function AnimeWatchExperience({
       aria-label={`${media.title} episodes and player`}
     >
       {view === "episodes" ? (
-        <EpisodeBrowser
-          key={activeSeason?.id ?? media.id}
-          media={media}
-          activeSeason={activeSeason}
-          displayedSeasonNumber={displayedSeasonNumber}
-          activeEpisode={activeEpisode}
-          resume={resume}
-          watchedEpisodes={watchedEpisodes}
-          loading={loadingCatalog}
-          providerMessage={catalog?.message}
-          onRetry={() => {
-            setLoadingCatalog(true);
-            setCatalogAttempt((attempt) => attempt + 1);
-          }}
-          onNavigate={onNavigate}
-          onSeasonNumberResolved={setResolvedSeasonNumber}
-          onPlay={playEpisode}
-        />
+        hideEpisodes ? null : (
+          <EpisodeBrowser
+            key={activeSeason?.id ?? media.id}
+            media={media}
+            activeSeason={activeSeason}
+            ranges={episodeRanges}
+            activeRange={activeRange}
+            onSelectRange={(range) => setSelectedRangeStart(range.start)}
+            displayedSeasonNumber={displayedSeasonNumber}
+            activeEpisode={activeEpisode}
+            resume={resume}
+            watchedEpisodes={watchedEpisodes}
+            loading={loadingCatalog}
+            providerMessage={catalog?.message}
+            onRetry={() => {
+              setLoadingCatalog(true);
+              setCatalogAttempt((attempt) => attempt + 1);
+            }}
+            onNavigate={onNavigate}
+            onSeasonNumberResolved={setResolvedSeasonNumber}
+            onPlay={playEpisode}
+          />
+        )
       ) : (
         <div
           className="watch-player-view"
@@ -494,7 +568,21 @@ export function AnimeWatchExperience({
             </button>
 
             {/* The title and fullscreen stay in the player's own controls. */}
-            {nextAudioSource && source ? (
+            {source ? (
+              <button
+                type="button"
+                className="watch-caption-tool watch-caption-tool--text"
+                aria-pressed={ownPlayerChosen}
+                aria-label={ownPlayerChosen ? "Use the main player" : "Use the backup player"}
+                title={
+                  ownPlayerChosen ? "Back to the main player" : "Try the backup player (own player)"
+                }
+                onClick={() => setOwnPlayerChosen((value) => !value)}
+              >
+                {ownPlayerChosen ? "MAIN" : "BACKUP"}
+              </button>
+            ) : null}
+            {nextAudioSource && source && !ownPlayerChosen ? (
               <button
                 type="button"
                 className="watch-caption-tool watch-caption-tool--text"
@@ -507,7 +595,27 @@ export function AnimeWatchExperience({
             ) : null}
           </div>
 
-          {source ? (
+          {ownPlayerChosen || downloadedEpisode || (!source && !loadingPlayback) ? (
+            <OwnAnimePlayer
+              key={`own:${activeEpisode.number}`}
+              media={catalogMedia}
+              title={media.title}
+              // The list's copy carries the episode's name (from the art sources) for the title.
+              episode={
+                activeSeason?.episodes.find((item) => item.number === activeEpisode.number) ??
+                activeEpisode
+              }
+              previousEpisode={previousEpisode}
+              nextEpisode={nextEpisode}
+              resumeAt={
+                resume?.episode === activeEpisode.number ? resume.positionSeconds : undefined
+              }
+              onNext={playEpisode}
+              onPrevious={playEpisode}
+              onWatched={onEpisodeWatched}
+              onUseMainPlayer={source ? () => setOwnPlayerChosen(false) : undefined}
+            />
+          ) : source ? (
             <AnimeEmbedPlayer
               key={`${activeEpisode.number}:${source.id}:${retryCount}`}
               mediaId={media.id}
@@ -590,6 +698,9 @@ export function AnimeWatchExperience({
 function EpisodeBrowser({
   media,
   activeSeason,
+  ranges,
+  activeRange,
+  onSelectRange,
   displayedSeasonNumber,
   activeEpisode,
   resume,
@@ -603,6 +714,9 @@ function EpisodeBrowser({
 }: {
   media: AniListCatalogMedia | AniListMediaDetail;
   activeSeason?: AnimeProviderSeason;
+  ranges?: AnimeEpisodeRanges;
+  activeRange?: AnimeEpisodeRange;
+  onSelectRange: (range: AnimeEpisodeRange) => void;
   displayedSeasonNumber: number;
   activeEpisode: AnimeProviderEpisode;
   resume?: PlaybackResume;
@@ -615,8 +729,27 @@ function EpisodeBrowser({
   onPlay: (episode: AnimeProviderEpisode) => void;
 }): React.JSX.Element {
   const runtime = "duration" in media ? media.duration : undefined;
-  const [expanded, setExpanded] = useState(false);
-  const episodes = activeSeason?.episodes ?? [];
+  const online = useOnline();
+  const downloads = useOptionalDownloads();
+  // Arcs replace seasons only for a long runner AniList lists without other seasons (the season
+  // box decides once the series is known).
+  const [arcMode, setArcMode] = useState(false);
+  const shownRange = arcMode ? activeRange : undefined;
+  // "Show all" belongs to the range it was opened in.
+  const [expandedRange, setExpandedRange] = useState<number>();
+  const expanded = expandedRange === (shownRange?.start ?? 0);
+  const setExpanded = (update: (value: boolean) => boolean): void =>
+    setExpandedRange(update(expanded) ? (shownRange?.start ?? 0) : undefined);
+  const seasonEpisodes = activeSeason?.episodes ?? [];
+  const lastRange = ranges?.ranges.at(-1);
+  // The last range also holds the locked next-airing tile past the aired count.
+  const episodes = shownRange
+    ? seasonEpisodes.filter(
+        (episode) =>
+          episode.number >= shownRange.start &&
+          (shownRange === lastRange || episode.number <= shownRange.end),
+      )
+    : seasonEpisodes;
   // Collapsed, show the page of episodes holding the current one (episode 112 of 366 opens on
   // 109–120), not always the first page.
   const currentIndex = Math.max(
@@ -634,14 +767,19 @@ function EpisodeBrowser({
         <h2>
           Episodes
           <small>
-            Season {displayedSeasonNumber}
-            {episodes.length ? ` · ${episodes.length} episodes` : ""}
+            {shownRange
+              ? `${shownRange.title} · Episodes ${shownRange.start}–${shownRange.end}`
+              : `${isSeasonEntry(media) ? `Season ${displayedSeasonNumber}` : mediaFormatLabel(media.format)}${episodes.length > 1 ? ` · ${episodes.length} episodes` : ""}`}
           </small>
         </h2>
         <SeasonPicker
           media={media}
           onNavigate={onNavigate}
           onCurrentNumber={onSeasonNumberResolved}
+          ranges={ranges}
+          activeRange={activeRange}
+          onSelectRange={onSelectRange}
+          onArcModeChange={setArcMode}
         />
       </header>
 
@@ -659,11 +797,17 @@ function EpisodeBrowser({
         {visibleEpisodes.map((episode, index) => {
           const isCurrent = sameEpisode(episode, activeEpisode);
           const upcoming = unairedEpisode(media, episode.number);
+          // Offline, only downloaded episodes can play; the rest say so instead of failing.
+          const needsInternet =
+            !online &&
+            !upcoming &&
+            downloads?.byEpisode.get(downloadKey(media.id, episode.number))?.status !== "done";
           const isWatched = !upcoming && episode.number <= watchedEpisodes;
           const defaultTitle = `Episode ${episode.number}`;
           const episodeTitle = episode.title?.trim();
           // Most episodes have no still: a slice of the series art sits behind the episode number.
-          const seriesArt = media.bannerUrl ?? media.coverUrl;
+          // Through the artwork cache, so it still shows offline once seen.
+          const seriesArt = cachedArtworkUrl(media.bannerUrl ?? media.coverUrl);
           const duration = episode.durationMinutes ?? runtime ?? 24;
           const resumed =
             resume?.episode === episode.number && resume.durationSeconds > 0 ? resume : undefined;
@@ -675,15 +819,14 @@ function EpisodeBrowser({
           const minutesLeft = resumed
             ? Math.max(1, Math.round((resumed.durationSeconds - resumed.positionSeconds) / 60))
             : undefined;
+          // One quiet line under the title: E3 · 24m, or what matters more right now.
           const status = upcoming
             ? episodeAiringLabel(upcoming)
-            : isCurrent
-              ? minutesLeft && progress < 100
-                ? `Continue · ${minutesLeft}m left`
-                : "Up next"
-              : isWatched
-                ? "Watched"
-                : defaultTitle;
+            : needsInternet
+              ? "Needs internet"
+              : minutesLeft && progress < 100
+                ? `${minutesLeft} min left`
+                : `${duration}m`;
 
           return (
             <div
@@ -692,13 +835,13 @@ function EpisodeBrowser({
             >
               <button
                 type="button"
-                className={`episode-tile${isCurrent ? " is-current" : ""}${isWatched && !isCurrent ? " is-watched" : ""}${upcoming ? " is-upcoming" : ""}`}
+                className={`episode-tile${isCurrent ? " is-current" : ""}${isWatched && !isCurrent ? " is-watched" : ""}${upcoming ? " is-upcoming" : ""}${needsInternet ? " is-offline" : ""}`}
                 aria-label={
-                  upcoming
+                  upcoming || needsInternet
                     ? `Episode ${episode.number}: ${episodeTitle ?? defaultTitle}. ${status}`
                     : `Play episode ${episode.number}: ${episodeTitle ?? defaultTitle}`
                 }
-                disabled={Boolean(upcoming)}
+                disabled={Boolean(upcoming) || needsInternet}
                 onClick={() => onPlay(episode)}
               >
                 <span className="episode-tile-frame">
@@ -708,6 +851,7 @@ function EpisodeBrowser({
                       src={episode.thumbnailUrl}
                       alt=""
                       loading="lazy"
+                      onError={hideBrokenImage}
                     />
                   ) : seriesArt ? (
                     <img
@@ -715,19 +859,19 @@ function EpisodeBrowser({
                       src={seriesArt}
                       alt=""
                       loading="lazy"
+                      onError={hideBrokenImage}
                       style={{ objectPosition: `${(index * 29) % 100}% 40%` }}
                     />
                   ) : null}
-                  {episode.thumbnailUrl ? (
-                    <span className="episode-tile-badge">E{episode.number}</span>
-                  ) : (
+                  {episode.thumbnailUrl ? null : (
                     <span className="episode-tile-number" aria-hidden="true">
                       {String(episode.number).padStart(2, "0")}
                     </span>
                   )}
-                  {isWatched && !isCurrent ? (
-                    <span className="episode-tile-check" aria-hidden="true">
-                      <Check size={13} strokeWidth={3} />
+                  {isWatched ? (
+                    <span className="episode-tile-watched" aria-hidden="true">
+                      <Check size={11} strokeWidth={3} />
+                      Watched
                     </span>
                   ) : null}
                   {upcoming ? (
@@ -739,21 +883,35 @@ function EpisodeBrowser({
                       <Play size={22} fill="currentColor" />
                     </span>
                   )}
-                  {upcoming ? null : <span className="episode-tile-duration">{duration}m</span>}
                   {progress > 0 ? (
                     <span className="episode-watch-progress" aria-hidden="true">
                       <span style={{ transform: `scaleX(${progress / 100})` }} />
                     </span>
                   ) : null}
                 </span>
-                <strong>{episodeTitle ?? defaultTitle}</strong>
-                <span className="episode-tile-status">{status}</span>
+                <strong title={episodeTitle ?? defaultTitle}>{episodeTitle ?? defaultTitle}</strong>
+                <span className="episode-tile-status">
+                  <b>E{episode.number}</b>
+                  <span aria-hidden="true">·</span>
+                  {status}
+                </span>
               </button>
               {upcoming ? null : (
-                <EpisodeQueueToggle
-                  item={animeBingeItem(media, episode.number)}
-                  label={`episode ${episode.number}`}
-                />
+                <>
+                  <span className="episode-tile-tools">
+                    <EpisodeQueueToggle
+                      item={animeBingeItem(media, episode.number)}
+                      label={`episode ${episode.number}`}
+                    />
+                  </span>
+                  <span className="episode-tile-dl">
+                    <EpisodeDownloadToggle
+                      media={media}
+                      episode={episode.number}
+                      minutes={runtime}
+                    />
+                  </span>
+                </>
               )}
             </div>
           );
@@ -774,17 +932,30 @@ function EpisodeBrowser({
   );
 }
 
+/** One renderer-session loader for every season box: two-hop series graphs, cached. */
+const loadSeriesDetail = createSeriesLoader((id) => window.anistream.getAnimeSeriesGraph(id));
+
 function SeasonPicker({
   media,
   onNavigate,
   onCurrentNumber,
+  ranges,
+  activeRange,
+  onSelectRange,
+  onArcModeChange,
 }: {
   media: AniListCatalogMedia | AniListMediaDetail;
   onNavigate?: (media: AniListCatalogMedia) => void;
   onCurrentNumber: (number: number) => void;
+  /** Arcs (or TheTVDB seasons) of a long runner; shown here only when it has no other seasons. */
+  ranges?: AnimeEpisodeRanges;
+  activeRange?: AnimeEpisodeRange;
+  onSelectRange: (range: AnimeEpisodeRange) => void;
+  onArcModeChange: (arcMode: boolean) => void;
 }): React.JSX.Element {
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const reducedMotion = useAppReducedMotion();
   const inferredSeasonNumber = inferMediaDisplayedSeasonNumber(media);
@@ -800,77 +971,71 @@ function SeasonPicker({
     [inferredNumber, media],
   );
   const [open, setOpen] = useState(false);
-  const [choices, setChoices] = useState<AnimeSeasonChoice[]>([currentChoice]);
-  const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string>();
-  const requestGeneration = useRef(0);
-  const loadingRef = useRef(false);
-  const visibleChoices = loaded ? choices : [currentChoice];
-  const selected = visibleChoices.find((choice) => choice.current) ?? currentChoice;
+  const [attempt, setAttempt] = useState(0);
+  // Keyed by title and attempt: a result for anything else is simply not shown.
+  const loadKey = `${media.id}:${attempt}`;
+  const [outcome, setOutcome] = useState<{ key: string; series?: AnimeSeries; error?: string }>();
+  const settled = outcome?.key === loadKey ? outcome : undefined;
+  const series = settled?.series;
+  const error = settled?.error;
+  const loading = !settled;
+  const loaded = series !== undefined;
+  const seasons = series?.seasons.length ? series.seasons : [currentChoice];
+  const extras = series?.extras ?? [];
+  const selected = seasons.find((choice) => choice.current) ?? currentChoice;
+  const currentIsSeason = isSeasonEntry(media);
+  // A long runner AniList lists without any other season (One Piece) is browsed by arc instead.
+  const arcMode = Boolean(
+    ranges && activeRange && loaded && currentIsSeason && series.seasons.length <= 1,
+  );
   const hasExactPrequel =
     "relations" in media &&
     media.relations.some(
       (relation) => relation.relationType === "PREQUEL" && relation.media.type === "ANIME",
     );
-  const needsAutomaticResolution = inferredSeasonNumber === undefined && hasExactPrequel;
   const awaitingSeasonNumber =
-    inferredSeasonNumber === undefined && (!("relations" in media) || hasExactPrequel) && !loaded;
+    inferredSeasonNumber === undefined &&
+    (!("relations" in media) || hasExactPrequel) &&
+    !loaded &&
+    !arcMode;
 
-  const loadChoices = useCallback((): void => {
-    if (loadingRef.current || loaded) return;
-    const generation = ++requestGeneration.current;
-    loadingRef.current = true;
-    setLoading(true);
-    setError(undefined);
-    void (async () => {
-      const detail =
-        "relations" in media
-          ? media
-          : await window.anistream.getAniListMediaDetail(media.id, "ANIME");
-      return buildAnimeSeasonChain(detail, (id) =>
-        window.anistream.getAniListMediaDetail(id, "ANIME"),
-      );
-    })()
+  // The series loads with the title (one or two light requests, cached), not on first open.
+  useEffect(() => {
+    let active = true;
+    const key = `${media.id}:${attempt}`;
+    loadSeriesDetail(media.id)
+      .then((detail) => buildAnimeSeries(detail, loadSeriesDetail))
       .then((result) => {
-        if (requestGeneration.current !== generation) return;
-        const nextChoices = result.length ? result : [currentChoice];
-        setChoices(nextChoices);
-        onCurrentNumber(nextChoices.find((choice) => choice.current)?.number ?? inferredNumber);
-        setLoaded(true);
+        if (!active) return;
+        setOutcome({ key, series: result });
+        onCurrentNumber(result.seasons.find((choice) => choice.current)?.number ?? inferredNumber);
       })
       .catch((reason: unknown) => {
-        if (requestGeneration.current !== generation) return;
-        setError(
-          friendlyRemoteError(reason, {
+        if (!active) return;
+        setOutcome({
+          key,
+          error: friendlyRemoteError(reason, {
             provider: "AniList",
             operation: "connected seasons",
             fallback: "Connected seasons could not be loaded. Try again shortly.",
           }),
-        );
-      })
-      .finally(() => {
-        if (requestGeneration.current === generation) {
-          loadingRef.current = false;
-          setLoading(false);
-        }
+        });
       });
-  }, [currentChoice, inferredNumber, loaded, media, onCurrentNumber]);
+    return () => {
+      active = false;
+    };
+    // `onCurrentNumber` is a state setter from the parent; the walk reruns only per title.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media.id, attempt]);
 
-  useEffect(() => {
-    if (needsAutomaticResolution) loadChoices();
-  }, [loadChoices, needsAutomaticResolution]);
-
-  useEffect(
-    () => () => {
-      requestGeneration.current += 1;
-      loadingRef.current = false;
-    },
-    [],
-  );
+  useEffect(() => onArcModeChange(arcMode), [arcMode, onArcModeChange]);
 
   useEffect(() => {
     if (!open) return;
+    // Long arc lists open on the current entry.
+    menuRef.current
+      ?.querySelector<HTMLElement>("[aria-checked='true']")
+      ?.scrollIntoView({ block: "nearest" });
     const closeOnOutsidePointer = (event: PointerEvent): void => {
       if (!pickerRef.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -888,21 +1053,17 @@ function SeasonPicker({
     };
   }, [open]);
 
-  function toggle(): void {
-    const next = !open;
-    setOpen(next);
-    if (next) loadChoices();
-  }
-
   function openAndFocusFirst(event: React.KeyboardEvent<HTMLButtonElement>): void {
     if (event.key !== "ArrowDown") return;
     event.preventDefault();
-    if (!open) {
-      setOpen(true);
-      loadChoices();
-    }
+    setOpen(true);
     window.requestAnimationFrame(() => {
-      pickerRef.current?.querySelector<HTMLButtonElement>("[role='menuitemradio']")?.focus();
+      const options =
+        pickerRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']");
+      const current = pickerRef.current?.querySelector<HTMLButtonElement>(
+        "[role='menuitemradio'][aria-checked='true']",
+      );
+      (current ?? options?.[0])?.focus();
     });
   }
 
@@ -927,6 +1088,30 @@ function SeasonPicker({
     options[nextIndex]?.focus();
   }
 
+  function choose(action: () => void, current: boolean): void {
+    setOpen(false);
+    if (current) triggerRef.current?.focus();
+    else action();
+  }
+
+  const triggerTitle = arcMode
+    ? (activeRange?.title ?? "")
+    : !currentIsSeason
+      ? mediaFormatLabel(media.format)
+      : awaitingSeasonNumber
+        ? error
+          ? "Season unavailable"
+          : "Finding season…"
+        : seasonChoiceLabel(selected);
+  const triggerDetail =
+    arcMode && activeRange
+      ? rangeEpisodesLabel(activeRange)
+      : !currentIsSeason
+        ? media.title
+        : awaitingSeasonNumber && !error
+          ? "Checking AniList"
+          : episodeCountLabel(selected.episodeCount);
+
   return (
     <div className="season-picker" ref={pickerRef}>
       <button
@@ -936,28 +1121,19 @@ function SeasonPicker({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
-        onClick={toggle}
+        onClick={() => setOpen((value) => !value)}
         onKeyDown={openAndFocusFirst}
       >
         <span>
-          <strong>
-            {awaitingSeasonNumber
-              ? error
-                ? "Season unavailable"
-                : "Finding season…"
-              : seasonChoiceLabel(selected)}
-          </strong>
-          <small>
-            {awaitingSeasonNumber && !error
-              ? "Checking AniList"
-              : episodeCountLabel(selected.episodeCount)}
-          </small>
+          <strong>{triggerTitle}</strong>
+          <small>{triggerDetail}</small>
         </span>
         <ChevronDown aria-hidden="true" size={18} className={open ? "is-open" : undefined} />
       </button>
       <AnimatePresence>
         {open ? (
           <motion.div
+            ref={menuRef}
             id={menuId}
             className="season-picker-menu"
             role="menu"
@@ -968,33 +1144,91 @@ function SeasonPicker({
             transition={motionTransition(reducedMotion, "fast")}
             onKeyDown={moveOptionFocus}
           >
-            <div className="season-picker-menu-heading">
-              <span>Series order</span>
-              <small>From AniList</small>
-            </div>
-            {visibleChoices.map((choice) => (
-              <button
-                key={choice.media.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={choice.current}
-                className={choice.current ? "is-current" : undefined}
-                onClick={() => {
-                  setOpen(false);
-                  if (choice.current) triggerRef.current?.focus();
-                  else onNavigate?.(choice.media);
-                }}
-              >
-                <span className="season-picker-option-copy">
-                  <strong>
-                    {seasonChoiceLabel(choice)}{" "}
-                    <span>({episodeCountLabel(choice.episodeCount)})</span>
-                  </strong>
-                  <small>{choice.media.title}</small>
-                </span>
-                {choice.current ? <Check aria-hidden="true" size={17} /> : null}
-              </button>
-            ))}
+            {arcMode && ranges && activeRange ? (
+              <>
+                <div className="season-picker-menu-heading">
+                  <span>Seasons</span>
+                  <small>{ranges.kind === "arc" ? "From TMDB" : "From TheTVDB"}</small>
+                </div>
+                {ranges.ranges.map((range) => {
+                  const current = range.start === activeRange.start;
+                  return (
+                    <button
+                      key={range.start}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={current}
+                      className={current ? "is-current" : undefined}
+                      onClick={() => choose(() => onSelectRange(range), current)}
+                    >
+                      <span className="season-picker-option-copy">
+                        <strong>{range.title}</strong>
+                        <small>
+                          {rangeEpisodesLabel(range)}
+                          {range.filler ? " · Filler" : ""}
+                        </small>
+                      </span>
+                      {current ? <Check aria-hidden="true" size={17} /> : null}
+                    </button>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <div className="season-picker-menu-heading">
+                  <span>Seasons</span>
+                  <small>From AniList</small>
+                </div>
+                {seasons.map((choice) => {
+                  const current = choice.current && currentIsSeason;
+                  return (
+                    <button
+                      key={choice.media.id}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={current}
+                      className={current ? "is-current" : undefined}
+                      onClick={() => choose(() => onNavigate?.(choice.media), current)}
+                    >
+                      <span className="season-picker-option-copy">
+                        <strong>
+                          {seasonChoiceLabel(choice)}{" "}
+                          <span>({episodeCountLabel(choice.episodeCount)})</span>
+                        </strong>
+                        <small>{choice.media.title}</small>
+                      </span>
+                      {current ? <Check aria-hidden="true" size={17} /> : null}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+            {extras.length ? (
+              <>
+                <div className="season-picker-menu-heading season-picker-menu-heading--group">
+                  <span>Movies &amp; specials</span>
+                </div>
+                {extras.map((extra) => (
+                  <button
+                    key={extra.media.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={extra.current}
+                    className={extra.current ? "is-current" : undefined}
+                    onClick={() => choose(() => onNavigate?.(extra.media), extra.current)}
+                  >
+                    <span className="season-picker-option-copy">
+                      <strong>{extra.media.title}</strong>
+                      <small>
+                        {mediaFormatLabel(extra.media.format)}
+                        {extra.media.seasonYear ? ` · ${extra.media.seasonYear}` : ""}
+                      </small>
+                    </span>
+                    {extra.current ? <Check aria-hidden="true" size={17} /> : null}
+                  </button>
+                ))}
+              </>
+            ) : null}
             {loading ? (
               <p className="season-picker-status" role="status">
                 <LoaderCircle aria-hidden="true" size={16} /> Loading connected seasons…
@@ -1003,14 +1237,7 @@ function SeasonPicker({
             {error ? (
               <div className="season-picker-error" role="alert">
                 <span>{error}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoaded(false);
-                    setError(undefined);
-                    loadChoices();
-                  }}
-                >
+                <button type="button" onClick={() => setAttempt((value) => value + 1)}>
                   Retry
                 </button>
               </div>
@@ -1019,6 +1246,41 @@ function SeasonPicker({
         ) : null}
       </AnimatePresence>
     </div>
+  );
+}
+
+function rangeEpisodesLabel(range: AnimeEpisodeRange): string {
+  return range.start === range.end
+    ? `Episode ${range.start}`
+    : `Episodes ${range.start}–${range.end}`;
+}
+
+function mediaFormatLabel(format: string | undefined): string {
+  switch (format) {
+    case "MOVIE":
+      return "Movie";
+    case "OVA":
+      return "OVA";
+    case "ONA":
+      return "ONA";
+    case "SPECIAL":
+      return "Special";
+    case "TV_SHORT":
+      return "Short";
+    case "MUSIC":
+      return "Music video";
+    default:
+      return "TV";
+  }
+}
+
+function rangeContaining(
+  ranges: readonly AnimeEpisodeRange[],
+  episode: number,
+): AnimeEpisodeRange | undefined {
+  return (
+    ranges.find((range) => episode >= range.start && episode <= range.end) ??
+    (episode > (ranges.at(-1)?.end ?? 0) ? ranges.at(-1) : ranges[0])
   );
 }
 
@@ -1153,6 +1415,18 @@ function AnimeEmbedPlayer({
   );
 }
 
+/** Applies episode-art details without replacing a genuine provider title or description. */
+function withEpisodeArt(episode: AnimeProviderEpisode, art: AnimeEpisodeArt): AnimeProviderEpisode {
+  const ownTitle = episode.title?.trim();
+  const placeholder = !ownTitle || /^(episode|ep\.?)\s*\d+$/i.test(ownTitle);
+  return {
+    ...episode,
+    ...(art.stillUrl ? { thumbnailUrl: art.stillUrl } : {}),
+    ...(placeholder && art.title ? { title: art.title } : {}),
+    ...(!episode.description?.trim() && art.synopsis ? { description: art.synopsis } : {}),
+  };
+}
+
 function fallbackSeason(media: AniListCatalogMedia | AniListMediaDetail): AnimeProviderSeason {
   const count = Math.min(
     Math.max(
@@ -1225,4 +1499,9 @@ function audioShortLabel(label: string): string {
   if (/\bdub/i.test(label)) return "DUB";
   if (/\bsub/i.test(label)) return "SUB";
   return (label.split("·")[0] ?? label).trim().slice(0, 3).toUpperCase();
+}
+
+/** An image that cannot load (e.g. offline and never cached) disappears instead of showing broken. */
+function hideBrokenImage(event: React.SyntheticEvent<HTMLImageElement>): void {
+  event.currentTarget.style.visibility = "hidden";
 }

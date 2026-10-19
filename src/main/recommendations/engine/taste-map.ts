@@ -6,7 +6,9 @@
  * 1. Weight: affinity × recency (the ranker's half-life), liked titles only.
  * 2. Link: exact relations (sequels, adaptations, a film series), provider recommendations between
  *    liked titles, and each title's strongest IDF-cosine neighbours (top K above a floor).
- * 3. Cluster: Louvain modularity optimisation (Blondel et al. 2008), deterministic order.
+ * 3. Cluster: Louvain modularity optimisation (Blondel et al. 2008), deterministic order, within
+ *    each section, so a section with a thin history (often manga) still gets tastes of its own
+ *    instead of joining the anime of the same works; links across sections become bridges.
  * 4. Name: each cluster by its most distinctive genres/tags (class-based TF-IDF lift).
  * 5. Compress: the node budget is shared by √(cluster weight); a cluster's weaker titles fold into
  *    its hub, and edges between clusters become hub-to-hub bridges.
@@ -32,6 +34,7 @@ import {
   itemKey,
   packedDot,
   packVectors,
+  SENSITIVE_TAGS,
   type Vector,
 } from "./content";
 import { NOT_A_THEME, themeLabel } from "./rows";
@@ -42,7 +45,8 @@ const DAY_MS = 86_400_000;
 const MAX_TITLES = 600;
 /** Title nodes drawn; the rest fold into their cluster hub. */
 const NODE_BUDGET = 120;
-const MAX_CLUSTERS = 18;
+/** Tastes per section; past this the weakest fold into the section's "other" taste. */
+const MAX_CLUSTERS = 10;
 const NEIGHBORS = 4;
 const MIN_SIMILARITY = 0.3;
 /** A lone title joins the cluster whose centroid it is at least this close to. */
@@ -102,7 +106,11 @@ export function buildTasteMap(
   const space = new ContentSpace(titles.map((title) => title.features));
   const vectors = titles.map((title) => space.vector(title.features));
   const { adjacency, kinds } = linkTitles(titles, vectors);
-  const { membership, otherFrom } = groupClusters(titles, vectors, louvain(adjacency));
+  const { membership, otherFrom } = groupClusters(
+    titles,
+    vectors,
+    louvain(withinSections(adjacency, titles)),
+  );
   return compress(
     { titles, vectors, adjacency, kinds, membership, otherFrom },
     now,
@@ -119,6 +127,14 @@ export function tasteMapFingerprint(history: HybridHistoryItem[], now: number): 
     (row) => `${itemKey(row.features)}:${row.affinity}:${row.occurredAt}:${row.features.updatedAt}`,
   );
   return `${Math.floor(now / 3_600_000)}|${rows.join(",")}`;
+}
+
+/** The links between titles of the same section (clusters never span sections). */
+function withinSections(adjacency: Adjacency, titles: Title[]): Adjacency {
+  return adjacency.map(
+    (neighbors, a) =>
+      new Map([...neighbors].filter(([b]) => titles[b].section === titles[a].section)),
+  );
 }
 
 /** One row per title (strongest signal, latest time), liked only, weighted, strongest first. */
@@ -288,9 +304,9 @@ function localMoves(graph: Adjacency): { community: number[]; moved: boolean } {
 }
 
 /**
- * Lone titles join the cluster whose centroid they are closest to, or their section's "other"
- * cluster; past MAX_CLUSTERS the weakest clusters fold into "other" too. Returns compact IDs,
- * strongest cluster first.
+ * Lone titles join the cluster of their section whose centroid they are closest to, or their
+ * section's "other" cluster; past MAX_CLUSTERS in a section the weakest clusters fold into
+ * "other" too. Returns compact IDs, strongest cluster first.
  */
 function groupClusters(
   titles: Title[],
@@ -300,10 +316,16 @@ function groupClusters(
   const members = new Map<number, number[]>();
   raw.forEach((cluster, at) => members.set(cluster, [...(members.get(cluster) ?? []), at]));
   const weightOf = (list: number[]) => list.reduce((sum, at) => sum + titles[at].weight, 0);
+  const perSection = new Map<RecommendationSection, number>();
   const real = [...members.entries()]
     .filter(([, list]) => list.length >= 2)
     .sort((a, b) => weightOf(b[1]) - weightOf(a[1]) || a[0] - b[0])
-    .slice(0, MAX_CLUSTERS);
+    .filter(([, list]) => {
+      const section = titles[list[0]].section;
+      const count = perSection.get(section) ?? 0;
+      perSection.set(section, count + 1);
+      return count < MAX_CLUSTERS;
+    });
   const kept = new Set(real.map(([cluster]) => cluster));
   const centroids = real.map(([, list]) => {
     const centroid: Vector = new Map();
@@ -321,6 +343,7 @@ function groupClusters(
     let best = -1;
     let bestValue = MIN_ATTACH;
     centroids.forEach((centroid, index) => {
+      if (titles[real[index][1][0]].section !== titles[at].section) return;
       const value = dot(centroid, vectors[at]);
       if (value > bestValue) {
         best = index;
@@ -483,7 +506,7 @@ function clusterLabels({ titles, vectors, otherFrom }: Clustered, members: numbe
     for (const genre of title.features.genres) names.set(`g:${genre}`, genre);
     for (const tag of title.features.tags) {
       const lower = tag.name.toLocaleLowerCase();
-      if (NOT_A_LABEL.has(lower) || NOT_A_THEME.has(lower)) continue;
+      if (NOT_A_LABEL.has(lower) || NOT_A_THEME.has(lower) || SENSITIVE_TAGS.has(lower)) continue;
       const key = `t:${lower}`;
       if (!names.has(key)) names.set(key, themeLabel(tag.name));
     }

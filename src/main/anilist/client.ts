@@ -22,6 +22,7 @@ import {
 } from "../../shared/anilist-filters";
 import {
   loadRecommendationSeeds,
+  loadRecommendationByMalIds,
   loadRecommendationTrending,
   type RecommendationSeedData,
 } from "./recommendation-seeds";
@@ -33,6 +34,7 @@ import {
   normalizeGroups,
   normalizeListEntry,
   normalizeMediaDetail,
+  normalizeSeriesGraph,
   normalizeProfile,
 } from "./normalize";
 import {
@@ -43,6 +45,7 @@ import {
   DASHBOARD_QUERY,
   DELETE_ENTRY_MUTATION,
   MEDIA_DETAIL_QUERY,
+  ANIME_SERIES_GRAPH_QUERY,
   MANGA_KIND_HINTS_QUERY,
   UPDATE_ENTRY_MUTATION,
   VIEWER_QUERY,
@@ -64,6 +67,7 @@ import { AuthorizationTransaction } from "./authorization-transaction";
 import type {
   AniListListEntrySummary,
   AniListMediaDetail,
+  AnimeSeriesNode,
   AniListProfile,
   LatestAnimeUpdate,
   LatestUpdatesPage,
@@ -118,6 +122,20 @@ export class AniListClient {
       (query, variables) =>
         this.publicRequest(query, variables, `recommendation-trending:${type}`, signal),
       type,
+    );
+  }
+  /** Features for exact MyAnimeList IDs ("Try something new" candidates), one request ≤ 50. */
+  public getRecommendationByMalIds(
+    type: AniListMediaType,
+    malIds: number[],
+    signal?: AbortSignal,
+  ): Promise<RecommendationItemFeatures[]> {
+    const key = [...new Set(malIds)].sort((a, b) => a - b).join(",");
+    return loadRecommendationByMalIds(
+      (query, variables) =>
+        this.publicRequest(query, variables, `recommendation-by-mal:${type}:${key}`, signal),
+      type,
+      malIds,
     );
   }
   private readonly personalAiringCache = createBoundedCache<PersonalAiringUpdate[]>({
@@ -188,6 +206,10 @@ export class AniListClient {
   private readonly detailCache = createBoundedCache<AniListMediaDetail>({
     maxEntries: 60,
     ttlMs: DETAIL_CACHE_TTL_MS,
+  });
+  private readonly seriesGraphCache = createBoundedCache<AnimeSeriesNode[]>({
+    maxEntries: 120,
+    ttlMs: 24 * 60 * 60_000,
   });
   private readonly airingCache = createBoundedCache<LatestUpdatesPage<LatestAnimeUpdate>>({
     maxEntries: 20,
@@ -536,6 +558,22 @@ export class AniListClient {
     return detail;
   }
 
+  /** Two hops of an anime's series graph (cached a day); see `ANIME_SERIES_GRAPH_QUERY`. */
+  public async getAnimeSeriesGraph(id: number): Promise<AnimeSeriesNode[]> {
+    if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid AniList media.");
+    const cacheKey = `series-graph:${id}`;
+    const cached = this.seriesGraphCache.get(cacheKey);
+    if (cached) return cached;
+    const response = await this.publicRequest<{ Media: unknown }>(
+      ANIME_SERIES_GRAPH_QUERY,
+      { id },
+      cacheKey,
+    );
+    const graph = normalizeSeriesGraph(response.Media);
+    this.seriesGraphCache.set(cacheKey, graph);
+    return graph;
+  }
+
   public async addEntry(mediaId: number): Promise<AniListListEntrySummary> {
     if (!Number.isInteger(mediaId) || mediaId <= 0) throw new Error("Invalid AniList media.");
     const response = await this.request<SaveEntryResponse>(ADD_ENTRY_MUTATION, { mediaId });
@@ -689,6 +727,22 @@ export class AniListClient {
     this.profile = undefined;
     await deleteSession(this.tokenPath);
     this.invalidateViewerData();
+  }
+
+  /** Drops every cached response so titles are re-read in the current title language. */
+  public clearCachedResponses(): void {
+    for (const cache of [
+      this.personalAiringCache,
+      this.scheduleCache,
+      this.browseCache,
+      this.dashboardCache,
+      this.detailCache,
+      this.seriesGraphCache,
+      this.airingCache,
+      this.mangaKindCache,
+      this.mediaByIdsCache,
+    ])
+      cache.clear();
   }
 
   private invalidateViewerData(): void {

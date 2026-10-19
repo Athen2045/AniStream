@@ -85,7 +85,15 @@ export function normalizeActivityInput(value: unknown): RecordActivityInput {
       title: text(media.title, 500),
       coverUrl: url(media.coverUrl),
       siteUrl: url(media.siteUrl),
+      // The wide banner, so a Continue card without an episode still is not a cropped poster.
+      ...(typeof media.bannerUrl === "string" && media.bannerUrl
+        ? { bannerUrl: url(media.bannerUrl) }
+        : {}),
       totalProgress,
+      // AniList's format (TV, MOVIE, OVA…), so a film's Continue card reads as one piece.
+      ...(typeof media.format === "string" && /^[A-Z_]{2,16}$/.test(media.format)
+        ? { format: media.format }
+        : {}),
     },
     unit: input.unit,
     state: input.state,

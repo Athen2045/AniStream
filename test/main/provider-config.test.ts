@@ -73,7 +73,7 @@ describe("local provider configuration", () => {
 
   it("defaults to every built-in database provider and unconfigured players", () => {
     const config = parseProviderConfig({});
-    expect(config.anime).toEqual({ database: ["anilist", "mal", "kitsu"], media: [] });
+    expect(config.anime).toEqual({ database: ["anilist", "mal", "kitsu", "anizip"], media: [] });
     expect(config.manga.media).toEqual([{ id: "mangadex", kind: "mangadex" }]);
     expect(
       parseProviderConfig({ manga: { media: [{ id: "mangadex", kind: "mangadex" }] } }).manga.media,

@@ -1,9 +1,19 @@
 export interface RequestGate {
-  run<T>(dedupeKey: string | undefined, fn: () => Promise<T>, signal?: AbortSignal): Promise<T>;
+  run<T>(
+    dedupeKey: string | undefined,
+    fn: () => Promise<T>,
+    signal?: AbortSignal,
+    options?: RequestGateRunOptions,
+  ): Promise<T>;
   /** Pause every future request until `retryAfterMs` has elapsed (see API.md: "On 429, stop the
    * queue until Retry-After/reset; do not send speculative retries."). Safe to call repeatedly;
    * only ever extends the pause, never shortens it. */
   reportRateLimited(retryAfterMs: number): void;
+}
+
+export interface RequestGateRunOptions {
+  /** Something the viewer is looking at now: waits ahead of background requests (same budget). */
+  priority?: boolean;
 }
 
 export interface RequestGateOptions {
@@ -26,63 +36,100 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
   const minIntervalMs = Math.max(0, options.minIntervalMs ?? 0);
   const startTimestamps: number[] = [];
   const inFlight = new Map<string, Promise<unknown>>();
-  let queueTail: Promise<void> = Promise.resolve();
+  // Requests waiting for a slot: priority ones first, each lane first-come first-served.
+  const waiters: Waiter[] = [];
+  let pumping = false;
   let blockedUntil = 0;
   let lastStartAt = 0;
 
-  function acquireSlot(signal?: AbortSignal): Promise<void> {
-    const slot = queueTail.then(async () => {
-      for (;;) {
-        throwIfAborted(signal);
-        const now = Date.now();
-        if (now < blockedUntil) {
-          await sleep(blockedUntil - now, signal);
-          continue;
-        }
-        if (minIntervalMs && now - lastStartAt < minIntervalMs) {
-          await sleep(minIntervalMs - (now - lastStartAt), signal);
-          continue;
-        }
-        while (startTimestamps.length && now - startTimestamps[0] >= windowMs) {
-          startTimestamps.shift();
-        }
-        if (startTimestamps.length < limit) {
-          startTimestamps.push(now);
-          lastStartAt = now;
-          return;
-        }
-        const waitMs = windowMs - (now - startTimestamps[0]) + 1;
-        await sleep(waitMs, signal);
+  function enqueue(waiter: Waiter): void {
+    const at = waiter.priority ? waiters.findIndex((other) => !other.priority) : -1;
+    if (at === -1) waiters.push(waiter);
+    else waiters.splice(at, 0, waiter);
+  }
+
+  function acquireSlot(signal?: AbortSignal, priority = false, key?: string): Promise<void> {
+    if (signal?.aborted) return Promise.reject(abortReason(signal));
+    return new Promise<void>((resolve, reject) => {
+      const waiter: Waiter = { priority, key, resolve, reject, signal };
+      if (signal) {
+        waiter.onAbort = () => {
+          const at = waiters.indexOf(waiter);
+          if (at !== -1) waiters.splice(at, 1);
+          reject(abortReason(signal));
+        };
+        signal.addEventListener("abort", waiter.onAbort, { once: true });
       }
+      enqueue(waiter);
+      void pump();
     });
-    queueTail = slot.then(
-      () => undefined,
-      () => undefined,
-    );
-    return slot;
+  }
+
+  /** A priority caller joining a queued request moves that request into the priority lane. */
+  function promote(key: string): void {
+    const at = waiters.findIndex((waiter) => waiter.key === key && !waiter.priority);
+    if (at === -1) return;
+    const [waiter] = waiters.splice(at, 1);
+    waiter.priority = true;
+    enqueue(waiter);
+  }
+
+  async function pump(): Promise<void> {
+    if (pumping) return;
+    pumping = true;
+    try {
+      while (waiters.length) {
+        const now = Date.now();
+        let waitMs = 0;
+        if (now < blockedUntil) waitMs = blockedUntil - now;
+        else if (minIntervalMs && now - lastStartAt < minIntervalMs)
+          waitMs = minIntervalMs - (now - lastStartAt);
+        else {
+          while (startTimestamps.length && now - startTimestamps[0] >= windowMs) {
+            startTimestamps.shift();
+          }
+          if (startTimestamps.length >= limit) waitMs = windowMs - (now - startTimestamps[0]) + 1;
+        }
+        if (waitMs > 0) {
+          await sleep(waitMs);
+          continue;
+        }
+        const waiter = waiters.shift();
+        if (!waiter) break;
+        if (waiter.signal && waiter.onAbort)
+          waiter.signal.removeEventListener("abort", waiter.onAbort);
+        startTimestamps.push(now);
+        lastStartAt = now;
+        waiter.resolve();
+      }
+    } finally {
+      pumping = false;
+    }
   }
 
   function run<T>(
     dedupeKey: string | undefined,
     fn: () => Promise<T>,
     signal?: AbortSignal,
+    options: RequestGateRunOptions = {},
   ): Promise<T> {
     if (signal?.aborted) return Promise.reject(abortReason(signal));
     if (dedupeKey) {
       const existing = inFlight.get(dedupeKey);
       if (existing) {
+        if (options.priority) promote(dedupeKey);
         return raceWithAbort(existing as Promise<T>, signal).catch((error: unknown) => {
           // The shared request belonged to another caller who cancelled it. This caller did not
           // cancel, so it runs the request itself instead of inheriting someone else's abort.
           if (!isCancellation(error) || signal?.aborted) throw error;
           if (inFlight.get(dedupeKey) === existing) inFlight.delete(dedupeKey);
-          return run(dedupeKey, fn, signal);
+          return run(dedupeKey, fn, signal, options);
         });
       }
     }
 
     const execution = (async () => {
-      await acquireSlot(signal);
+      await acquireSlot(signal, options.priority === true, dedupeKey);
       throwIfAborted(signal);
       return fn();
     })();
@@ -108,6 +155,15 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
       blockedUntil = Math.max(blockedUntil, Date.now() + Math.max(0, retryAfterMs));
     },
   };
+}
+
+interface Waiter {
+  priority: boolean;
+  key?: string;
+  resolve: () => void;
+  reject: (reason: unknown) => void;
+  signal?: AbortSignal;
+  onAbort?: () => void;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

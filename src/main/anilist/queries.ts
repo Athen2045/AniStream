@@ -60,6 +60,7 @@ export const DASHBOARD_QUERY = `
     updatedAt
     media {
       id
+      idMal
       type
       title {
         userPreferred
@@ -427,3 +428,66 @@ export interface MediaDetailResponse {
 export interface SaveEntryResponse {
   SaveMediaListEntry?: unknown;
 }
+
+const SERIES_NODE_FIELDS = `
+  id
+  idMal
+  type
+  title {
+    userPreferred
+    english
+    romaji
+    native
+  }
+  synonyms
+  coverImage {
+    extraLarge
+    large
+    color
+  }
+  bannerImage
+  format
+  status
+  episodes
+  chapters
+  volumes
+  siteUrl
+  genres
+  averageScore
+  popularity
+  season
+  seasonYear
+  nextAiringEpisode {
+    episode
+    airingAt
+  }
+`;
+
+/**
+ * Two hops of an anime's relations in one request (user request 2026-10-14): the root and its
+ * neighbours arrive with their own relations, so the season list walks two entries per request
+ * instead of loading full title details one hop at a time.
+ */
+export const ANIME_SERIES_GRAPH_QUERY = `
+  query AniStreamSeriesGraph($id: Int!) {
+    Media(id: $id, type: ANIME) {
+      ${SERIES_NODE_FIELDS}
+      relations {
+        edges {
+          relationType
+          node {
+            ${SERIES_NODE_FIELDS}
+            relations {
+              edges {
+                relationType
+                node {
+                  ${SERIES_NODE_FIELDS}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;

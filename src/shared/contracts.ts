@@ -49,6 +49,8 @@ export interface AniListProfile {
 export interface AniListMedia {
   id: number;
   type: AniListMediaType;
+  /** AniList's own MyAnimeList link, when it has one. */
+  malId?: number;
   title: string;
   coverUrl: string;
   /** AniList's dominant cover color (`#rrggbb`); manga pages use it as a per-title accent. */
@@ -150,10 +152,99 @@ export interface AnimeProviderEpisode {
   durationMinutes?: number;
 }
 
-/** A TMDB still for one AniList episode (exact link, aligned by air date). */
+/**
+ * Supplemental details for one AniList episode from the episode-art sources (exact links only):
+ * a thumbnail and, when a source has them, the episode's own title and synopsis.
+ */
 export interface AnimeEpisodeArt {
   number: number;
-  stillUrl: string;
+  stillUrl?: string;
+  title?: string;
+  synopsis?: string;
+}
+
+/** An opening or ending in an episode, for the own player's Skip buttons (seconds). */
+export interface AnimeSkipSegment {
+  kind: "opening" | "ending";
+  start: number;
+  end: number;
+}
+
+export interface AnimeSkipTimesInput {
+  aniListId: number;
+  /** MAL id (AniList's own idMal); AniSkip is keyed by it. */
+  malId: number;
+  episode: number;
+  /** The stream's length, so timings for the same cut are chosen. */
+  durationSeconds: number;
+}
+
+/** One episode from the direct-stream source, for AniStream's own player (trial 2026-10-18). */
+export interface AnimeDirectPlaybackInput {
+  aniListId: number;
+  episode: number;
+}
+
+export interface AnimeDirectSubtitleTrack {
+  /** Opaque ID for `getAnimeDirectSubtitle`. */
+  id: string;
+  label: string;
+  /** BCP 47-ish tag from the source, e.g. `en`, `pt-BR`. */
+  language: string;
+  default: boolean;
+}
+
+/** A subtitle track: ASS/SSA kept as-is for the ASS renderer, with a WebVTT copy as fallback. */
+export interface AnimeDirectSubtitle {
+  format: "ass" | "vtt";
+  /** The original script (ASS) or WebVTT. */
+  text: string;
+  /** Text-only WebVTT for when the ASS renderer cannot start. */
+  vtt: string;
+}
+
+/** How a direct stream's real length compares with the episode's expected runtime. */
+export interface AnimeDirectRuntimeCheck {
+  actualSeconds: number;
+  expectedSeconds: number;
+  /** `episode`: this episode's own runtime; `series`: AniList's average episode length. */
+  basis: "episode" | "series";
+  mismatch: boolean;
+}
+
+export type AnimeDirectPlayback =
+  | {
+      status: "ready";
+      streamUrl: string;
+      /** Played from the user's downloads folder. */
+      offline?: boolean;
+      subtitles: AnimeDirectSubtitleTrack[];
+      /** Fonts the episode's ASS subtitles use, behind the stream proxy. */
+      fonts: string[];
+      /** The stream's length against the expected runtime (possible mislabel when `mismatch`). */
+      runtime?: AnimeDirectRuntimeCheck;
+    }
+  | { status: "unavailable"; message: string };
+
+/** A contiguous run of AniList episode numbers: a story arc or a TheTVDB season. */
+export interface AnimeEpisodeRange {
+  title: string;
+  start: number;
+  end: number;
+  /** TMDB's arc list marks this arc as filler. */
+  filler?: boolean;
+}
+
+/** How a long-running entry splits for browsing; absent for entries browsed as one list. */
+export interface AnimeEpisodeRanges {
+  kind: "arc" | "season";
+  ranges: AnimeEpisodeRange[];
+}
+
+export interface AnimeEpisodeRangesInput {
+  aniListId: number;
+  /** Episodes in the AniList entry (or aired so far). */
+  episodes: number;
 }
 
 export interface AnimeEpisodeArtInput {
@@ -674,9 +765,25 @@ export interface AniListNamedPerson {
   role?: string;
 }
 
+/** How AniList titles are shown: English first (default), or AniList's preferred title. */
+export interface TitlePreferences {
+  english: boolean;
+}
+
 export interface AniListRelation {
   relationType: string;
   media: AniListCatalogMedia;
+}
+
+/**
+ * One anime in its series graph: the season chain and the films and specials beside it.
+ * `relations` (PREQUEL, SEQUEL, SIDE_STORY to other anime) is absent on the graph's outer ring.
+ */
+export interface AnimeSeriesNode {
+  media: AniListCatalogMedia;
+  /** English, romaji and native titles plus synonyms, for season-number inference. */
+  titles: string[];
+  relations?: AniListRelation[];
 }
 
 export interface AniListExternalLink {
@@ -922,6 +1029,16 @@ export interface AniStreamBridge {
   recordActivity(input: RecordActivityInput): Promise<LocalActivity>;
   getLocalActivity(): Promise<LocalActivity[]>;
   getBingeState(): Promise<import("./binge").BingeState>;
+  getDownloads(): Promise<import("./downloads").DownloadsState>;
+  addDownloads(
+    episodes: import("./downloads").DownloadEpisodeRequest[],
+  ): Promise<import("./downloads").DownloadAddResult>;
+  applyDownloadChange(
+    change: Exclude<import("./downloads").DownloadChange, { op: "add" }>,
+  ): Promise<import("./downloads").DownloadsState>;
+  /** Opens the folder picker; null when cancelled. */
+  chooseDownloadFolder(): Promise<import("./downloads").DownloadsState | null>;
+  onDownloadsChanged(callback: () => void): () => void;
   applyBingeChange(change: import("./binge").BingeChange): Promise<import("./binge").BingeState>;
   retryActivitySync(): Promise<LocalActivity[]>;
   getAppInfo(): Promise<AppInfo>;
@@ -937,6 +1054,9 @@ export interface AniStreamBridge {
   browseAniList(input: BrowseAniListInput): Promise<AniListCatalogPage>;
   getAniListFilterOptions(): Promise<AniListFilterOptions>;
   getAniListMediaDetail(id: number, type: AniListMediaType): Promise<AniListMediaDetail>;
+  getAnimeSeriesGraph(id: number): Promise<AnimeSeriesNode[]>;
+  getTitlePreferences(): Promise<TitlePreferences>;
+  setTitlePreferences(preferences: TitlePreferences): Promise<TitlePreferences>;
   /** Exact catalog titles by ID, in the order asked (at most 12). */
   getAniListMediaByIds(ids: number[], type: AniListMediaType): Promise<AniListCatalogMedia[]>;
   addAniListEntry(mediaId: number): Promise<AniListListEntrySummary>;
@@ -947,6 +1067,11 @@ export interface AniStreamBridge {
   getAnimeEpisodeCatalog(input: AnimeEpisodeCatalogInput): Promise<AnimeEpisodeCatalog>;
   /** TMDB episode stills for an anime; empty when no exact TMDB match exists. */
   getAnimeEpisodeArt(input: AnimeEpisodeArtInput): Promise<AnimeEpisodeArt[]>;
+  getAnimeSkipTimes(input: AnimeSkipTimesInput): Promise<AnimeSkipSegment[]>;
+  getAnimeEpisodeRanges(input: AnimeEpisodeRangesInput): Promise<AnimeEpisodeRanges | undefined>;
+  getAnimeDirectPlayback(input: AnimeDirectPlaybackInput): Promise<AnimeDirectPlayback>;
+  /** One subtitle track as WebVTT. */
+  getAnimeDirectSubtitle(id: string): Promise<AnimeDirectSubtitle>;
   getLatestAnimeUpdates(page: number): Promise<LatestUpdatesPage<LatestAnimeUpdate>>;
   getAiringSchedule(input: AiringScheduleInput): Promise<AiringSchedule>;
   getLatestMangaUpdates(page: number): Promise<LatestUpdatesPage<LatestMangaUpdate>>;
@@ -954,7 +1079,8 @@ export interface AniStreamBridge {
   searchMore(query: string, type: MoreMediaType, page: number): Promise<MoreCatalogPage>;
   /** Filtered More browsing/search (see `shared/more-filters`). */
   browseMore(input: import("./more-filters").MoreBrowseInput): Promise<MoreCatalogPage>;
-  getMoreDetail(id: number, type: MoreMediaType): Promise<MoreDetail>;
+  /** `priority`: shown now (hero slide, open title page), so it is fetched ahead of background work. */
+  getMoreDetail(id: number, type: MoreMediaType, priority?: boolean): Promise<MoreDetail>;
   getMoreSeason(id: number, season: number): Promise<MoreSeasonDetail>;
   getMoreLibrary(): Promise<MoreLibrary>;
   getMoreTitleProgress(input: MoreTitleRef): Promise<MoreTitleProgress[]>;

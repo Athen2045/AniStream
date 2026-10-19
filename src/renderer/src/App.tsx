@@ -1,4 +1,6 @@
-import { CalendarDays, ListVideo, RefreshCw, Search } from "lucide-react";
+import { CalendarDays, Download, ListVideo, RefreshCw, Search } from "lucide-react";
+import { DownloadsProvider, useDownloads } from "./DownloadsProvider";
+import { DownloadsView } from "./DownloadsView";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Suspense,
@@ -51,6 +53,7 @@ import { BingeProvider, useBinge } from "./BingeProvider";
 import { bingeAnimeMedia, bingeMoreItem } from "./binge-session";
 import type { BingeItem } from "../../shared/binge";
 import type { MorePlayTarget } from "./more-format";
+import type { SettingsTab } from "./SettingsView";
 import { MoreView } from "./MoreView";
 import appIcon from "./assets/app-icon.png";
 import {
@@ -94,7 +97,15 @@ const subscribeToInactiveReadiness = (): (() => void) => () => undefined;
 const SIMKL_PROFILE_SYNC_AFTER_MS = 30 * 60_000;
 const getInactiveReadinessSnapshot = (): ReadinessSnapshot => inactiveReadinessSnapshot;
 type AppView =
-  "ANIME" | "MANGA" | "MORE" | "PROFILE" | "SEARCH" | "SETTINGS" | "SCHEDULE" | "UPNEXT";
+  | "ANIME"
+  | "MANGA"
+  | "MORE"
+  | "PROFILE"
+  | "SEARCH"
+  | "SETTINGS"
+  | "SCHEDULE"
+  | "UPNEXT"
+  | "DOWNLOADS";
 
 export function App(): React.JSX.Element {
   return (
@@ -235,6 +246,7 @@ function AppContent(): React.JSX.Element {
   const [selectedMore, setSelectedMore] = useState<MoreCatalogItem>();
   const [selectedMoreAction, setSelectedMoreAction] = useState<"details" | "play">("details");
   const [navbarScrolled, setNavbarScrolled] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>();
   const openMoreDetails = useCallback((item: MoreCatalogItem) => {
     setSelectedMoreAction("details");
     setSelectedMore(item);
@@ -318,26 +330,30 @@ function AppContent(): React.JSX.Element {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [cancelSmoothDocumentScroll, view]);
 
-  // Catalog navbars float over hero artwork and only gain a surface once content scrolls under it.
-  const overlayNavbar =
-    view === "MORE" ||
-    view === "ANIME" ||
-    view === "MANGA" ||
-    view === "SEARCH" ||
-    view === "PROFILE" ||
-    view === "SCHEDULE" ||
-    view === "UPNEXT" ||
-    view === "SETTINGS";
+  // The navbar floats over every section (clear at the top, frosted glass once content scrolls
+  // under it); title pages scroll inside their own layer, so their scroll counts too (2026-10-19).
   const direction = sectionDirection(previousView, view);
   const sectionActive = (section: SearchScope): boolean =>
     view === section || (view === "SEARCH" && searchScope === section);
+  const titleOpen = Boolean(selectedMedia);
+  // Pages without hero artwork need no shade under the navbar at all.
+  const flatPage =
+    !titleOpen &&
+    (view === "DOWNLOADS" ||
+      view === "SETTINGS" ||
+      view === "SEARCH" ||
+      view === "SCHEDULE" ||
+      view === "UPNEXT");
   useEffect(() => {
-    if (!overlayNavbar) return;
-    const update = (): void => setNavbarScrolled(window.scrollY > 24);
+    const update = (): void => {
+      const titlePage = document.querySelector<HTMLElement>(".title-page");
+      setNavbarScrolled((titlePage ? titlePage.scrollTop : window.scrollY) > 24);
+    };
     update();
-    window.addEventListener("scroll", update, { passive: true });
-    return () => window.removeEventListener("scroll", update);
-  }, [overlayNavbar]);
+    // Capture: scroll events from the title page's own scroller do not bubble.
+    document.addEventListener("scroll", update, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", update, { capture: true });
+  }, [titleOpen, view]);
 
   useEffect(() => {
     const focusSearch = (event: KeyboardEvent): void => {
@@ -414,427 +430,444 @@ function AppContent(): React.JSX.Element {
   return (
     <PersonalLibraryProvider access={viewerAccess}>
       <BingeProvider onPlay={playBingeItem}>
-        <main
-          className="app-shell"
-          inert={activeReadiness ? true : undefined}
-          aria-hidden={activeReadiness ? true : undefined}
-        >
-          <nav
-            className={
-              overlayNavbar
-                ? `app-navbar app-navbar--overlay${navbarScrolled ? " is-scrolled" : ""}`
-                : "app-navbar"
-            }
+        <DownloadsProvider>
+          <main
+            className="app-shell"
+            inert={activeReadiness ? true : undefined}
+            aria-hidden={activeReadiness ? true : undefined}
           >
-            <button
-              className="wordmark"
-              type="button"
-              aria-label="AniStream home"
-              onClick={() => openCatalog("ANIME")}
+            <nav
+              className={`app-navbar app-navbar--overlay${navbarScrolled ? " is-scrolled" : ""}${
+                flatPage ? " app-navbar--flat" : ""
+              }`}
             >
-              <img className="wordmark-logo" src={appIcon} alt="" aria-hidden="true" />
-              <span className="wordmark-name">Stream</span>
-            </button>
-            <div className="nav-links" aria-label="Main navigation">
               <button
-                className={sectionActive("ANIME") ? "active" : ""}
+                className="wordmark"
                 type="button"
+                aria-label="AniStream home"
                 onClick={() => openCatalog("ANIME")}
               >
-                Anime
-                {sectionActive("ANIME") ? (
-                  <motion.span
-                    className="nav-underline"
-                    layoutId="nav-underline"
-                    transition={navIndicatorTransition(reducedMotion)}
-                    aria-hidden="true"
-                  />
-                ) : null}
+                <img className="wordmark-logo" src={appIcon} alt="" aria-hidden="true" />
+                <span className="wordmark-name">Stream</span>
               </button>
-              <button
-                className={sectionActive("MANGA") ? "active" : ""}
-                type="button"
-                onClick={() => openCatalog("MANGA")}
-              >
-                Manga
-                {sectionActive("MANGA") ? (
-                  <motion.span
-                    className="nav-underline"
-                    layoutId="nav-underline"
-                    transition={navIndicatorTransition(reducedMotion)}
-                    aria-hidden="true"
-                  />
-                ) : null}
-              </button>
-              <button
-                className={sectionActive("MORE") ? "active" : ""}
-                type="button"
-                onClick={() => openMore()}
-              >
-                More
-                {sectionActive("MORE") ? (
-                  <motion.span
-                    className="nav-underline"
-                    layoutId="nav-underline"
-                    transition={navIndicatorTransition(reducedMotion)}
-                    aria-hidden="true"
-                  />
-                ) : null}
-              </button>
-            </div>
-            <span className="nav-spacer" aria-hidden="true" />
-            <div className="nav-account">
-              <button
-                type="button"
-                className={`nav-search-button${view === "SEARCH" ? " active" : ""}`}
-                aria-label={view === "SEARCH" ? "Close search" : "Search"}
-                aria-pressed={view === "SEARCH"}
-                title="Search (Ctrl+K)"
-                onClick={() => openSearch(true)}
-              >
-                <Search size={17} aria-hidden="true" />
-              </button>
-              {preferences.schedule ? (
+              <div className="nav-links" aria-label="Main navigation">
+                <button
+                  className={sectionActive("ANIME") ? "active" : ""}
+                  type="button"
+                  onClick={() => openCatalog("ANIME")}
+                >
+                  Anime
+                  {sectionActive("ANIME") ? (
+                    <motion.span
+                      className="nav-underline"
+                      layoutId="nav-underline"
+                      transition={navIndicatorTransition(reducedMotion)}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </button>
+                <button
+                  className={sectionActive("MANGA") ? "active" : ""}
+                  type="button"
+                  onClick={() => openCatalog("MANGA")}
+                >
+                  Manga
+                  {sectionActive("MANGA") ? (
+                    <motion.span
+                      className="nav-underline"
+                      layoutId="nav-underline"
+                      transition={navIndicatorTransition(reducedMotion)}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </button>
+                <button
+                  className={sectionActive("MORE") ? "active" : ""}
+                  type="button"
+                  onClick={() => openMore()}
+                >
+                  More
+                  {sectionActive("MORE") ? (
+                    <motion.span
+                      className="nav-underline"
+                      layoutId="nav-underline"
+                      transition={navIndicatorTransition(reducedMotion)}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </button>
+              </div>
+              <span className="nav-spacer" aria-hidden="true" />
+              <div className="nav-account">
                 <button
                   type="button"
-                  className={`nav-schedule-button${view === "SCHEDULE" ? " active" : ""}`}
-                  aria-label="Airing schedule"
-                  aria-pressed={view === "SCHEDULE"}
-                  title="Airing schedule"
-                  onClick={openSchedule}
+                  className={`nav-search-button${view === "SEARCH" ? " active" : ""}`}
+                  aria-label={view === "SEARCH" ? "Close search" : "Search"}
+                  aria-pressed={view === "SEARCH"}
+                  title="Search (Ctrl+K)"
+                  onClick={() => openSearch(true)}
                 >
-                  <CalendarDays size={17} aria-hidden="true" />
+                  <Search size={17} aria-hidden="true" />
                 </button>
-              ) : null}
-              {preferences.upNext ? (
-                <UpNextNavButton active={view === "UPNEXT"} onOpen={openUpNext} />
-              ) : null}
-              {viewerAccess.kind === "member" ? (
-                <>
+                {preferences.schedule ? (
                   <button
                     type="button"
-                    aria-label="Refresh library"
-                    title="Refresh library"
-                    disabled={syncing || libraryRefreshSpinning}
-                    onClick={() => {
-                      if (!reducedMotion) setLibraryRefreshSpinning(true);
-                      void viewerSession.refresh();
-                    }}
+                    className={`nav-schedule-button${view === "SCHEDULE" ? " active" : ""}`}
+                    aria-label="Airing schedule"
+                    aria-pressed={view === "SCHEDULE"}
+                    title="Airing schedule"
+                    onClick={openSchedule}
                   >
-                    <RefreshCw
-                      size={17}
-                      className={libraryRefreshSpinning ? "refresh-spin-once" : undefined}
-                      aria-hidden="true"
-                      onAnimationEnd={() => setLibraryRefreshSpinning(false)}
-                    />
+                    <CalendarDays size={17} aria-hidden="true" />
                   </button>
+                ) : null}
+                {preferences.upNext ? (
+                  <UpNextNavButton active={view === "UPNEXT"} onOpen={openUpNext} />
+                ) : null}
+                <DownloadsNavButton active={view === "DOWNLOADS"} onOpen={openDownloads} />
+                {viewerAccess.kind === "member" ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Refresh library"
+                      title="Refresh library"
+                      disabled={syncing || libraryRefreshSpinning}
+                      onClick={() => {
+                        if (!reducedMotion) setLibraryRefreshSpinning(true);
+                        void viewerSession.refresh();
+                      }}
+                    >
+                      <RefreshCw
+                        size={17}
+                        className={libraryRefreshSpinning ? "refresh-spin-once" : undefined}
+                        aria-hidden="true"
+                        onAnimationEnd={() => setLibraryRefreshSpinning(false)}
+                      />
+                    </button>
+                    <NavbarAccountMenu
+                      kind="member"
+                      active={view === "PROFILE" || view === "SETTINGS"}
+                      name={viewerAccess.dashboard.profile.name}
+                      avatarUrl={accountPicture.url}
+                      subtitle={simklAuth ? "AniList + Simkl" : "AniList profile"}
+                      onOpenProfile={openProfile}
+                      onOpenSettings={() => openSettings()}
+                      onLogout={() => void viewerSession.logout()}
+                    />
+                  </>
+                ) : simklAuth ? (
                   <NavbarAccountMenu
                     kind="member"
                     active={view === "PROFILE" || view === "SETTINGS"}
-                    name={viewerAccess.dashboard.profile.name}
-                    avatarUrl={accountPicture.url}
-                    subtitle={simklAuth ? "AniList + Simkl" : "AniList profile"}
+                    name={simklAuth.userName ?? "Simkl"}
+                    avatarUrl={simklAuth.avatarUrl}
+                    subtitle="Simkl profile"
                     onOpenProfile={openProfile}
-                    onOpenSettings={openSettings}
-                    onLogout={() => void viewerSession.logout()}
+                    onOpenSettings={() => openSettings()}
+                    onLogout={() => void window.anistream.disconnectSimkl().catch(() => undefined)}
                   />
-                </>
-              ) : simklAuth ? (
-                <NavbarAccountMenu
-                  kind="member"
-                  active={view === "PROFILE" || view === "SETTINGS"}
-                  name={simklAuth.userName ?? "Simkl"}
-                  avatarUrl={simklAuth.avatarUrl}
-                  subtitle="Simkl profile"
-                  onOpenProfile={openProfile}
-                  onOpenSettings={openSettings}
-                  onLogout={() => void window.anistream.disconnectSimkl().catch(() => undefined)}
-                />
-              ) : (
-                <NavbarAccountMenu
-                  kind="guest"
-                  active={view === "PROFILE" || view === "SETTINGS"}
-                  onOpenSettings={openSettings}
-                  onSignIn={openProfile}
-                />
-              )}
-            </div>
-          </nav>
-          <UpdateNotice />
-          <ContinueUndoToast />
+                ) : (
+                  <NavbarAccountMenu
+                    kind="guest"
+                    active={view === "PROFILE" || view === "SETTINGS"}
+                    onOpenSettings={() => openSettings()}
+                    onSignIn={openProfile}
+                  />
+                )}
+              </div>
+            </nav>
+            <UpdateNotice />
+            <ContinueUndoToast />
 
-          {/* An open title page covers the route; keep the route out of focus order underneath. */}
-          <div className="route-stack" inert={selectedMedia ? true : undefined}>
-            <AnimatePresence mode="wait" initial={false} custom={direction}>
-              {view === "ANIME" || view === "MANGA" ? (
-                <motion.div
-                  className="route-view"
-                  key={`catalog-${view}`}
-                  custom={direction}
-                  variants={sectionVariants}
-                  initial={reducedMotion ? false : "initial"}
-                  animate="animate"
-                  exit={reducedMotion ? undefined : "exit"}
-                  transition={motionTransition(reducedMotion)}
-                >
-                  <CatalogView
-                    type={view}
-                    onLibrary={manageLibrary}
-                    access={viewerAccess}
-                    onSelect={(media) => openMedia(media, "details")}
-                    onPrimary={(media, targetUnit) =>
-                      openMedia(media, view === "ANIME" ? "play" : "read", targetUnit)
-                    }
-                  />
-                </motion.div>
-              ) : view === "MORE" ? (
-                <motion.div
-                  className="route-view"
-                  key="more"
-                  custom={direction}
-                  variants={sectionVariants}
-                  initial={reducedMotion ? false : "initial"}
-                  animate="animate"
-                  exit={reducedMotion ? undefined : "exit"}
-                  transition={motionTransition(reducedMotion)}
-                >
-                  <MoreView
-                    viewer={
-                      viewerAccess.kind === "member"
-                        ? String(viewerAccess.dashboard.profile.id)
-                        : "guest"
-                    }
-                    selection={
-                      selectedMore
-                        ? {
-                            item: selectedMore,
-                            action: selectedMoreAction,
-                            start: selectedMoreAction === "play" ? selectedMoreStart : undefined,
-                            nonce: playNonce,
-                            backLabel: moreFromSearch ? "Search" : undefined,
-                          }
-                        : undefined
-                    }
-                    onSelect={openMoreDetails}
-                    onPrimary={(item) => openMorePlayback(item)}
-                    onCloseTitle={closeMoreTitle}
-                  />
-                </motion.div>
-              ) : view === "SEARCH" ? (
-                <motion.div
-                  className="route-view"
-                  key={`search-${searchScope}`}
-                  variants={profileRouteVariants}
-                  initial={reducedMotion ? false : "initial"}
-                  animate="animate"
-                  exit={reducedMotion ? undefined : "exit"}
-                  transition={motionTransition(reducedMotion)}
-                >
-                  <SectionSearch
-                    scope={searchScope}
-                    access={viewerAccess}
-                    onOpenMedia={(media) => openMedia(media, "details")}
-                    onPrimaryMedia={(media) =>
-                      openMedia(media, media.type === "ANIME" ? "play" : "read")
-                    }
-                    onLibrary={manageLibrary}
-                    onOpenMore={(item) => {
-                      openMore();
-                      setMoreFromSearch(true);
-                      openMoreDetails(item);
-                    }}
-                    onPrimaryMore={(item) => {
-                      openMore();
-                      setMoreFromSearch(true);
-                      openMorePlayback(item);
-                    }}
-                  />
-                </motion.div>
-              ) : view === "UPNEXT" ? (
-                <motion.div
-                  className="route-view"
-                  key="upnext"
-                  variants={routeVariants}
-                  initial={reducedMotion ? false : "initial"}
-                  animate="animate"
-                  exit={reducedMotion ? undefined : "exit"}
-                  transition={motionTransition(reducedMotion)}
-                >
-                  <Suspense fallback={null}>
-                    <UpNextView />
-                  </Suspense>
-                </motion.div>
-              ) : view === "SCHEDULE" ? (
-                <motion.div
-                  className="route-view"
-                  key="schedule"
-                  variants={routeVariants}
-                  initial={reducedMotion ? false : "initial"}
-                  animate="animate"
-                  exit={reducedMotion ? undefined : "exit"}
-                  transition={motionTransition(reducedMotion)}
-                >
-                  <Suspense fallback={null}>
-                    <ScheduleView
+            {/* An open title page covers the route; keep the route out of focus order underneath. */}
+            <div className="route-stack" inert={selectedMedia ? true : undefined}>
+              <AnimatePresence mode="wait" initial={false} custom={direction}>
+                {view === "ANIME" || view === "MANGA" ? (
+                  <motion.div
+                    className="route-view"
+                    key={`catalog-${view}`}
+                    custom={direction}
+                    variants={sectionVariants}
+                    initial={reducedMotion ? false : "initial"}
+                    animate="animate"
+                    exit={reducedMotion ? undefined : "exit"}
+                    transition={motionTransition(reducedMotion)}
+                  >
+                    <CatalogView
+                      type={view}
+                      onLibrary={manageLibrary}
+                      access={viewerAccess}
+                      onSelect={(media) => openMedia(media, "details")}
+                      onPrimary={(media, targetUnit) =>
+                        openMedia(media, view === "ANIME" ? "play" : "read", targetUnit)
+                      }
+                    />
+                  </motion.div>
+                ) : view === "MORE" ? (
+                  <motion.div
+                    className="route-view"
+                    key="more"
+                    custom={direction}
+                    variants={sectionVariants}
+                    initial={reducedMotion ? false : "initial"}
+                    animate="animate"
+                    exit={reducedMotion ? undefined : "exit"}
+                    transition={motionTransition(reducedMotion)}
+                  >
+                    <MoreView
+                      viewer={
+                        viewerAccess.kind === "member"
+                          ? String(viewerAccess.dashboard.profile.id)
+                          : "guest"
+                      }
+                      selection={
+                        selectedMore
+                          ? {
+                              item: selectedMore,
+                              action: selectedMoreAction,
+                              start: selectedMoreAction === "play" ? selectedMoreStart : undefined,
+                              nonce: playNonce,
+                              backLabel: moreFromSearch ? "Search" : undefined,
+                            }
+                          : undefined
+                      }
+                      onSelect={openMoreDetails}
+                      onPrimary={(item) => openMorePlayback(item)}
+                      onCloseTitle={closeMoreTitle}
+                    />
+                  </motion.div>
+                ) : view === "SEARCH" ? (
+                  <motion.div
+                    className="route-view"
+                    key={`search-${searchScope}`}
+                    variants={profileRouteVariants}
+                    initial={reducedMotion ? false : "initial"}
+                    animate="animate"
+                    exit={reducedMotion ? undefined : "exit"}
+                    transition={motionTransition(reducedMotion)}
+                  >
+                    <SectionSearch
+                      scope={searchScope}
                       access={viewerAccess}
                       onOpenMedia={(media) => openMedia(media, "details")}
-                      onContinue={(media) =>
+                      onPrimaryMedia={(media) =>
                         openMedia(media, media.type === "ANIME" ? "play" : "read")
                       }
-                    />
-                  </Suspense>
-                </motion.div>
-              ) : view === "SETTINGS" ? (
-                <motion.div
-                  className="route-view"
-                  key="settings"
-                  variants={routeVariants}
-                  initial={reducedMotion ? false : "initial"}
-                  animate="animate"
-                  exit={reducedMotion ? undefined : "exit"}
-                  transition={motionTransition(reducedMotion)}
-                >
-                  <Suspense fallback={null}>
-                    <SettingsView
-                      access={viewerAccess}
-                      onSignIn={openProfile}
-                      onOpenProfile={openProfile}
-                      onLogout={() => void viewerSession.logout()}
-                    />
-                  </Suspense>
-                </motion.div>
-              ) : viewerAccess.kind === "member" ? (
-                <motion.div
-                  className="profile-route-transition"
-                  key={`profile-member-${viewerAccess.dashboard.profile.id}`}
-                  variants={profileRouteVariants}
-                  initial={reducedMotion ? false : "initial"}
-                  animate="animate"
-                  exit={reducedMotion ? undefined : "exit"}
-                  transition={motionTransition(reducedMotion, "emphasis")}
-                >
-                  <Suspense fallback={null}>
-                    <ProfileView
-                      dashboard={viewerAccess.dashboard}
-                      mediaType={mediaType}
-                      shelves={shelves}
-                      activeShelfKey={activeShelf?.key ?? ""}
-                      formatFilter={formatFilter}
-                      onFormatFilter={setFormatFilter}
-                      visibleEntries={visibleEntries}
-                      listQuery={listQuery}
-                      librarySort={librarySort}
-                      adding={adding}
-                      error={error}
-                      onSwitchType={switchMediaType}
-                      onSelectShelf={(key) => {
-                        setSelectedGroup(key);
-                        setFormatFilter("");
-                      }}
-                      onListQuery={setListQuery}
-                      onLibrarySort={setLibrarySort}
-                      onToggleAdding={() => setAdding((value) => !value)}
-                      onEdit={(entry) =>
-                        setEditingEntry({ entry, viewerId: viewerAccess.dashboard.profile.id })
-                      }
-                      access={viewerAccess}
                       onLibrary={manageLibrary}
-                      onOpenMedia={(media, action) => openMedia({ ...media, genres: [] }, action)}
-                      simkl={simklProfile}
-                      simklStatus={simklStatus}
-                      simklStatsLoading={simklProfileState.statsLoading}
-                      syncSources={profileSyncSources}
-                      onOpenMore={openMoreFromProfile}
+                      onOpenMore={(item) => {
+                        openMore();
+                        setMoreFromSearch(true);
+                        openMoreDetails(item);
+                      }}
+                      onPrimaryMore={(item) => {
+                        openMore();
+                        setMoreFromSearch(true);
+                        openMorePlayback(item);
+                      }}
                     />
-                  </Suspense>
-                </motion.div>
-              ) : simklStatus && simklAuth ? (
-                <motion.div
-                  className="profile-route-transition"
-                  key="profile-simkl"
-                  variants={profileRouteVariants}
-                  initial={reducedMotion ? false : "initial"}
-                  animate="animate"
-                  exit={reducedMotion ? undefined : "exit"}
-                  transition={motionTransition(reducedMotion, "emphasis")}
-                >
-                  <Suspense fallback={null}>
-                    <SimklProfileView
-                      profile={simklProfile}
-                      status={simklStatus}
-                      statsLoading={simklProfileState.statsLoading}
-                      syncSources={profileSyncSources}
-                      onOpenMore={openMoreFromProfile}
+                  </motion.div>
+                ) : view === "DOWNLOADS" ? (
+                  <motion.div
+                    className="route-view"
+                    key="downloads"
+                    variants={routeVariants}
+                    initial={reducedMotion ? false : "initial"}
+                    animate="animate"
+                    exit={reducedMotion ? undefined : "exit"}
+                    transition={motionTransition(reducedMotion)}
+                  >
+                    <DownloadsView
+                      onPlay={(media, episode) => openMedia(media, "play", episode)}
+                      onOpenSettings={() => openSettings("playback")}
                     />
-                  </Suspense>
-                </motion.div>
-              ) : (
-                <motion.div
-                  className="profile-route-transition"
-                  key="profile-connect"
-                  initial={false}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={reducedMotion ? undefined : { opacity: 0, y: -12, scale: 0.99 }}
-                  transition={motionTransition(reducedMotion, "standard")}
-                >
-                  <ProfileConnectView
-                    simkl={simklStatus}
-                    auth={auth}
-                    restoring={authRestoring}
-                    error={error}
-                    onConnect={connect}
-                    onCancel={cancelConnect}
-                    onBrowse={openStartSection}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                  </motion.div>
+                ) : view === "UPNEXT" ? (
+                  <motion.div
+                    className="route-view"
+                    key="upnext"
+                    variants={routeVariants}
+                    initial={reducedMotion ? false : "initial"}
+                    animate="animate"
+                    exit={reducedMotion ? undefined : "exit"}
+                    transition={motionTransition(reducedMotion)}
+                  >
+                    <Suspense fallback={null}>
+                      <UpNextView />
+                    </Suspense>
+                  </motion.div>
+                ) : view === "SCHEDULE" ? (
+                  <motion.div
+                    className="route-view"
+                    key="schedule"
+                    variants={routeVariants}
+                    initial={reducedMotion ? false : "initial"}
+                    animate="animate"
+                    exit={reducedMotion ? undefined : "exit"}
+                    transition={motionTransition(reducedMotion)}
+                  >
+                    <Suspense fallback={null}>
+                      <ScheduleView
+                        access={viewerAccess}
+                        onOpenMedia={(media) => openMedia(media, "details")}
+                        onContinue={(media) =>
+                          openMedia(media, media.type === "ANIME" ? "play" : "read")
+                        }
+                      />
+                    </Suspense>
+                  </motion.div>
+                ) : view === "SETTINGS" ? (
+                  <motion.div
+                    className="route-view"
+                    key="settings"
+                    variants={routeVariants}
+                    initial={reducedMotion ? false : "initial"}
+                    animate="animate"
+                    exit={reducedMotion ? undefined : "exit"}
+                    transition={motionTransition(reducedMotion)}
+                  >
+                    <Suspense fallback={null}>
+                      <SettingsView
+                        access={viewerAccess}
+                        initialTab={settingsTab}
+                        onSignIn={openProfile}
+                        onOpenProfile={openProfile}
+                        onLogout={() => void viewerSession.logout()}
+                      />
+                    </Suspense>
+                  </motion.div>
+                ) : viewerAccess.kind === "member" ? (
+                  <motion.div
+                    className="profile-route-transition"
+                    key={`profile-member-${viewerAccess.dashboard.profile.id}`}
+                    variants={profileRouteVariants}
+                    initial={reducedMotion ? false : "initial"}
+                    animate="animate"
+                    exit={reducedMotion ? undefined : "exit"}
+                    transition={motionTransition(reducedMotion, "emphasis")}
+                  >
+                    <Suspense fallback={null}>
+                      <ProfileView
+                        dashboard={viewerAccess.dashboard}
+                        mediaType={mediaType}
+                        shelves={shelves}
+                        activeShelfKey={activeShelf?.key ?? ""}
+                        formatFilter={formatFilter}
+                        onFormatFilter={setFormatFilter}
+                        visibleEntries={visibleEntries}
+                        listQuery={listQuery}
+                        librarySort={librarySort}
+                        adding={adding}
+                        error={error}
+                        onSwitchType={switchMediaType}
+                        onSelectShelf={(key) => {
+                          setSelectedGroup(key);
+                          setFormatFilter("");
+                        }}
+                        onListQuery={setListQuery}
+                        onLibrarySort={setLibrarySort}
+                        onToggleAdding={() => setAdding((value) => !value)}
+                        onEdit={(entry) =>
+                          setEditingEntry({ entry, viewerId: viewerAccess.dashboard.profile.id })
+                        }
+                        access={viewerAccess}
+                        onLibrary={manageLibrary}
+                        onOpenMedia={(media, action) => openMedia({ ...media, genres: [] }, action)}
+                        simkl={simklProfile}
+                        simklStatus={simklStatus}
+                        simklStatsLoading={simklProfileState.statsLoading}
+                        syncSources={profileSyncSources}
+                        onOpenMore={openMoreFromProfile}
+                      />
+                    </Suspense>
+                  </motion.div>
+                ) : simklStatus && simklAuth ? (
+                  <motion.div
+                    className="profile-route-transition"
+                    key="profile-simkl"
+                    variants={profileRouteVariants}
+                    initial={reducedMotion ? false : "initial"}
+                    animate="animate"
+                    exit={reducedMotion ? undefined : "exit"}
+                    transition={motionTransition(reducedMotion, "emphasis")}
+                  >
+                    <Suspense fallback={null}>
+                      <SimklProfileView
+                        profile={simklProfile}
+                        status={simklStatus}
+                        statsLoading={simklProfileState.statsLoading}
+                        syncSources={profileSyncSources}
+                        onOpenMore={openMoreFromProfile}
+                      />
+                    </Suspense>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    className="profile-route-transition"
+                    key="profile-connect"
+                    initial={false}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={reducedMotion ? undefined : { opacity: 0, y: -12, scale: 0.99 }}
+                    transition={motionTransition(reducedMotion, "standard")}
+                  >
+                    <ProfileConnectView
+                      simkl={simklStatus}
+                      auth={auth}
+                      restoring={authRestoring}
+                      error={error}
+                      onConnect={connect}
+                      onCancel={cancelConnect}
+                      onBrowse={openStartSection}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
-          <Suspense fallback={selectedMedia ? <TitlePageFallback media={selectedMedia} /> : null}>
-            <AnimatePresence mode="wait">
-              {selectedMedia ? (
-                <MediaDetailModal
-                  key={`${mediaDetailInstanceKey(selectedMedia, viewerAccess)}:${playNonce}`}
-                  media={selectedMedia}
-                  initialAction={selectedAction}
-                  initialUnit={selectedStartUnit}
-                  onNavigate={(media) => openMedia(media, "details")}
-                  onClose={() => {
-                    setSelectedMedia(undefined);
-                    setSelectedAction("details");
-                    setSelectedStartUnit(undefined);
-                  }}
-                  access={viewerAccess}
-                  onLibrary={manageLibrary}
-                  onScrolledChange={setNavbarScrolled}
-                />
-              ) : null}
-            </AnimatePresence>
-          </Suspense>
-          {editingEntry &&
-          viewerAccess.kind === "member" &&
-          editingEntry.viewerId === viewerAccess.dashboard.profile.id ? (
-            <EntryEditor
-              key={`${viewerAccess.dashboard.profile.id}:${editingEntry.entry.id}`}
-              entry={editingEntry.entry}
-              onSave={saveEntry}
-              onDelete={deleteEntry}
-              onClose={() => setEditingEntry(undefined)}
-            />
-          ) : null}
-        </main>
-        <AnimatePresence>
-          {activeReadiness ? (
-            <ReadinessScreen
-              key={`${readinessSnapshot.mode}-${readinessSnapshot.attempt}`}
-              snapshot={readinessSnapshot}
-              reducedMotion={reducedMotion}
-              onRetry={() => void activeReadiness.retry()}
-              onContinue={() => activeReadiness.continueDegraded()}
-            />
-          ) : null}
-        </AnimatePresence>
+            <Suspense fallback={selectedMedia ? <TitlePageFallback media={selectedMedia} /> : null}>
+              <AnimatePresence mode="wait">
+                {selectedMedia ? (
+                  <MediaDetailModal
+                    key={`${mediaDetailInstanceKey(selectedMedia, viewerAccess)}:${playNonce}`}
+                    media={selectedMedia}
+                    initialAction={selectedAction}
+                    initialUnit={selectedStartUnit}
+                    onNavigate={(media) => openMedia(media, "details")}
+                    onClose={() => {
+                      setSelectedMedia(undefined);
+                      setSelectedAction("details");
+                      setSelectedStartUnit(undefined);
+                    }}
+                    access={viewerAccess}
+                    onLibrary={manageLibrary}
+                    onScrolledChange={setNavbarScrolled}
+                  />
+                ) : null}
+              </AnimatePresence>
+            </Suspense>
+            {editingEntry &&
+            viewerAccess.kind === "member" &&
+            editingEntry.viewerId === viewerAccess.dashboard.profile.id ? (
+              <EntryEditor
+                key={`${viewerAccess.dashboard.profile.id}:${editingEntry.entry.id}`}
+                entry={editingEntry.entry}
+                onSave={saveEntry}
+                onDelete={deleteEntry}
+                onClose={() => setEditingEntry(undefined)}
+              />
+            ) : null}
+          </main>
+          <AnimatePresence>
+            {activeReadiness ? (
+              <ReadinessScreen
+                key={`${readinessSnapshot.mode}-${readinessSnapshot.attempt}`}
+                snapshot={readinessSnapshot}
+                reducedMotion={reducedMotion}
+                onRetry={() => void activeReadiness.retry()}
+                onContinue={() => activeReadiness.continueDegraded()}
+              />
+            ) : null}
+          </AnimatePresence>
+        </DownloadsProvider>
       </BingeProvider>
     </PersonalLibraryProvider>
   );
@@ -1002,6 +1035,12 @@ function AppContent(): React.JSX.Element {
     );
   }
 
+  function openDownloads(): void {
+    setSelectedMedia(undefined);
+    setSelectedMore(undefined);
+    setView("DOWNLOADS");
+  }
+
   function openUpNext(): void {
     setSelectedMedia(undefined);
     setSelectedMore(undefined);
@@ -1014,7 +1053,8 @@ function AppContent(): React.JSX.Element {
     setView("SCHEDULE");
   }
 
-  function openSettings(): void {
+  function openSettings(tab?: SettingsTab): void {
+    setSettingsTab(tab);
     setSelectedMedia(undefined);
     setSelectedMore(undefined);
     setView("SETTINGS");
@@ -1062,6 +1102,33 @@ function UpNextNavButton({
     >
       <ListVideo size={17} aria-hidden="true" />
       {count ? <span className="nav-badge">{count > 99 ? "99+" : count}</span> : null}
+    </button>
+  );
+}
+
+/** Navbar entry to Downloads; the badge counts episodes still downloading or waiting. */
+function DownloadsNavButton({
+  active,
+  onOpen,
+}: {
+  active: boolean;
+  onOpen: () => void;
+}): React.JSX.Element {
+  const { state } = useDownloads();
+  const pending =
+    state?.items.filter((item) => item.status === "downloading" || item.status === "queued")
+      .length ?? 0;
+  return (
+    <button
+      type="button"
+      className={`nav-upnext-button${active ? " active" : ""}`}
+      aria-label={pending ? `Downloads, ${pending} in progress` : "Downloads"}
+      aria-pressed={active}
+      title="Downloads"
+      onClick={onOpen}
+    >
+      <Download size={17} aria-hidden="true" />
+      {pending ? <span className="nav-badge">{pending > 99 ? "99+" : pending}</span> : null}
     </button>
   );
 }

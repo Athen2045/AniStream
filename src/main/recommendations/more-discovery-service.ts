@@ -3,6 +3,7 @@ import type { MoreCatalogItem, MoreMediaType } from "../../shared/contracts";
 import type {
   MoreDiscoveryFeed,
   MoreDiscoveryFeedback,
+  MoreDiscoveryRow,
   MoreRecommendation,
 } from "../../shared/discovery";
 import {
@@ -28,7 +29,12 @@ import {
   themeRowHybrid,
   type HybridHistoryItem,
   type HybridPick,
+  dailyRandom,
+  pairRowHybrid,
+  pickTryNew,
+  TRY_NEW_SIZE,
 } from "./engine";
+import type { MoreTryNewPool } from "./try-new-pools";
 import type { MoreDiscoveryStore } from "./stores/more-discovery-store";
 
 interface Dependencies {
@@ -62,6 +68,8 @@ interface Dependencies {
   watchedAniList?: () => ReadonlySet<number>;
   /** Genres and tags the viewer hid in Settings. */
   hiddenTags?: () => string[];
+  /** "Try something new" candidates (TMDB discover, Simkl); absent turns the row off. */
+  tryNew?: () => Promise<MoreTryNewPool>;
   /** The films of one TMDB collection (film series), for the next film in a liked series. */
   collection?: (id: number) => Promise<RecommendationItemFeatures[]>;
   now?: () => number;
@@ -80,6 +88,9 @@ const SHOWN_PER_RAIL = 7;
 const MAX_COLLECTION_FETCHES = 3;
 const COLLECTION_TTL_MS = 7 * 86_400_000;
 const CONTINUATION_ROW_MIN = 2;
+/** "Try something new" pools are a few provider requests; refreshed once a day. */
+const TRY_NEW_TTL_MS = 86_400_000;
+const TRY_NEW_RETRY_MS = 30 * 60_000;
 /** TMDB has one request per seed; keep each load small and let the cache converge. */
 const SEEDS_PER_LOAD = 4;
 /** Extra seeds fetched in the background after a load, so themes cover more of the history. */
@@ -121,6 +132,7 @@ export class MoreDiscoveryService {
   >();
   private warming?: Promise<void>;
   private readonly requests = new Map<string, { keys: Set<string>; expiresAt: number }>();
+  private tryNewPool?: MoreTryNewPool & { expiresAt: number };
 
   constructor(private readonly deps: Dependencies) {
     this.now = deps.now ?? Date.now;
@@ -403,7 +415,10 @@ export class MoreDiscoveryService {
 
     // Theme row: choose this load's themes now and fetch titles for the first one, since TMDB list
     // rows carry no keywords that could match a theme otherwise.
-    const themes = personal ? rankThemes(moreHistory, "MORE") : [];
+    // Seeds and theme rotate daily, not on every load.
+    const themes = personal
+      ? rankThemes(moreHistory, "MORE", [], dailyRandom("more-themes", now))
+      : [];
     const themePool: RecommendationItemFeatures[] = [];
     // A theme whose best-known titles the viewer has mostly seen gives way to the next one.
     // TMDB keywords are shared by movies and shows, so each theme brings both.
@@ -539,19 +554,30 @@ export class MoreDiscoveryService {
     const continuationRow = nextUp.length >= CONTINUATION_ROW_MIN ? nextUp : [];
     for (const pick of continuationRow) shown.add(itemKey(pick.features));
     const rows = personal
-      ? seedRowsHybrid(scored, history, "MORE", shown, { crossType: CROSS_TYPE_PER_ROW })
+      ? seedRowsHybrid(scored, history, "MORE", shown, {
+          crossType: CROSS_TYPE_PER_ROW,
+          random: dailyRandom("more-seeds", now),
+        })
       : [];
     for (const row of rows) for (const pick of row.items) shown.add(itemKey(pick.features));
     const themeRow = personal
       ? themeRowHybrid(scored, history, "MORE", shown, { themes })
       : undefined;
+    for (const pick of themeRow?.items ?? []) shown.add(itemKey(pick.features));
+    const pairRow = personal ? pairRowHybrid(scored, history, "MORE", shown, { now }) : undefined;
+    for (const entry of pairRow?.items ?? []) shown.add(itemKey(entry.pick.features));
+    const tryNew = await this.tryNewRow(history, shown, allowed, now, Boolean(message));
     if (!message && later.length) void this.warm(later.map(({ entry }) => entry));
     const items = picks.map(toRecommendation);
     // What this load put on screen, for the shown-but-ignored fade on later loads.
     this.deps.store.recordShown(
-      [picks, continuationRow, ...rows.map((row) => row.items), themeRow?.items ?? []].flatMap(
-        (list) => list.slice(0, SHOWN_PER_RAIL).map((pick) => itemKey(pick.features)),
-      ),
+      [
+        picks,
+        continuationRow,
+        ...rows.map((row) => row.items),
+        themeRow?.items ?? [],
+        (pairRow?.items ?? []).map((entry) => entry.pick),
+      ].flatMap((list) => list.slice(0, SHOWN_PER_RAIL).map((pick) => itemKey(pick.features))),
       now,
     );
     const requestId = randomUUID();
@@ -563,6 +589,8 @@ export class MoreDiscoveryService {
         ...rows.flatMap((row) => row.items.map((pick) => itemKey(pick.features))),
         ...continuationRow.map((pick) => itemKey(pick.features)),
         ...(themeRow?.items ?? []).map((pick) => itemKey(pick.features)),
+        ...(pairRow?.items ?? []).map((entry) => itemKey(entry.pick.features)),
+        ...(tryNew?.items ?? []).map((row) => `${row.item.type}:${row.item.id}`),
       ]),
       expiresAt: now + 60 * 60_000,
     });
@@ -609,9 +637,28 @@ export class MoreDiscoveryService {
                 },
               ]
             : []),
+          ...(pairRow
+            ? [
+                {
+                  strength: rowStrength(pairRow.items.map((entry) => entry.pick)),
+                  row: {
+                    seedTitle: pairRow.pair.join(" + "),
+                    seedType: "MOVIE" as const,
+                    seedId: 0,
+                    pair: pairRow.pair,
+                    items: pairRow.items.map((entry) => ({
+                      ...toRecommendation(entry.pick),
+                      combo: entry.combo,
+                    })),
+                  },
+                },
+              ]
+            : []),
         ]
           .sort((a, b) => b.strength - a.strength)
           .map(({ row }) => row),
+        // Last: the litmus row, after everything the viewer is known to like.
+        ...(tryNew ? [tryNew] : []),
       ],
       requestId,
       message:
@@ -619,6 +666,71 @@ export class MoreDiscoveryService {
         (personal
           ? undefined
           : "Picked from your anime and manga taste. Watch a few movies or shows, or connect Simkl in Settings, to personalize these further."),
+    };
+  }
+
+  /**
+   * "Try something new": exactly ten well-rated titles outside the viewer's usual taste, at least
+   * one an obscure classic and one a documentary when any qualifies; Simkl picks link back to
+   * simkl.com. The pool is fetched at most once a day; any failure just leaves the row out.
+   */
+  private async tryNewRow(
+    history: HybridHistoryItem[],
+    shown: ReadonlySet<string>,
+    allowed: (row: RecommendationItemFeatures) => boolean,
+    now: number,
+    skip: boolean,
+  ): Promise<MoreDiscoveryRow | undefined> {
+    if (!this.deps.tryNew) return undefined;
+    if ((!this.tryNewPool || this.tryNewPool.expiresAt <= now) && !skip) {
+      try {
+        const pool = await this.deps.tryNew();
+        this.tryNewPool = {
+          ...pool,
+          expiresAt: now + (pool.candidates.length ? TRY_NEW_TTL_MS : TRY_NEW_RETRY_MS),
+        };
+      } catch {
+        this.tryNewPool = {
+          candidates: this.tryNewPool?.candidates ?? [],
+          simklLinks: this.tryNewPool?.simklLinks ?? new Map(),
+          expiresAt: now + TRY_NEW_RETRY_MS,
+        };
+      }
+    }
+    const pool = this.tryNewPool;
+    if (!pool) return undefined;
+    const picks = pickTryNew(
+      history,
+      pool.candidates.filter((row) => !shown.has(itemKey(row.features)) && allowed(row.features)),
+      { now, requireDocumentary: true },
+    );
+    if (picks.length < TRY_NEW_SIZE) return undefined;
+    return {
+      seedTitle: "",
+      seedType: "MOVIE",
+      seedId: 0,
+      tryNew: true,
+      items: picks.map((pick) => {
+        const base = toRecommendation({
+          features: pick.features,
+          score: pick.score,
+          reasonCodes: [],
+        });
+        const simklUrl = pool.simklLinks.get(itemKey(pick.features));
+        return {
+          ...base,
+          reasonCodes: [
+            pick.obscureClassic
+              ? ("obscure-classic" as const)
+              : pick.documentary
+                ? ("documentary" as const)
+                : ("try-new" as const),
+            ...(simklUrl ? (["on-simkl"] as const) : []),
+          ],
+          newTastes: pick.newTastes,
+          ...(simklUrl ? { simklUrl } : {}),
+        };
+      }),
     };
   }
 }

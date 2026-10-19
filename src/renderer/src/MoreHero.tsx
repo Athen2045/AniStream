@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Info, Play, Star } from "lucide-react";
 import { MoreSaveMenu } from "./MoreSaveMenu";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MoreCatalogItem, MoreDetail } from "../../shared/contracts";
 import type { MoreCardActions } from "./MorePosterCard";
 import { formatDuration, formatScore, moreKey, releaseState } from "./more-format";
@@ -34,6 +34,24 @@ export function MoreHero({
   const paused = held || !visible;
   const [details, setDetails] = useState<Record<string, MoreDetail>>({});
   const active = items[Math.min(index, items.length - 1)];
+  const activeLoaded = active ? Boolean(details[moreKey(active)]) : true;
+
+  // The slide on screen asks first, ahead of the page's background requests (a request already
+  // queued for it moves up); the other slides follow at normal priority. Each logo is preloaded.
+  useEffect(() => {
+    if (!active || activeLoaded) return;
+    let alive = true;
+    void window.anistream
+      .getMoreDetail(active.id, active.type, true)
+      .then((detail) => {
+        preloadLogo(detail.logoUrl);
+        if (alive) setDetails((current) => ({ ...current, [moreKey(active)]: detail }));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [active, activeLoaded]);
 
   useEffect(() => {
     let alive = true;
@@ -41,6 +59,7 @@ export function MoreHero({
       void window.anistream
         .getMoreDetail(item.id, item.type)
         .then((detail) => {
+          preloadLogo(detail.logoUrl);
           if (alive) setDetails((current) => ({ ...current, [moreKey(item)]: detail }));
         })
         .catch(() => undefined);
@@ -185,7 +204,22 @@ export function MoreHero({
   );
 }
 
-/** TMDB logo artwork when available, otherwise the plain title as a heading. */
+const preloadedLogos = new Set<string>();
+
+/** Warms the image cache, so a slide's logo is ready before the carousel reaches it. */
+function preloadLogo(url: string | undefined): void {
+  if (!url || preloadedLogos.has(url)) return;
+  preloadedLogos.add(url);
+  const image = new Image();
+  image.decoding = "async";
+  image.src = url;
+}
+
+/**
+ * TMDB logo artwork when available, otherwise the plain title as a heading. The title text stays
+ * until the logo has loaded, then the logo fades in (no blank gap, no abrupt swap); a logo already
+ * in the image cache shows at once.
+ */
 export function MoreTitleArt({
   title,
   logoUrl,
@@ -196,13 +230,36 @@ export function MoreTitleArt({
   level: 1 | 2;
 }): React.JSX.Element {
   const [failedLogo, setFailedLogo] = useState<string>();
+  const [loadedLogo, setLoadedLogo] = useState<string>();
+  const [instantLogo, setInstantLogo] = useState<string>();
+  const image = useRef<HTMLImageElement>(null);
   const Heading = level === 1 ? "h1" : "h2";
-  if (logoUrl && failedLogo !== logoUrl) {
-    return (
-      <Heading className="more-title-art">
-        <img src={logoUrl} alt={title} onError={() => setFailedLogo(logoUrl)} />
-      </Heading>
-    );
-  }
-  return <Heading className="more-title-art more-title-text">{title}</Heading>;
+  const usable = logoUrl && failedLogo !== logoUrl ? logoUrl : undefined;
+  // Decoded from the cache before paint: show it without the fade.
+  useLayoutEffect(() => {
+    const element = image.current;
+    if (usable && element?.complete && element.naturalWidth > 0) {
+      setLoadedLogo(usable);
+      setInstantLogo(usable);
+    }
+  }, [usable]);
+  if (!usable) return <Heading className="more-title-art more-title-text">{title}</Heading>;
+  const loaded = loadedLogo === usable;
+  return (
+    <Heading
+      className={`more-title-art${loaded ? "" : " more-title-text is-loading-logo"}${
+        loaded && instantLogo !== usable ? " is-fading-in" : ""
+      }`}
+    >
+      {loaded ? null : title}
+      <img
+        ref={image}
+        src={usable}
+        alt={loaded ? title : ""}
+        aria-hidden={loaded ? undefined : true}
+        onLoad={() => setLoadedLogo(usable)}
+        onError={() => setFailedLogo(usable)}
+      />
+    </Heading>
+  );
 }

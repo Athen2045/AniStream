@@ -1,0 +1,39 @@
+/* Trial palette (user request 2026-10-13): charcoal greys instead of the green-black, softer white
+   text, the same emerald accent used sparingly. Loaded last in main.tsx so it overrides the
+   tokens in styles.css and redesign.css; remove that import to go back to the current colours. */
+:root,
+html[data-platform] {
+  /* Backgrounds: charcoal base, lighter greys for cards, lists and raised containers. */
+  --ink: #121212;
+  --surface-base: #161616;
+  --surface-panel: #1e1e1e;
+  --surface-raised: #242424;
+  --surface-hover: #2c2c2c;
+  --surface-input: #0e0e0e;
+  --surface-overlay: rgb(18 18 18 / 0.96);
+  --surface-glass: rgb(24 24 24 / 0.9);
+  --skeleton-base: #1a1a1a;
+  --skeleton-shine: #262626;
+
+  /* Text: soft white, then muted grey for subtitles, timestamps and captions. */
+  --text: #e1e1e1;
+  --text-secondary: #cfcfcf;
+  --text-soft: #b8b8b8;
+  --muted: #a0a0a0;
+  --muted-deep: #767676;
+
+  /* Accent: the app's emerald, a touch brighter so it still reads on charcoal. */
+  --primary: #2a8a63;
+  --primary-hover: #36a678;
+  --primary-deep: #1e6247;
+  --primary-soft: rgb(42 138 99 / 0.15);
+  --primary-glow: rgb(42 138 99 / 0.22);
+  --secondary-coral: #2a8a63;
+  --secondary-coral-soft: rgb(42 138 99 / 0.14);
+
+  --app-ambience:
+    radial-gradient(ellipse 72% 32% at 82% -8%, rgb(42 138 99 / 0.07), transparent 70%),
+    radial-gradient(ellipse 50% 30% at 8% 16%, rgb(255 255 255 / 0.02), transparent 72%), var(--ink);
+  background: var(--ink);
+  color: var(--text);
+}

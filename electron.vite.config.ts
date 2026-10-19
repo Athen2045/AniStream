@@ -20,5 +20,14 @@ export default defineConfig({
     // electron-vite leaves output unminified; the renderer is the one bundle worth shrinking
     // (less to parse and keep compiled at launch). Main and preload stay readable.
     build: { minify: "esbuild" },
+    // The ASS subtitle renderer (JASSUB) runs in a module worker, which needs ES output.
+    worker: { format: "es" },
+    // Pre-bundling moves JASSUB away from its worker and WebAssembly files (new URL(…, import.meta.url)).
+    // Its CommonJS dependencies still need converting, so those are pre-bundled on their own.
+    optimizeDeps: {
+      exclude: ["jassub"],
+      // Only the CommonJS ones: pre-bundling the ESM abslink would split it into two copies.
+      include: ["jassub > throughput", "jassub > rvfc-polyfill"],
+    },
   },
 });

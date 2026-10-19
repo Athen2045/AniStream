@@ -11,6 +11,8 @@
  *   picks        rail selection (soft diversity + calibration from `diversity`) and card reasons
  *   rows         "Because you watched X" and "Because you like <theme>" rows
  *   taste-map    the viewer's taste as a clustered, compressed graph (Settings > taste map)
+ *   try-new      "Try something new": well-rated titles outside the usual taste (litmus row)
+ *   pair-row     "Because you like A + B": keep one half of a favourite pair, try a new partner
  */
 export {
   discoveryEvidence,
@@ -18,13 +20,27 @@ export {
   recommendationFeatures,
   type HistoryAffinity,
 } from "./evidence";
-export { itemKey } from "./content";
+export { dailyRandom, itemKey } from "./content";
 export { tasteRetrieval } from "./retrieval";
 export { eligibilityFilter, firstSeason, isHidden, redirectEdges } from "./eligibility";
 export { rankHybrid } from "./rank";
 export { adjustScores } from "./signals";
 export { franchiseKeys } from "./diversity";
 export { buildTasteMap, tasteMapFingerprint } from "./taste-map";
+export {
+  pairRowHybrid,
+  rankTastePairs,
+  type HybridPairRow,
+  type PairPick,
+  type TastePair,
+} from "./pair-row";
+export {
+  pickTryNew,
+  TRY_NEW_SIZE,
+  weightedRating,
+  type TryNewCandidate,
+  type TryNewPick,
+} from "./try-new";
 export { continuationPicks, pickHybrid, selectHybrid, toAniListResults } from "./picks";
 export {
   buildSeedRows,

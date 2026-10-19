@@ -1,141 +1,143 @@
-/* Settings > Your taste map: a full-window graph dialog (Obsidian-style graph view). */
+/* Settings > Your taste map: the graph fills the window and the controls float over it
+   (redesign approved 2026-10-11, mockups in prototypes/mockups/taste-map-redesign/). */
 .taste-map-dialog {
-  --taste-anime: #4fb286;
-  --taste-manga: #d49a4a;
-  --taste-more: #6f9fe0;
-  --taste-node: #c3cac6;
-  --taste-line: #7d8681;
-  --taste-label: #d5dbd7;
-  width: min(1320px, calc(100vw - 48px));
-  height: min(860px, calc(100vh - 48px));
+  --taste-anime: #4fd19a;
+  --taste-manga: #e3a75c;
+  --taste-more: #7fa9f2;
+  /* Follow the app's --ink: the glass is a touch lighter than the background behind it. */
+  --taste-glass-solid: color-mix(in srgb, var(--ink), white 3%);
+  --taste-glass: color-mix(in srgb, var(--taste-glass-solid) 78%, transparent);
+  --taste-glass-line: rgb(255 255 255 / 0.08);
+  --taste-soft: #c9d0cc;
+  --taste-muted: #8d9691;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
   max-width: none;
   max-height: none;
+  margin: 0;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-base);
-  color: var(--text-secondary);
+  border: 0;
+  background:
+    radial-gradient(1100px 700px at 50% 45%, var(--taste-glass-solid) 0%, var(--ink) 70%),
+    var(--ink);
+  color: var(--taste-soft);
 }
 .taste-map-dialog[open] {
-  display: flex;
-  flex-direction: column;
+  display: block;
 }
 .taste-map-dialog::backdrop {
-  background: rgb(0 0 0 / 0.66);
+  background: var(--ink);
 }
-.taste-map-head {
+/* A faint dot grid gives the space depth without drawing lines. */
+.taste-map-dialog::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgb(255 255 255 / 0.045) 1px, transparent 1.2px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(900px 620px at 50% 48%, #000 30%, transparent 100%);
+  pointer-events: none;
+}
+
+/* Shared glass for everything that floats over the map. */
+.taste-map-filter,
+.taste-map-chips,
+.taste-map-zoom,
+.taste-map-panel,
+.taste-map-popover {
+  border: 1px solid var(--taste-glass-line);
+  background: var(--taste-glass);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(18px);
+}
+
+.taste-map-top {
+  position: absolute;
+  top: 22px;
+  left: 28px;
+  right: calc(var(--caption-controls-width) + 28px);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px 22px 14px;
-  border-bottom: 1px solid var(--line);
-}
-.taste-map-head h2 {
-  margin: 0;
-  color: var(--text);
-  font-size: 1.15rem;
-}
-.taste-map-head p {
-  margin: 4px 0 0;
-  font-size: 0.82rem;
-}
-.taste-map-body {
-  display: grid;
-  flex: 1;
-  min-height: 0;
-  grid-template-columns: minmax(0, 1fr) 280px;
-}
-.taste-map-canvas {
-  position: relative;
-  min-height: 0;
-}
-.taste-map-canvas canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  cursor: grab;
-  touch-action: none;
-}
-.taste-map-canvas canvas:active {
-  cursor: grabbing;
-}
-.taste-map-card {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  max-width: min(420px, calc(100% - 32px));
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-glass);
   pointer-events: none;
 }
-.taste-map-card img {
-  width: 42px;
-  height: 60px;
-  border-radius: 5px;
-  object-fit: cover;
+.taste-map-top > * {
+  pointer-events: auto;
 }
-.taste-map-card strong {
-  display: block;
-  color: var(--text);
-  font-size: 0.88rem;
-}
-.taste-map-card span {
-  font-size: 0.78rem;
-}
-.taste-map-side {
-  overflow-y: auto;
-  padding: 14px 14px 18px;
-  border-left: 1px solid var(--line);
-  background: var(--surface-panel);
-}
-.taste-map-side h3 {
-  margin: 0 0 8px;
-  color: var(--text);
-  font-size: 0.86rem;
-}
-.taste-map-side ol {
-  display: grid;
-  gap: 4px;
+.taste-map-heading h2 {
   margin: 0;
-  padding: 0;
-  list-style: none;
+  color: var(--text);
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
-.taste-map-cluster {
-  display: grid;
-  grid-template-columns: 10px 1fr;
-  column-gap: 9px;
-  width: 100%;
-  padding: 8px 9px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+.taste-map-heading p {
+  margin: 5px 0 0;
+  color: var(--taste-muted);
+  font-size: 0.8rem;
+}
+.taste-map-heading b {
+  color: var(--taste-soft);
+  font-weight: 600;
+}
+.taste-map-filter {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+}
+.taste-map-filter button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
   background: none;
-  color: inherit;
-  text-align: left;
+  color: var(--taste-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
 }
-.taste-map-cluster:hover,
-.taste-map-cluster[aria-pressed="true"] {
-  background: var(--surface-raised);
+.taste-map-filter button:hover {
+  color: var(--text);
 }
-.taste-map-cluster[aria-pressed="true"] {
-  border-color: var(--line);
+.taste-map-filter button[aria-pressed="true"] {
+  background: rgb(255 255 255 / 0.11);
+  color: var(--text);
 }
-.taste-map-cluster:focus-visible {
-  outline: 2px solid var(--primary-hover);
-  outline-offset: 1px;
+/* The filter options are one group; Close follows a thin divider as the bar's last segment
+   (user request 2026-10-13), away from the window's own buttons. */
+.taste-map-filter-group {
+  display: contents;
 }
+.taste-map-filter-divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 6px 4px;
+  background: rgb(255 255 255 / 0.12);
+}
+.taste-map-filter .taste-map-filter-close {
+  justify-content: center;
+  width: 32px;
+  padding: 0;
+}
+.taste-map-filter .taste-map-filter-close:hover {
+  background: rgb(255 255 255 / 0.08);
+}
+
 .taste-map-dot {
-  grid-row: span 2;
-  width: 10px;
-  height: 10px;
-  margin-top: 4px;
+  flex: none;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
 }
 .taste-map-dot--anime {
@@ -147,36 +149,387 @@
 .taste-map-dot--more {
   background: var(--taste-more);
 }
-.taste-map-cluster-name {
+
+.taste-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+.taste-map-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+.taste-map-canvas canvas:active {
+  cursor: grabbing;
+}
+
+/* Bottom: the tastes, biggest first, and the zoom buttons. */
+.taste-map-dock {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: 22px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.taste-map-chips {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.taste-map-chip-strip {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.taste-map-chip-strip::-webkit-scrollbar {
+  display: none;
+}
+.taste-map-chips.has-more::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 96px;
+  background: linear-gradient(90deg, transparent, var(--taste-glass-solid) 70%);
+  pointer-events: none;
+}
+.taste-map-chip-more {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--taste-soft);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+.taste-map-chip-more:hover {
+  background: rgb(255 255 255 / 0.12);
   color: var(--text);
-  font-size: 0.84rem;
+}
+.taste-map-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 13px 0 12px;
+  border: 0;
+  border-radius: 11px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.taste-map-chip small {
+  color: var(--taste-muted);
+  font-size: 0.74rem;
   font-weight: 600;
 }
-.taste-map-cluster-meta {
-  font-size: 0.74rem;
+.taste-map-chip:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+.taste-map-chip[aria-pressed="true"] {
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+.taste-map-chip.is-faded {
+  opacity: 0.32;
+}
+.taste-map-trend {
+  display: inline-flex;
+  color: var(--taste-muted);
 }
 .taste-map-trend--growing {
   color: var(--taste-anime);
 }
-.taste-map-trend--fading {
-  color: var(--muted);
+.taste-map-zoom {
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 16px;
 }
-.taste-map-hint {
-  margin: 14px 2px 0;
-  font-size: 0.74rem;
+.taste-map-zoom button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 11px;
+  background: none;
+  color: var(--taste-soft);
+  cursor: pointer;
 }
-.taste-map-empty {
-  margin: auto;
+.taste-map-zoom button:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--text);
+}
+.taste-map-dialog button:focus-visible {
+  outline: 2px solid var(--primary-hover);
+  outline-offset: 2px;
+}
+
+/* Right: the picked taste. */
+.taste-map-panel {
+  position: absolute;
+  top: 88px;
+  right: 28px;
+  bottom: 92px;
+  display: flex;
+  flex-direction: column;
+  width: 352px;
+  padding: 22px;
+  overflow-y: auto;
+  border-radius: 20px;
+  scrollbar-width: none;
+}
+.taste-map-panel-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--taste-muted);
+  cursor: pointer;
+}
+.taste-map-panel-close:hover {
+  background: rgb(255 255 255 / 0.1);
+  color: var(--text);
+}
+.taste-map-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--taste-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.taste-map-panel h3 {
+  margin: 10px 36px 6px 0;
+  color: var(--text);
+  font-size: 1.5rem;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+.taste-map-panel-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--taste-muted);
+  font-size: 0.8rem;
+}
+.taste-map-panel h4 {
+  margin: 22px 0 10px;
+  color: var(--taste-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.taste-map-strongest {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.taste-map-strongest li {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+.taste-map-strongest img,
+.taste-map-nocover {
+  width: 38px;
+  height: 54px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--surface-panel);
+}
+.taste-map-strongest strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.taste-map-weight {
+  display: block;
+  height: 4px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.07);
+}
+.taste-map-weight-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+.taste-map-weight-fill--anime {
+  background: var(--taste-anime);
+}
+.taste-map-weight-fill--manga {
+  background: var(--taste-manga);
+}
+.taste-map-weight-fill--more {
+  background: var(--taste-more);
+}
+.taste-map-panel-foot {
+  margin: auto 0 0;
+  padding-top: 18px;
+  color: var(--taste-muted);
+  font-size: 0.78rem;
+}
+
+/* Beside the hovered node. */
+.taste-map-popover {
+  position: absolute;
+  padding: 14px;
+  border-radius: 16px;
+  pointer-events: none;
+}
+.taste-map-popover-head {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+}
+.taste-map-popover-head img {
+  flex: none;
+  width: 62px;
+  height: 88px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.taste-map-popover-head strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.94rem;
+  line-height: 1.25;
+}
+.taste-map-popover-sub {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  margin-top: 5px;
+  color: var(--taste-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.taste-map-popover-sub .taste-map-dot {
+  transform: translateY(-1px);
+}
+.taste-map-popover-links {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--taste-glass-line);
+  color: var(--taste-muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+.taste-map-popover-links b {
+  color: var(--taste-soft);
+  font-weight: 600;
+}
+
+/* Building, empty and failed: a few points orbiting a centre. */
+.taste-map-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 40px;
-  font-size: 0.9rem;
+  text-align: center;
 }
-@media (max-width: 860px) {
-  .taste-map-body {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) 180px;
+.taste-map-placeholder h3 {
+  margin: 26px 0 8px;
+  color: var(--text);
+  font-size: 1.35rem;
+}
+.taste-map-placeholder p {
+  max-width: 400px;
+  margin: 0;
+  color: var(--taste-muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+.taste-map-progress {
+  width: 180px;
+  height: 10px;
+  margin-top: 18px;
+}
+.taste-map-orbit {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.09);
+  stroke-dasharray: 2 6;
+}
+.taste-map-orbit-line {
+  stroke: rgb(255 255 255 / 0.05);
+}
+.taste-map-orbit-point {
+  opacity: 0.4;
+}
+.taste-map-orbit-point--anime {
+  fill: var(--taste-anime);
+}
+.taste-map-orbit-point--manga {
+  fill: var(--taste-manga);
+}
+.taste-map-orbit-point--more {
+  fill: var(--taste-more);
+}
+.taste-map-orbit-hub {
+  fill: rgb(79 209 154 / 0.15);
+  stroke: rgb(79 209 154 / 0.6);
+  stroke-width: 1.5;
+}
+.taste-map-orbit-core {
+  fill: var(--taste-anime);
+}
+
+/* Narrow windows: the filter drops under the title and the panel narrows. */
+@media (max-width: 1000px) {
+  .taste-map-filter {
+    top: 78px;
+    left: 28px;
+    transform: none;
   }
-  .taste-map-side {
-    border-top: 1px solid var(--line);
-    border-left: 0;
+  .taste-map-panel {
+    top: 130px;
+    width: min(320px, calc(100vw - 56px));
   }
+}
+.taste-map-dialog:focus {
+  outline: none;
 }

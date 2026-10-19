@@ -1,5 +1,5 @@
 import { RefreshCw, ThumbsDown } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { AniListCatalogMedia, AniListMediaType } from "../../shared/contracts";
 import type { RecommendationResult } from "../../shared/recommendations";
 import { ContentCarousel } from "./ContentCarousel";
@@ -8,6 +8,7 @@ import { CoverImage } from "./CoverImage";
 import type { ViewerAccess } from "./viewer-access";
 import type { createDiscoverySession } from "./discovery-session";
 import { friendlyRemoteError } from "./remote-error";
+import { arrangeFeed, type FeedSlot } from "./feed-layout";
 
 export function ForYouRail({
   type,
@@ -16,8 +17,11 @@ export function ForYouRail({
   onLibrary,
   access,
   session,
+  slots = {},
 }: {
   type: AniListMediaType;
+  /** The page's own rails, placed between the For You rows (see `feed-layout.ts`). */
+  slots?: Partial<Record<FeedSlot, ReactNode>>;
   /** Owned by the page, which shares the feed with its hero. */
   session: ReturnType<typeof createDiscoverySession>;
   onSelect: (media: AniListCatalogMedia) => void;
@@ -144,22 +148,32 @@ export function ForYouRail({
           </ContentCarousel>
         ) : null}
       </section>
-      {rows.map((row) => {
-        const heading = row.continuation
-          ? type === "MANGA"
-            ? "New from series you read"
-            : "Next seasons of shows you watched"
-          : row.theme
-            ? `Because you like ${row.theme}`
-            : `Because you ${verb} ${row.seedTitle}`;
+      {arrangeFeed(rows).map((entry) => {
+        if (entry.kind === "slot")
+          return <Fragment key={`slot:${entry.slot}`}>{slots[entry.slot] ?? null}</Fragment>;
+        const row = entry.row;
+        const heading = row.tryNew
+          ? "Try something new"
+          : row.continuation
+            ? type === "MANGA"
+              ? "New from series you read"
+              : "Next seasons of shows you watched"
+            : row.pair
+              ? `Because you like ${row.pair.join(" + ")}`
+              : row.theme
+                ? `Because you like ${row.theme}`
+                : `Because you ${verb} ${row.seedTitle}`;
         return (
           <section
-            key={`${state.feed?.requestId}:row:${row.continuation ? "next" : row.theme ? `theme:${row.theme}` : row.seedId}`}
+            key={`${state.feed?.requestId}:row:${row.tryNew ? "try-new" : row.pair ? `pair:${row.pair.join("+")}` : row.continuation ? "next" : row.theme ? `theme:${row.theme}` : row.seedId}`}
             className="media-rail for-you-preview"
             aria-label={heading}
           >
             <div className="rail-heading">
               <div>
+                {row.tryNew ? (
+                  <p className="catalog-kicker">Well rated, outside your usual taste</p>
+                ) : null}
                 <h2>{heading}</h2>
               </div>
             </div>
@@ -303,6 +317,12 @@ function DiscoveryCard({
   );
 }
 function reasonLabel(item: RecommendationResult, inRow: boolean): string {
+  if (item.combo?.length === 2) return `Try ${item.combo[0]} + ${item.combo[1]}`;
+  if (item.reasonCodes[0] === "obscure-classic") return "Overlooked classic";
+  if (item.reasonCodes[0] === "try-new")
+    return item.newTastes?.length
+      ? `New to you: ${item.newTastes.slice(0, 2).join(" · ")}`
+      : "New to you";
   const reason = inRow
     ? item.reasonCodes.find((code) => code !== "similar-to")
     : item.reasonCodes[0];

@@ -1,0 +1,933 @@
+/* Anime simplify (redesign 2026-10-18, mockups prototypes/mockups/anime-simplify/): the anime
+   title header (series and movie), episode cards with the round download button, Continue
+   Watching episode cards, the offline Downloaded row, and the Downloads page. */
+
+/* ---------- Anime title header ---------- */
+.anime-head {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-end;
+  min-height: 560px;
+  padding: calc(var(--app-navbar-height) + 80px) var(--page-gutter) 34px;
+  overflow: hidden;
+}
+.anime-head-art {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: var(--surface-panel);
+}
+.anime-head-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+}
+.anime-head--cover .anime-head-art img {
+  filter: blur(26px) saturate(1.2) brightness(0.7);
+  transform: scale(1.15);
+}
+.anime-head-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      0deg,
+      var(--ink) 2%,
+      color-mix(in srgb, var(--ink) 70%, transparent) 38%,
+      color-mix(in srgb, var(--ink) 5%, transparent) 80%
+    ),
+    linear-gradient(90deg, color-mix(in srgb, var(--ink) 75%, transparent), transparent 60%);
+}
+.anime-head-copy {
+  width: min(780px, 100%);
+}
+.anime-head-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+.anime-head-kicker span + span::before {
+  content: "·";
+  margin-right: 8px;
+  opacity: 0.6;
+}
+.anime-head h1 {
+  margin: 8px 0 10px;
+  font-size: clamp(36px, 4vw, 52px);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+}
+.anime-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+.anime-head-meta > * + *::before {
+  content: "·";
+  margin: 0 9px;
+  opacity: 0.6;
+}
+.anime-head-meta b {
+  color: var(--text);
+  font-weight: 700;
+}
+.anime-head-meta a {
+  color: inherit;
+  text-decoration: none;
+}
+.anime-head-meta a:hover {
+  text-decoration: underline;
+}
+.anime-head-genres {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+.anime-head-synopsis {
+  display: -webkit-box;
+  max-width: 660px;
+  margin: 14px 0 22px;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1.55;
+  cursor: pointer;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.anime-head-synopsis.is-open {
+  display: block;
+  cursor: default;
+}
+.anime-head-synopsis-loading {
+  display: grid;
+  gap: 8px;
+  max-width: 600px;
+  margin: 16px 0 22px;
+}
+.anime-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.anime-head-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 24px 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #f2f2f2;
+  color: #121212;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.anime-head-primary:hover:not(:disabled) {
+  background: #fff;
+}
+.anime-head-primary:disabled {
+  background: rgb(255 255 255 / 0.12);
+  color: var(--text-soft);
+  cursor: default;
+}
+.anime-head-primary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.anime-head .title-tracker,
+.anime-head .title-source-credit {
+  margin-top: 14px;
+}
+
+/* Movie: the artwork fills the window behind a left column; no episode list follows. */
+.anime-head--movie {
+  align-items: center;
+  min-height: 100vh;
+  padding-top: calc(var(--app-navbar-height) + 60px);
+}
+.anime-head--movie .anime-head-art img {
+  object-position: center 30%;
+}
+.anime-head--movie .anime-head-art::after {
+  background:
+    linear-gradient(
+      90deg,
+      var(--ink) 16%,
+      color-mix(in srgb, var(--ink) 75%, transparent) 42%,
+      color-mix(in srgb, var(--ink) 10%, transparent) 75%
+    ),
+    linear-gradient(0deg, var(--ink) 3%, transparent 40%);
+}
+.anime-head--movie .anime-head-copy {
+  width: min(580px, 100%);
+}
+.anime-head-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.anime-head--movie h1 {
+  margin: 16px 0 12px;
+  font-size: clamp(44px, 5vw, 62px);
+  line-height: 1;
+}
+.anime-head--movie .anime-head-synopsis {
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+.anime-head-resume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -6px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.anime-head-resume-track {
+  width: 220px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.16);
+}
+.anime-head-resume-track span {
+  display: block;
+  height: 100%;
+  background: var(--primary-hover);
+  transform-origin: left;
+}
+.anime-head--movie .anime-head-primary {
+  height: 52px;
+  padding: 0 30px 0 26px;
+  font-size: 16px;
+}
+.anime-head-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 34px;
+  margin: 32px 0 0;
+}
+.anime-head-facts dt,
+.anime-about dt {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.anime-head-facts dd,
+.anime-about dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.title-page--movie .title-body {
+  margin-top: -40px;
+}
+
+/* Series: About, one quiet strip after the episodes. */
+.anime-about dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 20px 22px;
+  border-radius: 14px;
+  background: var(--surface-panel);
+}
+
+/* ---------- Episode cards ---------- */
+.title-page--anime .episode-grid {
+  gap: 28px 22px;
+}
+.episode-tile-wrap {
+  position: relative;
+}
+.title-page--anime .episode-tile {
+  gap: 0;
+}
+.title-page--anime .episode-tile-frame {
+  margin-bottom: 12px;
+  border: 0;
+  border-radius: 10px;
+}
+.title-page--anime .episode-tile.is-current .episode-tile-frame {
+  border: 0;
+  box-shadow: 0 0 0 2px var(--primary-hover);
+}
+.title-page--anime .episode-tile.is-watched .episode-tile-still,
+.title-page--anime .episode-tile.is-watched .episode-tile-art {
+  filter: brightness(0.62) saturate(0.85);
+}
+.title-page--anime .episode-tile .episode-watch-progress {
+  height: 3px;
+}
+.episode-tile-watched {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 70%, transparent);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.title-page--anime .episode-tile > strong {
+  padding: 0 44px 0 0;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.title-page--anime .episode-tile-status,
+.title-page--anime .episode-tile.is-current .episode-tile-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.title-page--anime .episode-tile-status b {
+  color: var(--text);
+  font-weight: 700;
+}
+/* Up Next stays in the top-right corner of the still, on hover. */
+.title-page--anime .episode-tile-tools {
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+.title-page--anime .episode-tile-wrap:hover .episode-tile-tools,
+.title-page--anime .episode-tile-wrap:focus-within .episode-tile-tools {
+  opacity: 1;
+}
+.title-page--anime .episode-tile-wrap.is-watched .episode-tile-tools {
+  right: 10px;
+}
+/* The download button sits at the right of the title line. */
+.episode-tile-dl {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 4px;
+}
+
+/* ---------- Round download button (one size everywhere) ---------- */
+.episode-tile-dl .episode-download-toggle,
+.episode-download-toggle {
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: transparent;
+  color: var(--text-soft);
+  opacity: 1;
+}
+.episode-download-toggle:hover {
+  border-color: rgb(255 255 255 / 0.32);
+  background: rgb(255 255 255 / 0.08);
+  color: var(--text);
+}
+.episode-download-toggle.is-queued {
+  border-style: dashed;
+  color: var(--muted);
+}
+.episode-download-toggle.is-downloading,
+.episode-download-toggle.is-paused {
+  border-color: transparent;
+}
+.episode-download-toggle.is-paused {
+  color: var(--secondary-amber);
+}
+.episode-download-toggle.is-failed {
+  border-color: rgb(240 181 74 / 0.5);
+  color: #f0b54a;
+}
+.episode-download-toggle.is-done {
+  border-color: transparent;
+  background: #4fd39a;
+  color: #0f2e22;
+}
+
+/* ---------- Continue Watching: episode cards ---------- */
+/* Three wide cards across the window, as in the user's reference. */
+.media-rail .rail-card.anime-continue-card {
+  /* Four per row (2026-10-19; three read too large). */
+  --rail-card-width: calc((100vw - 2 * var(--page-gutter) - 3 * 16px) / 4);
+  flex: 0 0 var(--rail-card-width);
+  width: var(--rail-card-width);
+}
+.anime-continue-card {
+  display: grid;
+  min-width: 0;
+}
+.anime-continue-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--surface-panel);
+}
+.anime-continue-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--motion-standard) var(--motion-ease);
+}
+.anime-continue-art:hover img {
+  transform: scale(1.03);
+}
+/* No episode still or banner: the whole poster on a blurred copy of itself, not a crop. */
+.anime-continue-art.is-poster .anime-continue-blur {
+  position: absolute;
+  inset: -12%;
+  width: 124%;
+  height: 124%;
+  filter: blur(22px) saturate(1.4) brightness(0.75);
+}
+.anime-continue-art.is-poster .anime-continue-poster {
+  position: relative;
+  display: block;
+  width: auto;
+  height: 100%;
+  margin-inline: auto;
+  object-fit: contain;
+  box-shadow: 0 0 28px rgb(0 0 0 / 0.45);
+}
+.anime-continue-art.is-poster:hover img {
+  transform: none;
+}
+.anime-continue-art .rail-art-hit {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+}
+.anime-continue-progress {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgb(255 255 255 / 0.18);
+  pointer-events: none;
+}
+.anime-continue-progress span {
+  display: block;
+  height: 100%;
+  background: var(--primary-hover);
+  transform-origin: left;
+}
+.anime-continue-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-top: 10px;
+}
+.anime-continue-head .anime-continue-name {
+  flex: 1;
+  min-width: 0;
+}
+.anime-continue-info {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-standard) var(--motion-ease),
+    border-color var(--motion-standard) var(--motion-ease);
+}
+.anime-continue-info:hover,
+.anime-continue-info:focus-visible {
+  border-color: rgb(255 255 255 / 0.32);
+  background: rgb(255 255 255 / 0.12);
+}
+.anime-continue-info::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: -4px;
+  bottom: calc(100% + 8px);
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--surface-raised, #2a2a2a);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(3px);
+  transition:
+    opacity var(--motion-standard) var(--motion-ease),
+    transform var(--motion-standard) var(--motion-ease);
+}
+.anime-continue-info:hover::after,
+.anime-continue-info:focus-visible::after {
+  opacity: 1;
+  transform: none;
+}
+.anime-continue-name {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.anime-continue-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.anime-continue-where {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.anime-continue-where b {
+  color: var(--text);
+  font-weight: 700;
+}
+.anime-continue-where button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.anime-continue-where button:hover,
+.anime-continue-name:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.anime-continue-time {
+  flex: none;
+  color: var(--muted-deep, #767676);
+  font-size: 12.5px;
+}
+.anime-continue-card .continue-remove {
+  z-index: 3;
+}
+
+/* ---------- Offline: Downloaded ---------- */
+.downloaded-titles-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---------- Downloads page ---------- */
+.downloads-page .downloads-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+.downloads-settings-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  margin-left: auto;
+  padding: 0 16px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.downloads-settings-button:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+.downloads-page .downloads-storage {
+  max-width: none;
+  padding: 22px 24px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-panel);
+}
+.downloads-storage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.downloads-storage-head strong {
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+.downloads-storage-head span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.downloads-storage-head .downloads-free {
+  margin-left: auto;
+}
+.downloads-page .downloads-meter {
+  display: flex;
+  height: 10px;
+  margin: 14px 0 12px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.08);
+}
+.downloads-meter-used {
+  background: var(--primary-hover);
+}
+.downloads-meter-coming {
+  background: color-mix(in srgb, var(--primary-hover) 45%, transparent);
+}
+.downloads-meter.is-full .downloads-meter-used {
+  background: var(--secondary-amber);
+}
+.downloads-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.downloads-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.downloads-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.12);
+}
+.downloads-legend i.is-used {
+  background: var(--primary-hover);
+}
+.downloads-legend i.is-coming {
+  background: color-mix(in srgb, var(--primary-hover) 45%, transparent);
+}
+.downloads-legend .downloads-where {
+  margin-left: auto;
+  min-width: 0;
+}
+.downloads-where span {
+  overflow: hidden;
+  max-width: 280px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.downloads-queue,
+.downloads-done {
+  margin-top: 32px;
+}
+.downloads-queue > h2,
+.downloads-done > h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+}
+.downloads-job {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface-panel);
+}
+.downloads-job + .downloads-job {
+  margin-top: 8px;
+}
+.downloads-job-art,
+.downloads-job .downloads-job-art img {
+  width: 160px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.downloads-job-text {
+  display: grid;
+  min-width: 0;
+}
+.downloads-job-text > strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.downloads-job-text > span:nth-child(2) {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.downloads-page .downloads-progress {
+  grid-column: auto;
+  grid-row: auto;
+  display: block;
+  height: 6px;
+  margin: 12px 0 7px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.1);
+}
+.downloads-page .downloads-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--primary-hover);
+  transform-origin: left;
+  transition: transform 400ms linear;
+}
+.downloads-job-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.downloads-job-stats b {
+  color: var(--text);
+}
+.downloads-job-actions {
+  display: flex;
+  gap: 8px;
+}
+.downloads-job-actions button,
+.downloads-wait button,
+.downloads-ep-remove,
+.downloads-ep-play {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--text);
+  cursor: pointer;
+}
+.downloads-job-actions button:hover,
+.downloads-wait button:hover,
+.downloads-ep-remove:hover {
+  background: rgb(255 255 255 / 0.14);
+}
+.downloads-waiting {
+  margin: 8px 0 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--surface-panel);
+  list-style: none;
+}
+.downloads-wait {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  font-size: 13.5px;
+}
+.downloads-wait + .downloads-wait {
+  border-top: 1px solid var(--line);
+}
+.downloads-wait-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border: 1px dashed rgb(255 255 255 / 0.2);
+  border-radius: 50%;
+  color: var(--muted);
+}
+.downloads-wait.is-paused .downloads-wait-icon {
+  border-style: solid;
+  color: var(--secondary-amber);
+}
+.downloads-wait.is-failed .downloads-wait-icon {
+  border: 1px solid rgb(240 181 74 / 0.5);
+  color: #f0b54a;
+}
+.downloads-wait-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.downloads-wait-name span,
+.downloads-ep-name span {
+  color: var(--muted);
+}
+.downloads-wait-status {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.downloads-wait.is-failed .downloads-wait-status {
+  color: #f0b54a;
+}
+.downloads-wait button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+}
+.downloads-show {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface-panel);
+}
+.downloads-show .downloads-cover,
+.downloads-show .downloads-cover img {
+  width: 74px;
+  aspect-ratio: 2 / 3;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.downloads-show header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.downloads-show h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.downloads-show header span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.downloads-show ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.downloads-ep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.03);
+  font-size: 13.5px;
+}
+.downloads-ep-play {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: #f2f2f2;
+  color: #121212;
+}
+.downloads-ep-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.downloads-ep-size {
+  width: 76px;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: right;
+}
+.downloads-ep-remove {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+}
+.downloads-ep-confirm {
+  display: flex;
+  gap: 6px;
+}
+.downloads-ep-confirm button {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.downloads-ep-confirm .is-danger {
+  border-color: rgb(255 116 133 / 0.5);
+  color: #ff8f9c;
+}
+.downloads-job-actions button:focus-visible,
+.downloads-wait button:focus-visible,
+.downloads-ep button:focus-visible,
+.downloads-settings-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  .media-rail .rail-card.anime-continue-card {
+    --rail-card-width: calc((100vw - 2 * var(--page-gutter) - 2 * 16px) / 3);
+  }
+  .anime-about dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .downloads-job {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .downloads-job-art {
+    display: none;
+  }
+}

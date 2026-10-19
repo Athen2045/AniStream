@@ -8,6 +8,8 @@ import type { MoreTmdbEmbedProvider } from "../provider-config";
 import { mergeMoreHistory } from "../more-library";
 import type { SimklService } from "../simkl/service";
 import { TmdbClient } from "../tmdb";
+import { createMoreDetailLoader } from "../more-detail-copies";
+import type { TitleCopies } from "../title-copies";
 
 export interface MoreDomainDeps {
   tmdb: TmdbClient;
@@ -20,14 +22,17 @@ export interface MoreDomainDeps {
   tracker?: () => SimklService | undefined;
   /** Saved Trending copies (shown at once, refreshed in the background for the next launch). */
   snapshots?: FieldSnapshots;
+  /** Saved title details, so logos and facts show at once on later visits. */
+  copies?: TitleCopies;
 }
 
 const MORE_LIKE_THIS_LIMIT = 6;
 
 export function registerMoreDomain(
   trustedRendererOrigin: string,
-  { tmdb, database, players, frameUserAgent, tracker, snapshots }: MoreDomainDeps,
+  { tmdb, database, players, frameUserAgent, tracker, snapshots, copies }: MoreDomainDeps,
 ): void {
+  const loadDetail = createMoreDetailLoader(tmdb, copies);
   registerTrustedIpcHandler(trustedRendererOrigin, "more:trending", (_event, type, page) =>
     snapshots && page === 1
       ? snapshots.get({
@@ -43,21 +48,25 @@ export function registerMoreDomain(
   registerTrustedIpcHandler(trustedRendererOrigin, "more:search", (_event, query, type, page) =>
     tmdb.search(query, type, page),
   );
-  registerTrustedIpcHandler(trustedRendererOrigin, "more:detail", async (_event, id, type) => {
-    const detail = await tmdb.getDetail(id, type);
-    // "More like this" skips what the viewer already watched (user decision 2026-10-06).
-    const watched = new Set(
-      (database?.listMoreHistory() ?? [])
-        .filter((entry) => entry.finishedEpisodes > 0)
-        .map((entry) => `${entry.type}:${entry.tmdbId}`),
-    );
-    return {
-      ...detail,
-      recommendations: detail.recommendations
-        .filter((item) => !watched.has(`${item.type}:${item.id}`))
-        .slice(0, MORE_LIKE_THIS_LIMIT),
-    };
-  });
+  registerTrustedIpcHandler(
+    trustedRendererOrigin,
+    "more:detail",
+    async (_event, id, type, priority) => {
+      const detail = await loadDetail(id, type, priority);
+      // "More like this" skips what the viewer already watched (user decision 2026-10-06).
+      const watched = new Set(
+        (database?.listMoreHistory() ?? [])
+          .filter((entry) => entry.finishedEpisodes > 0)
+          .map((entry) => `${entry.type}:${entry.tmdbId}`),
+      );
+      return {
+        ...detail,
+        recommendations: detail.recommendations
+          .filter((item) => !watched.has(`${item.type}:${item.id}`))
+          .slice(0, MORE_LIKE_THIS_LIMIT),
+      };
+    },
+  );
   registerTrustedIpcHandler(trustedRendererOrigin, "more:season", (_event, id, season) =>
     tmdb.getSeason(id, season),
   );

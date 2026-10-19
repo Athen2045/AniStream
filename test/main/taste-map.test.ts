@@ -130,4 +130,41 @@ describe("taste graph", () => {
     expect(tasteMapFingerprint([liked(mystery(1)), liked(sports(2), 0.5)], now)).not.toBe(same);
     expect(tasteMapFingerprint([liked(mystery(1))], now)).not.toBe(same);
   });
+  it("gives each section its own tastes, joined to the same works by a bridge", () => {
+    // Three liked anime and their three manga sources: one taste would hold all six.
+    const adaptation = (id: number, mediaType: "ANIME" | "MANGA") =>
+      item(id, {
+        ...mystery(id),
+        mediaType,
+        relations: [
+          {
+            id: mediaType === "ANIME" ? id + 100 : id - 100,
+            mediaType: mediaType === "ANIME" ? "MANGA" : "ANIME",
+            relationType: mediaType === "ANIME" ? "SOURCE" : "ADAPTATION",
+          },
+        ],
+      });
+    const map = buildTasteMap(
+      [
+        ...[1, 2, 3].map((id) => liked(adaptation(id, "ANIME"))),
+        ...[101, 102, 103].map((id) => liked(adaptation(id, "MANGA"), 0.8)),
+      ],
+      now,
+    );
+    expect(map.clusters.map((cluster) => cluster.section).sort()).toEqual(["ANIME", "MANGA"]);
+    for (const node of map.nodes.filter((row) => row.kind === "title"))
+      expect(map.clusters.find((cluster) => cluster.id === node.cluster)?.section).toBe(
+        node.section,
+      );
+    expect(map.links.some((link) => link.kind === "bridge")).toBe(true);
+  });
+  it("never names a taste after a content-warning tag", () => {
+    const warned = (id: number) =>
+      item(id, { genres: ["Drama"], tags: [tag("Rape", 95), tag("Boarding School", 80)] });
+    const map = buildTasteMap(
+      [1, 2, 3].map((id) => liked(warned(id))),
+      now,
+    );
+    for (const cluster of map.clusters) expect(cluster.label.toLowerCase()).not.toContain("rape");
+  });
 });

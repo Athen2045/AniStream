@@ -12,6 +12,7 @@ import "./styles/title.css";
 import "./styles/profile.css";
 import "./styles/schedule.css";
 import "./styles/upnext.css";
+import "./styles/downloads.css";
 import "./styles/settings.css";
 import "./styles/taste-map.css";
 import "./styles/continue.css";
@@ -21,6 +22,9 @@ import "./styles/player-chrome.css";
 import "./styles/similar.css";
 import "./styles/profile-simkl.css";
 import "./styles/loading.css";
+import "./styles/anime-simplify.css";
+import "./styles/theme-trial.css";
+import "./styles/player.css";
 
 document.documentElement.dataset.platform = navigator.userAgent.includes("Windows")
   ? "win32"

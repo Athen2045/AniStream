@@ -15,6 +15,8 @@ export interface ProviderTransportOptions {
 
 export interface ProviderRequestOptions extends RequestInit {
   dedupeKey?: string;
+  /** Waits ahead of background requests in the gate (something the viewer is looking at). */
+  gatePriority?: boolean;
   onResponse?: (response: Response, gate: RequestGate) => void | Promise<void>;
 }
 
@@ -30,9 +32,12 @@ export class ProviderTransport {
   }
 
   public request(url: URL, request: ProviderRequestOptions = {}): Promise<Response> {
-    const { dedupeKey = url.toString(), signal } = request;
-    return this.runWithDeadline(dedupeKey, signal, (deadline) =>
-      this.dispatch(url, { ...request, signal: deadline }),
+    const { dedupeKey = url.toString(), signal, gatePriority } = request;
+    return this.runWithDeadline(
+      dedupeKey,
+      signal,
+      (deadline) => this.dispatch(url, { ...request, signal: deadline }),
+      gatePriority,
     );
   }
 
@@ -45,9 +50,12 @@ export class ProviderTransport {
     request: ProviderRequestOptions,
     parse: (response: Response) => Promise<T>,
   ): Promise<T> {
-    const { dedupeKey = url.toString(), signal } = request;
-    return this.runWithDeadline(dedupeKey, signal, async (deadline) =>
-      parse(await this.dispatch(url, { ...request, signal: deadline })),
+    const { dedupeKey = url.toString(), signal, gatePriority } = request;
+    return this.runWithDeadline(
+      dedupeKey,
+      signal,
+      async (deadline) => parse(await this.dispatch(url, { ...request, signal: deadline })),
+      gatePriority,
     );
   }
 
@@ -55,6 +63,7 @@ export class ProviderTransport {
     dedupeKey: string | undefined,
     callerSignal: AbortSignal | null | undefined,
     dispatch: (signal: AbortSignal) => Promise<T>,
+    priority = false,
   ): Promise<T> {
     const timeout = new AbortController();
     const timeoutId = setTimeout(
@@ -66,6 +75,7 @@ export class ProviderTransport {
       dedupeKey,
       () => dispatch(combined.signal),
       combined.signal,
+      { priority },
     );
     return request.finally(() => {
       clearTimeout(timeoutId);
@@ -74,7 +84,13 @@ export class ProviderTransport {
   }
 
   private async dispatch(url: URL, request: ProviderRequestOptions): Promise<Response> {
-    const { dedupeKey: _dedupeKey, onResponse, signal, ...init } = request;
+    const {
+      dedupeKey: _dedupeKey,
+      gatePriority: _gatePriority,
+      onResponse,
+      signal,
+      ...init
+    } = request;
     const response = await this.fetcher(url, {
       ...init,
       headers: mergeHeaders(this.options.headers, init.headers),

@@ -5,12 +5,15 @@ import {
   createUpdatePreferencesStore,
   type UpdatePreferencesStore,
 } from "./update-preferences-store";
+import { createTitlePreferencesStore, type TitlePreferencesStore } from "./title-preferences-store";
 import { createBackupRepository, type BackupRepository } from "./backup-repository";
 import { createReaderSettingsRepository, type ReaderSettingsRepository } from "./reader-settings";
 import { createActivityRepository, type ActivityRepository } from "./activity/repository";
 import { createEntryChangeRepository, type EntryChangeRepository } from "./entry-changes";
 import { createMoreLibraryRepository, type MoreLibraryRepository } from "./more-library";
 import { createBingeRepository, type BingeRepository } from "./binge-repository";
+import { createDownloadStore, type DownloadStore } from "./downloads/download-store";
+import { createTitleCopies, type TitleCopies } from "./title-copies";
 import type {
   AniListDashboard,
   MangaReadingResume,
@@ -62,8 +65,12 @@ export interface AppDatabase
   readonly fieldSnapshots: SnapshotStore;
   readonly personalization: PersonalizationStore;
   readonly backup: BackupRepository;
+  readonly downloads: DownloadStore;
+  /** Saved title-page data for offline use (titles with downloads are never trimmed). */
+  readonly titleCopies: TitleCopies;
   readonly updateLaunch: UpdateLaunchStore;
   readonly updatePreferences: UpdatePreferencesStore;
+  readonly titlePreferences: TitlePreferencesStore;
   getCachedAniListDashboard(): AniListDashboard | undefined;
   saveCachedAniListDashboard(dashboard: AniListDashboard): void;
   clearCachedAniListDashboard(): void;
@@ -206,6 +213,7 @@ export function openAppDatabase(path: string): AppDatabase {
   const recommendationRepository = createRecommendationRepository(database);
   const mangaPreferenceRepository = createMangaPreferenceRepository(database);
   const bingeRepository = createBingeRepository(database);
+  const downloadStore = createDownloadStore(database);
 
   return {
     ...createReaderSettingsRepository(database),
@@ -224,8 +232,13 @@ export function openAppDatabase(path: string): AppDatabase {
     fieldSnapshots: createSnapshotStore(database),
     personalization: createPersonalizationStore(database),
     backup: createBackupRepository(database, bingeRepository),
+    downloads: downloadStore,
+    titleCopies: createTitleCopies(database, () =>
+      downloadStore.list().map((item) => item.aniListId),
+    ),
     updateLaunch: createUpdateLaunchStore(database),
     updatePreferences: createUpdatePreferencesStore(database),
+    titlePreferences: createTitlePreferencesStore(database),
     ready: true,
     getCachedAniListDashboard: () => {
       const row = readAppMeta.get(dashboardCacheKey);

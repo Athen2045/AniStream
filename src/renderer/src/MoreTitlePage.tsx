@@ -86,7 +86,7 @@ export function MoreTitlePage({
   useEffect(() => {
     let active = true;
     void window.anistream
-      .getMoreDetail(item.id, item.type)
+      .getMoreDetail(item.id, item.type, true)
       .then((next) => {
         if (active) setDetail(next);
       })

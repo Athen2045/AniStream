@@ -27,6 +27,10 @@ export interface DiscoveryRow {
   theme?: string;
   /** The "next seasons of shows you watched" row (released sequels of liked titles). */
   continuation?: boolean;
+  /** The "Try something new" row: well-rated titles outside the viewer's usual taste. */
+  tryNew?: boolean;
+  /** "Because you like A + B": the viewer's favourite pair of tastes; items swap one half. */
+  pair?: string[];
   items: RecommendationResult[];
 }
 
@@ -36,6 +40,12 @@ export interface MoreRecommendation {
   reasonCodes: RecommendationReasonCode[];
   /** Title of the watched/listed More title behind a "similar-to" reason. */
   relatedTitle?: string;
+  /** The title's page on simkl.com when the pick came from Simkl (Simkl asks for a link back). */
+  simklUrl?: string;
+  /** "Try something new": the genres or tags this title brings that are new to the viewer. */
+  newTastes?: string[];
+  /** Tag-pair row: the kept taste and its new partner. */
+  combo?: string[];
 }
 
 export interface MoreDiscoveryRow {
@@ -46,6 +56,10 @@ export interface MoreDiscoveryRow {
   theme?: string;
   /** The "next in film series you watched" row. */
   continuation?: boolean;
+  /** The "Try something new" row. */
+  tryNew?: boolean;
+  /** "Because you like A + B". */
+  pair?: string[];
   items: MoreRecommendation[];
 }
 

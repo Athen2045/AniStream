@@ -14,7 +14,7 @@
   padding: 0;
   border: 1px solid rgb(255 255 255 / 0.18);
   border-radius: 50%;
-  background: rgb(10 12 11 / 0.72);
+  background: color-mix(in srgb, var(--ink) 72%, transparent);
   color: #fff;
   opacity: 0;
   backdrop-filter: blur(10px);
@@ -60,7 +60,7 @@
   padding: 10px 10px 10px 18px;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 14px;
-  background: rgb(22 26 23 / 0.94);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   box-shadow: 0 18px 50px rgb(0 0 0 / 0.5);
   backdrop-filter: blur(16px);
   pointer-events: auto;

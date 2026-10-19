@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { AniListDashboard, AniListMediaType } from "../../shared/contracts";
 import type { LocalActivity } from "../../shared/activity";
 import type {
+  DiscoveryRow,
   DiscoveryFeed,
   DiscoveryFeedback,
   DiscoveryImpressionInput,
@@ -31,7 +32,12 @@ import {
   redirectEdges,
   rowStrength,
   selectHybrid,
+  dailyRandom,
+  pairRowHybrid,
+  pickTryNew,
+  TRY_NEW_SIZE,
   type HybridHistoryItem,
+  type TryNewCandidate,
 } from "./engine";
 
 /** Titles watched/read (any section) before For You starts; matches the hero (user 2026-10-08). */
@@ -52,6 +58,11 @@ interface Dependencies {
   watchedMore?: () => ReadonlySet<string>;
   /** Genres and tags the viewer hid in Settings. */
   hiddenTags?: () => string[];
+  /** "Try something new" candidates (MyAnimeList rankings); absent turns the row off. */
+  tryNew?: (
+    type: AniListMediaType,
+    options: { signal?: AbortSignal; knownMalIds: ReadonlySet<number> },
+  ) => Promise<TryNewCandidate[]>;
   now?: () => number;
   providerTimeoutMs?: number;
 }
@@ -69,6 +80,9 @@ const RETRIEVAL_LIMIT = 40;
 /** How strongly the main rail follows the viewer's genre mix (0 = off). */
 const CALIBRATION = 0.3;
 const CONTINUATION_ROW_MIN = 2;
+/** "Try something new" pools are a few provider requests; refreshed once a day. */
+const TRY_NEW_TTL_MS = 86_400_000;
+const TRY_NEW_RETRY_MS = 30 * 60_000;
 const HALF_LIFE_MS = HYBRID_WEIGHTS.halfLifeDays * 86_400_000;
 interface CandidatePool {
   items: RecommendationItemFeatures[];
@@ -80,6 +94,10 @@ export class DiscoveryService {
   private readonly now: () => number;
   private readonly providerTimeoutMs: number;
   private readonly pools = new Map<AniListMediaType, CandidatePool>();
+  private readonly tryNewPools = new Map<
+    AniListMediaType,
+    { items: TryNewCandidate[]; expiresAt: number }
+  >();
   private readonly pending = new Map<string, Promise<DiscoveryFeed>>();
   private readonly requests = new Map<
     string,
@@ -498,17 +516,52 @@ export class DiscoveryService {
           }
         : undefined;
     for (const pick of nextUp) shown.add(pick.features.anilistId);
-    const seedRows = buildSeedRows(scored, ranked, type, shown);
+    // Seeds and theme rotate daily, not on every load.
+    const seedRows = buildSeedRows(scored, ranked, type, shown, {
+      random: dailyRandom(`seeds:${owner}:${type}`, now),
+    });
     for (const row of seedRows) for (const item of row.items) shown.add(item.anilistId);
-    const themeRow = buildThemeRow(scored, ranked, type, shown);
+    const themeRow = buildThemeRow(scored, ranked, type, shown, {
+      random: dailyRandom(`themes:${owner}:${type}`, now),
+    });
+    if (themeRow) for (const item of themeRow.items) shown.add(item.anilistId);
+    const pairRow = pairRowHybrid(
+      scored,
+      ranked,
+      type,
+      new Set([...shown].map((id) => `${type}:${id}`)),
+      { now },
+    );
+    const pairDiscoveryRow: DiscoveryRow | undefined = pairRow
+      ? {
+          seedId: 0,
+          seedTitle: pairRow.pair.join(" + "),
+          pair: pairRow.pair,
+          items: toAniListResults(pairRow.items.map((entry) => entry.pick)).map((item, at) => ({
+            ...item,
+            combo: pairRow.items[at].combo,
+          })),
+        }
+      : undefined;
+    if (pairDiscoveryRow) for (const item of pairDiscoveryRow.items) shown.add(item.anilistId);
+    const tryNewRow = await this.tryNewRow(type, owner, ranked, shown, now, signal, {
+      skip: Boolean(message),
+      allowed: (row) => allowed(row) && eligible(row),
+    });
     // Strongest row first, so the best match is the first thing the viewer sees.
     const rows = [
       // The continuation row leads: the most dependable picks (X's in-network source).
       ...(continuationRow ? [continuationRow] : []),
-      ...(themeRow ? [...seedRows, themeRow] : seedRows)
+      ...[
+        ...seedRows,
+        ...(themeRow ? [themeRow] : []),
+        ...(pairDiscoveryRow ? [pairDiscoveryRow] : []),
+      ]
         .map((row) => ({ row, strength: rowStrength(row.items) }))
         .sort((a, b) => b.strength - a.strength)
         .map(({ row }) => row),
+      // Last: the litmus row, after everything the viewer is known to like.
+      ...(tryNewRow ? [tryNewRow] : []),
     ];
     const requestId = randomUUID();
     for (const [id, request] of this.requests)
@@ -525,6 +578,64 @@ export class DiscoveryService {
       rows,
       requestId,
       message,
+    };
+  }
+
+  /**
+   * "Try something new": exactly ten well-rated entry points outside the viewer's usual taste,
+   * from a pool fetched at most once a day. Any failure just leaves the row out.
+   */
+  private async tryNewRow(
+    type: AniListMediaType,
+    owner: number,
+    history: HybridHistoryItem[],
+    shown: ReadonlySet<number>,
+    now: number,
+    signal: AbortSignal | undefined,
+    options: { skip: boolean; allowed: (row: RecommendationItemFeatures) => boolean },
+  ): Promise<DiscoveryRow | undefined> {
+    if (!this.deps.tryNew) return undefined;
+    let pool = this.tryNewPools.get(type);
+    if ((!pool || pool.expiresAt <= now) && !options.skip) {
+      try {
+        // MyAnimeList IDs of everything on the viewer's lists, so the pool skips them up front.
+        const dashboard = this.deps.dashboard();
+        const knownMalIds = new Set<number>();
+        if (dashboard?.profile.id === owner)
+          for (const list of type === "ANIME" ? dashboard.animeLists : dashboard.mangaLists)
+            for (const entry of list.entries)
+              if (entry.media.malId) knownMalIds.add(entry.media.malId);
+        const items = await this.deps.tryNew(type, { signal, knownMalIds });
+        pool = { items, expiresAt: now + (items.length ? TRY_NEW_TTL_MS : TRY_NEW_RETRY_MS) };
+        this.deps.store.saveFeatures(items.map((row) => row.features));
+      } catch {
+        pool = { items: pool?.items ?? [], expiresAt: now + TRY_NEW_RETRY_MS };
+      }
+      this.tryNewPools.set(type, pool);
+    }
+    this.assertOwner(owner);
+    const candidates = (pool?.items ?? []).filter(
+      (row) => !shown.has(row.features.anilistId) && options.allowed(row.features),
+    );
+    const picks = pickTryNew(history, candidates, { now });
+    if (picks.length < TRY_NEW_SIZE) return undefined;
+    return {
+      seedId: 0,
+      seedTitle: "",
+      tryNew: true,
+      items: picks.map((pick) => ({
+        anilistId: pick.features.anilistId,
+        mediaType: type,
+        malId: pick.features.malId,
+        title: pick.features.normalizedTitle,
+        coverUrl: pick.features.coverUrl,
+        score: pick.score,
+        reasonCodes: [
+          pick.obscureClassic ? ("obscure-classic" as const) : ("try-new" as const),
+          ...(pick.score >= 80 ? (["highly-rated"] as const) : []),
+        ],
+        newTastes: pick.newTastes,
+      })),
     };
   }
 }

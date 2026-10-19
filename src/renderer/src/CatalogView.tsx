@@ -27,6 +27,8 @@ import { HERO_SLIDES, mixHeroPicks, withTrendingSlide } from "./hero-picks";
 import { usePersonalHero } from "./usePersonalHero";
 import { LegalFooter } from "./LegalFooter";
 import { hasHiddenGenre, useHiddenTags } from "./hidden-tags";
+import { useOnline } from "./useOnline";
+import { DownloadedTitlesRail } from "./DownloadedTitlesRail";
 
 const NO_AVAILABILITY_MEDIA: [] = [];
 const HERO_SIZE = 6;
@@ -117,7 +119,8 @@ export function CatalogView({
       const picks = mixHeroPicks(
         { reason: "For You", items: forYouFeed.items },
         (forYouFeed.rows ?? [])
-          .filter((row) => !row.theme)
+          // The litmus row is outside the viewer's taste: it never feeds the hero.
+          .filter((row) => !row.theme && !row.tryNew && !row.pair)
           .map((row) => ({ reason: `Because you ${verb} ${row.seedTitle}`, items: row.items })),
         (item) => String(item.anilistId),
         12,
@@ -165,8 +168,88 @@ export function CatalogView({
   // Time to play starts when this section opens.
   useEffect(() => startBrowsing(type), [type]);
   const mediaName = type === "ANIME" ? "anime" : "manga";
+  // Offline, Anime shows only its hero and the titles with downloads (user decision 2026-10-18).
+  const online = useOnline();
+  const offlineAnime = type === "ANIME" && !online;
 
   // The hero image gets the early paint; everything below it stays lazy to protect scrolling.
+  // Trending: the page's popular anchor. With For You on it sits after the next-seasons row
+  // (`feed-layout.ts`); otherwise it keeps its place after Continue.
+  const forYouShown = access.kind === "member" && Boolean(forYouSession);
+  const trendingRails = (
+    <>
+      {trending.length ? (
+        <section className="media-rail" aria-label={`Trending ${mediaName}`}>
+          <div className="rail-heading">
+            <div>
+              <p className="catalog-kicker">Top {trending.length} moving up now</p>
+              <h2>Trending {mediaName}</h2>
+            </div>
+          </div>
+          <ContentCarousel label={`Trending ${mediaName}`}>
+            {trending.map((media, index) => (
+              <CatalogCard
+                rank={index + 1}
+                key={media.id}
+                media={media}
+                inLibrary={personalized && access.libraryEntries.has(media.id)}
+                onSelect={onSelect}
+                onPrimary={onPrimary}
+                onLibrary={
+                  onLibrary ??
+                  (personalized
+                    ? async (title) => {
+                        await access.addToLibrary(title);
+                      }
+                    : undefined)
+                }
+              />
+            ))}
+          </ContentCarousel>
+        </section>
+      ) : null}
+
+      {!trending.length && malTrendingFallback.length ? (
+        <section className="media-rail" aria-label={`Trending ${mediaName} via MyAnimeList`}>
+          <div className="rail-heading">
+            <div>
+              <p className="catalog-kicker">AniList is unreachable — via MyAnimeList</p>
+              <h2>Trending {mediaName}</h2>
+            </div>
+          </div>
+          <ContentCarousel label={`Trending ${mediaName} via MyAnimeList`}>
+            {malTrendingFallback.map((item, index) => (
+              <a
+                className="rail-card"
+                key={item.malId}
+                style={cardMotionStyle(index)}
+                href={item.malUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`${item.title} on MyAnimeList`}
+              >
+                <span className="rail-art">
+                  <span className="rank">{index + 1}</span>
+                  <span className="rail-badge rail-badge--external">
+                    <ExternalLink size={11} aria-hidden="true" />
+                    MAL
+                  </span>
+                  {item.coverUrl ? (
+                    <img src={item.coverUrl} alt="" loading="lazy" decoding="async" />
+                  ) : (
+                    <span className="rail-art-fallback">{item.title}</span>
+                  )}
+                </span>
+                <strong>{item.title}</strong>
+                <span>{item.score ? `${item.score} MAL score` : "MyAnimeList"}</span>
+              </a>
+            ))}
+          </ContentCarousel>
+        </section>
+      ) : null}
+    </>
+  );
+
   return (
     <section
       ref={pageRef}
@@ -197,228 +280,166 @@ export function CatalogView({
       ) : null}
 
       <div className="catalog-content">
-        {error ? <p className="error-banner">{error}</p> : null}
-        {trendingLoading && !trending.length && !malTrendingFallback.length ? (
-          <section className="media-rail" aria-label={`Trending ${mediaName}`}>
-            <div className="rail-heading">
-              <div>
-                <p className="catalog-kicker">Loading</p>
-                <h2>Trending {mediaName}</h2>
-              </div>
-            </div>
-            <div className="rail-skeleton-row" aria-hidden="true">
-              {Array.from({ length: 6 }, (_, index) => (
-                <span className="rail-card-skeleton" key={`trending-skeleton-${index}`} />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <PersonalLibrary
-          key={`continue:${type}:${access.kind === "member" ? access.dashboard.profile.id : "guest"}`}
-          type={type}
-          access={access}
-          onSelect={onSelect}
-          onPrimary={onPrimary}
-        />
-
-        {/* For You right after Continue: the most relevant picks first. */}
-        {access.kind === "member" && forYouSession ? (
-          <ForYouRail
-            key={`for-you:${forYouKey}`}
-            session={forYouSession}
-            type={type}
-            onSelect={onSelect}
-            onPrimary={onPrimary}
-            onLibrary={onLibrary}
-            access={access}
-          />
-        ) : null}
-
-        {trending.length ? (
-          <section className="media-rail" aria-label={`Trending ${mediaName}`}>
-            <div className="rail-heading">
-              <div>
-                <p className="catalog-kicker">Top {trending.length} moving up now</p>
-                <h2>Trending {mediaName}</h2>
-              </div>
-            </div>
-            <ContentCarousel label={`Trending ${mediaName}`}>
-              {trending.map((media, index) => (
-                <CatalogCard
-                  rank={index + 1}
-                  key={media.id}
-                  media={media}
-                  inLibrary={personalized && access.libraryEntries.has(media.id)}
-                  onSelect={onSelect}
-                  onPrimary={onPrimary}
-                  onLibrary={
-                    onLibrary ??
-                    (personalized
-                      ? async (title) => {
-                          await access.addToLibrary(title);
-                        }
-                      : undefined)
-                  }
-                />
-              ))}
-            </ContentCarousel>
-          </section>
-        ) : null}
-
-        {!trending.length && malTrendingFallback.length ? (
-          <section className="media-rail" aria-label={`Trending ${mediaName} via MyAnimeList`}>
-            <div className="rail-heading">
-              <div>
-                <p className="catalog-kicker">AniList is unreachable — via MyAnimeList</p>
-                <h2>Trending {mediaName}</h2>
-              </div>
-            </div>
-            <ContentCarousel label={`Trending ${mediaName} via MyAnimeList`}>
-              {malTrendingFallback.map((item, index) => (
-                <a
-                  className="rail-card"
-                  key={item.malId}
-                  style={cardMotionStyle(index)}
-                  href={item.malUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={`${item.title} on MyAnimeList`}
-                >
-                  <span className="rail-art">
-                    <span className="rank">{index + 1}</span>
-                    <span className="rail-badge rail-badge--external">
-                      <ExternalLink size={11} aria-hidden="true" />
-                      MAL
-                    </span>
-                    {item.coverUrl ? (
-                      <img src={item.coverUrl} alt="" loading="lazy" decoding="async" />
-                    ) : (
-                      <span className="rail-art-fallback">{item.title}</span>
-                    )}
-                  </span>
-                  <strong>{item.title}</strong>
-                  <span>{item.score ? `${item.score} MAL score` : "MyAnimeList"}</span>
-                </a>
-              ))}
-            </ContentCarousel>
-          </section>
-        ) : null}
-
-        {type === "ANIME" && preferences.latestUpdates ? (
-          <section
-            className="latest-updates-section"
-            aria-label="Latest anime updates"
-            aria-busy={latestLoading}
-          >
-            <div className="rail-heading">
-              <div className="source-heading">
-                <h2>Latest Anime Updates</h2>
-                <AniListSourceIcon label="AniList source" />
-              </div>
-              <span className="rail-count">Page {latestPage}</span>
-            </div>
-            {latestError ? <p className="latest-updates-error">{latestError}</p> : null}
-            <div className="latest-updates-grid">
-              {latestLoading && !latestAnime.length
-                ? Array.from({ length: 21 }, (_, index) => (
-                    <span
-                      className="latest-update-skeleton"
-                      key={`anime-latest-skeleton-${index}`}
-                      aria-hidden="true"
-                    />
-                  ))
-                : latestAnime.map((update) => (
-                    <button
-                      className={`latest-update-card${latestLoading ? " is-refreshing" : ""}`}
-                      type="button"
-                      key={update.media.id}
-                      onClick={() => onSelect(update.media)}
-                    >
-                      <span className="latest-update-art">
-                        <span className="latest-kind-badge">
-                          {formatLabel(update.media.format)}
-                        </span>
-                        <CoverImage src={update.media.coverUrl} title={update.media.title} />
-                      </span>
-                      <span className="latest-update-meta">
-                        <span>EP {update.episode}</span>
-                        <span>{relativeTime(update.airedAt * 1_000)}</span>
-                      </span>
-                      <strong title={update.media.title}>{update.media.title}</strong>
-                    </button>
+        {offlineAnime ? <DownloadedTitlesRail onSelect={onSelect} /> : null}
+        {offlineAnime ? null : (
+          <>
+            {error ? <p className="error-banner">{error}</p> : null}
+            {trendingLoading && !trending.length && !malTrendingFallback.length ? (
+              <section className="media-rail" aria-label={`Trending ${mediaName}`}>
+                <div className="rail-heading">
+                  <div>
+                    <p className="catalog-kicker">Loading</p>
+                    <h2>Trending {mediaName}</h2>
+                  </div>
+                </div>
+                <div className="rail-skeleton-row" aria-hidden="true">
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <span className="rail-card-skeleton" key={`trending-skeleton-${index}`} />
                   ))}
-            </div>
-            {latestPageInfo ? (
-              <Pagination
-                label="Latest anime update pages"
-                page={latestPage}
-                totalPages={latestPageInfo.lastPage}
-                hasNextPage={latestPageInfo.hasNextPage}
-                onPageChange={setLatestPage}
-              />
+                </div>
+              </section>
             ) : null}
-          </section>
-        ) : null}
 
-        {type === "MANGA" && preferences.latestUpdates ? (
-          <section
-            className="latest-updates-section"
-            aria-label="Latest manga updates"
-            aria-busy={latestLoading}
-          >
-            <div className="rail-heading">
-              <div>
-                <p className="catalog-kicker">New chapters from MangaDex</p>
-                <h2>Latest Manga Updates</h2>
-              </div>
-              <span className="rail-count">Page {latestPage}</span>
-            </div>
-            {latestError ? <p className="latest-updates-error">{latestError}</p> : null}
-            <div className="latest-updates-grid">
-              {latestLoading && !latestManga.length
-                ? Array.from({ length: 21 }, (_, index) => (
-                    <span
-                      className="latest-update-skeleton"
-                      key={`manga-latest-skeleton-${index}`}
-                      aria-hidden="true"
-                    />
-                  ))
-                : latestManga.map((update) =>
-                    update.aniListId ? (
-                      <button
-                        className={`latest-update-card${latestLoading ? " is-refreshing" : ""}`}
-                        type="button"
-                        key={update.mangaDexId}
-                        onClick={() => onSelect(toMangaCatalogMedia(update))}
-                      >
-                        <LatestMangaCardContent update={update} />
-                      </button>
-                    ) : (
-                      <a
-                        className={`latest-update-card${latestLoading ? " is-refreshing" : ""}`}
-                        key={update.mangaDexId}
-                        href={update.mangaDexUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`${update.title} on MangaDex`}
-                      >
-                        <LatestMangaCardContent update={update} />
-                      </a>
-                    ),
-                  )}
-            </div>
-            {latestPageInfo ? (
-              <Pagination
-                label="Latest manga update pages"
-                page={latestPage}
-                totalPages={latestPageInfo.lastPage}
-                hasNextPage={latestPageInfo.hasNextPage}
-                onPageChange={setLatestPage}
+            <PersonalLibrary
+              key={`continue:${type}:${access.kind === "member" ? access.dashboard.profile.id : "guest"}`}
+              type={type}
+              access={access}
+              onSelect={onSelect}
+              onPrimary={onPrimary}
+            />
+
+            {/* For You right after Continue: the most relevant picks first. */}
+            {forYouShown && forYouSession ? (
+              <ForYouRail
+                slots={{ afterContinuation: trendingRails }}
+                key={`for-you:${forYouKey}`}
+                session={forYouSession}
+                type={type}
+                onSelect={onSelect}
+                onPrimary={onPrimary}
+                onLibrary={onLibrary}
+                access={access}
               />
             ) : null}
-          </section>
-        ) : null}
+
+            {forYouShown ? null : trendingRails}
+
+            {type === "ANIME" && preferences.latestUpdates ? (
+              <section
+                className="latest-updates-section"
+                aria-label="Latest anime updates"
+                aria-busy={latestLoading}
+              >
+                <div className="rail-heading">
+                  <div className="source-heading">
+                    <h2>Latest Anime Updates</h2>
+                    <AniListSourceIcon label="AniList source" />
+                  </div>
+                  <span className="rail-count">Page {latestPage}</span>
+                </div>
+                {latestError ? <p className="latest-updates-error">{latestError}</p> : null}
+                <div className="latest-updates-grid">
+                  {latestLoading && !latestAnime.length
+                    ? Array.from({ length: 21 }, (_, index) => (
+                        <span
+                          className="latest-update-skeleton"
+                          key={`anime-latest-skeleton-${index}`}
+                          aria-hidden="true"
+                        />
+                      ))
+                    : latestAnime.map((update) => (
+                        <button
+                          className={`latest-update-card${latestLoading ? " is-refreshing" : ""}`}
+                          type="button"
+                          key={update.media.id}
+                          onClick={() => onSelect(update.media)}
+                        >
+                          <span className="latest-update-art">
+                            <span className="latest-kind-badge">
+                              {formatLabel(update.media.format)}
+                            </span>
+                            <CoverImage src={update.media.coverUrl} title={update.media.title} />
+                          </span>
+                          <span className="latest-update-meta">
+                            <span>EP {update.episode}</span>
+                            <span>{relativeTime(update.airedAt * 1_000)}</span>
+                          </span>
+                          <strong title={update.media.title}>{update.media.title}</strong>
+                        </button>
+                      ))}
+                </div>
+                {latestPageInfo ? (
+                  <Pagination
+                    label="Latest anime update pages"
+                    page={latestPage}
+                    totalPages={latestPageInfo.lastPage}
+                    hasNextPage={latestPageInfo.hasNextPage}
+                    onPageChange={setLatestPage}
+                  />
+                ) : null}
+              </section>
+            ) : null}
+
+            {type === "MANGA" && preferences.latestUpdates ? (
+              <section
+                className="latest-updates-section"
+                aria-label="Latest manga updates"
+                aria-busy={latestLoading}
+              >
+                <div className="rail-heading">
+                  <div>
+                    <p className="catalog-kicker">New chapters from MangaDex</p>
+                    <h2>Latest Manga Updates</h2>
+                  </div>
+                  <span className="rail-count">Page {latestPage}</span>
+                </div>
+                {latestError ? <p className="latest-updates-error">{latestError}</p> : null}
+                <div className="latest-updates-grid">
+                  {latestLoading && !latestManga.length
+                    ? Array.from({ length: 21 }, (_, index) => (
+                        <span
+                          className="latest-update-skeleton"
+                          key={`manga-latest-skeleton-${index}`}
+                          aria-hidden="true"
+                        />
+                      ))
+                    : latestManga.map((update) =>
+                        update.aniListId ? (
+                          <button
+                            className={`latest-update-card${latestLoading ? " is-refreshing" : ""}`}
+                            type="button"
+                            key={update.mangaDexId}
+                            onClick={() => onSelect(toMangaCatalogMedia(update))}
+                          >
+                            <LatestMangaCardContent update={update} />
+                          </button>
+                        ) : (
+                          <a
+                            className={`latest-update-card${latestLoading ? " is-refreshing" : ""}`}
+                            key={update.mangaDexId}
+                            href={update.mangaDexUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`${update.title} on MangaDex`}
+                          >
+                            <LatestMangaCardContent update={update} />
+                          </a>
+                        ),
+                      )}
+                </div>
+                {latestPageInfo ? (
+                  <Pagination
+                    label="Latest manga update pages"
+                    page={latestPage}
+                    totalPages={latestPageInfo.lastPage}
+                    hasNextPage={latestPageInfo.hasNextPage}
+                    onPageChange={setLatestPage}
+                  />
+                ) : null}
+              </section>
+            ) : null}
+          </>
+        )}
         <LegalFooter />
       </div>
     </section>
