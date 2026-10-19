@@ -1,58 +1,130 @@
+import { withTitleCopy, type TitleCopies } from "../title-copies";
 import type { AnimeSourceClient } from "../anime-source";
 import type { AniListClient } from "../anilist";
 import type { AnimeTmdbLinks } from "../anime-tmdb-links";
 import { animeEpisodeArt } from "../anime-episode-art";
+import { animeEpisodeRanges } from "../anime-episode-ranges";
+import type { AniZipClient } from "../anizip";
 import { createBoundedCache } from "../anilist/cache";
+import { chainEpisodeArt, type EpisodeArtSource } from "../episode-art-sources";
+import type { KitsuClient } from "../kitsu";
+import type { SkipTimesClient } from "../skip-times";
 import type { TmdbClient } from "../tmdb";
-import type { AnimeEpisodeArt } from "../../shared/contracts";
+import { cachedEpisodeArtUrl } from "../../shared/artwork";
+import type { AnimeEpisodeArt, AnimeEpisodeRanges } from "../../shared/contracts";
 import type { MalClient } from "../mal";
 import { registerTrustedIpcHandler } from "../ipc";
 
 export interface AnimeDomainDeps {
   animeSource: AnimeSourceClient | undefined;
   mal: MalClient | undefined;
-  /** TMDB episode stills: exact Wikidata links, TMDB, and AniList start dates. */
-  episodeArt?: { links: AnimeTmdbLinks; tmdb: TmdbClient; aniList: AniListClient };
+  /**
+   * Episode thumbnail sources, tried in this order (user decision 2026-10-13); each is optional.
+   * TMDB stills need exact Wikidata links, TMDB, and AniList start dates.
+   */
+  /** Saved title-page data, served when a live load fails (offline). */
+  copies?: TitleCopies;
+  /** Opening/ending times for the own player's Skip buttons. */
+  skipTimes?: SkipTimesClient;
+  episodeArt?: {
+    anizip?: AniZipClient;
+    kitsu?: KitsuClient;
+    tmdb?: { links: AnimeTmdbLinks; tmdb: TmdbClient; aniList: AniListClient };
+  };
 }
 
 /** Configured anime source episode discovery/playback, plus MAL score and trending fallback. */
 export function registerAnimeDomain(
   trustedRendererOrigin: string,
-  { animeSource, mal, episodeArt }: AnimeDomainDeps,
+  { animeSource, mal, episodeArt, copies, skipTimes }: AnimeDomainDeps,
 ): void {
+  // Saved with the title, so a downloaded episode can still skip its opening offline.
+  registerTrustedIpcHandler(trustedRendererOrigin, "anime:skip-times", async (_event, input) => {
+    if (!skipTimes) return [];
+    return withTitleCopy(
+      copies,
+      `skip:${input.aniListId}:${input.episode}:${Math.round(input.durationSeconds)}`,
+      input.aniListId,
+      () => skipTimes.getSkipTimes(input),
+    ).catch(() => []);
+  });
   const artCache = createBoundedCache<AnimeEpisodeArt[]>({ maxEntries: 40, ttlMs: 6 * 3_600_000 });
+  const artSources = episodeArtSources(episodeArt);
   registerTrustedIpcHandler(trustedRendererOrigin, "anime:episode-art", async (_event, input) => {
-    if (!episodeArt) return [];
-    // Long series fetch the TMDB seasons around the viewed episode, so the area is in the key.
+    if (!artSources.length) return [];
+    // Long series load the thumbnails around the viewed episode, so the area is in the key.
     const key = `${input.aniListId}:${input.episodes}:${Math.floor(input.focus / 50)}`;
     const cached = artCache.get(key);
     if (cached) return cached;
-    void episodeArt.links.refreshIfStale();
-    try {
-      const { art, complete } = await animeEpisodeArt(
-        {
-          links: () => episodeArt.links.index(),
-          media: async (id) => {
-            const detail = await episodeArt.aniList.getMediaDetail(id, "ANIME");
-            return {
-              startDate: detail.startDate,
-              prequels: detail.relations
-                .filter((row) => row.relationType === "PREQUEL" && row.media.type === "ANIME")
-                .map((row) => row.media.id),
-            };
-          },
-          detail: (id) => episodeArt.tmdb.getDetail(id, "TV"),
-          season: (id, number) => episodeArt.tmdb.getSeason(id, number),
-        },
-        input,
-      );
-      if (complete) artCache.set(key, art);
-      return art;
-    } catch {
-      // Stills are decoration: the episode list keeps its own artwork when TMDB is unavailable.
-      return [];
-    }
+    return withTitleCopy(
+      copies,
+      `art:${key}`,
+      input.aniListId,
+      async () => {
+        // Thumbnails are decoration: a failed source leaves the episode list's own artwork.
+        const { art, complete } = await chainEpisodeArt(artSources, input);
+        // Served through the episode-art cache, so image hosts never see the renderer.
+        const served = art.map((row) =>
+          row.stillUrl ? { ...row, stillUrl: cachedEpisodeArtUrl(row.stillUrl) } : row,
+        );
+        if (complete) artCache.set(key, served);
+        return served;
+      },
+      (served) => served.length > 0,
+    );
   });
+  const rangeCache = createBoundedCache<AnimeEpisodeRanges | null>({
+    maxEntries: 40,
+    ttlMs: 24 * 3_600_000,
+  });
+  registerTrustedIpcHandler(
+    trustedRendererOrigin,
+    "anime:episode-ranges",
+    async (_event, input) => {
+      const anizip = episodeArt?.anizip;
+      if (!anizip) return undefined;
+      const key = `${input.aniListId}:${input.episodes}`;
+      const cached = rangeCache.get(key);
+      if (cached !== undefined) return cached ?? undefined;
+      const tmdb = episodeArt.tmdb;
+      const loadRanges = async () => {
+        try {
+          const ranges = await animeEpisodeRanges(
+            {
+              index: (id) => anizip.getTitle(id),
+              tmdbTvId: tmdb
+                ? (id) => {
+                    const key = tmdb.links
+                      .index()
+                      .tmdbKeysFor(id)
+                      .find((link) => link.startsWith("TV:"));
+                    return key ? Number(key.slice(3)) : undefined;
+                  }
+                : undefined,
+              storyArcs: tmdb ? (id) => tmdb.tmdb.getStoryArcs(id) : undefined,
+              tvSeasons: tmdb
+                ? async (id) => (await tmdb.tmdb.getDetail(id, "TV")).seasons
+                : undefined,
+            },
+            input,
+          );
+          rangeCache.set(key, ranges ?? null);
+          return ranges;
+        } catch {
+          // Ranges are a browsing aid: without them the episodes stay one list.
+          return undefined;
+        }
+      };
+      // The saved copy keeps a long series' arcs offline.
+      return withTitleCopy(
+        copies,
+        `ranges:${input.aniListId}`,
+        input.aniListId,
+        loadRanges,
+        (ranges) => ranges !== undefined,
+      );
+    },
+  );
   registerTrustedIpcHandler(trustedRendererOrigin, "anime:provider-readiness", async () => {
     if (!animeSource) {
       return {
@@ -77,7 +149,15 @@ export function registerAnimeDomain(
           checkedAt: new Date().toISOString(),
         };
       }
-      return animeSource.getEpisodeCatalog(input);
+      // The saved list keeps the title page (and downloaded episodes) usable offline.
+      return withTitleCopy(
+        copies,
+        `episodes:${input.aniListId}`,
+        input.aniListId,
+        () => animeSource.getEpisodeCatalog(input),
+        // A bare AniList-count list (the index was unreachable) is not worth more than the copy.
+        (catalog) => catalog.seasons.some((season) => !season.id.startsWith("anilist:")),
+      );
     },
   );
   registerTrustedIpcHandler(trustedRendererOrigin, "anime:playback", async (_event, input) => {
@@ -96,4 +176,44 @@ export function registerAnimeDomain(
       return mal.getRanking(type);
     },
   );
+}
+
+function episodeArtSources(deps: AnimeDomainDeps["episodeArt"]): EpisodeArtSource[] {
+  if (!deps) return [];
+  const sources: EpisodeArtSource[] = [];
+  const { anizip, kitsu, tmdb } = deps;
+  if (anizip) {
+    sources.push({
+      load: async (input) => ({
+        art: await anizip.getEpisodeArt(input.aniListId, input.episodes),
+        complete: true,
+      }),
+    });
+  }
+  if (kitsu) sources.push({ load: (input) => kitsu.getEpisodeArt(input) });
+  if (tmdb) {
+    sources.push({
+      load: (input) => {
+        void tmdb.links.refreshIfStale();
+        return animeEpisodeArt(
+          {
+            links: () => tmdb.links.index(),
+            media: async (id) => {
+              const detail = await tmdb.aniList.getMediaDetail(id, "ANIME");
+              return {
+                startDate: detail.startDate,
+                prequels: detail.relations
+                  .filter((row) => row.relationType === "PREQUEL" && row.media.type === "ANIME")
+                  .map((row) => row.media.id),
+              };
+            },
+            detail: (id) => tmdb.tmdb.getDetail(id, "TV"),
+            season: (id, number) => tmdb.tmdb.getSeason(id, number),
+          },
+          input,
+        );
+      },
+    });
+  }
+  return sources;
 }

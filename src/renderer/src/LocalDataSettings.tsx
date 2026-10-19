@@ -139,10 +139,7 @@ export function LocalDataSettings(): React.JSX.Element {
       <div className="set-row">
         <div className="set-text">
           <strong>Back up this device</strong>
-          <span>
-            History, resume points, Up Next, and reader preferences, saved as an unencrypted JSON
-            file. Your AniList lists are already kept on AniList.
-          </span>
+          <span>History, resume points, Up Next and reader settings, as a JSON file.</span>
         </div>
         <button
           type="button"

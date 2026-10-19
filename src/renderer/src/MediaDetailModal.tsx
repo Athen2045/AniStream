@@ -46,15 +46,10 @@ import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
 import { createMediaDetailSession } from "./media-detail-session";
 import { motionTransition } from "./motion";
 import { friendlyRemoteError } from "./remote-error";
-import {
-  airingOutlook,
-  formatAiringTime,
-  formatCountdown,
-  titleReleaseNotice,
-  unairedEpisode,
-  type AiringOutlook,
-} from "./airing";
+import { formatAiringTime, titleReleaseNotice, unairedEpisode } from "./airing";
 import { UpNextButton } from "./UpNextButton";
+import { TitleDownloadButton } from "./DownloadButtons";
+import { useOnline } from "./useOnline";
 import { animeBingeItem } from "./binge-session";
 import { Select } from "./Select";
 import { MalSourceIcon } from "./MalSourceIcon";
@@ -62,6 +57,7 @@ import { RatingChips, compactVotes } from "./RatingChips";
 import { MangaDexSourceIcon } from "./MangaDexSourceIcon";
 import { MANGA_LANGUAGES, type MangaLanguage } from "../../shared/manga-languages";
 import { TitleFeedback } from "./TitleFeedback";
+import { AnimeAbout, AnimeTitleHeader } from "./AnimeTitleHeader";
 
 const MANGA_LANGUAGE_LABELS: Record<MangaLanguage, string> = { en: "English", ja: "Japanese" };
 
@@ -335,6 +331,8 @@ export function MediaDetailModal({
   }, [onScrolledChange]);
 
   const isAnime = resolved.type === "ANIME";
+  const animeLayout: "series" | "movie" = resolved.format === "MOVIE" ? "movie" : "series";
+  const online = useOnline();
   const libraryEntry = personalized ? access.libraryEntries.get(media.id) : undefined;
   const accentStyle = isAnime ? undefined : titleAccentStyle(resolved.coverColor);
   const mangaProgress = Math.max(detail?.listEntry?.progress ?? 0, libraryProgress);
@@ -368,10 +366,8 @@ export function MediaDetailModal({
       return !entry || entry.status === "PLANNING";
     })
     .slice(0, 6);
-  const outlook = airingOutlook(resolved);
   const sections = [
     { id: "units", label: isAnime ? "Episodes" : "Chapters" },
-    ...(outlook ? [{ id: "airing", label: "Airing" }] : []),
     ...(recommendations.length ? [{ id: "similar", label: "More like this" }] : []),
     ...(detail?.externalLinks.length ? [{ id: "links", label: "Links" }] : []),
   ];
@@ -443,7 +439,7 @@ export function MediaDetailModal({
 
   return (
     <motion.div
-      className={`title-page ${isAnime ? "title-page--anime" : "title-page--manga"}`}
+      className={`title-page ${isAnime ? `title-page--anime title-page--${animeLayout}` : "title-page--manga"}`}
       style={accentStyle}
       ref={pageRef}
       role="dialog"
@@ -455,274 +451,456 @@ export function MediaDetailModal({
       exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
       transition={motionTransition(reducedMotion, "emphasis")}
     >
-      <TitleBand media={resolved} />
+      {isAnime ? null : <TitleBand media={resolved} />}
       <button className="title-back" type="button" ref={backButtonRef} onClick={onClose}>
         <ArrowLeft size={17} aria-hidden="true" />
         Back
       </button>
 
-      <section className="title-main">
-        <div className={`title-cover${isAnime ? "" : " title-cover--book"}`}>
-          <CoverImage src={cachedArtworkUrl(resolved.coverUrl)} title={resolved.title} />
-        </div>
-        <div className="title-info">
-          <p className="title-kicker">
-            {titleKicker(resolved, detail).map((part) => (
-              <span key={part}>{part}</span>
-            ))}
-          </p>
-          <h1>{resolved.title}</h1>
-          {altTitles.length ? <p className="title-alt">{altTitles.join(" · ")}</p> : null}
-          {!isAnime && credits.length ? (
-            <p className="title-byline">
-              By <strong>{credits.join(", ")}</strong>
-            </p>
-          ) : null}
-          {genres.length ? (
-            <ul className="title-genres" aria-label="Genres">
-              {genres.slice(0, 6).map((genre) => (
-                <li key={genre}>{genre}</li>
-              ))}
-            </ul>
-          ) : loading ? (
-            <ul className="title-genres title-genres--loading" aria-hidden="true">
-              {[78, 92, 70].map((width) => (
-                <li key={width} className="sk-pill" style={{ width }} />
-              ))}
-            </ul>
-          ) : null}
-          <div className="title-actions">
-            {mangaUnreadable ? null : (
-              <button
-                className={`title-primary${blockedLabel ? " is-upcoming" : ""}`}
-                type="button"
-                disabled={Boolean(blockedLabel)}
-                onClick={() => {
-                  if (isAnime) setAutoPlayRequest((request) => request + 1);
-                  else void openPreferredChapter();
-                }}
-              >
-                {blockedLabel ? (
-                  <Clock3 size={18} />
-                ) : isAnime ? (
-                  <Play size={18} fill="currentColor" />
-                ) : (
-                  <BookOpen size={18} />
-                )}
-                {blockedLabel ?? primaryLabel}
-              </button>
-            )}
-            {isAnime ? (
-              <UpNextButton item={animeBingeItem(resolved)} className="title-library" />
-            ) : null}
-            {personalized || onLibrary ? (
-              <button
-                className="title-library"
-                type="button"
-                disabled={adding}
-                aria-label={libraryEntry ? "Edit library entry" : "Add to AniList planning"}
-                title={libraryEntry ? "Edit library entry" : "Add to Planning"}
-                onClick={manageLibrary}
-              >
-                {libraryEntry ? <Check size={16} /> : <Plus size={17} />}
-                {libraryEntry
-                  ? `${entryStatusLabel(libraryEntry.status, isAnime)} · ${libraryEntry.progress}${
-                      resolved.totalProgress ? `/${resolved.totalProgress}` : ""
-                    }`
-                  : "Add to list"}
-              </button>
-            ) : null}
-            {personalized && detail ? (
-              <button
-                className="title-round"
-                type="button"
-                aria-label="Rate or complete"
-                aria-expanded={ratingOpen}
-                title="Rate or mark completed"
-                onClick={() => setRatingOpen((open) => !open)}
-              >
-                <Star
-                  size={18}
-                  fill={detail.listEntry?.score ? "currentColor" : "none"}
-                  aria-hidden="true"
-                />
-              </button>
-            ) : null}
-            <TitleFeedback
-              title={resolved.title}
-              target={{ type: resolved.type, id: resolved.id }}
-              className="title-round"
-            />
-          </div>
-          {ratingOpen && personalized && detail ? (
-            <div className="detail-tracker-compact title-tracker">
-              <label>
-                <Star size={15} />
-                <span className="sr-only">AniList rating out of 10</span>
-                <input
-                  aria-label="AniList rating out of 10"
-                  type="number"
-                  min="0"
-                  max="10"
-                  step="0.5"
-                  value={rating ?? detail.listEntry?.score ?? 0}
-                  onChange={(event) => setRating(Number(event.target.value))}
-                />
-                <span>/ 10</span>
-              </label>
-              <button
-                type="button"
-                disabled={savingTracker}
-                onClick={() =>
-                  void detailSession
-                    .saveRating(rating ?? detail.listEntry?.score ?? 0)
-                    .catch(() => undefined)
-                }
-              >
-                Save rating
-              </button>
-              <button
-                type="button"
-                disabled={savingTracker}
-                onClick={() => void markMediaCompleted()}
-              >
-                Mark completed
-              </button>
-            </div>
-          ) : null}
-          <RatingChips
-            chips={[
-              resolved.averageScore
-                ? {
-                    source: "anilist",
-                    score: `${resolved.averageScore}%`,
-                    detail: "AniList",
-                    href: media.siteUrl,
-                    title: `${resolved.averageScore}% on AniList`,
-                  }
-                : undefined,
-              malScore?.score
-                ? {
-                    source: "mal",
-                    score: String(malScore.score),
-                    detail: malScore.scoredBy
-                      ? `${compactVotes(malScore.scoredBy)} users`
-                      : "MyAnimeList",
+      {isAnime ? (
+        <AnimeTitleHeader
+          media={resolved}
+          layout={animeLayout}
+          kicker={titleKicker(resolved, detail)}
+          scores={[
+            ...(malScore?.score
+              ? [
+                  {
+                    score: `★ ${malScore.score}`,
+                    source: "MAL",
                     href: malScore.malUrl,
                     title: malScore.scoredBy
                       ? `${malScore.score}/10 from ${malScore.scoredBy.toLocaleString()} MAL users`
                       : `${malScore.score}/10 on MyAnimeList`,
-                  }
-                : undefined,
-              !isAnime &&
-              mangaEnrichment?.status === "available" &&
-              mangaEnrichment.mangaUpdatesRating !== undefined
-                ? {
-                    source: "mangaupdates",
-                    score: mangaEnrichment.mangaUpdatesRating.toFixed(2),
-                    detail: "MangaUpdates",
-                    title: `${mangaEnrichment.mangaUpdatesRating.toFixed(2)}/10 on MangaUpdates`,
-                  }
-                : undefined,
-            ]}
-          />
-          <div className="title-stats">
-            {readerSession?.statistics?.rating && readerSession.mangaDexId ? (
-              <a
-                href={`https://mangadex.org/title/${readerSession.mangaDexId}`}
-                target="_blank"
-                rel="noreferrer"
-                title={`${readerSession.statistics.rating}/10 on MangaDex`}
-              >
-                {readerSession.statistics.rating.toFixed(2)}
-                <small>MangaDex</small>
-              </a>
-            ) : null}
-            {readerSession?.statistics?.follows !== undefined ? (
-              <span>
-                {compactNumber(readerSession.statistics.follows)}
-                <small>follows</small>
-              </span>
-            ) : resolved.popularity ? (
-              <span>
-                {compactNumber(resolved.popularity)}
-                <small>members</small>
-              </span>
-            ) : null}
-            {detail?.duration ? (
-              <span>
-                {detail.duration}m<small>per episode</small>
-              </span>
-            ) : null}
-          </div>
-          {loading && !aniListSummary && !malSummary ? (
-            // While details load, the summary is shaped, never "no summary".
-            <div className="title-synopsis-loading" aria-hidden="true">
-              <span className="sk-line" style={{ width: "96%" }} />
-              <span className="sk-line" style={{ width: "90%" }} />
-              <span className="sk-line" style={{ width: "62%" }} />
-            </div>
-          ) : description ? (
+                  },
+                ]
+              : []),
+            ...(resolved.averageScore
+              ? [
+                  {
+                    score: `${resolved.averageScore}%`,
+                    source: "AniList",
+                    href: media.siteUrl,
+                    title: `${resolved.averageScore}% on AniList`,
+                  },
+                ]
+              : []),
+          ]}
+          genres={genres}
+          description={aniListSummary ?? malSummary}
+          loading={loading}
+          primaryLabel={primaryLabel}
+          blockedLabel={blockedLabel}
+          onPrimary={() => setAutoPlayRequest((request) => request + 1)}
+          minutes={detail?.duration}
+          studio={detail?.studios[0]}
+          facts={
+            detail
+              ? titleFacts(detail)
+                  .filter(([name]) => ["Aired", "Original Creator", "Country"].includes(name))
+                  .map(([name, value]): [string, string] => [
+                    name === "Aired"
+                      ? "Released"
+                      : name === "Original Creator"
+                        ? "Original creator"
+                        : name,
+                    value,
+                  ])
+              : undefined
+          }
+          actions={
             <>
-              <p className={`title-synopsis${synopsisOpen ? " is-open" : ""}`}>{description}</p>
-              {description.length > 260 ? (
+              <TitleDownloadButton
+                media={resolved}
+                airedEpisodes={
+                  resolved.status === "NOT_YET_RELEASED"
+                    ? 0
+                    : resolved.nextAiringEpisode
+                      ? resolved.nextAiringEpisode.episode - 1
+                      : (resolved.totalProgress ?? 0)
+                }
+                minutes={detail?.duration}
+                className="title-library"
+              />
+              {animeLayout === "series" ? (
+                <UpNextButton item={animeBingeItem(resolved)} className="title-library" />
+              ) : null}
+              {personalized || onLibrary ? (
                 <button
-                  className="title-more"
+                  className="title-round"
                   type="button"
-                  aria-expanded={synopsisOpen}
-                  onClick={() => setSynopsisOpen((open) => !open)}
+                  disabled={adding}
+                  aria-label={libraryEntry ? "Edit library entry" : "Add to AniList planning"}
+                  title={
+                    libraryEntry
+                      ? `${entryStatusLabel(libraryEntry.status, isAnime)} · ${libraryEntry.progress}${
+                          resolved.totalProgress ? `/${resolved.totalProgress}` : ""
+                        }`
+                      : "Add to Planning"
+                  }
+                  onClick={manageLibrary}
                 >
-                  {synopsisOpen ? "Show less" : "Read more"}
+                  {libraryEntry ? <Check size={17} /> : <Plus size={18} />}
                 </button>
               ) : null}
+              {personalized && detail ? (
+                <button
+                  className="title-round"
+                  type="button"
+                  aria-label="Rate or complete"
+                  aria-expanded={ratingOpen}
+                  title="Rate or mark completed"
+                  onClick={() => setRatingOpen((open) => !open)}
+                >
+                  <Star
+                    size={18}
+                    fill={detail.listEntry?.score ? "currentColor" : "none"}
+                    aria-hidden="true"
+                  />
+                </button>
+              ) : null}
+              <TitleFeedback
+                title={resolved.title}
+                target={{ type: resolved.type, id: resolved.id }}
+                className="title-round"
+              />
             </>
-          ) : null}
-          {malFilled.length && malScore ? (
-            <p className="title-source-credit">
-              <MalSourceIcon label="" />
-              <span>
-                {joinWords(malFilled)} from{" "}
-                <a href={malScore.malUrl} target="_blank" rel="noreferrer">
-                  MyAnimeList
-                </a>
-              </span>
-            </p>
-          ) : null}
-        </div>
-        {detail ? (
-          <dl className="title-facts">
-            {titleFacts(detail, mangaEnrichment).map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : (
-          <div className="title-facts title-facts--loading" aria-hidden="true">
-            {[70, 110, 90, 60, 80].map((width) => (
-              <div key={width}>
-                <span className="sk-line" style={{ width }} />
-                <span className="sk-line" style={{ width: width + 30 }} />
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+          }
+          extra={
+            <>
+              {ratingOpen && personalized && detail ? (
+                <div className="detail-tracker-compact title-tracker">
+                  <label>
+                    <Star size={15} />
+                    <span className="sr-only">AniList rating out of 10</span>
+                    <input
+                      aria-label="AniList rating out of 10"
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value={rating ?? detail.listEntry?.score ?? 0}
+                      onChange={(event) => setRating(Number(event.target.value))}
+                    />
+                    <span>/ 10</span>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={savingTracker}
+                    onClick={() =>
+                      void detailSession
+                        .saveRating(rating ?? detail.listEntry?.score ?? 0)
+                        .catch(() => undefined)
+                    }
+                  >
+                    Save rating
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingTracker}
+                    onClick={() => void markMediaCompleted()}
+                  >
+                    Mark completed
+                  </button>
+                </div>
+              ) : null}
+              {malFilled.length && malScore ? (
+                <p className="title-source-credit">
+                  <MalSourceIcon label="" />
+                  <span>
+                    {joinWords(malFilled)} from{" "}
+                    <a href={malScore.malUrl} target="_blank" rel="noreferrer">
+                      MyAnimeList
+                    </a>
+                  </span>
+                </p>
+              ) : null}
+            </>
+          }
+        />
+      ) : null}
 
-      <nav className="title-tabs" aria-label="Title sections">
-        {sections.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            className={section.id === activeSection ? "is-active" : undefined}
-            aria-current={section.id === activeSection ? "true" : undefined}
-            onClick={() => scrollToSection(section.id)}
-          >
-            {section.label}
-          </button>
-        ))}
-      </nav>
+      {isAnime ? null : (
+        <section className="title-main">
+          <div className={`title-cover${isAnime ? "" : " title-cover--book"}`}>
+            <CoverImage src={cachedArtworkUrl(resolved.coverUrl)} title={resolved.title} />
+          </div>
+          <div className="title-info">
+            <p className="title-kicker">
+              {titleKicker(resolved, detail).map((part) => (
+                <span key={part}>{part}</span>
+              ))}
+            </p>
+            <h1>{resolved.title}</h1>
+            {altTitles.length ? <p className="title-alt">{altTitles.join(" · ")}</p> : null}
+            {!isAnime && credits.length ? (
+              <p className="title-byline">
+                By <strong>{credits.join(", ")}</strong>
+              </p>
+            ) : null}
+            {genres.length ? (
+              <ul className="title-genres" aria-label="Genres">
+                {genres.slice(0, 6).map((genre) => (
+                  <li key={genre}>{genre}</li>
+                ))}
+              </ul>
+            ) : loading ? (
+              <ul className="title-genres title-genres--loading" aria-hidden="true">
+                {[78, 92, 70].map((width) => (
+                  <li key={width} className="sk-pill" style={{ width }} />
+                ))}
+              </ul>
+            ) : null}
+            <div className="title-actions">
+              {mangaUnreadable ? null : (
+                <button
+                  className={`title-primary${blockedLabel ? " is-upcoming" : ""}`}
+                  type="button"
+                  disabled={Boolean(blockedLabel)}
+                  onClick={() => {
+                    if (isAnime) setAutoPlayRequest((request) => request + 1);
+                    else void openPreferredChapter();
+                  }}
+                >
+                  {blockedLabel ? (
+                    <Clock3 size={18} />
+                  ) : isAnime ? (
+                    <Play size={18} fill="currentColor" />
+                  ) : (
+                    <BookOpen size={18} />
+                  )}
+                  {blockedLabel ?? primaryLabel}
+                </button>
+              )}
+              {isAnime ? (
+                <UpNextButton item={animeBingeItem(resolved)} className="title-library" />
+              ) : null}
+              {isAnime ? (
+                <TitleDownloadButton
+                  media={resolved}
+                  // Aired so far: everything before the next airing, else the full count.
+                  airedEpisodes={
+                    resolved.status === "NOT_YET_RELEASED"
+                      ? 0
+                      : resolved.nextAiringEpisode
+                        ? resolved.nextAiringEpisode.episode - 1
+                        : (resolved.totalProgress ?? 0)
+                  }
+                  minutes={detail?.duration}
+                  className="title-library"
+                />
+              ) : null}
+              {personalized || onLibrary ? (
+                <button
+                  className="title-library"
+                  type="button"
+                  disabled={adding}
+                  aria-label={libraryEntry ? "Edit library entry" : "Add to AniList planning"}
+                  title={libraryEntry ? "Edit library entry" : "Add to Planning"}
+                  onClick={manageLibrary}
+                >
+                  {libraryEntry ? <Check size={16} /> : <Plus size={17} />}
+                  {libraryEntry
+                    ? `${entryStatusLabel(libraryEntry.status, isAnime)} · ${libraryEntry.progress}${
+                        resolved.totalProgress ? `/${resolved.totalProgress}` : ""
+                      }`
+                    : "Add to list"}
+                </button>
+              ) : null}
+              {personalized && detail ? (
+                <button
+                  className="title-round"
+                  type="button"
+                  aria-label="Rate or complete"
+                  aria-expanded={ratingOpen}
+                  title="Rate or mark completed"
+                  onClick={() => setRatingOpen((open) => !open)}
+                >
+                  <Star
+                    size={18}
+                    fill={detail.listEntry?.score ? "currentColor" : "none"}
+                    aria-hidden="true"
+                  />
+                </button>
+              ) : null}
+              <TitleFeedback
+                title={resolved.title}
+                target={{ type: resolved.type, id: resolved.id }}
+                className="title-round"
+              />
+            </div>
+            {ratingOpen && personalized && detail ? (
+              <div className="detail-tracker-compact title-tracker">
+                <label>
+                  <Star size={15} />
+                  <span className="sr-only">AniList rating out of 10</span>
+                  <input
+                    aria-label="AniList rating out of 10"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    value={rating ?? detail.listEntry?.score ?? 0}
+                    onChange={(event) => setRating(Number(event.target.value))}
+                  />
+                  <span>/ 10</span>
+                </label>
+                <button
+                  type="button"
+                  disabled={savingTracker}
+                  onClick={() =>
+                    void detailSession
+                      .saveRating(rating ?? detail.listEntry?.score ?? 0)
+                      .catch(() => undefined)
+                  }
+                >
+                  Save rating
+                </button>
+                <button
+                  type="button"
+                  disabled={savingTracker}
+                  onClick={() => void markMediaCompleted()}
+                >
+                  Mark completed
+                </button>
+              </div>
+            ) : null}
+            <RatingChips
+              chips={[
+                resolved.averageScore
+                  ? {
+                      source: "anilist",
+                      score: `${resolved.averageScore}%`,
+                      detail: "AniList",
+                      href: media.siteUrl,
+                      title: `${resolved.averageScore}% on AniList`,
+                    }
+                  : undefined,
+                malScore?.score
+                  ? {
+                      source: "mal",
+                      score: String(malScore.score),
+                      detail: malScore.scoredBy
+                        ? `${compactVotes(malScore.scoredBy)} users`
+                        : "MyAnimeList",
+                      href: malScore.malUrl,
+                      title: malScore.scoredBy
+                        ? `${malScore.score}/10 from ${malScore.scoredBy.toLocaleString()} MAL users`
+                        : `${malScore.score}/10 on MyAnimeList`,
+                    }
+                  : undefined,
+                !isAnime &&
+                mangaEnrichment?.status === "available" &&
+                mangaEnrichment.mangaUpdatesRating !== undefined
+                  ? {
+                      source: "mangaupdates",
+                      score: mangaEnrichment.mangaUpdatesRating.toFixed(2),
+                      detail: "MangaUpdates",
+                      title: `${mangaEnrichment.mangaUpdatesRating.toFixed(2)}/10 on MangaUpdates`,
+                    }
+                  : undefined,
+              ]}
+            />
+            <div className="title-stats">
+              {readerSession?.statistics?.rating && readerSession.mangaDexId ? (
+                <a
+                  href={`https://mangadex.org/title/${readerSession.mangaDexId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`${readerSession.statistics.rating}/10 on MangaDex`}
+                >
+                  {readerSession.statistics.rating.toFixed(2)}
+                  <small>MangaDex</small>
+                </a>
+              ) : null}
+              {readerSession?.statistics?.follows !== undefined ? (
+                <span>
+                  {compactNumber(readerSession.statistics.follows)}
+                  <small>follows</small>
+                </span>
+              ) : resolved.popularity ? (
+                <span>
+                  {compactNumber(resolved.popularity)}
+                  <small>members</small>
+                </span>
+              ) : null}
+              {detail?.duration ? (
+                <span>
+                  {detail.duration}m<small>per episode</small>
+                </span>
+              ) : null}
+            </div>
+            {loading && !aniListSummary && !malSummary ? (
+              // While details load, the summary is shaped, never "no summary".
+              <div className="title-synopsis-loading" aria-hidden="true">
+                <span className="sk-line" style={{ width: "96%" }} />
+                <span className="sk-line" style={{ width: "90%" }} />
+                <span className="sk-line" style={{ width: "62%" }} />
+              </div>
+            ) : description ? (
+              <>
+                <p className={`title-synopsis${synopsisOpen ? " is-open" : ""}`}>{description}</p>
+                {description.length > 260 ? (
+                  <button
+                    className="title-more"
+                    type="button"
+                    aria-expanded={synopsisOpen}
+                    onClick={() => setSynopsisOpen((open) => !open)}
+                  >
+                    {synopsisOpen ? "Show less" : "Read more"}
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+            {malFilled.length && malScore ? (
+              <p className="title-source-credit">
+                <MalSourceIcon label="" />
+                <span>
+                  {joinWords(malFilled)} from{" "}
+                  <a href={malScore.malUrl} target="_blank" rel="noreferrer">
+                    MyAnimeList
+                  </a>
+                </span>
+              </p>
+            ) : null}
+          </div>
+          {detail ? (
+            <dl className="title-facts">
+              {titleFacts(detail, mangaEnrichment).map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <div className="title-facts title-facts--loading" aria-hidden="true">
+              {[70, 110, 90, 60, 80].map((width) => (
+                <div key={width}>
+                  <span className="sk-line" style={{ width }} />
+                  <span className="sk-line" style={{ width: width + 30 }} />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {isAnime ? null : (
+        <nav className="title-tabs" aria-label="Title sections">
+          {sections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              className={section.id === activeSection ? "is-active" : undefined}
+              aria-current={section.id === activeSection ? "true" : undefined}
+              onClick={() => scrollToSection(section.id)}
+            >
+              {section.label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <div className="title-body">
         {loading ? (
@@ -731,6 +909,12 @@ export function MediaDetailModal({
               <span key={index} className="sk-block detail-skeleton-card" />
             ))}
           </div>
+        ) : null}
+        {!online ? (
+          <p className="title-offline-note" role="status">
+            You&rsquo;re offline. This page shows what was saved the last time it loaded
+            {isAnime ? "; downloaded episodes play as usual." : "."}
+          </p>
         ) : null}
         {error || libraryError ? (
           <p className="error-banner" role="alert">
@@ -744,9 +928,11 @@ export function MediaDetailModal({
               <AnimeWatchExperience
                 media={resolved}
                 initialEpisode={initialEpisode}
+                exactEpisode={initialUnit !== undefined}
                 autoPlayRequest={autoPlayRequest}
                 onEpisodeWatched={markEpisodeWatched}
                 onNavigate={onNavigate}
+                hideEpisodes={animeLayout === "movie"}
               />
             </Suspense>
           ) : (
@@ -768,8 +954,6 @@ export function MediaDetailModal({
             />
           )}
         </section>
-
-        {outlook ? <DetailAiring outlook={outlook} total={resolved.totalProgress} /> : null}
 
         {recommendations.length ? (
           <section className="title-section" data-title-section="similar">
@@ -796,7 +980,19 @@ export function MediaDetailModal({
           </section>
         ) : null}
 
-        {detail?.externalLinks.length ? (
+        {isAnime && animeLayout === "series" && detail ? (
+          <AnimeAbout
+            facts={titleFacts(detail)
+              .filter(([name]) => ["Status", "Aired", "Studio", "Original Creator"].includes(name))
+              .map(([name, value]): [string, string] => [
+                name === "Original Creator" ? "Original creator" : name,
+                value,
+              ])}
+          />
+        ) : null}
+
+        {/* Anime pages drop the Links row (user decision 2026-10-18). */}
+        {!isAnime && detail?.externalLinks.length ? (
           <section className="title-section" data-title-section="links">
             <h2>Links</h2>
             <div className="external-links">
@@ -1526,57 +1722,6 @@ function volumeSummaries(
   });
   close(rows.length);
   return headings;
-}
-
-const AIRING_ROWS_SHOWN = 5;
-/** Beyond a week the date says enough; a countdown only helps for what is close. */
-const COUNTDOWN_WINDOW_MS = 7 * 86_400_000;
-
-/** AniList's scheduled airings; a scheduled episode is not a promise the player has it yet. */
-function DetailAiring({
-  outlook,
-  total,
-}: {
-  outlook: AiringOutlook;
-  total?: number;
-}): React.JSX.Element {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  const last = outlook.rows.find((row) => row.final);
-  return (
-    <section className="title-section" data-title-section="airing">
-      <h2>Airing schedule</h2>
-      <p className="title-airing-summary">
-        {[
-          outlook.cadence,
-          last
-            ? `Finale (episode ${last.episode}) ${formatAiringTime(last.airingAt, now)}`
-            : total
-              ? `${total} episodes planned`
-              : undefined,
-        ]
-          .filter(Boolean)
-          .join(" · ") || "Times are shown in your local time zone."}
-      </p>
-      <ol className="title-airing">
-        {outlook.rows.slice(0, AIRING_ROWS_SHOWN).map((row, index) => (
-          <li key={row.episode} className={index === 0 ? "is-next" : undefined}>
-            <strong>Episode {row.episode}</strong>
-            <time dateTime={new Date(row.airingAt * 1000).toISOString()}>
-              {formatAiringTime(row.airingAt, now)}
-            </time>
-            {row.final ? <em>Finale</em> : null}
-            {row.airingAt * 1000 - now < COUNTDOWN_WINDOW_MS ? (
-              <span>{formatCountdown(row.airingAt, now)}</span>
-            ) : null}
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
 }
 
 const ORIGINAL_CREATOR_ROLE = /^original (?:creator|story)\b/i;

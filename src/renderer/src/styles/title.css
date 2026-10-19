@@ -33,8 +33,17 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgb(7 8 7 / 0.55) 0, transparent var(--app-navbar-height)),
-    linear-gradient(0deg, var(--ink) 0, rgb(7 8 7 / 0.72) 26%, transparent 62%);
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--ink) 55%, transparent) 0,
+      transparent var(--app-navbar-height)
+    ),
+    linear-gradient(
+      0deg,
+      var(--ink) 0,
+      color-mix(in srgb, var(--ink) 72%, transparent) 26%,
+      transparent 62%
+    );
 }
 /* Without a banner the cover, blurred and darkened, fills the same band. */
 .title-band--fallback .title-band-art {
@@ -70,7 +79,7 @@
   flex-wrap: wrap;
   gap: 8px 18px;
   align-items: center;
-  color: #e7ebe8;
+  color: var(--text);
   font-size: 14px;
   font-weight: 600;
 }
@@ -143,7 +152,7 @@
 .title-round,
 .title-back {
   border-color: rgb(255 255 255 / 0.14);
-  background: rgb(18 22 19 / 0.62);
+  background: color-mix(in srgb, var(--surface-panel) 62%, transparent);
   backdrop-filter: blur(16px);
   font-weight: 600;
 }
@@ -199,8 +208,8 @@
   overflow: visible;
   border-radius: 4px 10px 10px 4px;
   box-shadow:
-    4px 4px 0 -1px #2a2d2b,
-    8px 8px 0 -2px #1d201e,
+    4px 4px 0 -1px color-mix(in srgb, var(--surface-raised), white 8%),
+    8px 8px 0 -2px color-mix(in srgb, var(--surface-raised), white 3%),
     0 34px 60px -16px rgb(0 0 0 / 0.9);
 }
 .title-cover--book img,
@@ -336,7 +345,7 @@
   max-width: 760px;
   margin: 18px 0 0;
   overflow: hidden;
-  color: #d9dfdb;
+  color: var(--text-secondary);
   font-size: 15.5px;
   line-height: 1.65;
   -webkit-box-orient: vertical;
@@ -361,7 +370,7 @@
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 16px;
-  background: rgb(18 22 19 / 0.62);
+  background: color-mix(in srgb, var(--surface-panel) 62%, transparent);
   backdrop-filter: blur(18px);
 }
 .title-page--manga .title-facts {
@@ -398,7 +407,11 @@
   gap: 30px;
   margin: 48px var(--page-gutter) 0;
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(180deg, var(--ink) 70%, rgb(7 8 7 / 0.92));
+  background: linear-gradient(
+    180deg,
+    var(--ink) 70%,
+    color-mix(in srgb, var(--ink) 92%, transparent)
+  );
 }
 .title-tabs button {
   position: relative;
@@ -438,52 +451,6 @@
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
-}
-.title-airing-summary {
-  margin: -6px 0 16px;
-  color: var(--text-soft);
-  font-size: 14px;
-}
-.title-airing {
-  display: grid;
-  max-width: 640px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.title-airing li {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  padding: 10px 2px;
-  border-bottom: 1px solid var(--line-subtle);
-  color: var(--text-soft);
-  font-size: 14px;
-}
-.title-airing li:last-child {
-  border-bottom: 0;
-}
-.title-airing strong {
-  min-width: 110px;
-  color: var(--text-secondary);
-  font-weight: 600;
-}
-.title-airing li.is-next strong {
-  color: var(--success);
-}
-.title-airing span {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 13px;
-}
-.title-airing em {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--secondary-amber-soft);
-  color: var(--secondary-amber);
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 600;
 }
 .title-section .watch-experience {
   margin: 0;
@@ -638,6 +605,18 @@
   padding: 0 2px;
   color: var(--muted);
   font-size: 13px;
+}
+/* Episode synopsis from the episode-art sources: two lines, the full text stays in the DOM. */
+.episode-tile-synopsis {
+  display: -webkit-box;
+  overflow: hidden;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 .episode-tile.is-current .episode-tile-status {
   color: #4fd197;
@@ -999,7 +978,7 @@
   max-width: 640px;
   margin: 12px 0 18px;
   overflow: hidden;
-  color: #d9dfdb;
+  color: var(--text-secondary);
   font-size: 15px;
   line-height: 1.6;
   -webkit-box-orient: vertical;
@@ -1047,8 +1026,8 @@
   overflow: visible;
   border-radius: 4px 8px 8px 4px;
   box-shadow:
-    3px 3px 0 -1px #2a2d2b,
-    6px 6px 0 -2px #1d201e,
+    3px 3px 0 -1px color-mix(in srgb, var(--surface-raised), white 8%),
+    6px 6px 0 -2px color-mix(in srgb, var(--surface-raised), white 3%),
     0 14px 30px rgb(0 0 0 / 0.4);
 }
 .continue-book .rail-art img,
@@ -1109,7 +1088,12 @@
   position: absolute;
   z-index: 1;
   inset: 0;
-  background: linear-gradient(0deg, rgb(4 5 4 / 0.96) 6%, rgb(4 5 4 / 0.5) 46%, transparent 72%);
+  background: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--ink) 96%, transparent) 6%,
+    color-mix(in srgb, var(--ink) 50%, transparent) 46%,
+    transparent 72%
+  );
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--motion-fast) var(--motion-ease);

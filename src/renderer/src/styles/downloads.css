@@ -1,0 +1,311 @@
+/* Offline anime downloads (DownloadButtons.tsx, DownloadsView.tsx). Loaded after upnext.css. */
+
+/* ---------- Episode tile: download + Up Next buttons share the top-right corner ---------- */
+.episode-tile-tools {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+.episode-tile-wrap.is-watched .episode-tile-tools {
+  right: 44px;
+}
+.episode-tile-tools .episode-queue-toggle {
+  position: static;
+}
+.episode-download-toggle {
+  position: relative;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: 50%;
+  background: rgb(7 8 7 / 0.74);
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease);
+}
+.episode-tile-wrap:hover .episode-download-toggle,
+.episode-tile-wrap:focus-within .episode-download-toggle {
+  opacity: 1;
+}
+/* Anything in progress, paused, failed or done stays visible without hovering. */
+.episode-download-toggle.is-queued,
+.episode-download-toggle.is-downloading,
+.episode-download-toggle.is-paused,
+.episode-download-toggle.is-failed,
+.episode-download-toggle.is-done {
+  opacity: 1;
+}
+.episode-download-toggle:hover {
+  background: rgb(255 255 255 / 0.18);
+}
+.episode-download-toggle.is-done {
+  border-color: transparent;
+  background: var(--primary);
+  cursor: default;
+}
+.episode-download-toggle.is-failed {
+  border-color: var(--error-line);
+  color: var(--error-text);
+}
+.episode-download-toggle.is-paused {
+  color: var(--secondary-amber);
+}
+.episode-download-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.download-ring {
+  position: absolute;
+  inset: -1px;
+  width: 30px;
+  height: 30px;
+  transform: rotate(-90deg);
+}
+.download-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+.download-ring-track {
+  stroke: rgb(255 255 255 / 0.18);
+}
+.download-ring-value {
+  stroke: var(--primary-hover);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 400ms linear;
+}
+
+/* ---------- Title page panel ---------- */
+.download-panel {
+  min-width: 300px;
+  max-width: 340px;
+  gap: 10px;
+  padding: 14px;
+}
+.download-panel p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.download-panel p.download-panel-note {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.download-panel .download-panel-confirm {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #0b0d0c;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---------- Downloads page ---------- */
+.downloads-page {
+  min-height: 100vh;
+  padding: calc(var(--app-navbar-height) + 40px) var(--page-gutter) 64px;
+  background:
+    radial-gradient(ellipse 60% 340px at 12% 0, rgb(42 131 95 / 0.12), transparent 70%), var(--ink);
+}
+.downloads-header h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.downloads-header p {
+  margin: 4px 0 22px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.downloads-storage {
+  display: grid;
+  max-width: 980px;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 14px;
+  background: var(--surface-panel);
+}
+.downloads-meter-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.downloads-meter-text strong {
+  font-size: 16px;
+}
+.downloads-meter-text span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.downloads-meter-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-hover);
+}
+.downloads-meter-bar span {
+  display: block;
+  height: 100%;
+  background: var(--primary-hover);
+  transform-origin: left;
+  transition: transform var(--motion-standard) var(--motion-ease);
+}
+.downloads-meter-bar.is-full span {
+  background: var(--secondary-amber);
+}
+.downloads-actions button.is-primary {
+  border-color: transparent;
+  background: #fff;
+  color: #0b0d0c;
+}
+.downloads-actions button.is-danger {
+  border-color: var(--error-line);
+  background: var(--error-soft);
+  color: var(--error-text);
+}
+.downloads-title {
+  max-width: 980px;
+  margin-bottom: 26px;
+}
+.downloads-title > header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.downloads-cover {
+  width: 44px;
+  height: 62px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.downloads-cover.cover-image-fallback {
+  display: block;
+  overflow: hidden;
+  background: var(--surface-raised);
+  font-size: 0;
+}
+.downloads-title h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.downloads-title > header span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.downloads-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.downloads-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  gap: 4px 14px;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+.downloads-episode {
+  font-size: 14px;
+  font-weight: 600;
+}
+.downloads-status {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.downloads-row.is-done .downloads-status svg {
+  color: var(--success);
+}
+.downloads-row.is-failed .downloads-status {
+  color: var(--error-text);
+  white-space: normal;
+}
+.downloads-progress {
+  grid-column: 2 / 3;
+  grid-row: 2;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-hover);
+}
+.downloads-progress span {
+  display: block;
+  height: 100%;
+  background: var(--primary-hover);
+  transform-origin: left;
+  transition: transform 400ms linear;
+}
+.downloads-row.is-paused .downloads-progress span {
+  background: var(--secondary-amber);
+}
+.downloads-actions {
+  display: inline-flex;
+  grid-row: 1 / 3;
+  grid-column: 3;
+  gap: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .download-ring-value,
+  .downloads-progress span,
+  .downloads-meter-bar span {
+    transition: none;
+  }
+}
+
+/* ---------- Offline title page ---------- */
+.title-offline-note {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border: 1px solid rgb(255 193 92 / 0.35);
+  border-radius: 10px;
+  background: var(--secondary-amber-soft);
+  color: var(--secondary-amber);
+  font-size: 13.5px;
+}
+.episode-tile.is-offline {
+  cursor: default;
+}
+.episode-tile.is-offline .episode-tile-art,
+.episode-tile.is-offline .episode-tile-still {
+  filter: brightness(0.22) saturate(0.3) grayscale(0.5);
+}
+.episode-tile.is-offline .episode-play {
+  display: none;
+}
+.episode-tile.is-offline .episode-tile-status {
+  color: var(--muted);
+}

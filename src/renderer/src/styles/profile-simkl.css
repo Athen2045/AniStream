@@ -57,7 +57,7 @@
   padding: 0 14px 0 11px;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 12px;
-  background: rgb(12 14 13 / 0.62);
+  background: color-mix(in srgb, var(--ink) 62%, transparent);
   color: #fff;
   text-decoration: none;
   backdrop-filter: blur(14px);
@@ -109,14 +109,14 @@ a.rating-chip:hover {
   padding: 0 15px;
   border: 1px solid rgb(255 255 255 / 0.16);
   border-radius: 999px;
-  background: rgb(7 8 7 / 0.55);
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
   color: #fff;
   font-size: 13.5px;
   font-weight: 600;
   backdrop-filter: blur(12px);
 }
 .profile-edit-look:hover {
-  background: rgb(7 8 7 / 0.75);
+  background: color-mix(in srgb, var(--ink) 75%, transparent);
 }
 .profile-source {
   display: inline-flex;
@@ -206,7 +206,7 @@ a.rating-chip:hover {
   height: 24px;
   padding: 0 8px;
   border-radius: 7px;
-  background: rgb(7 8 7 / 0.78);
+  background: color-mix(in srgb, var(--ink) 78%, transparent);
   color: #f5c451;
   font-size: 12px;
   font-weight: 700;
@@ -350,7 +350,7 @@ a.rating-chip:hover {
   height: 66px;
   overflow: hidden;
   border-radius: 9px;
-  background: #0b0c0b;
+  background: color-mix(in srgb, var(--ink), white 2%);
 }
 .look-hero-preview img,
 .look-mix {
@@ -424,7 +424,7 @@ a.rating-chip:hover {
   height: 30px;
   padding: 0 12px;
   border-radius: 999px;
-  background: rgb(7 8 7 / 0.72);
+  background: color-mix(in srgb, var(--ink) 72%, transparent);
   font-size: 12.5px;
   font-weight: 600;
   pointer-events: none;
@@ -513,7 +513,7 @@ a.rating-chip:hover {
 }
 .set-avatar--logo {
   border: 1px solid rgb(255 255 255 / 0.14);
-  background: #0b0b0b;
+  background: color-mix(in srgb, var(--ink), white 2%);
 }
 .set-avatar--logo .source-logo {
   width: 26px;
@@ -521,12 +521,6 @@ a.rating-chip:hover {
 }
 .set-avatar--anilist {
   background: #2b2d42;
-}
-.set-subhead {
-  margin: 26px 0 12px;
-  color: var(--text-soft);
-  font-size: 15px;
-  font-weight: 700;
 }
 .set-pictures {
   display: inline-flex;
@@ -572,7 +566,7 @@ a.rating-chip:hover {
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 8px;
-  background: #0b0c0b;
+  background: color-mix(in srgb, var(--ink), white 2%);
 }
 .set-hero-thumb img {
   width: 100%;
@@ -600,7 +594,7 @@ a.rating-chip:hover {
   padding: 16px 18px;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 16px;
-  background: rgb(15 18 16 / 0.82);
+  background: color-mix(in srgb, var(--surface-panel) 82%, transparent);
   backdrop-filter: blur(18px);
 }
 .signin-tracker--waiting {
@@ -623,7 +617,7 @@ a.rating-chip:hover {
 }
 .signin-tracker-mark--simkl {
   border: 1px solid rgb(255 255 255 / 0.14);
-  background: #0b0b0b;
+  background: color-mix(in srgb, var(--ink), white 2%);
 }
 .signin-tracker-text {
   flex: 1;

@@ -83,14 +83,15 @@ function setup(history: MoreHistoryEntry[], aniListTaste: HybridHistoryItem[] = 
 
 describe("More For You", () => {
   it("counts real watching, not player checks, as taste evidence", () => {
-    expect(moreAffinity(watched(1, { maxRatio: 0.14, finishedEpisodes: 0 }))).toBe(0);
-    expect(moreAffinity(watched(1, { maxRatio: 0.3, finishedEpisodes: 0 }))).toBe(0.35);
-    expect(moreAffinity(watched(1))).toBe(0.6);
-    expect(moreAffinity(watched(1, { finishedEpisodes: 1 }, "TV"))).toBe(0.35);
-    expect(moreAffinity(watched(1, { finishedEpisodes: 2 }, "TV"))).toBe(0.6);
-    expect(moreAffinity(watched(1, { maxRatio: 0, finishedEpisodes: 0, watchlisted: true }))).toBe(
-      0.25,
-    );
+    // The fixture clock, so the two-week "abandoned movie" rule does not depend on today's date.
+    expect(moreAffinity(watched(1, { maxRatio: 0.14, finishedEpisodes: 0 }), 7, { now })).toBe(0);
+    expect(moreAffinity(watched(1, { maxRatio: 0.3, finishedEpisodes: 0 }), 7, { now })).toBe(0.35);
+    expect(moreAffinity(watched(1), 7, { now })).toBe(0.6);
+    expect(moreAffinity(watched(1, { finishedEpisodes: 1 }, "TV"), 7, { now })).toBe(0.35);
+    expect(moreAffinity(watched(1, { finishedEpisodes: 2 }, "TV"), 7, { now })).toBe(0.6);
+    expect(
+      moreAffinity(watched(1, { maxRatio: 0, finishedEpisodes: 0, watchlisted: true }), 7, { now }),
+    ).toBe(0.25);
   });
 
   it("stays in learning without More evidence or AniList taste, and makes no requests", async () => {

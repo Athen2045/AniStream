@@ -1,6 +1,16 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Bookmark, Film, KeyRound } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { arrangeFeed, type FeedSlot } from "./feed-layout";
 import type {
   MoreCatalogItem,
   MoreCatalogPage,
@@ -273,7 +283,8 @@ export function MoreView({
       return mixHeroPicks(
         { reason: "For You", items: wide(feed.items) },
         (feed.rows ?? [])
-          .filter((row) => !row.theme)
+          // The litmus row is outside the viewer's taste: it never feeds the hero.
+          .filter((row) => !row.theme && !row.tryNew && !row.pair)
           .map((row) => ({
             reason: `Because you watched ${row.seedTitle}`,
             items: wide(row.items),
@@ -481,38 +492,55 @@ export function MoreView({
                   </section>
                 ) : (
                   <>
-                    {preferences.forYou ? (
-                      <MoreForYouRails state={forYou} actions={actions} />
-                    ) : null}
-                    {library.watchlist.length ? (
-                      <PosterRail
-                        title={WATCH_LIST}
-                        items={library.watchlist}
-                        actions={actions}
-                        onViewAll={() => chooseFilter("LIST")}
-                      />
-                    ) : null}
-                    {trendingMovies.items.length ? (
-                      <PosterRail
-                        title={trendingMovies.title}
-                        items={trendingMovies.items}
-                        actions={actions}
-                        onViewAll={() => chooseFilter("MOVIE")}
-                      />
-                    ) : null}
-                    {trendingShows.items.length ? (
-                      <PosterRail
-                        title={trendingShows.title}
-                        items={trendingShows.items}
-                        actions={actions}
-                        onViewAll={() => chooseFilter("TV")}
-                      />
-                    ) : null}
-                    {simklRows
-                      .filter((row) => row.kind === "list")
-                      .map((row) => (
-                        <SimklRail key={row.id} row={row} actions={actions} />
-                      ))}
+                    {(() => {
+                      const watchList = library.watchlist.length ? (
+                        <PosterRail
+                          title={WATCH_LIST}
+                          items={library.watchlist}
+                          actions={actions}
+                          onViewAll={() => chooseFilter("LIST")}
+                        />
+                      ) : null;
+                      const movies = trendingMovies.items.length ? (
+                        <PosterRail
+                          title={trendingMovies.title}
+                          items={trendingMovies.items}
+                          actions={actions}
+                          onViewAll={() => chooseFilter("MOVIE")}
+                        />
+                      ) : null;
+                      const shows = trendingShows.items.length ? (
+                        <PosterRail
+                          title={trendingShows.title}
+                          items={trendingShows.items}
+                          actions={actions}
+                          onViewAll={() => chooseFilter("TV")}
+                        />
+                      ) : null;
+                      const lists = simklRows
+                        .filter((row) => row.kind === "list")
+                        .map((row) => <SimklRail key={row.id} row={row} actions={actions} />);
+                      // With For You on, the page's rails sit between its rows (`feed-layout.ts`).
+                      return preferences.forYou ? (
+                        <MoreForYouRails
+                          state={forYou}
+                          actions={actions}
+                          slots={{
+                            afterMain: watchList,
+                            afterContinuation: movies,
+                            middle: shows,
+                            end: lists,
+                          }}
+                        />
+                      ) : (
+                        <>
+                          {watchList}
+                          {movies}
+                          {shows}
+                          {lists}
+                        </>
+                      );
+                    })()}
                   </>
                 )}
               </>
@@ -563,16 +591,29 @@ export function MoreView({
 function MoreForYouRails({
   state,
   actions,
+  slots = {},
 }: {
   state: ReturnType<typeof useMoreForYou>;
   actions: MoreCardActions;
+  /** The page's own rails, placed between the For You rows (see `feed-layout.ts`). */
+  slots?: Partial<Record<FeedSlot, ReactNode>>;
 }): React.JSX.Element | null {
   const { feed } = state;
   const items = feed?.items ?? [];
   const rows = (feed?.rows ?? []).filter((row) => row.items.length);
-  if (!feed && !state.error) return null;
+  // Without a feed the page's own rails still show, in the same order.
+  const slotsOnly = (
+    <>
+      {arrangeFeed([]).map((entry) =>
+        entry.kind === "slot" ? (
+          <Fragment key={`slot:${entry.slot}`}>{slots[entry.slot] ?? null}</Fragment>
+        ) : null,
+      )}
+    </>
+  );
+  if (!feed && !state.error) return slotsOnly;
   // Hidden until enough movies or shows were watched to learn from (user request 2026-10-09).
-  if (feed?.status === "learning" && !state.error) return null;
+  if (feed?.status === "learning" && !state.error) return slotsOnly;
   const poster = (entry: MoreRecommendation, inRow: boolean): React.JSX.Element => (
     <MorePosterCard
       key={moreKey(entry.item)}
@@ -612,26 +653,54 @@ function MoreForYouRails({
           </ContentCarousel>
         ) : null}
       </section>
-      {rows.map((row) => {
-        const heading = row.continuation
-          ? "Next in film series you watched"
-          : row.theme
-            ? `Because you like ${row.theme}`
-            : `Because you watched ${row.seedTitle}`;
+      {arrangeFeed(rows).map((entry) => {
+        if (entry.kind === "slot")
+          return <Fragment key={`slot:${entry.slot}`}>{slots[entry.slot] ?? null}</Fragment>;
+        const row = entry.row;
+        const heading = row.tryNew
+          ? TRY_NEW_HEADING
+          : row.continuation
+            ? "Next in film series you watched"
+            : row.pair
+              ? `Because you like ${row.pair.join(" + ")}`
+              : row.theme
+                ? `Because you like ${row.theme}`
+                : `Because you watched ${row.seedTitle}`;
         return (
           <section
             key={
-              row.continuation
-                ? "next"
-                : row.theme
-                  ? `theme:${row.theme}`
-                  : `${row.seedType}:${row.seedId}`
+              row.tryNew
+                ? "try-new"
+                : row.pair
+                  ? `pair:${row.pair.join("+")}`
+                  : row.continuation
+                    ? "next"
+                    : row.theme
+                      ? `theme:${row.theme}`
+                      : `${row.seedType}:${row.seedId}`
             }
             className="more-section more-rail"
             aria-label={heading}
           >
             <div className="more-section-head rail-heading">
-              <h2>{heading}</h2>
+              {row.tryNew ? (
+                <div>
+                  <p className="catalog-kicker">{TRY_NEW_KICKER}</p>
+                  <h2>{heading}</h2>
+                </div>
+              ) : (
+                <h2>{heading}</h2>
+              )}
+              {row.tryNew && row.items.some((entry) => entry.simklUrl) ? (
+                <a
+                  className="more-link"
+                  href="https://simkl.com/tv/best-shows/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Documentaries from Simkl
+                </a>
+              ) : null}
             </div>
             <ContentCarousel label={heading}>
               {row.items.map((entry) => poster(entry, !row.theme))}
@@ -643,7 +712,18 @@ function MoreForYouRails({
   );
 }
 
+const TRY_NEW_HEADING = "Try something new";
+const TRY_NEW_KICKER = "Well rated, outside your usual taste";
+
 function moreReason(entry: MoreRecommendation, inRow: boolean): string {
+  if (entry.combo?.length === 2) return `Try ${entry.combo[0]} + ${entry.combo[1]}`;
+  if (entry.reasonCodes.includes("on-simkl")) return "Top rated on Simkl";
+  if (entry.reasonCodes[0] === "obscure-classic") return "Overlooked classic";
+  if (entry.reasonCodes[0] === "documentary") return "Documentary";
+  if (entry.reasonCodes[0] === "try-new")
+    return entry.newTastes?.length
+      ? `New to you: ${entry.newTastes.slice(0, 2).join(" · ")}`
+      : "New to you";
   const reason = inRow
     ? entry.reasonCodes.find((code) => code !== "similar-to")
     : entry.reasonCodes[0];

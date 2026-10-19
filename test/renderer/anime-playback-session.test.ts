@@ -234,3 +234,29 @@ describe("AnimePlaybackSession", () => {
     session.dispose();
   });
 });
+
+describe("explicit episode choice", () => {
+  it("plays exactly the chosen episode, even before the user's progress", () => {
+    expect(
+      chooseInitialAnimeEpisode({ requestedEpisode: 1, completedProgress: 2, exact: true }),
+    ).toBe(1);
+    expect(
+      chooseInitialAnimeEpisode({
+        requestedEpisode: 1,
+        savedEpisode: 3,
+        completedProgress: 2,
+        exact: true,
+      }),
+    ).toBe(1);
+    expect(
+      chooseInitialAnimeEpisode({
+        requestedEpisode: 40,
+        completedProgress: 0,
+        totalEpisodes: 28,
+        exact: true,
+      }),
+    ).toBe(28);
+    // Without an explicit choice, progress still moves a generic Watch forward.
+    expect(chooseInitialAnimeEpisode({ requestedEpisode: 1, completedProgress: 2 })).toBe(3);
+  });
+});

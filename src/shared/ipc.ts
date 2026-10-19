@@ -12,6 +12,15 @@ import type {
   AnimeEpisodeCatalog,
   AnimeEpisodeArt,
   AnimeEpisodeArtInput,
+  AnimeSkipSegment,
+  AnimeSkipTimesInput,
+  AnimeEpisodeRanges,
+  AnimeDirectPlayback,
+  AnimeDirectSubtitle,
+  AnimeDirectPlaybackInput,
+  AnimeSeriesNode,
+  TitlePreferences,
+  AnimeEpisodeRangesInput,
   AnimeEpisodeCatalogInput,
   AnimePlaybackInput,
   AnimePlaybackResult,
@@ -74,6 +83,12 @@ import type { RestorePreview, RestoreSummary } from "./local-backup";
 import type { TasteMap } from "./taste-map";
 import type { PersonalAiringUpdate } from "./personal-library";
 import type { BingeChange, BingeState } from "./binge";
+import type {
+  DownloadAddResult,
+  DownloadChange,
+  DownloadEpisodeRequest,
+  DownloadsState,
+} from "./downloads";
 import type { LocalActivity, RecordActivityInput } from "./activity";
 import type {
   DiscoveryFeed,
@@ -107,6 +122,13 @@ export interface IpcInvokeChannelMap {
   "activity:record": { args: [input: RecordActivityInput]; result: LocalActivity };
   "activity:list": { args: []; result: LocalActivity[] };
   "binge:state": { args: []; result: BingeState };
+  "downloads:state": { args: []; result: DownloadsState };
+  "downloads:add": { args: [episodes: DownloadEpisodeRequest[]]; result: DownloadAddResult };
+  "downloads:apply": {
+    args: [change: Exclude<DownloadChange, { op: "add" }>];
+    result: DownloadsState;
+  };
+  "downloads:choose-folder": { args: []; result: DownloadsState | null };
   "binge:apply": { args: [change: BingeChange]; result: BingeState };
   "activity:retry": { args: []; result: LocalActivity[] };
   "app:get-info": { args: []; result: AppInfo };
@@ -128,6 +150,12 @@ export interface IpcInvokeChannelMap {
     args: [id: number, type: AniListMediaType];
     result: AniListMediaDetail;
   };
+  "anilist:series-graph": { args: [id: number]; result: AnimeSeriesNode[] };
+  "app:title-preferences": { args: []; result: TitlePreferences };
+  "app:set-title-preferences": {
+    args: [preferences: TitlePreferences];
+    result: TitlePreferences;
+  };
   "anilist:add-entry": { args: [mediaId: number]; result: AniListListEntrySummary };
   "anilist:update-entry": {
     args: [input: UpdateAniListEntryInput];
@@ -146,6 +174,16 @@ export interface IpcInvokeChannelMap {
     result: AnimeEpisodeCatalog;
   };
   "anime:episode-art": { args: [input: AnimeEpisodeArtInput]; result: AnimeEpisodeArt[] };
+  "anime:skip-times": { args: [input: AnimeSkipTimesInput]; result: AnimeSkipSegment[] };
+  "anime:direct-playback": {
+    args: [input: AnimeDirectPlaybackInput];
+    result: AnimeDirectPlayback;
+  };
+  "anime:direct-subtitle": { args: [id: string]; result: AnimeDirectSubtitle };
+  "anime:episode-ranges": {
+    args: [input: AnimeEpisodeRangesInput];
+    result: AnimeEpisodeRanges | undefined;
+  };
   "anime:playback": { args: [input: AnimePlaybackInput]; result: AnimePlaybackResult };
   "mal:score": {
     args: [type: AniListMediaType, malId: number];
@@ -173,7 +211,7 @@ export interface IpcInvokeChannelMap {
     result: MoreCatalogPage;
   };
   "more:detail": {
-    args: [id: number, type: MoreMediaType];
+    args: [id: number, type: MoreMediaType, priority: boolean];
     result: MoreDetail;
   };
   "more:season": { args: [id: number, season: number]; result: MoreSeasonDetail };
@@ -263,6 +301,7 @@ export interface IpcInvokeChannelMap {
 export interface IpcEventChannelMap {
   "app:update-status-changed": UpdateStatus;
   "activity:changed": undefined;
+  "downloads:changed": undefined;
   "anilist:auth-changed": AniListAuthState;
   "simkl:status-changed": SimklStatus;
 }

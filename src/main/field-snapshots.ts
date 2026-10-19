@@ -30,6 +30,11 @@ export interface FieldSnapshotOptions {
   /** A saved copy older than this is not shown; the field loads live instead. */
   maxAgeMs?: number;
   setTimer?: (run: () => void, ms: number) => void;
+  /**
+   * Prefix for every key, read per call: copies saved under another scope are never served. The
+   * title language uses it, so rows saved with romaji titles never show when English is on.
+   */
+  keyScope?: () => string;
 }
 
 const MAX_ROWS = 64;
@@ -49,7 +54,8 @@ export class FieldSnapshots {
   }
 
   /** The session's answer, else the saved copy (refreshed in the background), else a live load. */
-  async get<T>(field: SnapshotField<T>, fresh = false): Promise<T> {
+  async get<T>(unscoped: SnapshotField<T>, fresh = false): Promise<T> {
+    const field = { ...unscoped, key: this.scoped(unscoped.key) };
     if (!fresh) {
       if (this.session.has(field.key)) return this.session.get(field.key) as T;
       const saved = this.readSaved(field);
@@ -67,7 +73,8 @@ export class FieldSnapshots {
    * Edits the session answer and the saved copy in place, e.g. to drop a title the viewer marked
    * "Not interested" so it cannot come back from a saved feed. A failing edit leaves both as is.
    */
-  update(key: string, change: (value: unknown) => unknown): void {
+  update(unscopedKey: string, change: (value: unknown) => unknown): void {
+    const key = this.scoped(unscopedKey);
     if (this.session.has(key)) this.session.set(key, change(this.session.get(key)));
     try {
       const store = this.options.store();
@@ -82,7 +89,8 @@ export class FieldSnapshots {
    * Drops the session answer and the saved copy, so the next view loads live; e.g. after a
    * setting (hidden genres) changes what the field may contain.
    */
-  forget(key: string): void {
+  forget(unscopedKey: string): void {
+    const key = this.scoped(unscopedKey);
     this.session.delete(key);
     try {
       // An unusable value is never served, and the next good load replaces it.
@@ -90,6 +98,11 @@ export class FieldSnapshots {
     } catch {
       // A stale copy expires on its own.
     }
+  }
+
+  private scoped(key: string): string {
+    const scope = this.options.keyScope?.() ?? "";
+    return scope ? `${scope}:${key}` : key;
   }
 
   private loadLive<T>(field: SnapshotField<T>): Promise<T> {

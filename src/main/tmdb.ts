@@ -53,6 +53,10 @@ export class TmdbClient {
     maxEntries: 60,
     ttlMs: 30 * 60_000,
   });
+  private readonly storyArcCache = createBoundedCache<TmdbStoryArc[]>({
+    maxEntries: 40,
+    ttlMs: 24 * 3_600_000,
+  });
   private readonly genreCache = createBoundedCache<Map<number, string>>({
     maxEntries: 2,
     ttlMs: 24 * 60 * 60_000,
@@ -203,20 +207,26 @@ export class TmdbClient {
     return result;
   }
 
-  public async getDetail(id: number, type: MoreMediaType): Promise<MoreDetail> {
+  /** `priority`: the viewer is looking at this title now, so it waits ahead of background work. */
+  public async getDetail(id: number, type: MoreMediaType, priority = false): Promise<MoreDetail> {
     if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid TMDB media ID.");
     const key = `detail:${type}:${id}`;
     const cached = this.detailCache.get(key);
     if (cached) return cached;
     const mediaType = type === "MOVIE" ? "movie" : "tv";
-    const payload = await this.requestJson(`/${mediaType}/${id}`, undefined, {
-      append_to_response:
-        type === "MOVIE"
-          ? "images,release_dates,credits,recommendations"
-          : "images,content_ratings,aggregate_credits,recommendations",
-      // Logos are language-tagged; "null" admits textless art when no English logo exists.
-      include_image_language: "en,null",
-    });
+    const payload = await this.requestJson(
+      `/${mediaType}/${id}`,
+      undefined,
+      {
+        append_to_response:
+          type === "MOVIE"
+            ? "images,release_dates,credits,recommendations"
+            : "images,content_ratings,aggregate_credits,recommendations",
+        // Logos are language-tagged; "null" admits textless art when no English logo exists.
+        include_image_language: "en,null",
+      },
+      priority,
+    );
     const result = parseDetail(payload, type);
     this.detailCache.set(key, result);
     return result;
@@ -331,6 +341,75 @@ export class TmdbClient {
       .flatMap((value) => candidateFeatures(value, type, genres, now) ?? []);
   }
 
+  /**
+   * "Try something new" candidates, one discover page each, all rated by 50+ people (user request
+   * 2026-10-12): `documentary` (TMDB genre 99), `classic` (released 20+ years ago, under 3,000
+   * votes) and `world` (one non-English original language, under 3,000 votes). Highest rated first.
+   */
+  public async getTryNewPool(
+    type: MoreMediaType,
+    pool: "documentary" | "classic" | "world",
+    language?: string,
+  ): Promise<RecommendationItemFeatures[]> {
+    const mediaType = type === "MOVIE" ? "movie" : "tv";
+    const params: Record<string, string> = {
+      sort_by: "vote_average.desc",
+      include_adult: "false",
+      "vote_count.gte": String(TRY_NEW_MIN_VOTES),
+      "vote_average.gte": "7.2",
+    };
+    if (pool === "documentary") {
+      params.with_genres = String(DOCUMENTARY_GENRE);
+      // Concert films and fan documentaries carry fan-inflated ratings; not what this row is for.
+      params.without_genres = String(type === "MOVIE" ? MUSIC_GENRE : TV_MUSIC_FREE);
+    } else {
+      params.without_genres = String(DOCUMENTARY_GENRE);
+      params["vote_count.lte"] = String(TRY_NEW_MAX_VOTES);
+    }
+    if (pool === "classic") {
+      const year = new Date().getUTCFullYear() - 20;
+      params[type === "MOVIE" ? "primary_release_date.lte" : "first_air_date.lte"] =
+        `${year}-12-31`;
+    }
+    if (pool === "world") {
+      if (!language || !/^[a-z]{2,3}$/.test(language)) throw new Error("Invalid TMDB language.");
+      params.with_original_language = language;
+    }
+    const [genres, payload] = await Promise.all([
+      this.genreNames(type),
+      this.requestJson(`/discover/${mediaType}`, 1, params),
+    ]);
+    if (!isRecord(payload) || !Array.isArray(payload.results))
+      throw new Error("TMDB returned an invalid discover response.");
+    const now = Date.now();
+    return payload.results
+      .slice(0, PAGE_LIMIT)
+      .flatMap((value) => tryNewFeatures(candidateFeatures(value, type, genres, now)) ?? [])
+      .filter((row) => !isConcertFilm(row));
+  }
+
+  /** One title as a candidate (a Simkl pick), from the plain detail endpoint. */
+  public async getCandidate(
+    id: number,
+    type: MoreMediaType,
+  ): Promise<RecommendationItemFeatures | undefined> {
+    if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid TMDB media ID.");
+    const payload = await this.requestJson(`/${type === "MOVIE" ? "movie" : "tv"}/${id}`);
+    if (!isRecord(payload)) return undefined;
+    // Detail pages list genres as objects; discover rows carry their IDs.
+    const genres = new Map<number, string>();
+    const ids: number[] = [];
+    for (const genre of Array.isArray(payload.genres) ? payload.genres.slice(0, 12) : [])
+      if (isRecord(genre) && typeof genre.id === "number") {
+        const name = readString(genre.name, 60);
+        if (name) genres.set(genre.id, name);
+        ids.push(genre.id);
+      }
+    return tryNewFeatures(
+      candidateFeatures({ ...payload, genre_ids: ids }, type, genres, Date.now()),
+    );
+  }
+
   private async genreNames(type: MoreMediaType): Promise<Map<number, string>> {
     const cached = this.genreCache.get(type);
     if (cached) return cached;
@@ -359,10 +438,28 @@ export class TmdbClient {
     return result;
   }
 
+  /**
+   * A TV show's community "Story Arc" episode group (type 5), in order; empty when it has none.
+   * Two requests: the show's group list, then the chosen group.
+   */
+  public async getStoryArcs(id: number): Promise<TmdbStoryArc[]> {
+    if (!Number.isInteger(id) || id <= 0) throw new Error("Invalid TMDB media ID.");
+    const key = `arcs:${id}`;
+    const cached = this.storyArcCache.get(key);
+    if (cached) return cached;
+    const groupId = pickStoryArcGroup(await this.requestJson(`/tv/${id}/episode_groups`));
+    const arcs = groupId
+      ? parseStoryArcs(await this.requestJson(`/tv/episode_group/${groupId}`))
+      : [];
+    this.storyArcCache.set(key, arcs);
+    return arcs;
+  }
+
   private async requestJson(
     path: string,
     page?: number,
     query: Record<string, string> = {},
+    priority = false,
   ): Promise<unknown> {
     if (!this.accessToken) {
       throw new Error(
@@ -374,10 +471,10 @@ export class TmdbClient {
       ? [TMDB_API_URL, TMDB_FALLBACK_API_URL]
       : [TMDB_FALLBACK_API_URL, TMDB_API_URL];
     try {
-      return await this.requestFrom(first, path, page, query);
+      return await this.requestFrom(first, path, page, query, priority);
     } catch (error) {
       if (!isTransportFailure(error)) throw error;
-      const result = await this.requestFrom(second, path, page, query).catch(() => {
+      const result = await this.requestFrom(second, path, page, query, priority).catch(() => {
         throw error;
       });
       this.preferFallbackUntil = usePrimaryFirst ? Date.now() + FALLBACK_PREFERENCE_MS : 0;
@@ -390,6 +487,7 @@ export class TmdbClient {
     path: string,
     page: number | undefined,
     query: Record<string, string>,
+    priority: boolean,
   ): Promise<unknown> {
     const url = new URL(path.replace(/^\/+/, ""), baseUrl);
     if (page !== undefined) url.searchParams.set("page", String(page));
@@ -399,6 +497,7 @@ export class TmdbClient {
       url,
       {
         dedupeKey: url.toString(),
+        gatePriority: priority,
         headers: { Authorization: `Bearer ${this.accessToken}` },
         onResponse: (response, gate) => {
           if (response.status === 429 || response.status === 403) {
@@ -565,6 +664,27 @@ function candidateFeatures(
     origin: readLanguage(value.original_language),
     updatedAt: now,
   };
+}
+
+const DOCUMENTARY_GENRE = 99;
+const MUSIC_GENRE = 10402;
+/** TV has no Music genre; Reality (10764) plays its part among docuseries. */
+const TV_MUSIC_FREE = 10764;
+const TRY_NEW_MIN_VOTES = 50;
+const TRY_NEW_MAX_VOTES = 3_000;
+
+const CONCERT_GENRES = new Set(["music", "documentary", "tv movie"]);
+/** A concert film or fan documentary: music and nothing but (fan-inflated ratings). */
+function isConcertFilm(row: RecommendationItemFeatures): boolean {
+  const genres = row.genres.map((genre) => genre.toLocaleLowerCase());
+  return genres.includes("music") && genres.every((genre) => CONCERT_GENRES.has(genre));
+}
+
+/** TMDB's vote count is how many people rated the title. */
+function tryNewFeatures(
+  features: RecommendationItemFeatures | undefined,
+): RecommendationItemFeatures | undefined {
+  return features ? { ...features, ratingCount: features.popularity } : undefined;
 }
 
 /** TMDB answered; the host is reachable, so another host would not help. */
@@ -881,4 +1001,60 @@ function boundedInteger(value: unknown, fallback: number, max: number): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** One named arc from a TMDB "Story Arc" episode group. */
+export interface TmdbStoryArc {
+  name: string;
+  episodes: { airDate?: string; seasonNumber: number }[];
+}
+
+const EPISODE_GROUP_STORY_ARC = 5;
+
+/**
+ * The show's arc-level story group. TMDB episode groups are community-curated, so names decide
+ * between several type-5 "Arc" groups: lists marked English first, then "Story Arc(s)", lists with
+ * fillers over "No Filler" ones; sagas, combinations, compilations and other-language lists never.
+ */
+export function pickStoryArcGroup(value: unknown): string | undefined {
+  if (!isRecord(value) || !Array.isArray(value.results)) return undefined;
+  let best: { id: string; score: number } | undefined;
+  for (const group of value.results) {
+    if (!isRecord(group) || group.type !== EPISODE_GROUP_STORY_ARC) continue;
+    const id = readString(group.id, 64);
+    const name = readString(group.name, 200) ?? "";
+    const label = `${name} ${readString(group.description, 500) ?? ""}`;
+    if (!id || !/^[a-f0-9]+$/i.test(id) || !/\barcs?\b/i.test(name)) continue;
+    // Too coarse to browse by, or named for another language (lists are entered by contributors).
+    if (/saga|combo|compilation/i.test(name)) continue;
+    if (/french|spanish|german|italian|portuguese|español|français/i.test(label)) continue;
+    // Latin script only (through Latin Extended-B): other scripts mean another language's list.
+    if (/[^ -ɏ]/.test(name)) continue;
+    const score =
+      (/\[eng\]|\benglish\b/i.test(label) ? 4 : 0) +
+      (/^story arcs?$/i.test(name) ? 2 : 0) +
+      (/no filler/i.test(name) ? -1 : 0);
+    if (!best || score > best.score) best = { id, score };
+  }
+  return best?.id;
+}
+
+export function parseStoryArcs(value: unknown): TmdbStoryArc[] {
+  if (!isRecord(value) || !Array.isArray(value.groups)) return [];
+  return value.groups
+    .filter(isRecord)
+    .map((group) => ({
+      order: typeof group.order === "number" && Number.isFinite(group.order) ? group.order : 0,
+      name: readString(group.name, 200),
+      episodes: Array.isArray(group.episodes)
+        ? group.episodes.filter(isRecord).map((episode) => ({
+            airDate: readDate(episode.air_date),
+            seasonNumber: boundedInteger(episode.season_number, 0, 500),
+          }))
+        : [],
+    }))
+    .filter((group): group is typeof group & { name: string } => Boolean(group.name))
+    .sort((a, b) => a.order - b.order)
+    .slice(0, 300)
+    .map(({ name, episodes }) => ({ name, episodes: episodes.slice(0, 2_000) }));
 }

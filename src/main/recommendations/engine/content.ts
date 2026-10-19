@@ -13,6 +13,51 @@ export const MIN_TAG_RANK = 40;
 
 export type Vector = Map<string, number>;
 
+/**
+ * Content-warning tags (AniList, TMDB keywords): they still shape similarity, but never name a
+ * taste on screen ("Your taste map" labels, "New to you" captions). Lower case.
+ */
+export const SENSITIVE_TAGS = new Set([
+  "rape",
+  "sexual abuse",
+  "incest",
+  "nudity",
+  "masturbation",
+  "suicide",
+  "self-harm",
+  "torture",
+  "cannibalism",
+  "child abuse",
+  "domestic abuse",
+  "pedophilia",
+  "slavery",
+  "drugs",
+  "prostitution",
+  "sex work",
+]);
+
+/**
+ * A random source seeded by a key and the day: rows that rotate (which liked titles seed "Because
+ * you watched", which theme leads) change once a day and stay put within it, instead of
+ * reshuffling on every load (user request 2026-10-19). mulberry32 over an FNV-1a hash.
+ */
+export function dailyRandom(key: string, now: number): () => number {
+  let hash = 0x811c9dc5;
+  const text = `${key}:${Math.floor(now / DAY_MS)}`;
+  for (let at = 0; at < text.length; at += 1) {
+    hash ^= text.charCodeAt(at);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  let state = hash >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /** In-place Fisher–Yates shuffle. */
 export function shuffle<T>(values: T[], random: () => number): void {
   for (let index = values.length - 1; index > 0; index -= 1) {

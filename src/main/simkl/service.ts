@@ -30,6 +30,16 @@ const STATS_TTL_MS = 6 * 60 * 60_000;
 /** Title ratings are edge-cached catalog reads (no token); keep a day, at most 300 titles. */
 const RATINGS_TTL_MS = 24 * 60 * 60_000;
 const RATINGS_CACHE_SIZE = 300;
+/** Simkl's top-rated documentary series for "Try something new": one quota request a day. */
+const TOP_DOCUMENTARIES_TTL_MS = 24 * 60 * 60_000;
+const TOP_DOCUMENTARIES_LIMIT = 30;
+
+/** A title Simkl ranks among its best, by TMDB ID, with its simkl.com page for the link back. */
+export interface SimklPick {
+  type: MoreMediaType;
+  tmdbId: number;
+  link: string;
+}
 
 /** Owns when the Simkl library syncs and what the renderer is told about it. */
 export class SimklService {
@@ -38,6 +48,7 @@ export class SimklService {
   private rowsCache?: { key: string; rows: SimklRow[]; expiresAt: number };
   private rowsPending?: Promise<SimklRow[]>;
   private warming?: Promise<void>;
+  private documentaries?: { picks: SimklPick[]; expiresAt: number };
   private statsCache?: { accountId: number; stats: SimklStats; expiresAt: number };
   private readonly ratingsCache = new Map<
     string,
@@ -157,6 +168,22 @@ export class SimklService {
       this.warming = undefined;
     });
     return this.warming;
+  }
+
+  /**
+   * Simkl's top-rated documentary series (`/tv/best/all?type=documentary`), connected only: this
+   * client needs the viewer's token, so the call spends one of their daily requests; kept a day.
+   */
+  public async topDocumentaries(signal?: AbortSignal): Promise<SimklPick[]> {
+    if (!this.client.connected) return [];
+    const now = this.now();
+    if (this.documentaries && this.documentaries.expiresAt > now) return this.documentaries.picks;
+    const payload = await this.client.get("/tv/best/all", { type: "documentary" }, signal);
+    const picks = parseBestPicks(payload, "TV")
+      .slice(0, TOP_DOCUMENTARIES_LIMIT)
+      .map((pick) => ({ ...pick, link: this.client.titleLink(pick.type, pick.tmdbId) }));
+    this.documentaries = { picks, expiresAt: now + TOP_DOCUMENTARIES_TTL_MS };
+    return picks;
   }
 
   /** Imported titles as More evidence; empty while disconnected. */
@@ -444,5 +471,35 @@ function syncMessage(reason: unknown): string {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * TMDB IDs from a Simkl "best" list. The list is bare `null` when nothing matches; items carry
+ * string IDs (`ids.tmdb`), at the top level or under `show`/`movie`.
+ */
+export function parseBestPicks(
+  payload: unknown,
+  type: MoreMediaType,
+): Array<{ type: MoreMediaType; tmdbId: number }> {
+  if (!Array.isArray(payload)) return [];
+  const seen = new Set<number>();
+  return payload.flatMap((value) => {
+    const item =
+      isPlainRecord(value) && isPlainRecord(value.show)
+        ? value.show
+        : isPlainRecord(value) && isPlainRecord(value.movie)
+          ? value.movie
+          : value;
+    const ids = isPlainRecord(item) && isPlainRecord(item.ids) ? item.ids : undefined;
+    const raw = ids?.tmdb;
+    const tmdbId = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+    if (!Number.isInteger(tmdbId) || tmdbId <= 0 || seen.has(tmdbId)) return [];
+    seen.add(tmdbId);
+    return [{ type, tmdbId }];
+  });
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

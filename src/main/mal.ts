@@ -15,6 +15,31 @@ const SCORE_CACHE_TTL_MS = 30 * 60_000;
 const RANKING_CACHE_TTL_MS = 10 * 60_000;
 const MEDIA_TYPE_CACHE_TTL_MS = 24 * 60 * 60_000;
 const RANKING_LIMIT = 20;
+/** "Try something new" rankings: one page of this size per ranking, cached for a day. */
+const EXPLORE_LIMIT = 500;
+const EXPLORE_CACHE_TTL_MS = 24 * 60 * 60_000;
+const EXPLORE_FIELDS =
+  "mean,num_scoring_users,num_list_users,genres,start_date,media_type,num_episodes,num_chapters,nsfw";
+/** Manga section reads comics: MAL's novels and doujinshi stay out. */
+const COMIC_TYPES = new Set(["manga", "one_shot", "manhwa", "manhua", "oel"]);
+const ADULT_GENRES = new Set(["hentai", "erotica"]);
+
+/** One title of a MyAnimeList ranking with the fields "Try something new" needs. */
+export interface MalExploreItem {
+  malId: number;
+  /** MyAnimeList mean score (0–10). */
+  mean: number;
+  /** People who scored it. */
+  raters: number;
+  /** People with it on their list (audience size). */
+  members: number;
+  genres: string[];
+  /** First release year. */
+  year?: number;
+  mediaType: string;
+  /** Episodes (anime) or chapters (manga); 0 or absent when unknown. */
+  length?: number;
+}
 
 type Fetcher = typeof fetch;
 
@@ -36,6 +61,10 @@ export class MalClient {
   private readonly rankingCache = createBoundedCache<MalRankingItem[]>({
     maxEntries: 2,
     ttlMs: RANKING_CACHE_TTL_MS,
+  });
+  private readonly exploreCache = createBoundedCache<MalExploreItem[]>({
+    maxEntries: 12,
+    ttlMs: EXPLORE_CACHE_TTL_MS,
   });
   private readonly mangaKindCache = createBoundedCache<MangaPublicationKind>({
     maxEntries: 120,
@@ -107,6 +136,32 @@ export class MalClient {
     const ranking = parseMalRanking(payload, kind);
     this.rankingCache.set(kind, ranking);
     return ranking;
+  }
+
+  /**
+   * One MyAnimeList ranking page sorted by score (`all`, `movie`, `ova` for anime; `manga`,
+   * `oneshots` for manga), safe-for-work entries only. Cached for a day; empty when unconfigured.
+   */
+  public async getExploreRanking(
+    type: AniListMediaType,
+    rankingType: "all" | "movie" | "ova" | "manga" | "oneshots",
+    offset = 0,
+  ): Promise<MalExploreItem[]> {
+    if (!this.configured) return [];
+    if (!Number.isInteger(offset) || offset < 0 || offset > 5_000)
+      throw new Error("Invalid MyAnimeList ranking offset.");
+    const kind = type === "ANIME" ? "anime" : "manga";
+    const cacheKey = `explore:${kind}:${rankingType}:${offset}`;
+    const cached = this.exploreCache.get(cacheKey);
+    if (cached) return cached;
+    const url = new URL(`${MAL_API_URL}/${kind}/ranking`);
+    url.searchParams.set("ranking_type", rankingType);
+    url.searchParams.set("limit", String(EXPLORE_LIMIT));
+    if (offset) url.searchParams.set("offset", String(offset));
+    url.searchParams.set("fields", EXPLORE_FIELDS);
+    const items = parseMalExplore(await this.requestJson(url, cacheKey), kind);
+    this.exploreCache.set(cacheKey, items);
+    return items;
   }
 
   public async getMangaPublicationKind(malId: number): Promise<MangaPublicationKind | undefined> {
@@ -207,6 +262,46 @@ export function parseMalRanking(payload: unknown, kind: "anime" | "manga"): MalR
         coverUrl,
         score: toFiniteNumber(node.mean),
         malUrl: `https://myanimelist.net/${kind}/${node.id}`,
+      },
+    ];
+  });
+}
+
+export function parseMalExplore(payload: unknown, kind: "anime" | "manga"): MalExploreItem[] {
+  if (!isRecord(payload) || !Array.isArray(payload.data)) return [];
+  return payload.data.slice(0, EXPLORE_LIMIT).flatMap((entry): MalExploreItem[] => {
+    if (!isRecord(entry) || !isRecord(entry.node)) return [];
+    const node = entry.node;
+    const id = toFiniteNumber(node.id);
+    const mean = toFiniteNumber(node.mean);
+    const raters = toFiniteNumber(node.num_scoring_users);
+    const members = toFiniteNumber(node.num_list_users);
+    const mediaType = typeof node.media_type === "string" ? node.media_type : "";
+    if (!id || !Number.isInteger(id) || id <= 0 || mean === undefined || raters === undefined)
+      return [];
+    // "white" is MyAnimeList's safe-for-work rating; gray and black stay out.
+    if (node.nsfw !== "white") return [];
+    if (kind === "manga" && !COMIC_TYPES.has(mediaType)) return [];
+    const genres = Array.isArray(node.genres)
+      ? node.genres
+          .map((genre) => (isRecord(genre) ? boundedText(genre.name, 60) : undefined))
+          .filter((name): name is string => Boolean(name))
+          .slice(0, MAX_GENRES)
+      : [];
+    if (genres.some((genre) => ADULT_GENRES.has(genre.toLocaleLowerCase()))) return [];
+    const year =
+      typeof node.start_date === "string" ? Number(node.start_date.slice(0, 4)) : Number.NaN;
+    const length = toFiniteNumber(kind === "anime" ? node.num_episodes : node.num_chapters);
+    return [
+      {
+        malId: id,
+        mean,
+        raters,
+        members: members ?? 0,
+        genres,
+        year: Number.isInteger(year) && year > 1900 ? year : undefined,
+        mediaType,
+        length: length && length > 0 ? length : undefined,
       },
     ];
   });

@@ -56,7 +56,8 @@ describe("normalizeCatalogMedia", () => {
   it("normalizes a complete catalog media entry", () => {
     const media = normalizeCatalogMedia(catalogMediaFixture, "ANIME");
     expect(media.id).toBe(21);
-    expect(media.title).toBe("ONE PIECE");
+    // English titles by default (user decision 2026-10-14).
+    expect(media.title).toBe("One Piece");
     expect(media.coverUrl).toBe(
       "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/b21-extralarge.jpg",
     );

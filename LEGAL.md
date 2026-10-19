@@ -26,9 +26,10 @@ affiliated with AniStream. AniStream does not control, review or endorse the con
 their own terms and policies apply.
 
 Title information and artwork are provided through the public APIs of AniList, TMDB, MyAnimeList,
-Kitsu, MangaDex and Simkl. AniStream is not affiliated with or endorsed by any of them. This product
-uses the TMDB API but is not endorsed or certified by TMDB. All titles, artwork and trademarks are
-the property of their respective owners.
+Kitsu, MangaDex and Simkl. Episode thumbnails also come from TheTVDB through the ani.zip mapping
+service. AniStream is not affiliated with or endorsed by any of them. This product uses the TMDB API
+but is not endorsed or certified by TMDB. All titles, artwork and trademarks are the property of
+their respective owners.
 
 ## Your responsibility
 

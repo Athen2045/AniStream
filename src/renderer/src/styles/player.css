@@ -1,0 +1,638 @@
+/* ---------- Own player (2026-10-18) ----------
+   Redesigned 2026-10-18 after the user's reference: the title at the top left, a full-width seek
+   bar, and one quiet row of controls under it, all over soft shades; fixed px so it keeps its size
+   in full screen, where only the picture grows. */
+.own-player {
+  --player-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+.own-player .player-unavailable {
+  position: absolute;
+  inset: 0;
+}
+.vplayer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+.vplayer video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.vplayer video::cue {
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: clamp(16px, 2.2vw, 34px);
+  line-height: 1.3;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.8);
+}
+/* Subtitles sit above the control bar (22px gap + 52px bar + 14px air) while it shows, and drop
+   back near the bottom edge when the controls hide. */
+.vplayer video::-webkit-media-text-track-container {
+  transform: translateY(-16px);
+  transition: transform 260ms var(--player-ease);
+}
+.vplayer:has(.vbar-layer[data-visible]) video::-webkit-media-text-track-container {
+  transform: translateY(-104px);
+}
+/* ASS subtitles (JASSUB's canvas, sized to the picture by JASSUB): lifted above the bar while it
+   shows, like text subtitles; never catches clicks. */
+.vplayer canvas.JASSUB {
+  pointer-events: none;
+  translate: 0 0;
+  transition: translate 260ms var(--player-ease);
+}
+.vplayer:has(.vbar-layer[data-visible]) canvas.JASSUB {
+  translate: 0 -88px;
+}
+/* Possible mislabel: the stream's length does not match the episode's runtime. */
+.vplayer-warning {
+  position: absolute;
+  z-index: 12;
+  top: 18px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: min(680px, calc(100% - 48px));
+  padding: 12px 12px 12px 16px;
+  border-radius: 14px;
+  background: rgb(22 22 24 / 0.86);
+  box-shadow:
+    0 0 0 1px rgb(255 200 90 / 0.35),
+    0 18px 50px rgb(0 0 0 / 0.45);
+  color: #fff;
+  transform: translateX(-50%);
+  backdrop-filter: blur(24px) saturate(160%);
+}
+.vplayer-warning strong {
+  font-size: 13.5px;
+}
+.vplayer-warning p {
+  margin: 2px 0 0;
+  color: rgb(255 255 255 / 0.7);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.vplayer-warning-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+.vplayer-warning button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.16);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.vplayer-warning button:first-child {
+  background: #fff;
+  color: #111;
+}
+.vplayer-warning button:hover {
+  filter: brightness(1.1);
+}
+.vplayer-warning button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.vbar-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgb(0 0 0 / 0.55), transparent 18%),
+    linear-gradient(to top, rgb(0 0 0 / 0.72), transparent 30%);
+  pointer-events: none;
+  transition: opacity 260ms var(--player-ease);
+}
+.vbar-shade:not([data-visible]) {
+  opacity: 0;
+}
+.vbar-layer {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 260ms var(--player-ease);
+}
+.vbar-layer:not([data-visible]) {
+  opacity: 0;
+}
+.vbar-layer:not([data-visible]) * {
+  pointer-events: none !important;
+}
+/* Title, top left: the show, then the episode. */
+.vplayer-heading {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  max-width: min(640px, calc(100% - 220px));
+  color: #fff;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+}
+.vplayer-heading small {
+  display: block;
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.72);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vplayer-heading strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vplayer-heading strong span {
+  margin-left: 8px;
+  color: rgb(255 255 255 / 0.66);
+  font-weight: 500;
+}
+/* Seek bar on its own full-width row, the controls under it. */
+.vbar-stack {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 14px;
+  pointer-events: auto;
+}
+.vbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  color: #fff;
+}
+.vbar-grow {
+  flex: 1;
+}
+.vbar-btn {
+  position: relative;
+  display: grid;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: rgb(255 255 255 / 0.92);
+  cursor: pointer;
+  transition: background 120ms var(--player-ease);
+}
+.vbar-btn svg {
+  width: 20px;
+  height: 20px;
+}
+.vbar-btn--main svg {
+  width: 22px;
+  height: 22px;
+}
+.vbar-btn:hover:not(:disabled),
+.vbar-btn.is-open {
+  background: rgb(255 255 255 / 0.12);
+}
+.vbar-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.vbar-btn:disabled {
+  color: rgb(255 255 255 / 0.32);
+  cursor: default;
+}
+.vbar-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+.vbar-btn:focus:not(:focus-visible) {
+  outline: 0;
+}
+.vbar-cc.is-on::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  width: 12px;
+  height: 2px;
+  border-radius: 2px;
+  background: #fff;
+}
+.vbar-sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: rgb(255 255 255 / 0.14);
+}
+.vbar-volume {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+.vbar-volume .vslider--volume {
+  width: 0;
+  margin: 0;
+  opacity: 0;
+  transition:
+    width 180ms var(--player-ease),
+    opacity 180ms var(--player-ease),
+    margin 180ms var(--player-ease);
+}
+.vbar-volume:hover .vslider--volume,
+.vbar-volume:focus-within .vslider--volume,
+.vslider--volume[data-dragging] {
+  width: 72px;
+  margin: 0 6px 0 2px;
+  opacity: 1;
+}
+.vbar-time {
+  flex: none;
+  margin: 0 10px;
+  color: rgb(255 255 255 / 0.62);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Sliders: Video.js sets --media-slider-fill/-buffer/-pointer on the root. */
+.vslider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  cursor: pointer;
+  touch-action: none;
+}
+.vslider--seek {
+  width: 100%;
+  margin: 0 0 2px;
+}
+.vbar-time > :first-child {
+  color: #fff;
+}
+.vslider-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.22);
+  transition: height 120ms var(--player-ease);
+}
+.vslider:hover .vslider-track,
+.vslider[data-dragging] .vslider-track {
+  height: 6px;
+}
+.vslider-buffer {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--media-slider-buffer, 0%);
+  background: rgb(255 255 255 / 0.22);
+}
+.vslider-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--media-slider-fill, 0%);
+  background: #fff;
+}
+.vslider-thumb {
+  position: absolute;
+  top: 50%;
+  left: var(--media-slider-fill, 0%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  transform: translate(-50%, -50%) scale(0.85);
+  transition: transform 120ms var(--player-ease);
+}
+.vslider:hover .vslider-thumb,
+.vslider[data-dragging] .vslider-thumb {
+  transform: translate(-50%, -50%) scale(1);
+}
+.vslider-thumb:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.vslider-preview {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: clamp(98px, var(--media-slider-pointer, 0%), calc(100% - 98px));
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity 120ms var(--player-ease);
+}
+.vslider:hover .vslider-preview,
+.vslider[data-dragging] .vslider-preview {
+  opacity: 1;
+}
+/* The frame at the pointer (from the preview copy), above the time. */
+.vslider-frame {
+  display: none;
+  width: 192px;
+  height: 108px;
+  border-radius: 8px;
+  background: #111;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.14),
+    0 12px 32px rgb(0 0 0 / 0.5);
+}
+.vslider-frame.is-ready {
+  display: block;
+}
+.vslider-preview-time {
+  padding: 4px 9px;
+  border-radius: 7px;
+  background: rgb(20 20 20 / 0.86);
+}
+/* Small note above the bar ("Resumed at 12:34 · Start over", "Next episode in 5"). */
+.vbar-note {
+  position: absolute;
+  left: 50%;
+  bottom: 100px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+.vbar-note > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 5px 5px 12px;
+  border-radius: 999px;
+  background: rgb(18 18 20 / 0.5);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  color: rgb(255 255 255 / 0.85);
+  font-size: 12px;
+  white-space: nowrap;
+  backdrop-filter: blur(20px) saturate(160%);
+}
+.vbar-note button {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.16);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.vbar-note button:hover {
+  background: rgb(255 255 255 / 0.26);
+}
+/* Settings menu: opens above the gear. Long lists (subtitles, audio) scroll inside it. */
+.vmenu {
+  position: absolute;
+  right: 24px;
+  bottom: 84px;
+  display: grid;
+  width: 300px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgb(22 22 22 / 0.92);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.1),
+    0 18px 50px rgb(0 0 0 / 0.45);
+  color: #fff;
+  backdrop-filter: blur(28px) saturate(170%);
+  pointer-events: auto;
+}
+.vmenu-title {
+  margin: 4px 4px 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+.vmenu-value.is-on {
+  color: #fff;
+}
+.vmenu-chev-space {
+  flex: none;
+  width: 14px;
+}
+.vmenu-list {
+  display: grid;
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+}
+.vmenu-row,
+.vmenu-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.vmenu-row:hover,
+.vmenu-row:focus-visible,
+.vmenu-head:hover,
+.vmenu-head:focus-visible {
+  outline: 0;
+  background: rgb(255 255 255 / 0.1);
+}
+.vmenu-row svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  color: rgb(255 255 255 / 0.7);
+}
+.vmenu-head {
+  min-height: 32px;
+  margin-bottom: 2px;
+  color: rgb(255 255 255 / 0.55);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.vmenu-head svg {
+  width: 14px;
+  height: 14px;
+}
+.vmenu-label {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 0;
+}
+.vmenu-label small {
+  display: block;
+  margin-top: -1px;
+  color: rgb(255 255 255 / 0.45);
+  font-size: 11px;
+}
+.vmenu-value {
+  overflow: hidden;
+  max-width: 110px;
+  color: rgb(255 255 255 / 0.55);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vmenu-row .vmenu-chev {
+  width: 14px;
+  height: 14px;
+  color: rgb(255 255 255 / 0.45);
+}
+.vmenu-row .vmenu-tick {
+  visibility: hidden;
+  color: #fff;
+}
+.vmenu-row[aria-checked="true"] .vmenu-tick {
+  visibility: visible;
+}
+.vmenu-sep {
+  height: 1px;
+  margin: 5px 8px;
+  background: rgb(255 255 255 / 0.09);
+}
+.vmenu-switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.2);
+  transition: background 160ms var(--player-ease);
+}
+.vmenu-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  transition: transform 160ms var(--player-ease);
+}
+.vmenu-switch.is-on {
+  background: var(--accent);
+}
+.vmenu-switch.is-on::after {
+  transform: translateX(14px);
+}
+.vmenu-empty {
+  padding: 6px 10px 8px;
+  color: rgb(255 255 255 / 0.55);
+  font-size: 12px;
+}
+/* Skip opening/ending: over the right end of the bar, with a fill sweeping across as the
+   segment plays, and the seconds left. Visible even while the controls are hidden. */
+.vplayer-skip {
+  position: absolute;
+  z-index: 11;
+  right: 24px;
+  bottom: 96px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px 0 12px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(22 22 22 / 0.78);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16);
+  color: #fff;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(20px) saturate(160%);
+  animation: vplayer-skip-in 220ms var(--player-ease);
+}
+.vplayer-skip-fill {
+  position: absolute;
+  inset: 0;
+  background: rgb(255 255 255 / 0.16);
+  transform: scaleX(var(--skip-progress, 0));
+  transform-origin: left;
+  transition: transform 1s linear;
+}
+.vplayer-skip > :not(.vplayer-skip-fill) {
+  position: relative;
+}
+.vplayer-skip svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.vplayer-skip small {
+  color: rgb(255 255 255 / 0.62);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.vplayer-skip:hover {
+  background: rgb(40 40 40 / 0.86);
+}
+.vplayer-skip:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+@keyframes vplayer-skip-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (max-width: 700px) {
+  .vbar-time {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vbar-shade,
+  .vbar-layer,
+  .vbar-btn,
+  .vslider-track,
+  .vslider-thumb,
+  .vmenu-switch,
+  .vmenu-switch::after,
+  .vplayer-skip-fill {
+    transition: none;
+  }
+  .vplayer-skip {
+    animation: none;
+  }
+}
+html[data-motion="reduce"] .vplayer-skip-fill {
+  transition: none;
+}
+html[data-motion="reduce"] .vplayer-skip {
+  animation: none;
+}

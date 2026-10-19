@@ -214,4 +214,73 @@ describe("createRequestGate", () => {
       vi.useRealTimers();
     }
   });
+
+  it("starts priority requests before queued background ones, within the same budget", async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createRequestGate({ requestsPerMinute: 1 });
+      const order: string[] = [];
+      const job = (name: string) => async (): Promise<void> => {
+        order.push(name);
+      };
+      const first = gate.run("a", job("a"));
+      const second = gate.run("b", job("b"));
+      const urgent = gate.run("c", job("c"), undefined, { priority: true });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(order).toEqual(["a"]);
+      await vi.advanceTimersByTimeAsync(60_001);
+      expect(order).toEqual(["a", "c"]);
+      await vi.advanceTimersByTimeAsync(60_001);
+      expect(order).toEqual(["a", "c", "b"]);
+      await Promise.all([first, second, urgent]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("moves a queued request ahead when a priority caller joins it", async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createRequestGate({ requestsPerMinute: 1 });
+      const order: string[] = [];
+      const job = (name: string) => async (): Promise<string> => {
+        order.push(name);
+        return name;
+      };
+      void gate.run("a", job("a"));
+      void gate.run("b", job("b"));
+      const background = gate.run("c", job("c"));
+      const joined = gate.run("c", job("c"), undefined, { priority: true });
+      await vi.advanceTimersByTimeAsync(60_001);
+      expect(order).toEqual(["a", "c"]);
+      expect(await joined).toBe("c");
+      expect(await background).toBe("c");
+      await vi.advanceTimersByTimeAsync(60_001);
+      expect(order).toEqual(["a", "c", "b"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops a cancelled request from the queue without using a slot", async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createRequestGate({ requestsPerMinute: 1 });
+      const order: string[] = [];
+      const job = (name: string) => async (): Promise<void> => {
+        order.push(name);
+      };
+      void gate.run("a", job("a"));
+      const cancel = new AbortController();
+      const cancelled = gate.run("b", job("b"), cancel.signal);
+      const after = gate.run("c", job("c"));
+      cancel.abort();
+      await expect(cancelled).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(60_001);
+      await after;
+      expect(order).toEqual(["a", "c"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

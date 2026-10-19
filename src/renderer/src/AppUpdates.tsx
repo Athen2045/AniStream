@@ -14,6 +14,7 @@ import type {
   UpdateUnavailableReason,
 } from "../../shared/update-check";
 import { createUpdateSession } from "./update-session";
+import appIcon from "./assets/app-icon.png";
 
 const UpdateContext = createContext<ReturnType<typeof createUpdateSession> | null>(null);
 export function UpdateProvider({
@@ -57,6 +58,18 @@ const installFailures: Record<UpdateInstallFailure, string> = {
   disk: "The update could not be saved. Check your free disk space and try again.",
   unknown: "The update could not be downloaded.",
 };
+/** "today, 6:56 AM", or the date and time on another day. */
+function checkedLabel(iso: string): string {
+  const at = new Date(iso);
+  return at.toDateString() === new Date().toDateString()
+    ? `today, ${timeLabel(iso)}`
+    : at.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
+function timeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 function statusText(status: UpdateStatus): string {
   switch (status.kind) {
     case "idle":
@@ -258,11 +271,16 @@ export function AppUpdates(): React.JSX.Element {
   };
   return (
     <div className="set-card app-updates">
-      <div className="set-row">
+      <div className="set-row set-account">
+        <img className="update-app-icon" src={appIcon} alt="" aria-hidden="true" />
         <div className="set-text">
           <strong>{heading}</strong>
-          <span role="status" className={upToDate && !error ? "set-ok" : undefined}>
-            {error ?? detail}
+          <span className="set-meta">
+            <span role="status" className={upToDate && !error ? "set-ok" : undefined}>
+              {error ?? (upToDate ? "Up to date" : detail)}
+            </span>
+            {checkedAt && <span>Checked {checkedLabel(checkedAt)}</span>}
+            {coolingDown && <span>Next check after {timeLabel(retryAt!)}</span>}
           </span>
           {status.kind === "downloading" && (
             <progress
@@ -271,16 +289,6 @@ export function AppUpdates(): React.JSX.Element {
               value={status.percent}
               aria-label={`Downloading AniStream ${status.version}`}
             />
-          )}
-          {checkedAt && (
-            <span className="update-timing">
-              Last check: {new Date(checkedAt).toLocaleString()}
-            </span>
-          )}
-          {coolingDown && (
-            <span className="update-timing">
-              Next check available: {new Date(retryAt!).toLocaleString()}
-            </span>
           )}
         </div>
         <div className="update-actions">
@@ -318,7 +326,7 @@ export function AppUpdates(): React.JSX.Element {
                 className={refreshSpin ? "refresh-spin-once" : undefined}
                 aria-hidden="true"
               />
-              {manualPending || status.kind === "checking" ? "Checking…" : "Check for updates"}
+              {manualPending || status.kind === "checking" ? "Checking…" : "Check now"}
             </button>
           )}
         </div>
@@ -328,10 +336,7 @@ export function AppUpdates(): React.JSX.Element {
           <div className="set-row">
             <div className="set-text">
               <strong>Download updates automatically</strong>
-              <span>
-                Downloads a new release from GitHub in the background. Nothing is installed until
-                you choose Restart to update.
-              </span>
+              <span>From GitHub, in the background. Nothing installs until you restart.</span>
             </div>
             <UpdateToggle
               label="Download updates automatically"
@@ -342,14 +347,13 @@ export function AppUpdates(): React.JSX.Element {
           </div>
           <div className="set-row">
             <div className="set-text">
-              <strong>Install downloaded updates when I quit</strong>
+              <strong>Install when I quit</strong>
               <span>
-                {preferencesError ??
-                  "Installs a downloaded update when you close AniStream, instead of waiting for Restart to update."}
+                {preferencesError ?? "Installs a downloaded update when you close AniStream."}
               </span>
             </div>
             <UpdateToggle
-              label="Install downloaded updates when I quit"
+              label="Install when I quit"
               checked={preferences.installOnQuit}
               disabled={false}
               onChange={(on) => setPreference({ installOnQuit: on })}

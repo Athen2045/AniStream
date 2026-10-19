@@ -2,6 +2,7 @@ import type {
   AniListCatalogMedia,
   AniListMediaDetail,
   AniListRelation,
+  AnimeSeriesNode,
 } from "../../shared/contracts";
 
 const MAX_DIRECTION_HOPS = 8;
@@ -26,16 +27,54 @@ export interface AnimeSeasonChoice {
   current: boolean;
 }
 
-export type LoadAnimeDetail = (id: number) => Promise<AniListMediaDetail>;
+/** What the season walk needs of an anime: a full title detail or a series-graph node. */
+export type AnimeSeriesDetail = AniListCatalogMedia & {
+  relations: readonly AniListRelation[];
+  synonyms?: readonly string[];
+  titleEnglish?: string;
+  titleRomaji?: string;
+  titleNative?: string;
+};
+
+export type LoadAnimeDetail = (id: number) => Promise<AnimeSeriesDetail>;
+
+export interface AnimeSeries {
+  /** Episodic seasons in series order, numbered. */
+  seasons: AnimeSeasonChoice[];
+  /** Films, OVAs, specials and one-episode releases on or beside the chain, oldest first. */
+  extras: { media: AniListCatalogMedia; current: boolean }[];
+}
+
+const SEASON_FORMATS = new Set(["TV", "TV_SHORT", "ONA"]);
 
 /**
- * Walks only AniList's exact PREQUEL/SEQUEL edges. Branches prefer main episodic
- * formats so an OVA or short does not replace the next television season.
+ * A season is an episodic release (TV, TV short, ONA) with more than one episode, or with an
+ * unknown count while it airs. Films, OVAs, specials and one-episode ONAs are extras, so AniList
+ * listing a one-shot as a "prequel" (One Piece) does not make the main series "Season 2".
  */
+export function isSeasonEntry(media: AniListCatalogMedia): boolean {
+  return (
+    (media.format === undefined || SEASON_FORMATS.has(media.format)) && media.totalProgress !== 1
+  );
+}
+
+/** Seasons only; see `buildAnimeSeries`. */
 export async function buildAnimeSeasonChain(
-  current: AniListMediaDetail,
+  current: AnimeSeriesDetail,
   loadDetail: LoadAnimeDetail,
 ): Promise<AnimeSeasonChoice[]> {
+  return (await buildAnimeSeries(current, loadDetail)).seasons;
+}
+
+/**
+ * Walks only AniList's exact PREQUEL/SEQUEL edges. Branches prefer main episodic formats so an
+ * OVA or short does not replace the next television season; a film the chain passes through (or
+ * that sits beside a season) is listed as an extra, never numbered as a season.
+ */
+export async function buildAnimeSeries(
+  current: AnimeSeriesDetail,
+  loadDetail: LoadAnimeDetail,
+): Promise<AnimeSeries> {
   const [before, after] = await Promise.all([
     walkDirection(current, "PREQUEL", loadDetail),
     walkDirection(current, "SEQUEL", loadDetail),
@@ -52,8 +91,9 @@ export async function buildAnimeSeasonChain(
     seen.add(media.id);
     return true;
   });
+  const extras = seriesExtras(unique, current.id);
   let lastSeasonNumber = 0;
-  const numbered = unique.map((media) => {
+  const numbered = unique.filter(isSeasonEntry).map((media) => {
     const explicitNumber = inferDisplayedSeasonNumber(media.title);
     const partNumber = inferDisplayedPartNumber(media.title);
     const number =
@@ -73,20 +113,69 @@ export async function buildAnimeSeasonChain(
     seasonCounts.set(item.number, (seasonCounts.get(item.number) ?? 0) + 1);
   }
   const nextImplicitPart = new Map<number, number>();
-  return numbered.map((item) => {
+  const seasons = numbered.map((item) => {
     if ((seasonCounts.get(item.number) ?? 0) < 2 || item.partNumber) return item;
     const partNumber = nextImplicitPart.get(item.number) ?? 1;
     nextImplicitPart.set(item.number, partNumber + 1);
     return { ...item, partNumber };
   });
+  return { seasons, extras };
+}
+
+/** Non-season entries on the chain plus those its entries link as prequel, sequel or side story. */
+function seriesExtras(
+  chain: readonly AnimeSeriesDetail[],
+  currentId: number,
+): AnimeSeries["extras"] {
+  const extras = new Map<number, AniListCatalogMedia>();
+  for (const media of chain) {
+    if (!isSeasonEntry(media)) extras.set(media.id, media);
+    for (const relation of media.relations) {
+      const linked = relation.media;
+      if (linked.type === "ANIME" && !isSeasonEntry(linked) && !extras.has(linked.id))
+        extras.set(linked.id, linked);
+    }
+  }
+  return [...extras.values()]
+    .sort(
+      (a, b) =>
+        (a.seasonYear ?? Number.MAX_SAFE_INTEGER) - (b.seasonYear ?? Number.MAX_SAFE_INTEGER) ||
+        a.id - b.id,
+    )
+    .slice(0, 40)
+    .map((media) => ({ media, current: media.id === currentId }));
+}
+
+/**
+ * Season-walk loader backed by the main process's two-hop series graph: one request fills the
+ * entry and its neighbours, so most hops need no request at all. Bounded, per renderer session.
+ */
+export function createSeriesLoader(
+  fetchGraph: (id: number) => Promise<AnimeSeriesNode[]>,
+  maxEntries = 300,
+): LoadAnimeDetail {
+  const known = new Map<number, AnimeSeriesDetail>();
+  return async (id) => {
+    const hit = known.get(id);
+    if (hit) return hit;
+    for (const node of await fetchGraph(id)) {
+      if (!node.relations) continue;
+      known.delete(node.media.id);
+      known.set(node.media.id, { ...node.media, synonyms: node.titles, relations: node.relations });
+      if (known.size > maxEntries) known.delete(known.keys().next().value as number);
+    }
+    const loaded = known.get(id);
+    if (!loaded) throw new Error("AniList returned no series entry for this title.");
+    return loaded;
+  };
 }
 
 async function walkDirection(
-  origin: AniListMediaDetail,
+  origin: AnimeSeriesDetail,
   direction: "PREQUEL" | "SEQUEL",
   loadDetail: LoadAnimeDetail,
-): Promise<AniListMediaDetail[]> {
-  const result: AniListMediaDetail[] = [];
+): Promise<AnimeSeriesDetail[]> {
+  const result: AnimeSeriesDetail[] = [];
   const visited = new Set([origin.id]);
   let cursor = origin;
   for (let hop = 0; hop < MAX_DIRECTION_HOPS; hop += 1) {

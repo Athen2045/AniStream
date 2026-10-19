@@ -1,14 +1,25 @@
 import {
   BookOpen,
   Database,
-  Download,
+  FolderOpen,
+  Heart,
   MonitorPlay,
-  SlidersHorizontal,
+  Settings2,
+  ShieldCheck,
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import type { PersonalizationSettings, SimklStatus } from "../../shared/contracts";
+import type { TasteMap } from "../../shared/taste-map";
 import { cachedArtworkUrl } from "../../shared/artwork";
 import { SourceLogo } from "./SourceLogo";
 import { ProfileLookDialog } from "./ProfileLookDialog";
@@ -33,64 +44,97 @@ import { useOptionalBinge } from "./BingeProvider";
 import { createReaderSettingsSession } from "./reader-settings-session";
 import type { ViewerAccess } from "./viewer-access";
 import { TasteMapDialog } from "./TasteMapDialog";
+import { ForceLayout } from "./taste-map-layout";
 import { Pills, Toggle } from "./SettingsControls";
+import { useOptionalDownloads } from "./DownloadsProvider";
+import {
+  DOWNLOAD_LIMIT_CHOICES,
+  DOWNLOAD_QUALITIES,
+  estimateDownloadBytes,
+  formatBytes,
+} from "../../shared/downloads";
 
-const SECTIONS = [
-  { id: "account", label: "Account", icon: UserRound },
-  { id: "customize", label: "Customize", icon: SlidersHorizontal },
-  { id: "playback", label: "Playback", icon: MonitorPlay },
-  { id: "reading", label: "Reading", icon: BookOpen },
-  { id: "backup", label: "Backup", icon: Database },
-  { id: "updates", label: "Updates", icon: Download },
+/**
+ * One pane per tab, each with its own groups (redesign approved 2026-10-12; mockups in
+ * prototypes/mockups/settings-tabs-redesign/).
+ */
+const TABS = [
+  {
+    id: "account",
+    label: "Account",
+    icon: UserRound,
+    lede: "Your trackers and how your profile looks.",
+  },
+  {
+    id: "general",
+    label: "General",
+    icon: Settings2,
+    lede: "What AniStream shows and where it starts.",
+  },
+  {
+    id: "for-you",
+    label: "For You",
+    icon: Heart,
+    lede: "Suggestions from what you rate, finish and watch. Built on this device; only title lookups go to TMDB and Simkl.",
+  },
+  {
+    id: "playback",
+    label: "Playback",
+    icon: MonitorPlay,
+    lede: "How episodes and movies play, and where downloads go.",
+  },
+  { id: "reading", label: "Reading", icon: BookOpen, lede: "How manga pages look in the reader." },
+  {
+    id: "data",
+    label: "Backup & updates",
+    icon: Database,
+    lede: "Your data on this device, and new versions.",
+  },
 ] as const;
-type SectionId = (typeof SECTIONS)[number]["id"];
+export type SettingsTab = (typeof TABS)[number]["id"];
 
 export function SettingsView({
   access,
   onSignIn,
   onOpenProfile,
   onLogout,
+  initialTab = "account",
 }: {
   access: ViewerAccess;
   onSignIn: () => void;
   onOpenProfile: () => void;
   onLogout: () => void;
+  initialTab?: SettingsTab;
 }): React.JSX.Element {
-  const [active, setActive] = useState<SectionId>("account");
-  const preferences = useAppPreferences();
-  const binge = useOptionalBinge();
+  const [active, setActive] = useState<SettingsTab>(initialTab);
+  const tabs = useRef<Array<HTMLButtonElement | null>>([]);
+  const tab = TABS.find((entry) => entry.id === active) ?? TABS[0];
+  const simkl = useSimklStatus();
+  const signedOut = access.kind !== "member" && simkl?.auth.status !== "connected";
 
-  // A clicked section stays highlighted until the reader scrolls by hand.
-  const pinned = useRef<SectionId | undefined>(undefined);
-
-  // The side list follows the section under the navbar while scrolling.
-  useEffect(() => {
-    const update = (): void => {
-      if (pinned.current) return setActive(pinned.current);
-      let current: SectionId = SECTIONS[0].id;
-      for (const { id } of SECTIONS) {
-        const top = document.getElementById(`settings-${id}`)?.getBoundingClientRect().top;
-        if (top !== undefined && top < 160) current = id;
-      }
-      const atBottom =
-        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
-      setActive(atBottom ? SECTIONS[SECTIONS.length - 1].id : current);
-    };
-    const release = (): void => {
-      pinned.current = undefined;
-    };
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("wheel", release, { passive: true });
-    window.addEventListener("keydown", release);
-    window.addEventListener("pointerdown", release);
-    return () => {
-      window.removeEventListener("scroll", update);
-      window.removeEventListener("wheel", release);
-      window.removeEventListener("keydown", release);
-      window.removeEventListener("pointerdown", release);
-    };
-  }, []);
+  const choose = (id: SettingsTab, focus = false): void => {
+    setActive(id);
+    if (focus) tabs.current[TABS.findIndex((entry) => entry.id === id)]?.focus();
+    // Each tab starts at the top, even if the last one was scrolled.
+    if (window.scrollY > 0) window.scrollTo({ top: 0 });
+  };
+  // Up/Down (and Home/End) move between tabs, as in a vertical tab list.
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const at = TABS.findIndex((entry) => entry.id === active);
+    const next =
+      event.key === "ArrowDown"
+        ? (at + 1) % TABS.length
+        : event.key === "ArrowUp"
+          ? (at - 1 + TABS.length) % TABS.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? TABS.length - 1
+              : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    choose(TABS[next].id, true);
+  };
 
   return (
     <section className="set-page" aria-labelledby="settings-title">
@@ -101,171 +145,286 @@ export function SettingsView({
         <p>A few choices, all kept on this device.</p>
       </header>
       <div className="set-body">
-        <nav className="set-side" aria-label="Settings sections">
-          {SECTIONS.map(({ id, label, icon: Icon }) => (
+        <div
+          className="set-side"
+          role="tablist"
+          aria-label="Settings"
+          aria-orientation="vertical"
+          onKeyDown={onKeyDown}
+        >
+          {TABS.map(({ id, label, icon: Icon }, at) => (
             <button
               key={id}
-              type="button"
-              className={active === id ? "active" : undefined}
-              aria-current={active === id ? "true" : undefined}
-              onClick={() => {
-                pinned.current = id;
-                setActive(id);
-                document
-                  .getElementById(`settings-${id}`)
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+              ref={(element) => {
+                tabs.current[at] = element;
               }}
+              type="button"
+              role="tab"
+              id={`settings-tab-${id}`}
+              aria-selected={active === id}
+              aria-controls="settings-pane"
+              tabIndex={active === id ? 0 : -1}
+              className={active === id ? "active" : undefined}
+              onClick={() => choose(id)}
             >
               <Icon size={16} aria-hidden="true" />
               {label}
             </button>
           ))}
-        </nav>
-
-        <div className="set-groups">
-          <Group id="account" title="Account">
-            <AccountsCard
-              access={access}
-              onSignIn={onSignIn}
-              onOpenProfile={onOpenProfile}
-              onLogout={onLogout}
-            />
-            <ProfileLookCard access={access} />
-          </Group>
-
-          <Group id="customize" title="Customize app">
-            <div className="set-card">
-              <Row
-                title="Up Next & Playlists"
-                hint="Queue titles to watch in order and keep playlists. Off hides the Up Next button and title-page menu; your queue and playlists are kept."
-              >
-                <Toggle
-                  label="Up Next & Playlists"
-                  checked={preferences.upNext}
-                  onChange={(on) => setAppPreference("upNext", on)}
-                />
-              </Row>
-              <Row
-                title="Airing schedule"
-                hint="A calendar of upcoming episodes. Off hides the calendar button in the navbar."
-              >
-                <Toggle
-                  label="Airing schedule"
-                  checked={preferences.schedule}
-                  onChange={(on) => setAppPreference("schedule", on)}
-                />
-              </Row>
-              <Row
-                title="For You"
-                hint="Suggestions on Anime, Manga, and More, based on what you rate and finish."
-              >
-                <Toggle
-                  label="For You"
-                  checked={preferences.forYou}
-                  onChange={(on) => setAppPreference("forYou", on)}
-                />
-              </Row>
-              <Row
-                title="Latest Updates"
-                hint="The newest episodes and chapters at the bottom of Anime and Manga. Off hides the grid and stops loading it."
-              >
-                <Toggle
-                  label="Latest Updates"
-                  checked={preferences.latestUpdates}
-                  onChange={(on) => setAppPreference("latestUpdates", on)}
-                />
-              </Row>
-              <ActivitySignalsRow />
-              <HiddenTagsRow />
-              <TasteMapRow />
-              <Row
-                title="Rotating highlights"
-                hint="The featured title at the top of Anime, Manga, and More changes on its own."
-              >
-                <Toggle
-                  label="Rotating highlights"
-                  checked={preferences.heroRotate}
-                  onChange={(on) => setAppPreference("heroRotate", on)}
-                />
-              </Row>
-              <Row title="Reduce motion" hint="Fewer animations and transitions across the app.">
-                <Toggle
-                  label="Reduce motion"
-                  checked={preferences.reduceMotion}
-                  onChange={(on) => setAppPreference("reduceMotion", on)}
-                />
-              </Row>
-              <Row title="Open on" hint="The section AniStream shows when it starts.">
-                <Pills
-                  label="Open on"
-                  value={preferences.startSection}
-                  onChange={(value) => setAppPreference("startSection", value)}
-                  options={[
-                    { value: "ANIME", label: "Anime" },
-                    { value: "MANGA", label: "Manga" },
-                    { value: "MORE", label: "More" },
-                  ]}
-                />
-              </Row>
-            </div>
-          </Group>
-
-          <Group id="playback" title="Playback">
-            <div className="set-card">
-              {binge ? (
-                <Row
-                  title="Autoplay next"
-                  hint={
-                    preferences.upNext
-                      ? "Start the next episode or Up Next title a few seconds after one ends."
-                      : "Start the next episode a few seconds after one ends."
-                  }
-                >
-                  <Toggle
-                    label="Autoplay next"
-                    checked={binge.autoplay}
-                    onChange={binge.setAutoplay}
-                  />
-                </Row>
-              ) : null}
-              <Row title="Audio" hint="Used first when an anime episode offers both.">
-                <Pills
-                  label="Audio"
-                  value={preferences.audio}
-                  onChange={(value) => setAppPreference("audio", value)}
-                  options={[
-                    { value: "sub", label: "Sub" },
-                    { value: "dub", label: "Dub" },
-                  ]}
-                />
-              </Row>
-            </div>
-          </Group>
-
-          <Group id="reading" title="Reading">
-            <ReadingCard />
-          </Group>
-
-          <Group id="backup" title="Backup">
-            <LocalDataSettings />
-          </Group>
-
-          <Group id="updates" title="Updates">
-            <AppUpdates />
-          </Group>
         </div>
+
+        <section
+          className="set-pane"
+          id="settings-pane"
+          role="tabpanel"
+          aria-labelledby={`settings-tab-${tab.id}`}
+        >
+          <header className="set-pane-head">
+            <h2>{tab.label}</h2>
+            <p>
+              {tab.id === "account" && signedOut
+                ? "Connect a tracker to sync your lists. Both are optional."
+                : tab.lede}
+            </p>
+          </header>
+          {tab.id === "account" ? (
+            <>
+              <Label>Trackers</Label>
+              <AccountsCard
+                access={access}
+                onSignIn={onSignIn}
+                onOpenProfile={onOpenProfile}
+                onLogout={onLogout}
+              />
+              {signedOut ? (
+                <Note>
+                  Sign-in happens in your browser. AniStream keeps the session on this device.
+                </Note>
+              ) : null}
+              <ProfileLookCard access={access} />
+            </>
+          ) : tab.id === "general" ? (
+            <GeneralPane />
+          ) : tab.id === "for-you" ? (
+            <ForYouPane />
+          ) : tab.id === "playback" ? (
+            <PlaybackPane />
+          ) : tab.id === "reading" ? (
+            <ReadingCard />
+          ) : (
+            <>
+              <Label>Updates</Label>
+              <AppUpdates />
+              <Label>Backup</Label>
+              <LocalDataSettings />
+              <Note>
+                The backup file is not encrypted. Your AniList lists are already kept on AniList.
+              </Note>
+            </>
+          )}
+        </section>
       </div>
     </section>
   );
 }
 
-function Group({ id, title, children }: { id: SectionId; title: string; children: ReactNode }) {
+function Label({ children }: { children: ReactNode }): React.JSX.Element {
+  return <h3 className="set-label">{children}</h3>;
+}
+
+function Note({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <section className="set-group" id={`settings-${id}`} aria-labelledby={`settings-${id}-title`}>
-      <h2 id={`settings-${id}-title`}>{title}</h2>
+    <p className="set-note">
+      <ShieldCheck size={14} aria-hidden="true" />
       {children}
-    </section>
+    </p>
   );
+}
+
+function GeneralPane(): React.JSX.Element {
+  const preferences = useAppPreferences();
+  return (
+    <>
+      <Label>Start</Label>
+      <div className="set-card">
+        <Row title="Open on" hint="The section AniStream shows when it starts.">
+          <Pills
+            label="Open on"
+            value={preferences.startSection}
+            onChange={(value) => setAppPreference("startSection", value)}
+            options={[
+              { value: "ANIME", label: "Anime" },
+              { value: "MANGA", label: "Manga" },
+              { value: "MORE", label: "More" },
+            ]}
+          />
+        </Row>
+      </div>
+      <Label>Show in the app</Label>
+      <div className="set-card">
+        <Row
+          title="Up Next & Playlists"
+          hint="Queue titles in order. Off hides the button; your queue is kept."
+        >
+          <Toggle
+            label="Up Next & Playlists"
+            checked={preferences.upNext}
+            onChange={(on) => setAppPreference("upNext", on)}
+          />
+        </Row>
+        <Row title="Airing schedule" hint="A calendar of upcoming episodes in the navbar.">
+          <Toggle
+            label="Airing schedule"
+            checked={preferences.schedule}
+            onChange={(on) => setAppPreference("schedule", on)}
+          />
+        </Row>
+        <Row
+          title="Latest Updates"
+          hint="Newest episodes and chapters at the bottom of Anime and Manga."
+        >
+          <Toggle
+            label="Latest Updates"
+            checked={preferences.latestUpdates}
+            onChange={(on) => setAppPreference("latestUpdates", on)}
+          />
+        </Row>
+        <Row title="Rotating highlights" hint="The featured title at the top changes on its own.">
+          <Toggle
+            label="Rotating highlights"
+            checked={preferences.heroRotate}
+            onChange={(on) => setAppPreference("heroRotate", on)}
+          />
+        </Row>
+      </div>
+      <Label>Titles</Label>
+      <div className="set-card">
+        <EnglishTitlesRow />
+      </div>
+      <Label>Motion</Label>
+      <div className="set-card">
+        <Row title="Reduce motion" hint="Fewer animations and transitions.">
+          <Toggle
+            label="Reduce motion"
+            checked={preferences.reduceMotion}
+            onChange={(on) => setAppPreference("reduceMotion", on)}
+          />
+        </Row>
+      </div>
+    </>
+  );
+}
+
+function ForYouPane(): React.JSX.Element {
+  const preferences = useAppPreferences();
+  return (
+    <>
+      <div className="set-card">
+        <Row title="For You" hint="Suggestions on Anime, Manga and More.">
+          <Toggle
+            label="For You"
+            checked={preferences.forYou}
+            onChange={(on) => setAppPreference("forYou", on)}
+          />
+        </Row>
+        <ActivitySignalsRow />
+        <HiddenTagsRow />
+      </div>
+      <Label>Your Taste Graph</Label>
+      <TasteMapCard />
+    </>
+  );
+}
+
+function PlaybackPane(): React.JSX.Element {
+  const preferences = useAppPreferences();
+  const binge = useOptionalBinge();
+  return (
+    <>
+      <Label>Watching</Label>
+      <div className="set-card">
+        {binge ? (
+          <Row
+            title="Autoplay next"
+            hint={
+              preferences.upNext
+                ? "Start the next episode or Up Next title a few seconds after one ends."
+                : "Start the next episode a few seconds after one ends."
+            }
+          >
+            <Toggle label="Autoplay next" checked={binge.autoplay} onChange={binge.setAutoplay} />
+          </Row>
+        ) : null}
+        <Row title="Audio" hint="Used first when an anime episode offers both.">
+          <Pills
+            label="Audio"
+            value={preferences.audio}
+            onChange={(value) => setAppPreference("audio", value)}
+            options={[
+              { value: "sub", label: "Sub" },
+              { value: "dub", label: "Dub" },
+            ]}
+          />
+        </Row>
+      </div>
+      <DownloadSettingsCard />
+    </>
+  );
+}
+
+/** Offline downloads: storage limit, quality and folder (moved here from Downloads 2026-10-19). */
+function DownloadSettingsCard(): React.JSX.Element | null {
+  const downloads = useOptionalDownloads();
+  const state = downloads?.state;
+  if (!downloads || !state) return null;
+  const { settings } = state;
+  return (
+    <>
+      <Label>Downloads</Label>
+      <div className="set-card">
+        <Row title="Storage limit" hint="New downloads stop here; nothing is deleted for you.">
+          <Select
+            ariaLabel="Storage limit"
+            value={String(settings.limitBytes)}
+            onChange={(next) => void downloads.apply({ op: "settings", limitBytes: Number(next) })}
+            options={[...new Set([...DOWNLOAD_LIMIT_CHOICES, settings.limitBytes])]
+              .sort((a, b) => a - b)
+              .map((bytes) => ({ value: String(bytes), label: formatBytes(bytes) }))}
+          />
+        </Row>
+        <Row
+          title="Quality"
+          hint={`Up to ${formatBytes(estimateDownloadBytes(24, settings.quality))} for a 24-minute episode.`}
+        >
+          <Select
+            ariaLabel="Download quality"
+            value={settings.quality}
+            onChange={(next) => void downloads.apply({ op: "settings", quality: next })}
+            options={DOWNLOAD_QUALITIES.map((quality) => ({ value: quality, label: quality }))}
+          />
+        </Row>
+        <Row title="Folder" hint="Applies to new downloads; existing ones stay put.">
+          <code className="set-path" title={settings.folder}>
+            {shortFolder(settings.folder)}
+          </code>
+          <button
+            type="button"
+            className="set-button"
+            onClick={() => void downloads.chooseFolder()}
+          >
+            <FolderOpen size={15} aria-hidden="true" />
+            Change
+          </button>
+        </Row>
+      </div>
+    </>
+  );
+}
+
+/** The last three parts of a folder path, enough to recognise it. */
+function shortFolder(folder: string): string {
+  const parts = folder.split(/[\\/]+/).filter(Boolean);
+  return parts.length > 3 ? `…\\${parts.slice(-3).join("\\")}` : folder;
 }
 
 function Row({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
@@ -339,7 +498,7 @@ function AniListRow({
         <div className="set-text">
           <span className="set-provider">AniList</span>
           <strong>Anime and manga</strong>
-          <span>Sync your lists, scores and reading progress.</span>
+          <span>Lists, scores and reading progress.</span>
         </div>
         <button type="button" className="set-button set-button--primary" onClick={onSignIn}>
           Connect AniList
@@ -474,10 +633,7 @@ function SimklRow(): React.JSX.Element {
         ) : auth?.status === "error" ? (
           <span className="set-warn">{auth.message}</span>
         ) : (
-          <span>
-            Import what you watched and rated, keep your watch list in step, and teach More For You
-            your taste. Kept on this device.
-          </span>
+          <span>Movies and shows you watched and rated. Kept on this device.</span>
         )}
         {actionError ? <span className="set-warn">{actionError}</span> : null}
       </div>
@@ -520,7 +676,7 @@ function ProfileLookCard({ access }: { access: ViewerAccess }): React.JSX.Elemen
 
   return (
     <>
-      <h3 className="set-subhead">Profile look</h3>
+      <Label>Profile look</Label>
       <div className="set-card">
         <Row
           title="Profile picture"
@@ -608,16 +764,26 @@ function ActivitySignalsRow(): React.JSX.Element {
     };
   }, []);
   const names = { ANIME: "Anime", MANGA: "Manga", MORE: "More" } as const;
-  const timing = (settings?.timeToPlay ?? [])
-    .map((row) => `${names[row.section]} ${formatSeconds(row.medianSeconds)}`)
-    .join(" · ");
+  const timing = settings?.timeToPlay ?? [];
   return (
-    <Row
-      title="Learn from my activity"
-      hint={`Uses how you watch on this device (what you start, finish, abandon, mark Interested or Not interested, and how long it takes to find something to play) to improve For You. It stays on this device; only title lookups go to TMDB and Simkl. Turning it off stops this and deletes the measurements.${
-        timing ? ` Typical time to play: ${timing}.` : ""
-      }${error ? ` ${error}` : ""}`}
-    >
+    <div className="set-row">
+      <div className="set-text">
+        <strong>Learn from my activity</strong>
+        <span>
+          Uses what you start, finish, skip and mark here to improve For You. Off deletes what was
+          measured.{error ? ` ${error}` : ""}
+        </span>
+        {timing.length ? (
+          <ul className="set-stats" aria-label="Typical time to play">
+            {timing.map((row, at) => (
+              <li key={row.section}>
+                {at === 0 ? "Time to play · " : ""}
+                {names[row.section]} {formatSeconds(row.medianSeconds)}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
       <Toggle
         label="Learn from my activity"
         checked={settings?.activitySignals ?? true}
@@ -630,26 +796,102 @@ function ActivitySignalsRow(): React.JSX.Element {
             .catch(() => setError("The setting could not be saved."));
         }}
       />
-    </Row>
+    </div>
   );
 }
 
-/**
- * Genres and tags the viewer never wants recommended (X's muted keywords): kept out of For You,
- * the hero and trending in every section. Search still finds them.
- */
-function TasteMapRow(): React.JSX.Element {
+/** Settings > For You: the Taste Graph's summary, a small preview of it, and Open graph. */
+function TasteMapCard(): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const [map, setMap] = useState<TasteMap>();
+  useEffect(() => {
+    let alive = true;
+    window.anistream
+      .getTasteMap()
+      .then((value) => alive && setMap(value))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [open]);
   return (
-    <Row
-      title="Your taste map"
-      hint="What AniStream has learned you like, as a map of linked titles and tastes. Built on this device; nothing is sent anywhere."
-    >
-      <button type="button" className="set-button" onClick={() => setOpen(true)}>
-        Open map
-      </button>
+    <div className="set-card set-taste">
+      <TasteMapPreview map={map} />
+      <div className="set-text">
+        <strong>
+          {map?.titles
+            ? `${map.titles} liked titles in ${map.clusters.length} ${map.clusters.length === 1 ? "taste" : "tastes"}`
+            : map
+              ? "Your graph starts with a few titles"
+              : "Your Taste Graph"}
+        </strong>
+        <span>What AniStream has learned you like, as linked titles and tastes.</span>
+        <button type="button" className="set-button" onClick={() => setOpen(true)}>
+          Open graph
+        </button>
+      </div>
       {open ? <TasteMapDialog onClose={() => setOpen(false)} /> : null}
-    </Row>
+    </div>
+  );
+}
+
+const PREVIEW_COLOR = { ANIME: "#4fd19a", MANGA: "#e3a75c", MORE: "#7fa9f2" } as const;
+
+/** The viewer's own map, laid out once and drawn small; decorative (the summary says it). */
+function TasteMapPreview({ map }: { map?: TasteMap }): React.JSX.Element {
+  const drawing = useMemo(() => {
+    if (!map?.nodes.length) return undefined;
+    const layout = new ForceLayout(map);
+    layout.tick(300);
+    const index = new Map(map.nodes.map((node, at) => [node.id, at]));
+    const xs = layout.nodes.map((node) => node.x);
+    const ys = layout.nodes.map((node) => node.y);
+    const pad = 30;
+    const box = [
+      Math.min(...xs) - pad,
+      Math.min(...ys) - pad,
+      Math.max(...xs) + pad,
+      Math.max(...ys) + pad,
+    ];
+    return {
+      viewBox: `${box[0]} ${box[1]} ${box[2] - box[0]} ${box[3] - box[1]}`,
+      links: map.links.flatMap((link) => {
+        const a = index.get(link.source);
+        const b = index.get(link.target);
+        return a === undefined || b === undefined
+          ? []
+          : [[layout.nodes[a], layout.nodes[b]] as const];
+      }),
+      nodes: map.nodes.map((node, at) => ({ node, x: layout.nodes[at].x, y: layout.nodes[at].y })),
+    };
+  }, [map]);
+  return (
+    <div className="set-taste-preview" aria-hidden="true">
+      {drawing ? (
+        <svg viewBox={drawing.viewBox} preserveAspectRatio="xMidYMid meet">
+          {drawing.links.map(([a, b], at) => (
+            <line key={at} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+          ))}
+          {drawing.nodes.map(({ node, x, y }) => (
+            <circle
+              key={node.id}
+              cx={x}
+              cy={y}
+              r={node.kind === "cluster" ? 11 : 4}
+              fill={PREVIEW_COLOR[node.section]}
+              fillOpacity={node.kind === "cluster" ? 0.3 : 0.8}
+              stroke={node.kind === "cluster" ? PREVIEW_COLOR[node.section] : "none"}
+              strokeWidth={2}
+            />
+          ))}
+        </svg>
+      ) : (
+        <svg viewBox="-60 -30 120 60">
+          <circle r="22" className="set-taste-ghost" />
+          <circle r="4" className="set-taste-ghost-core" />
+        </svg>
+      )}
+    </div>
   );
 }
 
@@ -682,45 +924,43 @@ function HiddenTagsRow(): React.JSX.Element {
     void saveHiddenTags(next).catch(() => setError("The list could not be saved."));
   };
   return (
-    <div className="set-row set-row--stack">
+    <div className="set-row">
       <div className="set-text">
         <strong>Hidden genres &amp; tags</strong>
         <span>
-          Titles with these genres or tags stay out of For You, the hero and trending in every
-          section. Search still finds them.{error ? ` ${error}` : ""}
+          Kept out of For You, the hero and trending. Search still finds them.
+          {error ? ` ${error}` : ""}
         </span>
-        {hidden.length ? (
-          <div className="hidden-tag-chips" aria-label="Hidden genres and tags">
-            {hidden.map((name) => (
-              <button
-                key={name}
-                type="button"
-                className="hidden-tag-chip"
-                aria-label={`Show ${name} again`}
-                onClick={() => save(hidden.filter((entry) => entry !== name))}
-              >
-                {name}
-                <X size={13} aria-hidden="true" />
-              </button>
-            ))}
-          </div>
-        ) : null}
+        <div className="hidden-tag-chips" aria-label="Hidden genres and tags">
+          {hidden.map((name) => (
+            <button
+              key={name}
+              type="button"
+              className="hidden-tag-chip"
+              aria-label={`Show ${name} again`}
+              onClick={() => save(hidden.filter((entry) => entry !== name))}
+            >
+              {name}
+              <X size={13} aria-hidden="true" />
+            </button>
+          ))}
+          <Select
+            ariaLabel="Hide a genre or tag"
+            className="hidden-tag-add"
+            value=""
+            disabled={!vocabulary.length}
+            options={[
+              { value: "", label: "+ Add" },
+              ...vocabulary
+                .filter((name) => !taken.has(name.toLocaleLowerCase()))
+                .map((name) => ({ value: name, label: name })),
+            ]}
+            onChange={(name) => {
+              if (name) save([...hidden, name]);
+            }}
+          />
+        </div>
       </div>
-      <Select
-        ariaLabel="Hide a genre or tag"
-        className="filter-pill"
-        value=""
-        disabled={!vocabulary.length}
-        options={[
-          { value: "", label: "Add genre or tag" },
-          ...vocabulary
-            .filter((name) => !taken.has(name.toLocaleLowerCase()))
-            .map((name) => ({ value: name, label: name })),
-        ]}
-        onChange={(name) => {
-          if (name) save([...hidden, name]);
-        }}
-      />
     </div>
   );
 }
@@ -757,61 +997,113 @@ function ReadingCard(): React.JSX.Element {
   const disabled = saving || !snapshot.loaded;
 
   return (
-    <div className="set-card">
-      <Row title="Page width" hint="How wide pages appear in the reader.">
-        <Select
-          ariaLabel="Page width"
-          value={String(settings.width)}
-          disabled={disabled}
-          onChange={(next) => change({ width: Number(next) as ReaderSettings["width"] })}
-          options={[
-            { value: "720", label: "Narrow · 720px" },
-            { value: "960", label: "Medium · 960px" },
-            { value: "1120", label: "Wide · 1120px" },
-            { value: "1400", label: "Extra wide · 1400px" },
-          ]}
-        />
-      </Row>
-      <Row title="Image fit" hint="Original size never enlarges small pages.">
-        <Pills
-          label="Image fit"
-          value={settings.fit}
-          disabled={disabled}
-          onChange={(fit) => change({ fit })}
-          options={[
-            { value: "width", label: "Fit width" },
-            { value: "original", label: "Original size" },
-          ]}
-        />
-      </Row>
-      <Row title="Image quality" hint="Data saver loads smaller MangaDex images.">
-        <Pills
-          label="Image quality"
-          value={settings.quality}
-          disabled={disabled}
-          onChange={(quality) => change({ quality })}
-          options={[
-            { value: "data", label: "Original" },
-            { value: "data-saver", label: "Data saver" },
-          ]}
-        />
-      </Row>
-      <Row
-        title="Standard image port only"
-        hint="Turn on if pages never load on a school or office network."
-      >
-        <Toggle
-          label="Standard image port only"
-          checked={settings.standardPortOnly}
-          disabled={disabled}
-          onChange={(standardPortOnly) => change({ standardPortOnly })}
-        />
-      </Row>
+    <>
+      <Label>Pages</Label>
+      <div className="set-card">
+        <Row title="Page width" hint="How wide pages appear.">
+          <Select
+            ariaLabel="Page width"
+            value={String(settings.width)}
+            disabled={disabled}
+            onChange={(next) => change({ width: Number(next) as ReaderSettings["width"] })}
+            options={[
+              { value: "720", label: "Narrow · 720px" },
+              { value: "960", label: "Medium · 960px" },
+              { value: "1120", label: "Wide · 1120px" },
+              { value: "1400", label: "Extra wide · 1400px" },
+            ]}
+          />
+        </Row>
+        <Row title="Image fit" hint="Original size never enlarges small pages.">
+          <Pills
+            label="Image fit"
+            value={settings.fit}
+            disabled={disabled}
+            onChange={(fit) => change({ fit })}
+            options={[
+              { value: "width", label: "Fit width" },
+              { value: "original", label: "Original size" },
+            ]}
+          />
+        </Row>
+        <Row title="Image quality" hint="Data saver loads smaller images.">
+          <Pills
+            label="Image quality"
+            value={settings.quality}
+            disabled={disabled}
+            onChange={(quality) => change({ quality })}
+            options={[
+              { value: "data", label: "Original" },
+              { value: "data-saver", label: "Data saver" },
+            ]}
+          />
+        </Row>
+      </div>
+      <Label>Network</Label>
+      <div className="set-card">
+        <Row
+          title="Standard image port only"
+          hint="Turn on if pages never load on a school or office network."
+        >
+          <Toggle
+            label="Standard image port only"
+            checked={settings.standardPortOnly}
+            disabled={disabled}
+            onChange={(standardPortOnly) => change({ standardPortOnly })}
+          />
+        </Row>
+      </div>
       {error ? (
         <p className="error-banner set-error" role="alert">
           {error}
         </p>
       ) : null}
-    </div>
+    </>
+  );
+}
+
+/**
+ * English titles (default on, user decision 2026-10-14). Stored by the main process, which picks
+ * titles as AniList data arrives, so a change reloads the window to refetch every list.
+ */
+function EnglishTitlesRow(): React.JSX.Element {
+  const [english, setEnglish] = useState<boolean>();
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    let active = true;
+    window.anistream
+      .getTitlePreferences()
+      .then((preferences) => {
+        if (active) setEnglish(preferences.english);
+      })
+      .catch(() => {
+        if (active) setEnglish(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return (
+    <Row
+      title="English titles"
+      hint="Show titles in English when AniList has one. Off follows your AniList account (romaji when signed out)."
+    >
+      <Toggle
+        label="English titles"
+        checked={english ?? true}
+        disabled={english === undefined || saving}
+        onChange={(on) => {
+          setSaving(true);
+          setEnglish(on);
+          window.anistream
+            .setTitlePreferences({ english: on })
+            .then(() => window.location.reload())
+            .catch(() => {
+              setEnglish(!on);
+              setSaving(false);
+            });
+        }}
+      />
+    </Row>
   );
 }

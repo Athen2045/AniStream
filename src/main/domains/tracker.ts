@@ -1,3 +1,4 @@
+import { withTitleCopy } from "../title-copies";
 import type { AniListClient } from "../anilist";
 import type { AppDatabase } from "../database";
 import { registerTrustedIpcHandler } from "../ipc";
@@ -141,9 +142,18 @@ export function registerTrackerDomain(
     "anilist:media-detail",
     async (_event, id, type) => {
       if (!aniList) throw new Error("AniList is not ready.");
-      return aniList.getMediaDetail(id, type);
+      // A saved copy keeps the title page working offline.
+      return withTitleCopy(database?.titleCopies, `detail:${type}:${id}`, id, () =>
+        aniList.getMediaDetail(id, type),
+      );
     },
   );
+  registerTrustedIpcHandler(trustedRendererOrigin, "anilist:series-graph", async (_event, id) => {
+    if (!aniList) throw new Error("AniList is not ready.");
+    return withTitleCopy(database?.titleCopies, `series:${id}`, id, () =>
+      aniList.getAnimeSeriesGraph(id),
+    );
+  });
   registerTrustedIpcHandler(trustedRendererOrigin, "anilist:add-entry", async (_event, mediaId) => {
     if (!aniList) throw new Error("AniList is not ready.");
     // The offline copy keeps its last state; the next refresh adds the new entry.

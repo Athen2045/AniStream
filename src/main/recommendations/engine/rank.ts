@@ -16,8 +16,9 @@ import type { HybridRankInput, HybridScored } from "./types";
 /**
  * Ranks candidates by provider recommendation edges from liked history (graph), IDF-weighted
  * content similarity to the viewer's taste vector, and popularity/quality priors. History from
- * other sections counts at the cross-section prior weight. Pure: callers own retrieval,
- * exclusion, and persistence.
+ * other sections counts at the cross-section prior weight, raised by shrinkage while this
+ * section's own history is thin: prior + (1 − prior)·k / (k + own liked mass). Pure: callers own
+ * retrieval, exclusion, and persistence.
  */
 export function rankHybrid(input: HybridRankInput): HybridScored[] {
   const weights = { ...HYBRID_WEIGHTS, ...input.weights };
@@ -28,11 +29,25 @@ export function rankHybrid(input: HybridRankInput): HybridScored[] {
   const halfLife = weights.halfLifeDays * DAY_MS;
   const profile: Vector = new Map();
   const graph = new Map<string, { total: number; best: number; seed?: string }>();
+  const decayOf = (occurredAt: number) =>
+    Math.pow(0.5, Math.max(0, input.now - occurredAt) / halfLife);
+  const ownMass = input.history.reduce(
+    (sum, item) =>
+      recommendationSection(item.features.mediaType) === input.section && item.affinity > 0
+        ? sum + item.affinity * decayOf(item.occurredAt)
+        : sum,
+    0,
+  );
+  const shrink = weights.crossTypeShrink;
+  const crossPrior =
+    shrink > 0
+      ? weights.crossTypePrior + (1 - weights.crossTypePrior) * (shrink / (shrink + ownMass))
+      : weights.crossTypePrior;
 
   for (const item of input.history) {
-    const decay = Math.pow(0.5, Math.max(0, input.now - item.occurredAt) / halfLife);
+    const decay = decayOf(item.occurredAt);
     const sameSection = recommendationSection(item.features.mediaType) === input.section;
-    const weight = item.affinity * decay * (sameSection ? 1 : weights.crossTypePrior);
+    const weight = item.affinity * decay * (sameSection ? 1 : crossPrior);
     if (!weight) continue;
     addScaled(profile, space.vector(item.features), weight);
     const edges = item.features.recommendations ?? [];

@@ -10,11 +10,11 @@ import { extname, relative, resolve, sep } from "node:path";
 export function buildContentSecurityPolicy(frameOrigins: readonly string[]): string {
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' https: data: blob: anistream-art:",
-    "media-src 'self' https: blob:",
-    "connect-src 'self' https: blob:",
+    "media-src 'self' https: blob: anistream-media:",
+    "connect-src 'self' https: blob: anistream-media:",
     `frame-src ${frameOrigins.length ? frameOrigins.join(" ") : "'none'"}`,
     "worker-src 'self' blob:",
     "font-src 'self' data:",

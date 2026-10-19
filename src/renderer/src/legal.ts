@@ -39,7 +39,7 @@ export const LEGAL_POLICY: LegalSection[] = [
     heading: "Third-party services",
     paragraphs: [
       "The websites and players AniStream connects to are operated by independent third parties not affiliated with AniStream. AniStream does not control, review or endorse the content they host, and their own terms and policies apply.",
-      "Title information and artwork are provided through the public APIs of AniList, TMDB, MyAnimeList, Kitsu, MangaDex and Simkl. AniStream is not affiliated with or endorsed by any of them. This product uses the TMDB API but is not endorsed or certified by TMDB. All titles, artwork and trademarks are the property of their respective owners.",
+      "Title information and artwork are provided through the public APIs of AniList, TMDB, MyAnimeList, Kitsu, MangaDex and Simkl. Episode thumbnails also come from TheTVDB through the ani.zip mapping service. AniStream is not affiliated with or endorsed by any of them. This product uses the TMDB API but is not endorsed or certified by TMDB. All titles, artwork and trademarks are the property of their respective owners.",
     ],
   },
   {

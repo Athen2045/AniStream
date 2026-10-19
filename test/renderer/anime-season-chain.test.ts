@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { AniListMediaDetail, AniListRelation } from "../../src/shared/contracts";
 import {
   buildAnimeSeasonChain,
+  buildAnimeSeries,
+  createSeriesLoader,
+  isSeasonEntry,
   inferDisplayedPartNumber,
   inferDisplayedSeasonNumber,
   inferMediaDisplayedSeasonNumber,
@@ -157,5 +160,78 @@ describe("anime season chain", () => {
       [4, 1],
       [4, 2],
     ]);
+  });
+});
+
+describe("anime series seasons and extras", () => {
+  it("keeps films and one-episode releases out of the season numbering", async () => {
+    const monsters = anime(30, "MONSTERS", { episodes: 1, format: "ONA", seasonYear: 2024 });
+    const current = anime(31, "ONE PIECE", { episodes: 1180, seasonYear: 1999 });
+    const film = anime(32, "ONE PIECE FILM RED", {
+      episodes: 1,
+      format: "MOVIE",
+      seasonYear: 2022,
+    });
+    current.relations = [
+      relation("PREQUEL", monsters),
+      { relationType: "SIDE_STORY", media: film },
+    ];
+    monsters.relations = [relation("SEQUEL", current)];
+
+    const result = await buildAnimeSeries(current, async (id) => {
+      if (id === monsters.id) return monsters;
+      throw new Error(`unexpected ${id}`);
+    });
+
+    expect(result.seasons.map((item) => [item.media.id, item.number])).toEqual([[31, 1]]);
+    expect(result.extras.map((item) => item.media.id)).toEqual([32, 30]);
+  });
+
+  it("walks through a film between seasons without numbering it", async () => {
+    const s1 = anime(40, "Slayer", { episodes: 26, seasonYear: 2019 });
+    const film = anime(41, "Slayer Movie", { episodes: 1, format: "MOVIE", seasonYear: 2020 });
+    const s2 = anime(42, "Slayer Season 2", { episodes: 11, seasonYear: 2021 });
+    s1.relations = [relation("SEQUEL", film)];
+    film.relations = [relation("PREQUEL", s1), relation("SEQUEL", s2)];
+    s2.relations = [relation("PREQUEL", film)];
+    const byId = new Map([film, s2].map((media) => [media.id, media]));
+
+    const result = await buildAnimeSeries(s1, async (id) => byId.get(id)!);
+
+    expect(result.seasons.map((item) => [item.media.id, item.number])).toEqual([
+      [40, 1],
+      [42, 2],
+    ]);
+    expect(result.extras.map((item) => item.media.id)).toEqual([41]);
+  });
+
+  it("classifies season entries by format and episode count", () => {
+    expect(isSeasonEntry(anime(1, "TV", { episodes: 12 }))).toBe(true);
+    expect(isSeasonEntry(anime(2, "Airing", {}))).toBe(true);
+    expect(isSeasonEntry(anime(3, "Web", { episodes: 1, format: "ONA" }))).toBe(false);
+    expect(isSeasonEntry(anime(4, "Film", { episodes: 1, format: "MOVIE" }))).toBe(false);
+    expect(isSeasonEntry(anime(5, "OVA", { episodes: 6, format: "OVA" }))).toBe(false);
+  });
+});
+
+describe("createSeriesLoader", () => {
+  it("serves neighbours from one graph request and refetches only past its edge", async () => {
+    const one = anime(51, "One", { episodes: 12 });
+    const two = anime(52, "Two", { episodes: 12 });
+    const calls: number[] = [];
+    const loader = createSeriesLoader(async (id) => {
+      calls.push(id);
+      return [
+        { media: one, titles: ["One"], relations: [relation("SEQUEL", two)] },
+        { media: two, titles: ["Two Season 2"], relations: [relation("PREQUEL", one)] },
+        // Outer ring: no relations, so it is not served from this graph.
+        { media: anime(53, "Three", { episodes: 12 }), titles: [] },
+      ];
+    });
+    expect((await loader(51)).id).toBe(51);
+    expect((await loader(52)).synonyms).toEqual(["Two Season 2"]);
+    expect(calls).toEqual([51]);
+    await expect(loader(53)).rejects.toThrow();
+    expect(calls).toEqual([51, 53]);
   });
 });

@@ -43,6 +43,8 @@ connect AniList to sync your lists if you want to.
 ## Features
 
 - **Watch**: Anime with sub or dub, continuing from the last episode you watched
+- **Offline**: Download anime episodes (one, or every aired episode) and watch them without a
+  connection, within a storage limit you set (25 GB by default)
 - **Read**: Manga in a fullscreen reader that remembers your page
 - **Discover**: Trending titles, latest updates, and full title pages with similar picks
 - **For You**: Personal recommendations that run entirely on your device

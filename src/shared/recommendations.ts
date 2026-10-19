@@ -68,6 +68,11 @@ export interface RecommendationItemFeatures {
   creators: RecommendationCreator[];
   averageScore?: number;
   malScore?: number;
+  /**
+   * How many people rated the title at the provider behind `averageScore` (or `malScore` when
+   * set): MyAnimeList scoring users, TMDB vote count. Absent when unknown.
+   */
+  ratingCount?: number;
   popularity?: number;
   status?: string;
   /**
@@ -119,7 +124,14 @@ export type RecommendationReasonCode =
   | "highly-rated"
   | "explore-more"
   | "anime-fit"
-  | "manga-fit";
+  | "manga-fit"
+  /** "Try something new": outside the viewer's usual taste, well rated. */
+  | "try-new"
+  /** "Try something new": an older, little-known, well-rated title. */
+  | "obscure-classic"
+  | "documentary"
+  /** Among Simkl's top-rated (the card links to the title on simkl.com). */
+  | "on-simkl";
 
 export interface RecommendationResult {
   anilistId: number;
@@ -132,6 +144,10 @@ export interface RecommendationResult {
   relatedTo?: number;
   /** Display title of the history entry behind a "similar-to" reason. */
   relatedTitle?: string;
+  /** "Try something new": the genres or tags this title brings that are new to the viewer. */
+  newTastes?: string[];
+  /** Tag-pair row: the kept taste and its new partner ("Romance", "Action"). */
+  combo?: string[];
 }
 
 export interface RecommendationImpression extends RecommendationResult {
@@ -152,5 +168,12 @@ export const HYBRID_WEIGHTS = {
   quality: 0.1,
   /** Weight of the other media type's history (shared taste, own section first). */
   crossTypePrior: 0.35,
+  /**
+   * Shrinkage strength k for the cross-section prior: while a section's own liked history is thin
+   * the other sections count more, prior + (1 − prior)·k / (k + own mass). 0 keeps it fixed.
+   * k = 20 from the offline harness (2026-10-12): Manga MRR 0.096 → 0.109 and HR@20 0.27 → 0.33
+   * (15 hold-outs, so a small effect), Anime unchanged or slightly better; k = 40 hurt Manga.
+   */
+  crossTypeShrink: 20,
   halfLifeDays: 730,
 } as const;

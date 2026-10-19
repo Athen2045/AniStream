@@ -17,7 +17,13 @@ export type ProviderSectionName = "anime" | "manga" | "more";
 
 /** Built-in database providers per section. Required ones cannot be disabled. */
 const DATABASE_PROVIDERS = {
-  anime: { anilist: { required: true }, mal: { required: false }, kitsu: { required: false } },
+  anime: {
+    anilist: { required: true },
+    mal: { required: false },
+    kitsu: { required: false },
+    // Unofficial community mapping (episode thumbnails); user-approved 2026-10-13, off unless listed.
+    anizip: { required: false },
+  },
   manga: {
     anilist: { required: true },
     mangadex: { required: true },
@@ -92,6 +98,26 @@ export interface AnimeIndexedEmbedProvider extends MediaProviderBase, AnimeSourc
 }
 
 /**
+ * `direct-hls`: a source whose episode pages hand back a direct HLS stream, played by AniStream's
+ * own player through the main-process stream proxy (user decision 2026-10-18). Matched to AniList
+ * by search plus format/year/episode-count/first-air-date agreement. Endpoints live only in the
+ * gitignored local config.
+ */
+export interface AnimeDirectHlsProvider extends MediaProviderBase {
+  kind: "direct-hls";
+  /** Title search page; needs `{query}`. */
+  searchUrl: string;
+  /** Series page with its episode list; needs `{slug}`, same origin as `searchUrl`. */
+  titleUrl: string;
+  /** Episode page with the player data; needs `{slug}` and `{episode}`, same origin. */
+  episodeUrl: string;
+  /** Optional `Referer` the stream proxy sends for this source's media (HTTPS origin). */
+  referer?: string;
+}
+
+export type AnimeMediaProvider = AnimeIndexedEmbedProvider | AnimeDirectHlsProvider;
+
+/**
  * Built-in manga chapter sources (no endpoints to configure):
  * - `mangadex`: MangaDex@Home in-app reading (primary).
  * - `official-links`: opt-in, off by default (user prefers in-app reading only). Adds chapters MangaDex
@@ -136,7 +162,7 @@ export interface ProviderSection<Section extends ProviderSectionName, Media> {
 }
 
 export interface ProviderConfig {
-  anime: ProviderSection<"anime", AnimeIndexedEmbedProvider>;
+  anime: ProviderSection<"anime", AnimeMediaProvider>;
   manga: ProviderSection<"manga", MangaMediaProvider>;
   more: ProviderSection<"more", MoreTmdbEmbedProvider>;
 }
@@ -180,7 +206,9 @@ export function isDatabaseEnabled<Section extends ProviderSectionName>(
 export function embeddedPlayerOrigins(config: ProviderConfig): string[] {
   return [
     ...new Set([
-      ...config.anime.media.map((provider) => provider.playerOrigin),
+      ...config.anime.media.flatMap((provider) =>
+        provider.kind === "indexed-embed" ? [provider.playerOrigin] : [],
+      ),
       ...config.more.media.map((provider) => provider.origin),
     ]),
   ];
@@ -294,8 +322,10 @@ function parseMediaList<Media extends MediaProviderBase>(
   return media;
 }
 
-function parseAnimeMedia(value: Record<string, unknown>, id: string): AnimeIndexedEmbedProvider {
-  if (value.kind !== "indexed-embed") throw new Error('kind must be "indexed-embed"');
+function parseAnimeMedia(value: Record<string, unknown>, id: string): AnimeMediaProvider {
+  if (value.kind === "direct-hls") return parseDirectHls(value, id);
+  if (value.kind !== "indexed-embed")
+    throw new Error('kind must be "indexed-embed" or "direct-hls"');
   const recentIndexUrl = template(value.recentIndexUrl, "recentIndexUrl", []);
   const seriesUrl = template(value.seriesUrl, "seriesUrl", ["seriesId"]);
   sameOrigin([recentIndexUrl, seriesUrl]);
@@ -315,6 +345,26 @@ function parseAnimeMedia(value: Record<string, unknown>, id: string): AnimeIndex
     aniListEmbedUrl,
     playerOrigin,
     ...scriptRules(value),
+  };
+}
+
+function parseDirectHls(value: Record<string, unknown>, id: string): AnimeDirectHlsProvider {
+  const searchUrl = template(value.searchUrl, "searchUrl", ["query"]);
+  const titleUrl = template(value.titleUrl, "titleUrl", ["slug"]);
+  const episodeUrl = template(value.episodeUrl, "episodeUrl", ["slug", "episode"]);
+  sameOrigin([searchUrl, titleUrl, episodeUrl]);
+  let referer: string | undefined;
+  if (value.referer !== undefined) {
+    const url = httpsUrl(value.referer, "referer");
+    referer = `${url.origin}/`;
+  }
+  return {
+    id,
+    kind: "direct-hls",
+    searchUrl,
+    titleUrl,
+    episodeUrl,
+    ...(referer ? { referer } : {}),
   };
 }
 

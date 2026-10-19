@@ -6,6 +6,7 @@ import type {
   RecommendationRelation,
   RecommendationTag,
 } from "../../shared/recommendations";
+import { chooseAniListTitle } from "./title-preference";
 
 const SEED_PAGE_SIZE = 24;
 const EDGES_PER_SEED = 10;
@@ -24,7 +25,7 @@ const RELATION_TYPES = new Set<RecommendationRelation["relationType"]>([
 ]);
 
 const ITEM_FIELDS = `id type isAdult format status countryOfOrigin startDate { year month day }
-    title { userPreferred } coverImage { large }
+    title { userPreferred english romaji } coverImage { large }
     genres averageScore popularity tags { id name rank isMediaSpoiler }
     studios(isMain: true) { nodes { id name } }
     relations { edges { relationType node { id type } } }`;
@@ -32,6 +33,13 @@ const ITEM_FIELDS = `id type isAdult format status countryOfOrigin startDate { y
 const TRENDING_QUERY = `query AniStreamRecommendationTrending($type: MediaType!) {
   Page(page: 1, perPage: 20) {
     media(type: $type, sort: [TRENDING_DESC], isAdult: false) { ${ITEM_FIELDS} }
+  }
+}`;
+
+const BY_MAL_PAGE_SIZE = 50;
+const BY_MAL_QUERY = `query AniStreamRecommendationByMal($type: MediaType!, $ids: [Int!]!) {
+  Page(page: 1, perPage: ${BY_MAL_PAGE_SIZE}) {
+    media(type: $type, idMal_in: $ids, isAdult: false) { idMal ${ITEM_FIELDS} }
   }
 }`;
 
@@ -97,7 +105,7 @@ function parseItem(value: unknown, now: number): RecommendationItemFeatures | un
     (value.type !== "ANIME" && value.type !== "MANGA")
   )
     return undefined;
-  const title = isRecord(value.title) ? text(value.title.userPreferred) : undefined;
+  const title = isRecord(value.title) ? chooseAniListTitle(value.title) : undefined;
   const cover = isRecord(value.coverImage) ? text(value.coverImage.large) : undefined;
   const studios =
     isRecord(value.studios) && Array.isArray(value.studios.nodes) ? value.studios.nodes : [];
@@ -160,6 +168,34 @@ export async function loadRecommendationTrending(
     if (!item || item.mediaType !== type || seen.has(item.anilistId)) return [];
     seen.add(item.anilistId);
     return [item];
+  });
+}
+
+/**
+ * Candidate features for exact MyAnimeList IDs (AniList's own `idMal` link; never titles), one
+ * request for up to 50 IDs. Each item carries its MyAnimeList ID in `malId`.
+ */
+export async function loadRecommendationByMalIds(
+  request: (query: string, variables: Record<string, unknown>) => Promise<unknown>,
+  type: RecommendationMediaType,
+  malIds: number[],
+  now = Date.now(),
+): Promise<RecommendationItemFeatures[]> {
+  const ids = [
+    ...new Set(malIds.filter((id) => Number.isInteger(id) && id > 0 && id <= 2_147_483_647)),
+  ].slice(0, BY_MAL_PAGE_SIZE);
+  if (!ids.length) return [];
+  const response = await request(BY_MAL_QUERY, { type, ids });
+  if (!isRecord(response) || !isRecord(response.Page) || !Array.isArray(response.Page.media))
+    throw new Error("AniList returned invalid MyAnimeList-linked data.");
+  const seen = new Set<number>();
+  return response.Page.media.slice(0, BY_MAL_PAGE_SIZE).flatMap((value) => {
+    const item = parseItem(value, now);
+    const malId = isRecord(value) ? finite(value.idMal) : undefined;
+    if (!item || item.mediaType !== type || !malId || !ids.includes(malId) || seen.has(malId))
+      return [];
+    seen.add(malId);
+    return [{ ...item, malId }];
   });
 }
 

@@ -8,6 +8,8 @@ import { MoreDiscoveryService } from "../recommendations/more-discovery-service"
 import type { TmdbClient } from "../tmdb";
 import { mergeMoreHistory } from "../more-library";
 import type { SimklService } from "../simkl/service";
+import type { MalClient } from "../mal";
+import { aniListTryNewPool, moreTryNewPool } from "../recommendations/try-new-pools";
 import type { FieldSnapshots } from "../field-snapshots";
 import {
   isUsableDiscoveryFeed,
@@ -23,6 +25,8 @@ export function registerDiscoveryDomain(
   tmdb?: TmdbClient,
   simkl?: SimklService,
   snapshots?: FieldSnapshots,
+  /** MyAnimeList (when configured) feeds the Anime and Manga "Try something new" rows. */
+  mal?: MalClient,
 ): () => void {
   const owner = (): number => {
     const state = aniList.getState();
@@ -57,6 +61,18 @@ export function registerDiscoveryDomain(
     seeds: (ids, signal) => aniList.getRecommendationSeeds(ids, signal),
     trending: (type, signal) => aniList.getRecommendationTrending(type, signal),
     hiddenTags: () => personalization.hiddenTags(),
+    tryNew: mal?.configured
+      ? (type, options) =>
+          aniListTryNewPool(
+            {
+              ranking: (kind, ranking, offset) => mal.getExploreRanking(kind, ranking, offset),
+              byMalIds: (kind, ids, abort) => aniList.getRecommendationByMalIds(kind, ids, abort),
+            },
+            type,
+            Date.now(),
+            options,
+          )
+      : undefined,
   });
   // A saved feed is shown until the viewer acts (watching, a choice, Refresh asks for `fresh`).
   registerTrustedIpcHandler(origin, "discovery:for-you", async (_event, type, fresh) => {
@@ -118,6 +134,17 @@ export function registerDiscoveryDomain(
       return tmdb.getCollection(id);
     },
     hiddenTags: () => personalization.hiddenTags(),
+    tryNew: tmdb
+      ? () =>
+          moreTryNewPool(
+            {
+              pool: (type, pool, language) => tmdb.getTryNewPool(type, pool, language),
+              candidate: (id, type) => tmdb.getCandidate(id, type),
+              simklDocumentaries: simkl ? () => simkl.topDocumentaries() : undefined,
+            },
+            Date.now(),
+          )
+      : undefined,
   });
   registerTrustedIpcHandler(origin, "more:for-you", async (_event, fresh) => {
     // A due Simkl check runs in the background; its finish tells the renderer to reload.

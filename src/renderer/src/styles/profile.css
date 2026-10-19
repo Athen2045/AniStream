@@ -272,7 +272,11 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(0deg, rgb(4 5 4 / 0.9) 6%, transparent 48%);
+  background: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--ink) 90%, transparent) 6%,
+    transparent 48%
+  );
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--motion-fast) var(--motion-ease);
@@ -288,7 +292,7 @@
   height: 24px;
   padding: 0 8px;
   border-radius: 7px;
-  background: rgb(7 8 7 / 0.78);
+  background: color-mix(in srgb, var(--ink) 78%, transparent);
   color: #f5c451;
   font-size: 12px;
   backdrop-filter: blur(8px);
@@ -420,8 +424,8 @@
 .library-row--manga .library-row-thumb {
   border-radius: 3px 6px 6px 3px;
   box-shadow:
-    2px 2px 0 -1px #2a2d2b,
-    4px 4px 0 -2px #1d201e;
+    2px 2px 0 -1px color-mix(in srgb, var(--surface-raised), white 8%),
+    4px 4px 0 -2px color-mix(in srgb, var(--surface-raised), white 3%);
 }
 .library-row-thumb img {
   display: block;
@@ -521,7 +525,7 @@
   padding: 0;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 18px;
-  background: #0d100e;
+  background: color-mix(in srgb, var(--ink), white 3%);
 }
 .entry-editor-band {
   position: relative;
@@ -542,7 +546,12 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(0deg, #0d100e 0, rgb(13 16 14 / 0.4) 60%, transparent);
+  background: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--ink), white 3%) 0,
+    color-mix(in srgb, var(--surface-panel) 40%, transparent) 60%,
+    transparent
+  );
 }
 .entry-editor-close {
   position: absolute;

@@ -10,18 +10,26 @@
   padding-bottom: 40px;
 }
 
-/* Navbar floats over More artwork, then gains a surface once content scrolls beneath it. */
+/* The navbar floats over every section and title page: clear at the top (a light shade keeps it
+   readable over artwork), frosted glass once content scrolls beneath it (2026-10-19). */
 html .app-navbar.app-navbar--overlay {
   border-bottom-color: transparent;
-  background: linear-gradient(180deg, rgb(7 8 7 / 0.82), rgb(7 8 7 / 0.32) 70%, transparent);
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.16) 65%, transparent);
   transition:
     background-color var(--motion-standard) var(--motion-ease),
     border-color var(--motion-standard) var(--motion-ease);
 }
+html .app-navbar.app-navbar--overlay.app-navbar--flat:not(.is-scrolled) {
+  background: transparent;
+}
 html .app-navbar.app-navbar--overlay.is-scrolled {
-  border-bottom-color: var(--line-subtle);
-  background: rgb(10 12 11 / 0.86);
-  backdrop-filter: blur(18px) saturate(1.2);
+  border-bottom-color: rgb(255 255 255 / 0.06);
+  background: color-mix(in srgb, var(--ink) 58%, transparent);
+  backdrop-filter: blur(22px) saturate(1.4);
+}
+html .app-navbar.app-navbar--overlay .wordmark,
+html .app-navbar.app-navbar--overlay .nav-links button {
+  text-shadow: 0 1px 10px rgb(0 0 0 / 0.6);
 }
 
 /* Hero */
@@ -59,13 +67,33 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   z-index: -1;
   inset: 0;
   background:
-    linear-gradient(90deg, rgb(7 8 7 / 0.9) 0%, rgb(7 8 7 / 0.58) 34%, transparent 66%),
-    linear-gradient(0deg, var(--ink) 0%, rgb(7 8 7 / 0.55) 20%, transparent 46%);
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--ink) 90%, transparent) 0%,
+      color-mix(in srgb, var(--ink) 58%, transparent) 34%,
+      transparent 66%
+    ),
+    linear-gradient(
+      0deg,
+      var(--ink) 0%,
+      color-mix(in srgb, var(--ink) 55%, transparent) 20%,
+      transparent 46%
+    );
 }
 .more-hero-shade--detail {
   background:
-    linear-gradient(90deg, rgb(7 8 7 / 0.94) 0%, rgb(7 8 7 / 0.72) 36%, rgb(7 8 7 / 0.12) 68%),
-    linear-gradient(0deg, var(--ink) 0%, rgb(7 8 7 / 0.45) 24%, transparent 46%);
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--ink) 94%, transparent) 0%,
+      color-mix(in srgb, var(--ink) 72%, transparent) 36%,
+      color-mix(in srgb, var(--ink) 12%, transparent) 68%
+    ),
+    linear-gradient(
+      0deg,
+      var(--ink) 0%,
+      color-mix(in srgb, var(--ink) 45%, transparent) 24%,
+      transparent 46%
+    );
 }
 .more-hero-top {
   position: absolute;
@@ -92,6 +120,31 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   object-position: left bottom;
   filter: drop-shadow(0 6px 26px rgb(0 0 0 / 0.55));
 }
+/* While the logo loads it sits invisible out of the layout; the title text holds its place. */
+.more-title-art.is-loading-logo img {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.more-title-art.is-fading-in img {
+  animation: more-logo-in 320ms var(--motion-ease) both;
+}
+@keyframes more-logo-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .more-title-art.is-fading-in img {
+    animation: none;
+  }
+}
+html[data-motion="reduce"] .more-title-art.is-fading-in img {
+  animation: none;
+}
 .more-title-text {
   color: var(--text);
   font-size: clamp(38px, 4.4vw, 64px);
@@ -107,7 +160,7 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   align-items: center;
   gap: 8px 12px;
   margin-bottom: 14px;
-  color: #eef1ef;
+  color: var(--text);
   font-size: 15px;
   font-weight: 600;
 }
@@ -138,7 +191,7 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   display: -webkit-box;
   margin: 0 0 26px;
   overflow: hidden;
-  color: #e1e6e3;
+  color: var(--text-secondary);
   font-size: 16.5px;
   line-height: 1.6;
   -webkit-box-orient: vertical;
@@ -409,7 +462,7 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   height: 26px;
   padding: 0 7px;
   border-radius: 7px;
-  background: rgb(7 8 7 / 0.72);
+  background: color-mix(in srgb, var(--ink) 72%, transparent);
   backdrop-filter: blur(8px);
   color: var(--text);
   font-size: 13px;
@@ -423,7 +476,11 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   display: grid;
   gap: 4px;
   padding: 72px 12px 12px;
-  background: linear-gradient(0deg, rgb(7 8 7 / 0.97) 42%, transparent);
+  background: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--ink) 97%, transparent) 42%,
+    transparent
+  );
   opacity: 0;
   transform: translateY(8px);
   transition:
@@ -630,7 +687,7 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   flex-wrap: wrap;
   gap: 6px 12px;
   margin: -6px 0 22px;
-  color: #e9ece9;
+  color: var(--text);
   font-size: 16px;
   font-weight: 600;
 }
@@ -652,14 +709,14 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   font-size: 14.5px;
 }
 .more-credits strong {
-  color: #e9ece9;
+  color: var(--text);
   font-weight: 600;
 }
 .more-title-overview {
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
-  color: #d6dbd8;
+  color: var(--text-soft);
   font-size: 15.5px;
   line-height: 1.65;
   -webkit-box-orient: vertical;
@@ -681,7 +738,7 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   overflow: hidden;
   border: 1px solid var(--more-glass-line);
   border-radius: 14px;
-  background: rgb(12 15 13 / 0.6);
+  background: color-mix(in srgb, var(--surface-panel) 60%, transparent);
   backdrop-filter: blur(22px) saturate(1.3);
 }
 .more-info-card dl div {
@@ -752,7 +809,7 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface-raised);
-  color: #e7ebe8;
+  color: var(--text);
   font: inherit;
   font-size: 13.5px;
   font-weight: 600;
@@ -829,7 +886,7 @@ html .app-navbar.app-navbar--overlay.is-scrolled {
   position: absolute;
   z-index: 1;
   border-radius: 7px;
-  background: rgb(7 8 7 / 0.74);
+  background: color-mix(in srgb, var(--ink) 74%, transparent);
   color: var(--text);
   font-weight: 700;
 }

@@ -18,6 +18,8 @@ export interface ArtworkCacheOptions {
   directory: string;
   userAgent: string;
   fetch?: typeof fetch;
+  /** Which source URLs this cache may fetch; defaults to the cover/banner artwork hosts. */
+  allows?: (url: string) => boolean;
   /** Conservative application policy: about 120 titles' cover + banner. */
   maxBytes?: number;
   maxFiles?: number;
@@ -58,7 +60,7 @@ export class ArtworkCache {
 
   /** The local copy when present, otherwise a fresh download; undefined when neither works. */
   get(url: string): Promise<CachedArtwork | undefined> {
-    if (!isCacheableArtworkUrl(url)) return Promise.resolve(undefined);
+    if (!(this.options.allows ?? isCacheableArtworkUrl)(url)) return Promise.resolve(undefined);
     const key = createHash("sha256").update(url).digest("hex");
     const pending = this.inFlight.get(key);
     if (pending) return pending;

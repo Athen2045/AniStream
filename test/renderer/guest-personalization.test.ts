@@ -121,7 +121,7 @@ describe("guest personalization boundary", () => {
 
     expect(markup).toContain("Trending anime");
     expect(markup).toContain("Latest Anime Updates");
-    expect(markup).not.toContain("Continue Watching");
+    expect(markup).not.toContain("Continue watching");
     expect(markup).not.toContain("For You");
     expect(markup).not.toContain("Fresh episodes from AniList airing data");
     expect(markup).not.toContain("From your watch/read history · AniList");
@@ -131,7 +131,7 @@ describe("guest personalization boundary", () => {
   it("restores Continue and list controls for a connected viewer", () => {
     const markup = renderCatalog(memberAccess);
 
-    expect(markup).toContain("Continue Watching");
+    expect(markup).toContain("Continue watching");
     expect(markup).toContain("For You");
     expect(markup).not.toContain("Fresh episodes from AniList airing data");
     expect(markup).not.toContain("From your watch/read history · AniList");

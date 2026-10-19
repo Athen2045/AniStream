@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { setCaptionControlsVisible, windowChromeOptions } from "./window-chrome";
-import { app, BrowserWindow, dialog, protocol, session, shell } from "electron";
+import { app, BrowserWindow, dialog, net, protocol, session, shell } from "electron";
 import { AniListClient } from "./anilist";
 import { AnimeSourceClient } from "./anime-source";
 import { MalClient } from "./mal";
@@ -10,7 +10,9 @@ import { MalSyncClient } from "./malsync";
 import { MangaMirrorClient } from "./manga-mirror";
 import { installPlayerScriptFilter } from "./player-script-filter";
 import { MangaUpdatesClient } from "./mangaupdates";
+import { AniZipClient } from "./anizip";
 import { KitsuClient } from "./kitsu";
+import { SkipTimesClient } from "./skip-times";
 import { TmdbClient } from "./tmdb";
 import { SimklClient } from "./simkl/client";
 import { simklSessionFile } from "./simkl/session-file";
@@ -28,11 +30,17 @@ import {
   isDatabaseEnabled,
   loadProviderConfig,
   parseProviderConfig,
-  primaryMedia,
   PROVIDER_CONFIG_FILE,
+  type AnimeDirectHlsProvider,
+  type AnimeIndexedEmbedProvider,
   type MangaChapterMirrorProvider,
   type ProviderConfig,
 } from "./provider-config";
+import { AnimeDirectSource } from "./anime-direct-source";
+import { registerAnimeDirectDomain, resolveDirectEpisode } from "./domains/anime-direct";
+import { registerDownloadsDomain } from "./domains/downloads";
+import { DownloadManager } from "./downloads/download-manager";
+import { StreamProxy, streamSchemePrivileges } from "./stream-proxy";
 import { registerTrustedIpcHandler, sendTypedIpcEvent } from "./ipc";
 import { registerTrackerDomain } from "./domains/tracker";
 import { registerAnimeDomain } from "./domains/anime";
@@ -59,16 +67,25 @@ import { startDevTiming } from "./dev-performance";
 import { ArtworkCache } from "./artwork-cache";
 import { FieldSnapshots } from "./field-snapshots";
 import { PROVIDER_USER_AGENT } from "./provider-transport";
-import { ARTWORK_SCHEME, artworkSourceFromCacheUrl } from "../shared/artwork";
+import { prefersEnglishTitles, setPreferEnglishTitles } from "./anilist/title-preference";
+import {
+  ARTWORK_SCHEME,
+  artworkSourceFromCacheUrl,
+  episodeArtSourceFromCacheUrl,
+  isEpisodeArtUrl,
+} from "../shared/artwork";
 
 const finishStartupTiming = startDevTiming("startup:ready-to-show");
 
 let database: AppDatabase | undefined;
 let mainWindow: BrowserWindow | undefined;
+let downloadManager: DownloadManager | undefined;
 let disposeActivity: (() => void) | undefined;
 let disposeDiscovery: (() => void) | undefined;
 let aniList: AniListClient | undefined;
 let animeSource: AnimeSourceClient | undefined;
+let animeDirect: AnimeDirectSource | undefined;
+const streamProxy = new StreamProxy();
 let providerConfig: ProviderConfig = parseProviderConfig({});
 let mangaDex: MangaDexClient | undefined;
 let mal: MalClient | undefined;
@@ -77,6 +94,7 @@ let mangaUpdates: MangaUpdatesClient | undefined;
 let mangaTitle: MangaTitleModule | undefined;
 let mangaMirror: MangaMirrorClient | undefined;
 let kitsu: KitsuClient | undefined;
+let aniZip: AniZipClient | undefined;
 let tmdb: TmdbClient | undefined;
 let simkl: SimklClient | undefined;
 let simklService: SimklService | undefined;
@@ -89,6 +107,7 @@ const protocolCallbacks = new ProtocolCallbackRouter();
 // Offline artwork scheme (see src/shared/artwork.ts); must be registered before the app is ready.
 protocol.registerSchemesAsPrivileged([
   { scheme: ARTWORK_SCHEME, privileges: { standard: true, secure: true } },
+  streamSchemePrivileges(),
 ]);
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -282,11 +301,18 @@ void app
     if (mirrorConfig) mangaMirror = new MangaMirrorClient(mirrorConfig, { mapping: malSync });
     if (isDatabaseEnabled(providerConfig, "manga", "mangaupdates"))
       mangaUpdates = new MangaUpdatesClient();
-    if (!app.isPackaged && isDatabaseEnabled(providerConfig, "anime", "kitsu"))
-      kitsu = new KitsuClient();
-    // Fallback media providers are parsed and allowed to frame, but only the primary is used yet.
-    const animePlayer = primaryMedia(providerConfig.anime);
+    // Kitsu episode thumbnails ship in every build; its hero-art preview stays development-only.
+    if (isDatabaseEnabled(providerConfig, "anime", "kitsu")) kitsu = new KitsuClient();
+    if (isDatabaseEnabled(providerConfig, "anime", "anizip")) aniZip = new AniZipClient();
+    // The embedded anime player, plus (trial 2026-10-18) a direct-stream source for the own player.
+    const animePlayer = providerConfig.anime.media.find(
+      (entry): entry is AnimeIndexedEmbedProvider => entry.kind === "indexed-embed",
+    );
     if (animePlayer && isAnimeSourceEnabled()) animeSource = new AnimeSourceClient(animePlayer);
+    const directConfig = providerConfig.anime.media.find(
+      (entry): entry is AnimeDirectHlsProvider => entry.kind === "direct-hls",
+    );
+    if (directConfig && isAnimeSourceEnabled()) animeDirect = new AnimeDirectSource(directConfig);
     const [protocolExecutable, protocolArgs] = protocolRegistrationArgs({
       platform: process.platform,
       packaged: app.isPackaged,
@@ -308,26 +334,43 @@ void app
       directory: join(app.getPath("userData"), "artwork-cache"),
       userAgent: PROVIDER_USER_AGENT,
     });
-    // Only allowlisted AniList/Kitsu image URLs resolve; the renderer never names a file.
+    // Episode thumbnails have their own bounded cache so they never evict offline covers.
+    const episodeArtCache = new ArtworkCache({
+      directory: join(app.getPath("userData"), "episode-art-cache"),
+      userAgent: PROVIDER_USER_AGENT,
+      allows: isEpisodeArtUrl,
+      maxBytes: 60 * 1024 * 1024,
+      maxFiles: 800,
+    });
+    // Only allowlisted artwork and episode-image URLs resolve; the renderer never names a file.
+    // Own-player streams: opaque anistream-media:// URLs proxied by this process.
+    streamProxy.register();
     protocol.handle(ARTWORK_SCHEME, async (request) => {
-      const source = artworkSourceFromCacheUrl(request.url);
-      const artwork = source ? await artworkCache.get(source) : undefined;
+      const episodeSource = episodeArtSourceFromCacheUrl(request.url);
+      const source = episodeSource ?? artworkSourceFromCacheUrl(request.url);
+      const cache = episodeSource ? episodeArtCache : artworkCache;
+      const artwork = source ? await cache.get(source) : undefined;
       if (!artwork) return new Response(null, { status: source ? 404 : 400 });
       return new Response(artwork.body, {
         headers: { "Content-Type": artwork.contentType, "Cache-Control": "no-store" },
       });
     });
     installPlayerScriptFilter(session.defaultSession, [
-      ...providerConfig.anime.media.map((player) => ({
-        origin: player.playerOrigin,
-        scriptHosts: player.scriptHosts,
-        blockedScriptPaths: player.blockedScriptPaths,
-        blockedRequestHosts: player.blockedRequestHosts,
-      })),
+      ...providerConfig.anime.media
+        .flatMap((player) => (player.kind === "indexed-embed" ? [player] : []))
+        .map((player) => ({
+          origin: player.playerOrigin,
+          scriptHosts: player.scriptHosts,
+          blockedScriptPaths: player.blockedScriptPaths,
+          blockedRequestHosts: player.blockedRequestHosts,
+        })),
       ...providerConfig.more.media,
     ]);
 
     database = await databasePromise;
+    // Before any AniList request is normalized (English titles by default).
+    const titlePreferences = database.titlePreferences;
+    setPreferEnglishTitles(titlePreferences.read().english);
     const target = updateTarget(app.isPackaged, process.platform, process.arch);
     updateLaunch = new UpdateLaunch(database.updateLaunch, app.getVersion(), target !== undefined);
     // The service is assigned before any check can run, so these callbacks always reach it.
@@ -371,6 +414,20 @@ void app
       updates.cancelDownload(),
     );
     registerTrustedIpcHandler(trustedRendererOrigin, "app:install-update", () => updates.install());
+    registerTrustedIpcHandler(trustedRendererOrigin, "app:title-preferences", () =>
+      titlePreferences.read(),
+    );
+    registerTrustedIpcHandler(
+      trustedRendererOrigin,
+      "app:set-title-preferences",
+      (_event, preferences) => {
+        titlePreferences.write(preferences);
+        setPreferEnglishTitles(preferences.english);
+        // Cached AniList responses still carry the old titles; the renderer reloads after this.
+        aniList?.clearCachedResponses();
+        return titlePreferences.read();
+      },
+    );
     registerTrustedIpcHandler(trustedRendererOrigin, "app:update-preferences", () =>
       updates.getPreferences(),
     );
@@ -401,7 +458,11 @@ void app
     });
 
     // Saved Trending / For You copies; background refreshes run one at a time after startup.
-    const fieldSnapshots = new FieldSnapshots({ store: () => database?.fieldSnapshots });
+    const fieldSnapshots = new FieldSnapshots({
+      store: () => database?.fieldSnapshots,
+      // Each title language keeps its own copies; older unscoped copies (unknown language) are unused.
+      keyScope: () => (prefersEnglishTitles() ? "titles-en" : "titles-anilist"),
+    });
     registerTrackerDomain(trustedRendererOrigin, {
       aniList,
       database,
@@ -413,8 +474,51 @@ void app
     });
     registerAnimeDomain(trustedRendererOrigin, {
       animeSource,
+      copies: database.titleCopies,
+      skipTimes: new SkipTimesClient(),
       mal: isDatabaseEnabled(providerConfig, "anime", "mal") ? mal : undefined,
-      episodeArt: tmdb ? { links: database.animeTmdbLinks, tmdb, aniList } : undefined,
+      episodeArt: {
+        anizip: aniZip,
+        kitsu,
+        tmdb: tmdb ? { links: database.animeTmdbLinks, tmdb, aniList } : undefined,
+      },
+    });
+    // Offline anime downloads (user decision 2026-10-18): Videos/AniStream/Downloads by default.
+    let downloadsChangedTimer: ReturnType<typeof setTimeout> | undefined;
+    downloadManager = new DownloadManager({
+      store: database.downloads,
+      defaultFolder: join(app.getPath("videos"), "AniStream", "Downloads"),
+      resolve: async (aniListId, episode) => {
+        const source = animeDirect;
+        if (!source || !aniList) throw new Error("The backup source is not configured.");
+        const { stream } = await resolveDirectEpisode(source, aniList, aniListId, episode);
+        return {
+          src: stream.src,
+          headers: source.mediaHeaders(),
+          subtitles: stream.subtitles,
+          fonts: stream.fonts,
+          subtitle: (url) => source.subtitle(url),
+        };
+      },
+      fetcher: (url, init) => net.fetch(String(url), init),
+      onChange: () => {
+        // Progress arrives often; the renderer re-reads at most a few times a second.
+        if (downloadsChangedTimer) return;
+        downloadsChangedTimer = setTimeout(() => {
+          downloadsChangedTimer = undefined;
+          if (mainWindow) sendTypedIpcEvent(mainWindow.webContents, "downloads:changed", undefined);
+        }, 250);
+      },
+    });
+    streamProxy.setOfflineFiles((id, relative) => downloadManager?.filePath(id, relative));
+    registerDownloadsDomain(trustedRendererOrigin, downloadManager);
+    downloadManager.start();
+    registerAnimeDirectDomain(trustedRendererOrigin, {
+      source: animeDirect,
+      proxy: streamProxy,
+      aniList,
+      anizip: aniZip,
+      downloads: () => downloadManager,
     });
     registerMoreDomain(trustedRendererOrigin, {
       tmdb,
@@ -423,6 +527,7 @@ void app
       frameUserAgent: () => morePlayerFrameUa,
       tracker: () => simklService,
       snapshots: fieldSnapshots,
+      copies: database?.titleCopies,
     });
     registerMangaDomain(trustedRendererOrigin, {
       readerSettings: database,
@@ -444,7 +549,7 @@ void app
       if (mainWindow && !mainWindow.isDestroyed())
         sendTypedIpcEvent(mainWindow.webContents, "activity:changed", undefined);
     });
-    if (kitsu) registerKitsuDevelopmentDomain(trustedRendererOrigin, kitsu);
+    if (kitsu && !app.isPackaged) registerKitsuDevelopmentDomain(trustedRendererOrigin, kitsu);
     const simklClient = simkl;
     simklService = new SimklService(
       simklClient,
@@ -469,6 +574,7 @@ void app
       tmdb,
       simklSync,
       fieldSnapshots,
+      mal,
     );
 
     // Register every IPC handler before the renderer can invoke the preload bridge.
@@ -506,6 +612,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  downloadManager?.dispose();
   updateService?.dispose();
   updateLaunch?.dispose();
   disposeDiscovery?.();
@@ -560,17 +667,18 @@ function isSafeExternalUrl(value: string): boolean {
 
 function configureSessionPermissions(trustedRendererOrigin: string): void {
   const allowedOrigins = new Set([trustedRendererOrigin, ...embeddedPlayerOrigins()]);
-  session.defaultSession.setPermissionCheckHandler(
-    (_webContents, permission, requestingOrigin) =>
-      permission === "fullscreen" && allowedOrigins.has(safeOrigin(requestingOrigin) ?? ""),
+  // Local fonts (read on this device, never sent anywhere) let the own player's ASS subtitles use
+  // the fonts their styles name; only AniStream's own window may ask, never an embedded player.
+  const allowed = (permission: string, origin: string | undefined): boolean =>
+    (permission === "fullscreen" && allowedOrigins.has(origin ?? "")) ||
+    (permission === "local-fonts" && origin === trustedRendererOrigin);
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) =>
+    allowed(permission, safeOrigin(requestingOrigin)),
   );
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, permission, callback, details) => {
       const requestingOrigin = safeOrigin(details.requestingUrl);
-      callback(
-        permission === "fullscreen" &&
-          Boolean(requestingOrigin && allowedOrigins.has(requestingOrigin)),
-      );
+      callback(allowed(permission, requestingOrigin));
     },
   );
 }

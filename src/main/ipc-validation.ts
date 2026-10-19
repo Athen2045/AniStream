@@ -4,6 +4,7 @@ import { isMangaLanguage, type MangaLanguage } from "../shared/manga-languages";
 import { parseMoreTitleSnapshot } from "./more-library";
 import { normalizeActivityInput } from "../shared/activity";
 import { parseBingeChange } from "../shared/binge";
+import { parseDownloadChange } from "../shared/downloads";
 import { parseBrowseFilters, type AniListBrowseFilters } from "../shared/anilist-filters";
 import {
   MORE_GENRES,
@@ -386,6 +387,20 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     return [normalizeActivityInput(args[0])];
   },
   "binge:state": noArgs,
+  "downloads:state": noArgs,
+  "downloads:add": (value) => {
+    const [raw] = argsOfLength(value, 1);
+    const change = parseDownloadChange({ op: "add", episodes: raw });
+    if (change?.op !== "add") fail();
+    return [change.episodes];
+  },
+  "downloads:apply": (value) => {
+    const [raw] = argsOfLength(value, 1);
+    const change = parseDownloadChange(raw);
+    if (!change || change.op === "add") fail();
+    return [change];
+  },
+  "downloads:choose-folder": noArgs,
   "binge:apply": (value) => {
     const [raw] = argsOfLength(value, 1);
     const change = parseBingeChange(raw);
@@ -413,6 +428,13 @@ export const ipcArgValidators: IpcArgValidatorMap = {
   "app:cancel-update-download": noArgs,
   "app:install-update": noArgs,
   "app:update-preferences": noArgs,
+  "app:title-preferences": noArgs,
+  "app:set-title-preferences": (value) => {
+    const [input] = argsOfLength(value, 1);
+    const record = asRecord(input);
+    if (typeof record.english !== "boolean") fail();
+    return [{ english: record.english }];
+  },
   "app:set-update-preferences": updatePreferencesArgs,
   "anilist:auth-state": noArgs,
   "anilist:login": noArgs,
@@ -464,6 +486,12 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     if (parsed.some((id) => id > 2147483647)) fail();
     return [parsed, asMediaType(type)];
   },
+  "anilist:series-graph": (value) => {
+    const [id] = argsOfLength(value, 1);
+    const mediaId = asPositiveInt(id);
+    if (mediaId > 2147483647) fail();
+    return [mediaId];
+  },
   "anilist:media-detail": (value) => {
     const [id, type] = argsOfLength(value, 2);
     return [asPositiveInt(id), asMediaType(type)];
@@ -501,6 +529,39 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     const focus = asPositiveInt(record.focus);
     if (aniListId > 2147483647 || episodes > 5_000 || focus > 5_000) fail();
     return [{ aniListId, episodes, focus }];
+  },
+  "anime:skip-times": (value) => {
+    const [input] = argsOfLength(value, 1);
+    const record = asRecord(input);
+    const aniListId = asPositiveInt(record.aniListId);
+    const malId = asPositiveInt(record.malId);
+    const episode = asPositiveInt(record.episode);
+    const durationSeconds = record.durationSeconds;
+    if (aniListId > 2147483647 || malId > 2147483647 || episode > 5_000) fail();
+    if (typeof durationSeconds !== "number" || !Number.isFinite(durationSeconds)) fail();
+    if (durationSeconds <= 0 || durationSeconds > 6 * 3_600) fail();
+    return [{ aniListId, malId, episode, durationSeconds }];
+  },
+  "anime:direct-playback": (value) => {
+    const [input] = argsOfLength(value, 1);
+    const record = asRecord(input);
+    const aniListId = asPositiveInt(record.aniListId);
+    const episode = asPositiveInt(record.episode);
+    if (aniListId > 2147483647 || episode > 5_000) fail();
+    return [{ aniListId, episode }];
+  },
+  "anime:direct-subtitle": (value) => {
+    const [id] = argsOfLength(value, 1);
+    if (typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id)) fail();
+    return [id];
+  },
+  "anime:episode-ranges": (value) => {
+    const [input] = argsOfLength(value, 1);
+    const record = asRecord(input);
+    const aniListId = asPositiveInt(record.aniListId);
+    const episodes = asPositiveInt(record.episodes);
+    if (aniListId > 2147483647 || episodes > 5_000) fail();
+    return [{ aniListId, episodes }];
   },
   "anime:playback": (value) => {
     const [input] = argsOfLength(value, 1);
@@ -569,8 +630,9 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     return [normalized, asMoreMediaType(type), asPositiveInt(page)];
   },
   "more:detail": (value) => {
-    const [id, type] = argsOfLength(value, 2);
-    return [asPositiveInt(id), asMoreMediaType(type)];
+    const [id, type, priority] = argsOfLength(value, 3);
+    if (typeof priority !== "boolean") fail();
+    return [asPositiveInt(id), asMoreMediaType(type), priority];
   },
   "more:season": (value) => {
     const [id, season] = argsOfLength(value, 2);

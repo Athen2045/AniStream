@@ -24,7 +24,7 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #ffffff;
+  color: var(--text);
   background: #0a0909;
   font-synthesis: none;
   font-weight: 400;
@@ -282,7 +282,12 @@ html[data-platform="win32"] .catalog-content {
   height: var(--app-navbar-height);
   padding: 0 3.7vw 0 86px;
   border-bottom: 0;
-  background: linear-gradient(180deg, rgb(10 9 9 / 0.98), rgb(10 9 9 / 0.82) 72%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ink) 98%, transparent),
+    color-mix(in srgb, var(--ink) 82%, transparent) 72%,
+    transparent
+  );
   backdrop-filter: blur(14px) saturate(1.04);
   isolation: isolate;
   -webkit-app-region: drag;
@@ -619,13 +624,21 @@ html[data-platform="win32"] .catalog-content {
 .carousel-edge-left {
   left: 0;
   justify-content: flex-start;
-  background: linear-gradient(90deg, rgb(10 9 9 / 0.96), rgb(10 9 9 / 0));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ink) 96%, transparent),
+    color-mix(in srgb, var(--ink) 0%, transparent)
+  );
 }
 
 .carousel-edge-right {
   right: 0;
   justify-content: flex-end;
-  background: linear-gradient(270deg, rgb(10 9 9 / 0.96), rgb(10 9 9 / 0));
+  background: linear-gradient(
+    270deg,
+    color-mix(in srgb, var(--ink) 96%, transparent),
+    color-mix(in srgb, var(--ink) 0%, transparent)
+  );
 }
 
 .carousel-edge:not(:disabled),
@@ -706,7 +719,7 @@ a.rail-card {
 }
 
 .rail-badge--external {
-  background: rgb(10 9 9 / 0.82);
+  background: color-mix(in srgb, var(--ink) 82%, transparent);
   color: var(--text);
 }
 
@@ -1066,7 +1079,7 @@ a.rail-card {
   z-index: 2;
   right: 7px;
   top: 1px;
-  color: rgb(10 9 9 / 0.34);
+  color: color-mix(in srgb, var(--ink) 34%, transparent);
   font-size: 4.4rem;
   font-weight: 700;
   -webkit-text-stroke: 1px var(--text-soft);
@@ -1452,7 +1465,7 @@ a.rail-card {
   padding: 7px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgb(20 19 19 / 0.98);
+  background: color-mix(in srgb, var(--surface-panel) 98%, transparent);
   box-shadow: 0 22px 64px var(--shadow-deep);
   scrollbar-width: thin;
   scrollbar-color: var(--surface-hover) transparent;
@@ -1469,6 +1482,13 @@ a.rail-card {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* "Movies & specials" below the seasons or arcs. */
+.season-picker-menu-heading--group {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .season-picker-menu-heading small {
@@ -1595,7 +1615,7 @@ a.rail-card {
   place-items: center;
   border: 2px solid var(--highlight-lavender);
   border-radius: 50%;
-  background: rgb(10 9 9 / 0.68);
+  background: color-mix(in srgb, var(--ink) 68%, transparent);
   opacity: 0;
   transform: scale(0.84);
   transition:
@@ -2886,7 +2906,11 @@ a.rail-card {
   padding: 12px 14px;
   border: 1px solid var(--line-subtle);
   border-radius: 12px;
-  background: linear-gradient(180deg, var(--ink) 74%, rgb(10 9 9 / 0));
+  background: linear-gradient(
+    180deg,
+    var(--ink) 74%,
+    color-mix(in srgb, var(--ink) 0%, transparent)
+  );
   box-shadow: 0 12px 36px rgb(0 0 0 / 0.16);
 }
 .library-sort {
@@ -3300,7 +3324,11 @@ a.rail-card {
   padding: 44px 32px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: linear-gradient(145deg, var(--surface-panel), rgba(23, 32, 29, 0.52));
+  background: linear-gradient(
+    145deg,
+    var(--surface-panel),
+    color-mix(in srgb, var(--surface-raised) 52%, transparent)
+  );
   text-align: center;
 }
 

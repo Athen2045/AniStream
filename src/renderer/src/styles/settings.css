@@ -50,12 +50,12 @@
       90deg,
       var(--ink) 0,
       var(--ink) 30%,
-      rgb(7 8 7 / 0.86) 46%,
-      rgb(7 8 7 / 0.35) 70%,
-      rgb(7 8 7 / 0.55) 100%
+      color-mix(in srgb, var(--ink) 86%, transparent) 46%,
+      color-mix(in srgb, var(--ink) 35%, transparent) 70%,
+      color-mix(in srgb, var(--ink) 55%, transparent) 100%
     ),
     linear-gradient(0deg, var(--ink) 0, transparent 30%),
-    linear-gradient(180deg, rgb(7 8 7 / 0.7) 0, transparent 22%);
+    linear-gradient(180deg, color-mix(in srgb, var(--ink) 70%, transparent) 0, transparent 22%);
 }
 @keyframes signin-wall-in {
   from {
@@ -164,12 +164,12 @@
 }
 .signin-button--glass {
   border-color: rgb(255 255 255 / 0.14);
-  background: rgb(18 22 19 / 0.62);
+  background: color-mix(in srgb, var(--surface-panel) 62%, transparent);
   backdrop-filter: blur(16px);
   font-weight: 600;
 }
 .signin-button--glass:hover {
-  background: rgb(40 46 42 / 0.75);
+  background: color-mix(in srgb, var(--surface-hover) 75%, transparent);
 }
 .signin-button:active:not(:disabled) {
   transform: scale(0.985);
@@ -216,7 +216,7 @@
   padding: 18px 20px;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 16px;
-  background: rgb(18 22 19 / 0.62);
+  background: color-mix(in srgb, var(--surface-panel) 62%, transparent);
   backdrop-filter: blur(18px);
 }
 .signin-waiting strong {
@@ -323,15 +323,118 @@
 .set-side svg {
   opacity: 0.8;
 }
-.set-group {
-  margin-bottom: 40px;
-  scroll-margin-top: calc(var(--app-navbar-height) + 24px);
+/* One pane per tab (2026-10-12): a heading, a one-line lede, then labelled groups of cards. */
+.set-pane {
+  min-width: 0;
 }
-.set-group h2 {
-  margin: 0 0 12px;
-  font-size: 20px;
+.set-pane-head {
+  margin-bottom: 22px;
+}
+/* As in the mockups: a little shorter than the old rows so General fits a 900px window. */
+.set-pane .set-row {
+  min-height: 64px;
+  padding-block: 12px;
+}
+.set-pane .set-account {
+  padding-block: 20px;
+}
+.set-pane-head h2 {
+  margin: 0;
+  font-size: 26px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+}
+.set-pane-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.set-label {
+  margin: 22px 0 10px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.set-pane-head + .set-label {
+  margin-top: 0;
+}
+.set-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 4px 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.set-side button:focus-visible {
+  outline: 2px solid var(--primary-hover);
+  outline-offset: 1px;
+}
+/* Learn from my activity: typical time to play as small labels. */
+.set-text .set-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.set-text .set-stats li {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--text-soft, #c9cfcb);
+  font-size: 12px;
+}
+/* Your taste map: a small preview of the viewer's own map beside its summary. */
+.set-taste {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  padding: 16px;
+}
+.set-taste .set-text .set-button {
+  margin-top: 12px;
+}
+.set-taste-preview {
+  width: 210px;
+  height: 105px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: radial-gradient(
+    circle at 50% 45%,
+    color-mix(in srgb, var(--ink), white 3%),
+    var(--ink) 75%
+  );
+}
+.set-taste-preview svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.set-taste-preview line {
+  stroke: rgb(255 255 255 / 0.14);
+  stroke-width: 1.5;
+}
+.set-taste-ghost {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.12);
+  stroke-dasharray: 2 4;
+}
+.set-taste-ghost-core {
+  fill: rgb(79 209 154 / 0.5);
+}
+.update-app-icon {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
 }
 .set-card {
   overflow: hidden;
@@ -609,6 +712,9 @@
     display: flex;
     flex-wrap: wrap;
   }
+  .set-taste {
+    grid-template-columns: 1fr;
+  }
   .set-row {
     flex-wrap: wrap;
   }
@@ -679,4 +785,30 @@
 .hidden-tag-chip:hover,
 .hidden-tag-chip:focus-visible {
   border-color: var(--line-strong);
+}
+/* "+ Add" sits with the chips as a dashed chip that opens the genre and tag menu. */
+.hidden-tag-add.ui-select {
+  min-width: 0;
+  height: auto;
+  padding: 5px 12px;
+  border: 1px dashed rgb(255 255 255 / 0.22);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-soft, #c9cfcb);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.hidden-tag-add .ui-select-chevron {
+  display: none;
+}
+
+/* Download folder (Settings › Playback › Downloads): the path, shortened, beside "Change". */
+.set-path {
+  overflow: hidden;
+  max-width: 280px;
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

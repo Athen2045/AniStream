@@ -11,10 +11,13 @@ import type {
   AniListMediaType,
   AniListNamedPerson,
   AniListProfile,
+  AniListRelation,
+  AnimeSeriesNode,
   LatestAnimeUpdate,
   LatestUpdatesPage,
 } from "../../shared/contracts";
 import { decodeHtmlEntities } from "../../shared/text";
+import { chooseAniListTitle } from "./title-preference";
 
 export function normalizeProfile(value: unknown): AniListProfile {
   const viewer = asRecord(value, "AniList returned an invalid profile.");
@@ -98,18 +101,17 @@ export function normalizeMedia(value: unknown, expectedType: AniListMediaType): 
   const mediaType = requiredString(media.type, "media type");
   if (mediaType !== expectedType) throw new Error("AniList returned a mismatched media type.");
 
-  const preferredTitle =
-    optionalString(title.userPreferred) ??
-    optionalString(title.english) ??
-    optionalString(title.romaji);
+  const preferredTitle = chooseAniListTitle(title);
   if (!preferredTitle) throw new Error("AniList returned media without a title.");
   const nextAiring = media.nextAiringEpisode
     ? asRecord(media.nextAiringEpisode, "AniList returned an invalid airing schedule.")
     : undefined;
 
+  const malId = optionalNumber(media.idMal);
   return {
     id: requiredNumber(media.id, "media ID"),
     type: expectedType,
+    ...(malId ? { malId } : {}),
     title: preferredTitle,
     coverUrl: requiredString(cover.large, "cover image"),
     coverColor: optionalHexColor(cover.color),
@@ -162,10 +164,7 @@ export function normalizeCatalogMedia(
   const cover = asRecord(media.coverImage, "AniList returned an invalid cover.");
   const mediaType = requiredString(media.type, "media type");
   if (mediaType !== expectedType) throw new Error("AniList returned a mismatched media type.");
-  const preferredTitle =
-    optionalString(title.userPreferred) ??
-    optionalString(title.english) ??
-    optionalString(title.romaji);
+  const preferredTitle = chooseAniListTitle(title);
   if (!preferredTitle) throw new Error("AniList returned media without a title.");
 
   const nextAiring = media.nextAiringEpisode
@@ -482,4 +481,58 @@ function optionalHexColor(value: unknown): string | undefined {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)
     ? value.toLowerCase()
     : undefined;
+}
+
+/** Relations kept in the series graph: the season chain and the films/specials beside it. */
+const SERIES_RELATION_TYPES = new Set(["PREQUEL", "SEQUEL", "SIDE_STORY"]);
+
+/**
+ * Flattens the two-hop series graph. The root and its direct neighbours carry their relations;
+ * the outer ring does not (its own relations were not requested). Malformed or non-anime nodes are
+ * dropped rather than failing the whole graph.
+ */
+export function normalizeSeriesGraph(value: unknown): AnimeSeriesNode[] {
+  const nodes = new Map<number, AnimeSeriesNode>();
+  const visit = (raw: unknown, depth: number): AnimeSeriesNode | undefined => {
+    let media: AniListCatalogMedia;
+    try {
+      if (!isRecordValue(raw) || raw.type !== "ANIME") return undefined;
+      media = normalizeCatalogMedia(raw, "ANIME");
+    } catch {
+      return undefined;
+    }
+    const known = nodes.get(media.id);
+    const title = isRecordValue(raw.title) ? raw.title : {};
+    const node: AnimeSeriesNode = known ?? {
+      media,
+      titles: [
+        ...new Set(
+          [
+            title.english,
+            title.romaji,
+            title.native,
+            ...(Array.isArray(raw.synonyms) ? raw.synonyms : []),
+          ]
+            .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
+            .slice(0, 20),
+        ),
+      ],
+    };
+    nodes.set(media.id, node);
+    if (depth < 2 && isRecordValue(raw.relations) && Array.isArray(raw.relations.edges)) {
+      node.relations = raw.relations.edges.flatMap((edge: unknown): AniListRelation[] => {
+        if (!isRecordValue(edge) || typeof edge.relationType !== "string") return [];
+        if (!SERIES_RELATION_TYPES.has(edge.relationType)) return [];
+        const child = visit(edge.node, depth + 1);
+        return child ? [{ relationType: edge.relationType, media: child.media }] : [];
+      });
+    }
+    return node;
+  };
+  visit(value, 0);
+  return [...nodes.values()];
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
