@@ -15,6 +15,46 @@ export interface UnairedEpisode {
  * Whether an episode is still to air. Exact AniList airing rows win; otherwise anything at or
  * past the next scheduled episode, or any episode of a title not yet released, is unaired.
  */
+/**
+ * How many episodes AniList says have aired, or undefined when it cannot tell (on hiatus, or airing
+ * without a schedule). Used to fill an episode list that stops short of what aired.
+ */
+export function airedEpisodeCount(
+  media: AiringMedia & { totalProgress?: number },
+  now = Date.now(),
+) {
+  if (media.status === "NOT_YET_RELEASED") return 0;
+  const next = media.nextAiringEpisode;
+  if (next) return next.airingAt * 1000 > now ? next.episode - 1 : next.episode;
+  if (media.status === "FINISHED") return media.totalProgress;
+  return undefined;
+}
+
+/**
+ * Aired episode numbers (1 to `aired`) missing from the source's list. Empty when the count is
+ * unknown, or when the list numbers past what aired (beyond the next-airing tile), which means the
+ * source numbers the series differently and the two cannot be compared.
+ */
+export function missingAiredEpisodes(listed: readonly number[], aired?: number): number[] {
+  if (!aired || !listed.length || Math.max(...listed) > aired + 1) return [];
+  const have = new Set(listed);
+  return Array.from({ length: aired }, (_, index) => index + 1).filter(
+    (number) => !have.has(number),
+  );
+}
+
+/** "2–10", "5" or "2, 4–6": episode numbers as compact ranges. */
+export function episodeRangesLabel(numbers: readonly number[]): string {
+  const parts: string[] = [];
+  const sorted = [...new Set(numbers)].sort((a, b) => a - b);
+  for (let index = 0; index < sorted.length; index += 1) {
+    const start = sorted[index];
+    while (sorted[index + 1] === sorted[index] + 1) index += 1;
+    parts.push(start === sorted[index] ? String(start) : `${start}–${sorted[index]}`);
+  }
+  return parts.join(", ");
+}
+
 export function unairedEpisode(
   media: AiringMedia,
   episode: number,

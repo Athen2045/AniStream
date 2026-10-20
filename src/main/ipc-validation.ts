@@ -28,7 +28,6 @@ import type {
   MangaDexAvailabilityInput,
   MangaDexPageInput,
   MangaDexReaderInput,
-  KitsuHeroArtworkInput,
   SaveMangaReaderPreferencesInput,
   UpdateAniListEntryInput,
 } from "../shared/contracts";
@@ -206,17 +205,6 @@ function browseAniListInput(value: unknown): BrowseAniListInput {
     genre: asOptionalString(input.genre),
     sort: asBrowseSort(input.sort),
     ...filters,
-  };
-}
-
-function kitsuHeroArtworkInput(value: unknown): KitsuHeroArtworkInput {
-  const input = asRecord(value);
-  const title = asString(input.title).trim();
-  if (title.length === 0 || title.length > 200) fail();
-  return {
-    aniListId: asPositiveInt(input.aniListId),
-    type: asMediaType(input.type),
-    title,
   };
 }
 
@@ -574,10 +562,6 @@ export const ipcArgValidators: IpcArgValidatorMap = {
   "mal:trending-fallback": (value) => {
     const [type] = argsOfLength(value, 1);
     return [asMediaType(type)];
-  },
-  "kitsu:hero-art": (value) => {
-    const [input] = argsOfLength(value, 1);
-    return [kitsuHeroArtworkInput(input)];
   },
   "mangadex:latest": (value) => {
     const [page] = argsOfLength(value, 1);

@@ -1,5 +1,5 @@
 /**
- * Offline artwork: AniList (and dev-only Kitsu) images shown for Continue titles, the catalog hero,
+ * Offline artwork: AniList (and Kitsu episode) images shown for Continue titles, the catalog hero,
  * and title pages load through this scheme, so the main process keeps a bounded local copy that
  * still renders when AniList or the network is down. Only these image hosts are ever fetched.
  */

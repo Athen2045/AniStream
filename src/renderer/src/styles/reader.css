@@ -64,7 +64,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   cursor: pointer;
 }
 .reader-round:hover {
-  background: color-mix(in srgb, var(--surface-hover) 90%, transparent);
+  background: rgb(40 46 42 / 0.9);
 }
 .reader-title {
   display: flex;
@@ -167,7 +167,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   border: 0;
   border-radius: 11px;
   background: none;
-  color: var(--text);
+  color: #e7ebe9;
   cursor: pointer;
 }
 .reader-rail button:hover {
@@ -243,7 +243,7 @@ html[data-platform="win32"] .media-control-layer--reader {
 }
 
 .reader-popover {
-  background: color-mix(in srgb, var(--surface-panel) 97%, transparent);
+  background: rgb(16 19 17 / 0.97);
   top: 50%;
   right: 84px;
   width: 360px;
@@ -311,7 +311,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   width: 380px;
   padding-top: calc(var(--reader-pill-top) + 4px);
   border-left: 1px solid var(--reader-line);
-  background: color-mix(in srgb, var(--surface-panel) 98%, transparent);
+  background: rgb(14 16 15 / 0.98);
   backdrop-filter: blur(18px);
 }
 .reader-drawer header {

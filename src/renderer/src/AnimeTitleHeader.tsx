@@ -2,10 +2,12 @@ import { Clapperboard, Clock3, Play } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cachedArtworkUrl } from "../../shared/artwork";
 import type { AniListCatalogMedia, PlaybackResume } from "../../shared/contracts";
+import { SourceLogo, sourceName, type RatingSource } from "./SourceLogo";
 
 export interface AnimeTitleScore {
   score: string;
-  source: string;
+  /** Shown as the source's own logo (2026-10-20), named for screen readers. */
+  source: RatingSource;
   href?: string;
   title?: string;
 }
@@ -114,11 +116,13 @@ export function AnimeTitleHeader({
             <span key={score.source} className="anime-head-score" title={score.title}>
               {score.href ? (
                 <a href={score.href} target="_blank" rel="noreferrer">
-                  <b>{score.score}</b> {score.source}
+                  <b>{score.score}</b>
+                  <SourceLogo source={score.source} label={sourceName(score.source)} />
                 </a>
               ) : (
                 <>
-                  <b>{score.score}</b> {score.source}
+                  <b>{score.score}</b>
+                  <SourceLogo source={score.source} label={sourceName(score.source)} />
                 </>
               )}
             </span>

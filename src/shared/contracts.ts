@@ -114,19 +114,6 @@ export interface AniListCatalogPage {
   items: AniListCatalogMedia[];
 }
 
-export interface KitsuHeroArtworkInput {
-  aniListId: number;
-  type: AniListMediaType;
-  title: string;
-}
-
-export interface KitsuHeroArtwork {
-  source: "kitsu";
-  imageUrl: string;
-  width?: number;
-  height?: number;
-}
-
 export interface BrowseAniListInput extends AniListBrowseFilters {
   type: AniListMediaType;
   page: number;
@@ -1090,7 +1077,6 @@ export interface AniStreamBridge {
   releaseMorePlayer(): Promise<void>;
   getMalScore(type: AniListMediaType, malId: number): Promise<MalScore | undefined>;
   getMalTrendingFallback(type: AniListMediaType): Promise<MalRankingItem[]>;
-  getKitsuHeroArtwork(input: KitsuHeroArtworkInput): Promise<KitsuHeroArtwork | undefined>;
   getMangaDexAvailability(
     media: MangaDexAvailabilityInput[],
   ): Promise<MangaDexChapterAvailability[]>;

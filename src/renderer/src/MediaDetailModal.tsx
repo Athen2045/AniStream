@@ -467,7 +467,7 @@ export function MediaDetailModal({
               ? [
                   {
                     score: `★ ${malScore.score}`,
-                    source: "MAL",
+                    source: "mal" as const,
                     href: malScore.malUrl,
                     title: malScore.scoredBy
                       ? `${malScore.score}/10 from ${malScore.scoredBy.toLocaleString()} MAL users`
@@ -479,7 +479,7 @@ export function MediaDetailModal({
               ? [
                   {
                     score: `${resolved.averageScore}%`,
-                    source: "AniList",
+                    source: "anilist" as const,
                     href: media.siteUrl,
                     title: `${resolved.averageScore}% on AniList`,
                   },

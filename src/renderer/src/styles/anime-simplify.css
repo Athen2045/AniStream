@@ -85,6 +85,22 @@
   color: inherit;
   text-decoration: none;
 }
+/* Score, then its source's logo (MAL wordmark, AniList mark) instead of the name (2026-10-20). */
+.anime-head-score,
+.anime-head-score > a {
+  display: inline-flex;
+  align-items: center;
+}
+.anime-head-score b {
+  margin-right: 7px;
+}
+.anime-head-score .source-logo--anilist {
+  width: 15px;
+  height: 15px;
+}
+.anime-head-score .source-logo--mal {
+  height: 24px;
+}
 .anime-head-meta a:hover {
   text-decoration: underline;
 }
@@ -131,7 +147,7 @@
   border: 0;
   border-radius: 999px;
   background: #f2f2f2;
-  color: #121212;
+  color: #0b0d0c;
   font: inherit;
   font-size: 15px;
   font-weight: 700;
@@ -868,7 +884,7 @@
   height: 30px;
   border: 0;
   background: #f2f2f2;
-  color: #121212;
+  color: #0b0d0c;
 }
 .downloads-ep-name {
   flex: 1;

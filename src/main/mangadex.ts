@@ -187,8 +187,8 @@ export class MangaDexClient {
 
     try {
       const mapping =
-        (await this.findMappedManga(input.aniListId, input.title, signal)) ??
-        (await this.findHintedManga(input.aniListId, signal));
+        (await this.findMappedManga(input.aniListId, input.title, signal, translatedLanguage)) ??
+        (await this.findHintedManga(input.aniListId, signal, translatedLanguage));
       this.saveMapping(input.aniListId, mapping?.id ?? null);
       if (!mapping) {
         return this.rememberReader(cacheKey, {
@@ -395,7 +395,9 @@ export class MangaDexClient {
       const known = this.knownMapping(item.aniListId);
       let mangaDexId = known;
       if (mangaDexId === undefined) {
-        mangaDexId = (await this.findMappedManga(item.aniListId, item.title))?.id ?? null;
+        mangaDexId =
+          (await this.findMappedManga(item.aniListId, item.title, undefined, translatedLanguage))
+            ?.id ?? null;
         this.saveMapping(item.aniListId, mangaDexId);
       }
       if (mangaDexId === null) {
@@ -465,6 +467,7 @@ export class MangaDexClient {
   private async findHintedManga(
     aniListId: number,
     signal?: AbortSignal,
+    language?: string,
   ): Promise<ExactMangaDexMapping | undefined> {
     const hint = this.options.mappingHint;
     if (!hint) return undefined;
@@ -484,20 +487,56 @@ export class MangaDexClient {
         // A stale or removed candidate is simply not a match.
       }
     }
-    return findExactAniListManga({ data: records }, aniListId);
+    return this.chooseExactMatch({ data: records }, aniListId, language, signal);
   }
 
   private async findMappedManga(
     aniListId: number,
     title: string,
     signal?: AbortSignal,
+    language?: string,
   ): Promise<ExactMangaDexMapping | undefined> {
     const searchUrl = new URL("/manga", MANGADEX_API_URL);
     searchUrl.searchParams.set("title", title);
     searchUrl.searchParams.set("limit", String(MAPPING_SEARCH_LIMIT));
     searchUrl.searchParams.set("order[relevance]", "desc");
     appendContentRatings(searchUrl);
-    return findExactAniListManga(await this.requestJson(searchUrl, signal), aniListId);
+    return this.chooseExactMatch(
+      await this.requestJson(searchUrl, signal),
+      aniListId,
+      language,
+      signal,
+    );
+  }
+
+  /**
+   * The best exact match (see `rankExactAniListMatches`). Entries still tied are settled by
+   * MangaDex follows from one batched statistics request; if that fails, MangaDex's order stands.
+   */
+  private async chooseExactMatch(
+    payload: unknown,
+    aniListId: number,
+    language?: string,
+    signal?: AbortSignal,
+  ): Promise<ExactMangaDexMapping | undefined> {
+    const { matches, tied } = rankExactAniListMatches(payload, aniListId, language);
+    if (!tied) return matches[0];
+    const sameRank = matches.filter(
+      (match) =>
+        match.variant === matches[0].variant &&
+        (!language ||
+          match.availableLanguages.includes(language) ===
+            matches[0].availableLanguages.includes(language)),
+    );
+    try {
+      const url = new URL("/statistics/manga", MANGADEX_API_URL);
+      for (const match of sameRank) url.searchParams.append("manga[]", match.id);
+      const statistics = await this.requestJson(url, signal);
+      const follows = (id: string): number => parseMangaStatistics(statistics, id)?.follows ?? -1;
+      return [...sameRank].sort((left, right) => follows(right.id) - follows(left.id))[0];
+    } catch {
+      return matches[0];
+    }
   }
 
   private async getChapters(
@@ -713,6 +752,8 @@ interface ExactMangaDexMapping {
   id: string;
   publicationStatus?: "ongoing" | "completed" | "hiatus" | "cancelled";
   availableLanguages: string[];
+  /** A colored or other variant edition of the same work (from MangaDex's own titles). */
+  variant: boolean;
 }
 
 class MangaDexRequestError extends Error {
@@ -963,15 +1004,29 @@ function findCoverFileName(relationships: unknown): string | undefined {
   return undefined;
 }
 
-export function findExactAniListMapping(payload: unknown, aniListId: number): string | undefined {
-  return findExactAniListManga(payload, aniListId)?.id;
-}
-
-function findExactAniListManga(
+export function findExactAniListMapping(
   payload: unknown,
   aniListId: number,
-): ExactMangaDexMapping | undefined {
-  if (!isRecord(payload) || !Array.isArray(payload.data)) return undefined;
+  language?: string,
+): string | undefined {
+  return rankExactAniListMatches(payload, aniListId, language).matches[0]?.id;
+}
+
+const VARIANT_EDITION = /\bcolou?red\b|\bfull[ -]?colou?r\b/i;
+
+/**
+ * Entries carrying the exact AniList ID in `attributes.links.al`, best first. Identity comes only
+ * from that ID; when MangaDex lists the same work more than once (e.g. a regular release and an
+ * "Official Colored" edition, user decision 2026-10-20) the one with chapters in the wanted
+ * language comes first, then the regular edition, then MangaDex's own (relevance) order.
+ * `tied` reports that the first two are still equal on those rules.
+ */
+export function rankExactAniListMatches(
+  payload: unknown,
+  aniListId: number,
+  language?: string,
+): { matches: ExactMangaDexMapping[]; tied: boolean } {
+  if (!isRecord(payload) || !Array.isArray(payload.data)) return { matches: [], tied: false };
   const matches = new Map<string, ExactMangaDexMapping>();
   for (const candidate of payload.data) {
     // The ID is later placed in a request path (/manga/{id}/feed), so it must be a plain ID.
@@ -979,13 +1034,24 @@ function findExactAniListManga(
     const attributes = candidate.attributes;
     if (!isRecord(attributes) || !isRecord(attributes.links)) continue;
     if (String(attributes.links.al) !== String(aniListId)) continue;
+    if (matches.has(candidate.id)) continue;
     matches.set(candidate.id, {
       id: candidate.id,
       publicationStatus: readPublicationStatus(attributes.status),
       availableLanguages: readAvailableLanguages(attributes.availableTranslatedLanguages),
+      variant: editionTitles(attributes).some((title) => VARIANT_EDITION.test(title)),
     });
   }
-  return matches.size === 1 ? [...matches.values()][0] : undefined;
+  const rank = (match: ExactMangaDexMapping): number =>
+    (language && !match.availableLanguages.includes(language) ? 2 : 0) + (match.variant ? 1 : 0);
+  // A stable sort keeps MangaDex's order among equals.
+  const ranked = [...matches.values()].sort((left, right) => rank(left) - rank(right));
+  return { matches: ranked, tied: ranked.length > 1 && rank(ranked[0]) === rank(ranked[1]) };
+}
+
+function editionTitles(attributes: Record<string, unknown>): string[] {
+  const titles = isRecord(attributes.title) ? Object.values(attributes.title) : [];
+  return titles.filter((title): title is string => typeof title === "string");
 }
 
 export function findLatestNumericChapter(payload: unknown): number | undefined {

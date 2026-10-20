@@ -50,12 +50,12 @@
       90deg,
       var(--ink) 0,
       var(--ink) 30%,
-      color-mix(in srgb, var(--ink) 86%, transparent) 46%,
-      color-mix(in srgb, var(--ink) 35%, transparent) 70%,
-      color-mix(in srgb, var(--ink) 55%, transparent) 100%
+      rgb(7 8 7 / 0.86) 46%,
+      rgb(7 8 7 / 0.35) 70%,
+      rgb(7 8 7 / 0.55) 100%
     ),
     linear-gradient(0deg, var(--ink) 0, transparent 30%),
-    linear-gradient(180deg, color-mix(in srgb, var(--ink) 70%, transparent) 0, transparent 22%);
+    linear-gradient(180deg, rgb(7 8 7 / 0.7) 0, transparent 22%);
 }
 @keyframes signin-wall-in {
   from {
@@ -164,12 +164,12 @@
 }
 .signin-button--glass {
   border-color: rgb(255 255 255 / 0.14);
-  background: color-mix(in srgb, var(--surface-panel) 62%, transparent);
+  background: rgb(18 22 19 / 0.62);
   backdrop-filter: blur(16px);
   font-weight: 600;
 }
 .signin-button--glass:hover {
-  background: color-mix(in srgb, var(--surface-hover) 75%, transparent);
+  background: rgb(40 46 42 / 0.75);
 }
 .signin-button:active:not(:disabled) {
   transform: scale(0.985);
@@ -216,7 +216,7 @@
   padding: 18px 20px;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-panel) 62%, transparent);
+  background: rgb(18 22 19 / 0.62);
   backdrop-filter: blur(18px);
 }
 .signin-waiting strong {

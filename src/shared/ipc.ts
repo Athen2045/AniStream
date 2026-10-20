@@ -55,8 +55,6 @@ import type {
   MorePlaybackInput,
   MorePlaybackResume,
   SaveMorePlaybackResumeInput,
-  KitsuHeroArtwork,
-  KitsuHeroArtworkInput,
   MalRankingItem,
   MalScore,
   MangaDexAvailabilityInput,
@@ -192,10 +190,6 @@ export interface IpcInvokeChannelMap {
   "mal:trending-fallback": {
     args: [type: AniListMediaType];
     result: MalRankingItem[];
-  };
-  "kitsu:hero-art": {
-    args: [input: KitsuHeroArtworkInput];
-    result: KitsuHeroArtwork | undefined;
   };
   "mangadex:latest": {
     args: [page: number];

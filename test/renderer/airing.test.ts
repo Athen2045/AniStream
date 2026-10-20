@@ -3,6 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { AniListCatalogMedia } from "../../src/shared/contracts";
 import {
+  airedEpisodeCount,
+  episodeRangesLabel,
+  missingAiredEpisodes,
   airingOutlook,
   episodeAiringLabel,
   formatCountdown,
@@ -171,5 +174,42 @@ describe("airing outlook", () => {
     const manga = { type: "MANGA" as const, nextAiringEpisode: { episode: 1, airingAt: start } };
     expect(airingOutlook(manga, NOW)).toBeUndefined();
     expect(airingOutlook({ type: "ANIME", status: "FINISHED" }, NOW)).toBeUndefined();
+  });
+});
+
+describe("aired episode count", () => {
+  const now = Date.UTC(2026, 9, 20);
+  const at = (offsetHours: number) => Math.floor(now / 1000) + offsetHours * 3600;
+  it("counts from the next scheduled episode, or the full run once finished", () => {
+    const releasing = (airingAt: number) =>
+      airedEpisodeCount(
+        { type: "ANIME", status: "RELEASING", nextAiringEpisode: { episode: 4, airingAt } },
+        now,
+      );
+    expect(releasing(at(5))).toBe(3);
+    expect(releasing(at(-1))).toBe(4);
+    expect(airedEpisodeCount({ type: "ANIME", status: "FINISHED", totalProgress: 10 }, now)).toBe(
+      10,
+    );
+    expect(airedEpisodeCount({ type: "ANIME", status: "NOT_YET_RELEASED" }, now)).toBe(0);
+    expect(
+      airedEpisodeCount({ type: "ANIME", status: "HIATUS", totalProgress: 24 }, now),
+    ).toBeUndefined();
+  });
+});
+
+describe("aired episodes missing from the source", () => {
+  it("names the gaps, allows the next-airing tile, and skips other numbering", () => {
+    expect(missingAiredEpisodes([1], 10)).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(missingAiredEpisodes([1, 3, 4], 5)).toEqual([2, 5]);
+    expect(missingAiredEpisodes([1, 2, 3, 4], 3)).toEqual([]);
+    expect(missingAiredEpisodes([13, 14], 12)).toEqual([]);
+    expect(missingAiredEpisodes([1, 2], undefined)).toEqual([]);
+  });
+
+  it("writes episode numbers as compact ranges", () => {
+    expect(episodeRangesLabel([2, 3, 4, 5, 6, 7, 8, 9, 10])).toBe("2–10");
+    expect(episodeRangesLabel([2, 5])).toBe("2, 5");
+    expect(episodeRangesLabel([29, 30, 31, 33])).toBe("29–31, 33");
   });
 });
