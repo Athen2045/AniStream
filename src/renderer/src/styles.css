@@ -24,7 +24,7 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: var(--text);
+  color: #ffffff;
   background: #0a0909;
   font-synthesis: none;
   font-weight: 400;
@@ -282,12 +282,7 @@ html[data-platform="win32"] .catalog-content {
   height: var(--app-navbar-height);
   padding: 0 3.7vw 0 86px;
   border-bottom: 0;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--ink) 98%, transparent),
-    color-mix(in srgb, var(--ink) 82%, transparent) 72%,
-    transparent
-  );
+  background: linear-gradient(180deg, rgb(10 9 9 / 0.98), rgb(10 9 9 / 0.82) 72%, transparent);
   backdrop-filter: blur(14px) saturate(1.04);
   isolation: isolate;
   -webkit-app-region: drag;
@@ -624,21 +619,13 @@ html[data-platform="win32"] .catalog-content {
 .carousel-edge-left {
   left: 0;
   justify-content: flex-start;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--ink) 96%, transparent),
-    color-mix(in srgb, var(--ink) 0%, transparent)
-  );
+  background: linear-gradient(90deg, rgb(10 9 9 / 0.96), rgb(10 9 9 / 0));
 }
 
 .carousel-edge-right {
   right: 0;
   justify-content: flex-end;
-  background: linear-gradient(
-    270deg,
-    color-mix(in srgb, var(--ink) 96%, transparent),
-    color-mix(in srgb, var(--ink) 0%, transparent)
-  );
+  background: linear-gradient(270deg, rgb(10 9 9 / 0.96), rgb(10 9 9 / 0));
 }
 
 .carousel-edge:not(:disabled),
@@ -719,7 +706,7 @@ a.rail-card {
 }
 
 .rail-badge--external {
-  background: color-mix(in srgb, var(--ink) 82%, transparent);
+  background: rgb(10 9 9 / 0.82);
   color: var(--text);
 }
 
@@ -1079,7 +1066,7 @@ a.rail-card {
   z-index: 2;
   right: 7px;
   top: 1px;
-  color: color-mix(in srgb, var(--ink) 34%, transparent);
+  color: rgb(10 9 9 / 0.34);
   font-size: 4.4rem;
   font-weight: 700;
   -webkit-text-stroke: 1px var(--text-soft);
@@ -1465,7 +1452,7 @@ a.rail-card {
   padding: 7px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--surface-panel) 98%, transparent);
+  background: rgb(20 19 19 / 0.98);
   box-shadow: 0 22px 64px var(--shadow-deep);
   scrollbar-width: thin;
   scrollbar-color: var(--surface-hover) transparent;
@@ -1615,7 +1602,7 @@ a.rail-card {
   place-items: center;
   border: 2px solid var(--highlight-lavender);
   border-radius: 50%;
-  background: color-mix(in srgb, var(--ink) 68%, transparent);
+  background: rgb(10 9 9 / 0.68);
   opacity: 0;
   transform: scale(0.84);
   transition:

@@ -30,7 +30,13 @@ import type {
 } from "../../shared/contracts";
 import { chooseInitialAnimeEpisode, createAnimePlaybackSession } from "./anime-playback-session";
 import { saveAnimeActivity } from "./local-activity";
-import { episodeAiringLabel, unairedEpisode } from "./airing";
+import {
+  airedEpisodeCount,
+  episodeAiringLabel,
+  episodeRangesLabel,
+  missingAiredEpisodes,
+  unairedEpisode,
+} from "./airing";
 import { AutoplayNext, useNextUp } from "./AutoplayNext";
 import { EpisodeQueueToggle } from "./UpNextButton";
 import { EpisodeDownloadToggle } from "./DownloadButtons";
@@ -60,6 +66,9 @@ const EPISODES_PAGE_SIZE = 12;
 const MIN_RANGE_EPISODES = 50;
 
 type WatchView = "episodes" | "player";
+
+/** How long a recommendation card waits for AniList's details before loading episodes anyway. */
+const THIN_MEDIA_WAIT_MS = 4_000;
 
 export function AnimeWatchExperience({
   media,
@@ -104,7 +113,17 @@ export function AnimeWatchExperience({
   const [retryCount, setRetryCount] = useState(0);
   const [catalogAttempt, setCatalogAttempt] = useState(0);
   const [playbackAttempt, setPlaybackAttempt] = useState(0);
-  const [catalogMedia] = useState(media);
+  const [catalogMedia, setCatalogMedia] = useState(media);
+  // A recommendation card (For You, "Because you…") opens the page before AniList's details arrive
+  // and carries no episode count, status or airing schedule. Once they arrive, reload the episode
+  // list with them; other updates (e.g. list progress) keep the loaded list.
+  if (
+    media.id === catalogMedia.id &&
+    (media.totalProgress !== catalogMedia.totalProgress ||
+      media.status !== catalogMedia.status ||
+      media.nextAiringEpisode?.episode !== catalogMedia.nextAiringEpisode?.episode)
+  )
+    setCatalogMedia(media);
   const [catalogInitialEpisode] = useState(initialEpisode);
   const [catalogExactEpisode] = useState(exactEpisode);
   const [resolvedSeasonNumber, setResolvedSeasonNumber] = useState<number>();
@@ -247,7 +266,19 @@ export function AnimeWatchExperience({
 
   useEffect(() => playStarted("ANIME"), []);
 
+  // A thin card waits briefly for AniList's details before asking for episodes, so the list does
+  // not first appear with a single episode; without details (e.g. offline) it goes ahead anyway.
+  const thinMedia = catalogMedia.status === undefined && catalogMedia.totalProgress === undefined;
+  const [thinWaitOver, setThinWaitOver] = useState(false);
   useEffect(() => {
+    if (!thinMedia) return;
+    const timer = window.setTimeout(() => setThinWaitOver(true), THIN_MEDIA_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [thinMedia]);
+  const waitForDetails = thinMedia && !thinWaitOver;
+
+  useEffect(() => {
+    if (waitForDetails) return;
     let active = true;
     void Promise.allSettled([
       window.anistream.getAnimeEpisodeCatalog({
@@ -319,7 +350,15 @@ export function AnimeWatchExperience({
     return () => {
       active = false;
     };
-  }, [catalogAttempt, fallback, catalogExactEpisode, catalogInitialEpisode, catalogMedia, titles]);
+  }, [
+    catalogAttempt,
+    fallback,
+    catalogExactEpisode,
+    catalogInitialEpisode,
+    catalogMedia,
+    titles,
+    waitForDetails,
+  ]);
 
   useEffect(() => {
     if (view !== "player") return;
@@ -741,6 +780,14 @@ function EpisodeBrowser({
   const setExpanded = (update: (value: boolean) => boolean): void =>
     setExpandedRange(update(expanded) ? (shownRange?.start ?? 0) : undefined);
   const seasonEpisodes = activeSeason?.episodes ?? [];
+  // Aired episodes the source has not added yet are named, not shown as tiles that cannot play.
+  const aired = airedEpisodeCount(media);
+  const missing = activeSeason?.id.startsWith("index:")
+    ? missingAiredEpisodes(
+        seasonEpisodes.map((episode) => episode.number),
+        aired,
+      )
+    : [];
   const lastRange = ranges?.ranges.at(-1);
   // The last range also holds the locked next-airing tile past the aired count.
   const episodes = shownRange
@@ -769,7 +816,7 @@ function EpisodeBrowser({
           <small>
             {shownRange
               ? `${shownRange.title} · Episodes ${shownRange.start}–${shownRange.end}`
-              : `${isSeasonEntry(media) ? `Season ${displayedSeasonNumber}` : mediaFormatLabel(media.format)}${episodes.length > 1 ? ` · ${episodes.length} episodes` : ""}`}
+              : `${isSeasonEntry(media) ? `Season ${displayedSeasonNumber}` : mediaFormatLabel(media.format)}${missing.length && aired ? ` · ${aired - missing.length} of ${aired} aired` : episodes.length > 1 ? ` · ${episodes.length} episodes` : ""}`}
           </small>
         </h2>
         <SeasonPicker
@@ -784,6 +831,13 @@ function EpisodeBrowser({
       </header>
 
       {loading ? <p className="catalog-loading">Loading episode details…</p> : null}
+      {!loading && missing.length ? (
+        <p className="provider-note" role="status">
+          {missing.length > 1
+            ? `Episodes ${episodeRangesLabel(missing)} have aired, but the source hasn't added them yet.`
+            : `Episode ${missing[0]} has aired, but the source hasn't added it yet.`}
+        </p>
+      ) : null}
       {providerMessage ? (
         <div className="provider-note provider-note--action" role="status">
           <span>{providerMessage}</span>

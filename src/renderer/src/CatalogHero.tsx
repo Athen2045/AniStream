@@ -61,31 +61,10 @@ export function CatalogHero({
     return () => window.clearTimeout(timer);
   }, [heroIndex, items.length, rotating]);
   const [heroImageState, setHeroImageState] = useState<{ id: number; source?: string }>({ id: 0 });
-  const [kitsuHeroState, setKitsuHeroState] = useState<{ id: number; source?: string }>({ id: 0 });
   const mediaName = type === "ANIME" ? "anime" : "manga";
-  useEffect(() => {
-    if (!import.meta.env.DEV || !hero) return;
-
-    let active = true;
-    void window.anistream
-      .getKitsuHeroArtwork({ aniListId: hero.id, type, title: hero.title })
-      .then((artwork) => {
-        if (active && artwork) setKitsuHeroState({ id: hero.id, source: artwork.imageUrl });
-      })
-      .catch(() => {
-        // Kitsu is only a dev preview; AniList artwork should keep the page usable if it is down.
-      });
-    return () => {
-      active = false;
-    };
-  }, [hero, type]);
   if (!hero) return null;
   const heroImageSource =
-    heroImageState.id === hero.id
-      ? heroImageState.source
-      : kitsuHeroState.id === hero.id && kitsuHeroState.source
-        ? kitsuHeroState.source
-        : (hero.bannerUrl ?? hero.coverUrl);
+    heroImageState.id === hero.id ? heroImageState.source : (hero.bannerUrl ?? hero.coverUrl);
 
   return (
     <motion.header
@@ -127,17 +106,13 @@ export function CatalogHero({
               onError={() => {
                 // Banners are nicer, but a stale CDN URL should never leave the hero empty.
                 // Warning: do not retry the same URL here; broken provider URLs can otherwise loop.
-                if (heroImageSource === kitsuHeroState.source) {
-                  setKitsuHeroState({ id: hero.id });
-                } else {
-                  setHeroImageState({
-                    id: hero.id,
-                    source:
-                      heroImageSource === hero.bannerUrl && hero.coverUrl !== hero.bannerUrl
-                        ? hero.coverUrl
-                        : undefined,
-                  });
-                }
+                setHeroImageState({
+                  id: hero.id,
+                  source:
+                    heroImageSource === hero.bannerUrl && hero.coverUrl !== hero.bannerUrl
+                      ? hero.coverUrl
+                      : undefined,
+                });
               }}
             />
           ) : null}

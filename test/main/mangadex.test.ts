@@ -59,7 +59,25 @@ describe("MangaDex normalization", () => {
     expect(findExactAniListMapping(payload, 123)).toBeUndefined();
   });
 
-  it("rejects ambiguous duplicate AniList mappings", () => {
+  it("picks among several exact matches: wanted language, then the regular edition", () => {
+    const entry = (id: string, title: string, languages: string[]) => ({
+      id,
+      attributes: {
+        title: { en: title },
+        links: { al: "114791" },
+        availableTranslatedLanguages: languages,
+      },
+    });
+    const colored = entry("colored", "Undead Unluck (Official Colored)", ["en"]);
+    const regular = entry("regular", "Undead Unluck", ["en"]);
+    const similar = { id: "other", attributes: { links: { al: "87064" } } };
+    expect(findExactAniListMapping({ data: [colored, similar, regular] }, 114791, "en")).toBe(
+      "regular",
+    );
+    // A colored edition with chapters wins over a regular one without them.
+    const regularJa = entry("regular-ja", "Black Jack", ["ja"]);
+    expect(findExactAniListMapping({ data: [regularJa, colored] }, 114791, "en")).toBe("colored");
+    // Still equal on both rules: MangaDex's own order stands.
     expect(
       findExactAniListMapping(
         {
@@ -70,7 +88,37 @@ describe("MangaDex normalization", () => {
         },
         118586,
       ),
-    ).toBeUndefined();
+    ).toBe("first");
+  });
+
+  it("settles exact matches still tied by MangaDex follows, with one statistics request", async () => {
+    const entry = (id: string) => ({
+      id,
+      attributes: {
+        title: { en: "Same Work" },
+        links: { al: "700" },
+        availableTranslatedLanguages: ["en"],
+      },
+    });
+    const urls: string[] = [];
+    const fetcher = async (input: string | URL | Request): Promise<Response> => {
+      const url = new URL(String(input));
+      urls.push(url.pathname + url.search);
+      if (url.pathname === "/manga")
+        return Response.json({ data: [entry("quiet-entry"), entry("popular-entry")] });
+      if (url.pathname === "/statistics/manga")
+        return Response.json({
+          statistics: { "quiet-entry": { follows: 12 }, "popular-entry": { follows: 9_000 } },
+        });
+      return Response.json({ volumes: { "1": { chapters: { "4": {} } } } });
+    };
+    const [availability] = await new MangaDexClient("en", fetcher as typeof fetch).getAvailability([
+      { aniListId: 700, title: "Same Work" },
+    ]);
+    expect(availability).toMatchObject({ status: "available", mangaDexId: "popular-entry" });
+    expect(urls.filter((url) => url.startsWith("/statistics/manga"))).toEqual([
+      "/statistics/manga?manga%5B%5D=quiet-entry&manga%5B%5D=popular-entry",
+    ]);
   });
 
   it("finds the greatest numeric chapter across volumes", () => {

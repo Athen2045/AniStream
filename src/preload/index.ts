@@ -98,7 +98,6 @@ const bridge: AniStreamBridge = {
   releaseMorePlayer: () => invoke("more:player-release"),
   getMalScore: (type, malId) => invoke("mal:score", type, malId),
   getMalTrendingFallback: (type) => invoke("mal:trending-fallback", type),
-  getKitsuHeroArtwork: (input) => invoke("kitsu:hero-art", input),
   getMangaDexAvailability: (media) => invoke("mangadex:availability", media),
   getMangaTitleSnapshot: (input, requestId) => invoke("manga:title-snapshot", input, requestId),
   saveMangaReaderPreferences: (input) => invoke("manga:save-reader-preferences", input),

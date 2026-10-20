@@ -160,7 +160,7 @@ html[data-motion="reduce"] .more-title-art.is-fading-in img {
   align-items: center;
   gap: 8px 12px;
   margin-bottom: 14px;
-  color: var(--text);
+  color: #eef1ef;
   font-size: 15px;
   font-weight: 600;
 }
@@ -191,7 +191,7 @@ html[data-motion="reduce"] .more-title-art.is-fading-in img {
   display: -webkit-box;
   margin: 0 0 26px;
   overflow: hidden;
-  color: var(--text-secondary);
+  color: #e1e6e3;
   font-size: 16.5px;
   line-height: 1.6;
   -webkit-box-orient: vertical;
@@ -462,7 +462,7 @@ html[data-motion="reduce"] .more-title-art.is-fading-in img {
   height: 26px;
   padding: 0 7px;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--ink) 72%, transparent);
+  background: rgb(7 8 7 / 0.72);
   backdrop-filter: blur(8px);
   color: var(--text);
   font-size: 13px;
@@ -476,11 +476,7 @@ html[data-motion="reduce"] .more-title-art.is-fading-in img {
   display: grid;
   gap: 4px;
   padding: 72px 12px 12px;
-  background: linear-gradient(
-    0deg,
-    color-mix(in srgb, var(--ink) 97%, transparent) 42%,
-    transparent
-  );
+  background: linear-gradient(0deg, rgb(7 8 7 / 0.97) 42%, transparent);
   opacity: 0;
   transform: translateY(8px);
   transition:
@@ -687,7 +683,7 @@ html[data-motion="reduce"] .more-title-art.is-fading-in img {
   flex-wrap: wrap;
   gap: 6px 12px;
   margin: -6px 0 22px;
-  color: var(--text);
+  color: #e9ece9;
   font-size: 16px;
   font-weight: 600;
 }
@@ -709,14 +705,14 @@ html[data-motion="reduce"] .more-title-art.is-fading-in img {
   font-size: 14.5px;
 }
 .more-credits strong {
-  color: var(--text);
+  color: #e9ece9;
   font-weight: 600;
 }
 .more-title-overview {
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
-  color: var(--text-soft);
+  color: #d6dbd8;
   font-size: 15.5px;
   line-height: 1.65;
   -webkit-box-orient: vertical;
@@ -738,7 +734,7 @@ html[data-motion="reduce"] .more-title-art.is-fading-in img {
   overflow: hidden;
   border: 1px solid var(--more-glass-line);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--surface-panel) 60%, transparent);
+  background: rgb(12 15 13 / 0.6);
   backdrop-filter: blur(22px) saturate(1.3);
 }
 .more-info-card dl div {
@@ -809,7 +805,7 @@ html[data-motion="reduce"] .more-title-art.is-fading-in img {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface-raised);
-  color: var(--text);
+  color: #e7ebe8;
   font: inherit;
   font-size: 13.5px;
   font-weight: 600;
@@ -886,7 +882,7 @@ html[data-motion="reduce"] .more-title-art.is-fading-in img {
   position: absolute;
   z-index: 1;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--ink) 74%, transparent);
+  background: rgb(7 8 7 / 0.74);
   color: var(--text);
   font-weight: 700;
 }

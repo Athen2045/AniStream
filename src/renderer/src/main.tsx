@@ -23,7 +23,6 @@ import "./styles/similar.css";
 import "./styles/profile-simkl.css";
 import "./styles/loading.css";
 import "./styles/anime-simplify.css";
-import "./styles/theme-trial.css";
 import "./styles/player.css";
 
 document.documentElement.dataset.platform = navigator.userAgent.includes("Windows")

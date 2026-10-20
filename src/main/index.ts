@@ -45,7 +45,6 @@ import { registerTrustedIpcHandler, sendTypedIpcEvent } from "./ipc";
 import { registerTrackerDomain } from "./domains/tracker";
 import { registerAnimeDomain } from "./domains/anime";
 import { registerMangaDomain } from "./domains/manga";
-import { registerKitsuDevelopmentDomain } from "./domains/kitsu";
 import { registerResumeDomain } from "./domains/resume";
 import { registerActivityDomain } from "./domains/activity";
 import { registerBackupDomain } from "./domains/backup";
@@ -301,7 +300,7 @@ void app
     if (mirrorConfig) mangaMirror = new MangaMirrorClient(mirrorConfig, { mapping: malSync });
     if (isDatabaseEnabled(providerConfig, "manga", "mangaupdates"))
       mangaUpdates = new MangaUpdatesClient();
-    // Kitsu episode thumbnails ship in every build; its hero-art preview stays development-only.
+    // Kitsu episode thumbnails ship in every build.
     if (isDatabaseEnabled(providerConfig, "anime", "kitsu")) kitsu = new KitsuClient();
     if (isDatabaseEnabled(providerConfig, "anime", "anizip")) aniZip = new AniZipClient();
     // The embedded anime player, plus (trial 2026-10-18) a direct-stream source for the own player.
@@ -549,7 +548,6 @@ void app
       if (mainWindow && !mainWindow.isDestroyed())
         sendTypedIpcEvent(mainWindow.webContents, "activity:changed", undefined);
     });
-    if (kitsu && !app.isPackaged) registerKitsuDevelopmentDomain(trustedRendererOrigin, kitsu);
     const simklClient = simkl;
     simklService = new SimklService(
       simklClient,

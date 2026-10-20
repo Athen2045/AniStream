@@ -357,7 +357,7 @@
   overflow: hidden;
   border: 1px solid var(--line-subtle);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-panel) 70%, transparent);
+  background: rgb(20 19 19 / 0.7);
 }
 .schedule-month-weekdays,
 .schedule-month-grid {
