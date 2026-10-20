@@ -23,7 +23,6 @@ import type {
   AnimeEpisodeRange,
   AnimeEpisodeRanges,
   AnimePlaybackCandidate,
-  AnimePlaybackResult,
   AnimeProviderEpisode,
   AnimeProviderSeason,
   PlaybackResume,
@@ -103,7 +102,6 @@ export function AnimeWatchExperience({
   );
   const [selectedSeasonId, setSelectedSeasonId] = useState("");
   const [view, setView] = useState<WatchView>("episodes");
-  const [playback, setPlayback] = useState<AnimePlaybackResult>();
   const [source, setSource] = useState<AnimePlaybackCandidate>();
   const [resume, setResume] = useState<PlaybackResume>();
   const [loadingCatalog, setLoadingCatalog] = useState(true);
@@ -244,24 +242,15 @@ export function AnimeWatchExperience({
     return next && !unairedEpisode(media, next.number) ? next : undefined;
   }, [activeIndex, allEpisodes, media]);
   const previousEpisode = activeIndex > 0 ? allEpisodes[activeIndex - 1] : undefined;
-  // The own player (trial 2026-10-18): chosen by hand, or used when the embed has no source.
-  const [ownPlayerChosen, setOwnPlayerChosen] = useState(false);
+  // The own player (backup, trial 2026-10-18) takes over for an episode when the main player has
+  // no source or reports an error; there is no manual switch in the player (user decision
+  // 2026-10-20: audio comes from Settings, the backup is automatic).
+  const [backupEpisode, setBackupEpisode] = useState<number>();
+  const usingBackup = backupEpisode === activeEpisode.number;
   // A downloaded episode plays from the downloads folder in the own player (works offline).
   const downloads = useOptionalDownloads();
   const downloadedEpisode =
     downloads?.byEpisode.get(downloadKey(media.id, activeEpisode.number))?.status === "done";
-  const embedSources = useMemo(
-    () => playback?.candidates.filter((candidate) => candidate.kind === "embed") ?? [],
-    [playback],
-  );
-  // Audio cycles through the episode's embeds (normally subtitles ⇄ dub).
-  const nextAudioSource =
-    embedSources.length > 1
-      ? embedSources[
-          (embedSources.findIndex((candidate) => candidate.id === source?.id) + 1) %
-            embedSources.length
-        ]
-      : undefined;
   const watchedEpisodes = "listEntry" in media ? (media.listEntry?.progress ?? 0) : 0;
 
   useEffect(() => playStarted("ANIME"), []);
@@ -375,7 +364,6 @@ export function AnimeWatchExperience({
       })
       .then((result) => {
         if (!active) return;
-        setPlayback(result);
         // Start on the audio chosen in Settings when the episode offers it.
         setSource(
           preferredAudioSource(
@@ -445,7 +433,6 @@ export function AnimeWatchExperience({
         episodeFocus.current = document.activeElement;
       setResume((current) => (current?.episode === episode.number ? current : undefined));
       setLoadingPlayback(true);
-      setPlayback(undefined);
       setSource(undefined);
       setError(undefined);
       setSelectedSeasonId(seasonContainingEpisode(seasons, episode)?.id ?? selectedSeasonId);
@@ -575,13 +562,6 @@ export function AnimeWatchExperience({
             aria-hidden="true"
             onPointerMove={revealPlayerControls}
           />
-          {nextAudioSource ? (
-            <div
-              className="media-control-hotspot media-control-hotspot--caption media-control-hotspot--text"
-              aria-hidden="true"
-              onPointerMove={revealPlayerControls}
-            />
-          ) : null}
           <div
             className="media-control-layer media-control-layer--player"
             data-visible={playerChromeShown}
@@ -605,36 +585,9 @@ export function AnimeWatchExperience({
             >
               <ChevronLeft size={22} />
             </button>
-
-            {/* The title and fullscreen stay in the player's own controls. */}
-            {source ? (
-              <button
-                type="button"
-                className="watch-caption-tool watch-caption-tool--text"
-                aria-pressed={ownPlayerChosen}
-                aria-label={ownPlayerChosen ? "Use the main player" : "Use the backup player"}
-                title={
-                  ownPlayerChosen ? "Back to the main player" : "Try the backup player (own player)"
-                }
-                onClick={() => setOwnPlayerChosen((value) => !value)}
-              >
-                {ownPlayerChosen ? "MAIN" : "BACKUP"}
-              </button>
-            ) : null}
-            {nextAudioSource && source && !ownPlayerChosen ? (
-              <button
-                type="button"
-                className="watch-caption-tool watch-caption-tool--text"
-                aria-label={`Audio: ${source.label}. Switch to ${nextAudioSource.label}`}
-                title={`Audio: ${source.label} (switch to ${nextAudioSource.label})`}
-                onClick={() => setSource(nextAudioSource)}
-              >
-                {audioShortLabel(source.label)}
-              </button>
-            ) : null}
           </div>
 
-          {ownPlayerChosen || downloadedEpisode || (!source && !loadingPlayback) ? (
+          {usingBackup || downloadedEpisode || (!source && !loadingPlayback) ? (
             <OwnAnimePlayer
               key={`own:${activeEpisode.number}`}
               media={catalogMedia}
@@ -652,7 +605,7 @@ export function AnimeWatchExperience({
               onNext={playEpisode}
               onPrevious={playEpisode}
               onWatched={onEpisodeWatched}
-              onUseMainPlayer={source ? () => setOwnPlayerChosen(false) : undefined}
+              onUseMainPlayer={source ? () => setBackupEpisode(undefined) : undefined}
             />
           ) : source ? (
             <AnimeEmbedPlayer
@@ -669,6 +622,7 @@ export function AnimeWatchExperience({
                 setError(undefined);
                 setRetryCount((count) => count + 1);
               }}
+              onUseBackup={() => setBackupEpisode(activeEpisode.number)}
             />
           ) : (
             <div className="player-unavailable" role="status">
@@ -686,7 +640,6 @@ export function AnimeWatchExperience({
                   onClick={() => {
                     setError(undefined);
                     setLoadingPlayback(true);
-                    setPlayback(undefined);
                     setSource(undefined);
                     setPlaybackAttempt((attempt) => attempt + 1);
                   }}
@@ -1357,6 +1310,7 @@ function AnimeEmbedPlayer({
   onNext,
   onWatched,
   onRetry,
+  onUseBackup,
 }: {
   mediaId: number;
   media: AniListCatalogMedia;
@@ -1367,6 +1321,8 @@ function AnimeEmbedPlayer({
   onNext: (episode: AnimeProviderEpisode) => void;
   onWatched: (episode: number) => Promise<void>;
   onRetry: () => void;
+  /** Hands the episode to the backup (own) player. */
+  onUseBackup: () => void;
 }): React.JSX.Element {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const session = useMemo(
@@ -1387,6 +1343,10 @@ function AnimeEmbedPlayer({
     session.getSnapshot,
     session.getSnapshot,
   );
+  // A main-player error hands the episode to the backup player by itself (no switch in the UI).
+  useEffect(() => {
+    if (sessionState.hasError) onUseBackup();
+  }, [onUseBackup, sessionState.hasError]);
   // The next episode wins; at the end of what is available, the next Up Next title plays.
   const nextUp = useNextUp(
     nextEpisode
@@ -1436,12 +1396,17 @@ function AnimeEmbedPlayer({
           <strong>{sessionState.errorMessage ?? "No playback progress received yet."}</strong>
           <p>
             {sessionState.hasError
-              ? "The embedded player reported an error. Its controls remain available; you can retry or choose another audio option."
-              : "Use Play inside the video. If it still does not start, retry the player."}
+              ? "The main player reported an error. Switching to the backup player."
+              : "Use Play inside the video. If it still does not start, retry or use the backup player."}
           </p>
-          <button type="button" onClick={onRetry}>
-            Retry player
-          </button>
+          <span className="anime-embed-notice-actions">
+            <button type="button" onClick={onRetry}>
+              Retry player
+            </button>
+            <button type="button" onClick={onUseBackup}>
+              Use backup player
+            </button>
+          </span>
         </div>
       ) : !sessionState.hasError && !sessionState.ended && !sessionState.loaded ? (
         <div className="anime-embed-loading">
@@ -1546,13 +1511,6 @@ function formatLabel(value: string): string {
 
 function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-/** Caption-sized audio label: "SUB"/"DUB" for the usual embeds, otherwise the language. */
-function audioShortLabel(label: string): string {
-  if (/\bdub/i.test(label)) return "DUB";
-  if (/\bsub/i.test(label)) return "SUB";
-  return (label.split("·")[0] ?? label).trim().slice(0, 3).toUpperCase();
 }
 
 /** An image that cannot load (e.g. offline and never cached) disappears instead of showing broken. */

@@ -616,17 +616,17 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .vbar-shade,
-  .vbar-layer,
-  .vbar-btn,
-  .vslider-track,
-  .vslider-thumb,
-  .vmenu-switch,
-  .vmenu-switch::after,
-  .vplayer-skip-fill {
+  html:not([data-platform="win32"]) .vbar-shade,
+  html:not([data-platform="win32"]) .vbar-layer,
+  html:not([data-platform="win32"]) .vbar-btn,
+  html:not([data-platform="win32"]) .vslider-track,
+  html:not([data-platform="win32"]) .vslider-thumb,
+  html:not([data-platform="win32"]) .vmenu-switch,
+  html:not([data-platform="win32"]) .vmenu-switch::after,
+  html:not([data-platform="win32"]) .vplayer-skip-fill {
     transition: none;
   }
-  .vplayer-skip {
+  html:not([data-platform="win32"]) .vplayer-skip {
     animation: none;
   }
 }

@@ -29,3 +29,16 @@ export function relativeLuminance(color: string): number {
   );
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
+
+/**
+ * The title's own colour for its Watch / Read / Play button and page accents (TV-style UI,
+ * user decision 2026-10-20). CSS softens it to a readable pastel (styles/tv-ui.css); greys carry
+ * no real hue, so they get nothing here and the button falls back to the app's emerald.
+ */
+export function titleTintStyle(color: string | undefined): CSSProperties | undefined {
+  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return undefined;
+  const value = Number.parseInt(color.slice(1), 16);
+  const channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  if (Math.max(...channels) - Math.min(...channels) < 28) return undefined;
+  return { "--title-tint": color } as CSSProperties;
+}

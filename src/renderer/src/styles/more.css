@@ -10,28 +10,6 @@
   padding-bottom: 40px;
 }
 
-/* The navbar floats over every section and title page: clear at the top (a light shade keeps it
-   readable over artwork), frosted glass once content scrolls beneath it (2026-10-19). */
-html .app-navbar.app-navbar--overlay {
-  border-bottom-color: transparent;
-  background: linear-gradient(180deg, rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.16) 65%, transparent);
-  transition:
-    background-color var(--motion-standard) var(--motion-ease),
-    border-color var(--motion-standard) var(--motion-ease);
-}
-html .app-navbar.app-navbar--overlay.app-navbar--flat:not(.is-scrolled) {
-  background: transparent;
-}
-html .app-navbar.app-navbar--overlay.is-scrolled {
-  border-bottom-color: rgb(255 255 255 / 0.06);
-  background: color-mix(in srgb, var(--ink) 58%, transparent);
-  backdrop-filter: blur(22px) saturate(1.4);
-}
-html .app-navbar.app-navbar--overlay .wordmark,
-html .app-navbar.app-navbar--overlay .nav-links button {
-  text-shadow: 0 1px 10px rgb(0 0 0 / 0.6);
-}
-
 /* Hero */
 .more-hero,
 .more-title-hero {
@@ -138,7 +116,7 @@ html .app-navbar.app-navbar--overlay .nav-links button {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .more-title-art.is-fading-in img {
+  html:not([data-platform="win32"]) .more-title-art.is-fading-in img {
     animation: none;
   }
 }

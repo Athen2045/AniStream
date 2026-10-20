@@ -12,6 +12,13 @@ import type {
   MoreDiscoveryFeedback,
 } from "./discovery";
 
+export type WindowControlAction = "minimize" | "toggle-maximize" | "close";
+
+export interface WindowState {
+  maximized: boolean;
+  fullScreen: boolean;
+}
+
 export interface AppInfo {
   version: string;
   platform: string;
@@ -112,6 +119,26 @@ export interface AniListPageInfo {
 export interface AniListCatalogPage {
   pageInfo: AniListPageInfo;
   items: AniListCatalogMedia[];
+  /** Page-1 text searches only: what the same request found beyond this section. */
+  searchExtras?: AniListSearchExtras;
+}
+
+/** A character or studio whose name matches a search (every typed word is a word of the name). */
+export interface AniListSearchPerson {
+  kind: "character" | "studio";
+  id: number;
+  name: string;
+  imageUrl?: string;
+  /** The title they are best known for (characters), shown under the name. */
+  knownFor?: string;
+}
+
+export interface AniListSearchExtras {
+  /** Matches of the same query in the other section (anime ⇄ manga), up to `limit`. */
+  otherType: AniListMediaType;
+  otherCount: number;
+  otherLimit: number;
+  people: AniListSearchPerson[];
 }
 
 export interface BrowseAniListInput extends AniListBrowseFilters {
@@ -1031,6 +1058,9 @@ export interface AniStreamBridge {
   getAppInfo(): Promise<AppInfo>;
   /** Full-window media surfaces hide the native window controls along with their own. */
   setCaptionControlsVisible(visible: boolean): Promise<void>;
+  /** The app's own minimise / maximise / close buttons (Windows; macOS keeps its native ones). */
+  controlWindow(action: WindowControlAction): Promise<void>;
+  getWindowState(): Promise<WindowState>;
   getAnimeProviderReadiness(): Promise<ProviderReadiness>;
   getAniListAuthState(): Promise<AniListAuthState>;
   startAniListLogin(): Promise<void>;
@@ -1039,6 +1069,12 @@ export interface AniStreamBridge {
   getCachedAniListDashboard(): Promise<AniListDashboard | undefined>;
   getAniListDashboard(): Promise<AniListDashboard>;
   browseAniList(input: BrowseAniListInput): Promise<AniListCatalogPage>;
+  /** Titles of one type a search's character appears in, or its studio made. */
+  getAniListPersonTitles(
+    kind: "character" | "studio",
+    id: number,
+    type: AniListMediaType,
+  ): Promise<AniListCatalogMedia[]>;
   getAniListFilterOptions(): Promise<AniListFilterOptions>;
   getAniListMediaDetail(id: number, type: AniListMediaType): Promise<AniListMediaDetail>;
   getAnimeSeriesGraph(id: number): Promise<AnimeSeriesNode[]>;

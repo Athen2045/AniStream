@@ -1,0 +1,539 @@
+/* TV-style UI (user decision 2026-10-20; mockups prototypes/mockups/tv-ui/): a 64 px icon rail on
+   the left instead of the top bar, app-drawn window controls on Windows, an arrow-only Back level
+   with them, softer buttons, and Watch / Read / Play filled with the title's own colour. Loaded
+   last so it settles the older navbar-era rules. */
+
+:root {
+  --rail-width: 64px;
+  --rail-open-width: 264px;
+  /* No top bar any more: pages only clear the thin window-drag strip. */
+  --app-navbar-height: 32px;
+  --title-tint: #36a678;
+}
+html[data-platform="darwin"] {
+  /* The native traffic lights sit over the top of the rail. */
+  --rail-top: 52px;
+}
+
+/* Full-window media keeps its 48 px top band; its tools sit left of the app's window-controls
+   pill (there are no native Windows controls to measure any more). */
+.watch-experience--player,
+.media-reader-surface {
+  --app-navbar-height: 48px;
+}
+html[data-platform="win32"] {
+  --caption-controls-width: 150px;
+  --caption-inset-right: calc(var(--caption-controls-width) + 12px);
+}
+
+/* ---------------------------------------------------------------- layout */
+.app-shell {
+  padding-left: var(--rail-width);
+}
+/* Heroes keep running under the rail; their content stays right of it. */
+.app-shell .home-hero,
+.app-shell .more-hero {
+  margin-left: calc(-1 * var(--rail-width));
+  padding-left: var(--rail-width);
+}
+.more-hero .more-hero-copy,
+.more-hero .more-hero-top {
+  left: calc(var(--rail-width) + var(--page-gutter));
+}
+.catalog-page,
+.app-shell .profile-route-transition {
+  padding-top: 0;
+}
+.title-page {
+  left: var(--rail-width);
+}
+.media-rail .rail-card.anime-continue-card {
+  --rail-card-width: calc((100vw - var(--rail-width) - 2 * var(--page-gutter) - 3 * 16px) / 4);
+}
+@media (max-width: 1100px) {
+  .media-rail .rail-card.anime-continue-card {
+    --rail-card-width: calc((100vw - var(--rail-width) - 2 * var(--page-gutter) - 2 * 16px) / 3);
+  }
+}
+
+/* ---------------------------------------------------------------- side rail */
+/* One moving edge, as in the user's reference video (2026-10-20): the rail is always its open
+   width, and a clip-path reveals or hides everything right of the icons. Icons never move; the
+   edge cuts through the labels while they fade in place. No scrim, no reflow; clip-path also
+   limits hit testing, so the hidden part never catches the pointer. */
+.side-rail {
+  --rail-hidden: calc(var(--rail-open-width) - var(--rail-width));
+  position: fixed;
+  z-index: 200;
+  inset: 0 auto 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: var(--rail-open-width);
+  padding: var(--rail-top, 44px) 10px 14px;
+  border-right: 1px solid rgb(255 255 255 / 0.06);
+  background: rgb(9 11 10 / 0.94);
+  backdrop-filter: blur(24px) saturate(1.2);
+  clip-path: inset(0 var(--rail-hidden) 0 0);
+  /* Closing: the labels go first, the edge follows. */
+  transition: clip-path 210ms cubic-bezier(0.4, 0, 0.2, 1) 40ms;
+  will-change: clip-path;
+}
+.side-rail.is-open {
+  clip-path: inset(0 0 0 0);
+  box-shadow: 18px 0 48px rgb(0 0 0 / 0.38);
+  /* Opening: the edge leads, the labels follow. */
+  transition: clip-path 240ms cubic-bezier(0.2, 0, 0, 1);
+}
+.side-rail-label {
+  overflow: hidden;
+  min-width: 0;
+  opacity: 0;
+  text-overflow: clip;
+  white-space: nowrap;
+  transition: opacity 90ms ease;
+  pointer-events: none;
+}
+.side-rail.is-open .side-rail-label {
+  opacity: 1;
+  transition: opacity 160ms ease 90ms;
+}
+.side-rail-logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 38px;
+  margin: 0 0 12px;
+  padding: 0 0 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  cursor: pointer;
+}
+.side-rail-logo img {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+.side-rail-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+.side-rail-sep {
+  height: 1px;
+  margin: 8px 10px;
+  background: rgb(255 255 255 / 0.07);
+}
+.side-rail-grow {
+  flex: 1;
+  min-height: 8px;
+}
+.side-rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: rgb(255 255 255 / 0.6);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  isolation: isolate;
+}
+/* Hover/active pill: a 44 px rounded square while closed, the full row while open (uncovered by a
+   rounded clip, so its corners never stretch). */
+.side-rail-item::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.09);
+  opacity: 0;
+  clip-path: inset(0 calc(100% - 44px) 0 0 round 12px);
+  transition:
+    clip-path 210ms cubic-bezier(0.4, 0, 0.2, 1) 40ms,
+    opacity 120ms ease;
+}
+.side-rail.is-open .side-rail-item::after {
+  clip-path: inset(0 0 0 0 round 12px);
+  transition:
+    clip-path 240ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 120ms ease;
+}
+.side-rail-item:hover,
+.side-rail-item.is-active {
+  color: #fff;
+}
+.side-rail-item:hover::after {
+  opacity: 1;
+}
+.side-rail-item.is-active::after {
+  opacity: 0.75;
+}
+.side-rail-item.is-active .side-rail-icon {
+  color: #5fd3a0;
+}
+.side-rail-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.side-rail-item:focus-visible,
+.side-rail-logo:focus-visible {
+  outline: none;
+  color: #fff;
+  box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.55);
+}
+.side-rail-indicator {
+  position: absolute;
+  left: -10px;
+  top: 11px;
+  bottom: 11px;
+  width: 3px;
+  border-radius: 3px;
+  background: #36a678;
+  box-shadow: 0 0 10px #36a678;
+}
+.side-rail-icon {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+.side-rail-icon > svg {
+  width: 20px;
+  height: 20px;
+}
+.side-rail-badge {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 2px solid #070807;
+  border-radius: 999px;
+  background: var(--primary-hover);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 12px;
+  text-align: center;
+}
+/* Profile row: the account picture in place of the icon. */
+.side-rail-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.16);
+}
+.side-rail-item.is-active .side-rail-avatar {
+  box-shadow: 0 0 0 2px #36a678;
+}
+/* Short windows: tighter rows so the bottom group never runs off the screen. */
+@media (max-height: 760px) {
+  .side-rail {
+    padding-top: var(--rail-top, 40px);
+  }
+  .side-rail-logo {
+    margin-bottom: 6px;
+  }
+  .side-rail-item {
+    height: 38px;
+  }
+  .side-rail-sep {
+    margin: 4px 10px;
+  }
+}
+
+/* ---------------------------------------------------------------- window controls (Windows) */
+.window-drag-strip {
+  position: fixed;
+  z-index: 60;
+  top: 0;
+  left: var(--rail-width);
+  right: 150px;
+  height: 32px;
+  -webkit-app-region: drag;
+}
+/* Anything you can press stays pressable inside the drag strip. */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+.window-controls {
+  -webkit-app-region: no-drag;
+}
+.window-controls {
+  position: fixed;
+  z-index: 5000;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 14px;
+  background: rgb(7 8 7 / 0.42);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+  backdrop-filter: blur(16px) saturate(1.3);
+  transition: opacity var(--motion-standard, 200ms) ease;
+}
+.window-controls.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.window-controls button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 30px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: rgb(255 255 255 / 0.82);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.window-controls button:hover,
+.window-controls button:focus-visible {
+  outline: none;
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+}
+.window-controls button.window-close:hover,
+.window-controls button.window-close:focus-visible {
+  background: rgb(232 76 76 / 0.92);
+}
+
+/* ---------------------------------------------------------------- Back: an arrow, level with them */
+.title-page .title-back,
+.more-title-page .more-back--arrow {
+  position: absolute;
+  z-index: 6;
+  top: 10px;
+  left: var(--page-gutter);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 50%;
+  background: rgb(7 8 7 / 0.42);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+  color: #fff;
+  backdrop-filter: blur(16px) saturate(1.3);
+}
+.more-title-page .more-hero-top:has(.more-back--arrow) {
+  top: 0;
+}
+.more-title-page .more-back--arrow {
+  left: 0;
+}
+.title-page .title-back svg,
+.more-title-page .more-back--arrow svg {
+  transition: transform 160ms ease;
+}
+.title-page .title-back:hover,
+.more-title-page .more-back--arrow:hover {
+  border-color: rgb(255 255 255 / 0.22);
+  background: rgb(255 255 255 / 0.16);
+}
+.title-page .title-back:hover svg,
+.more-title-page .more-back--arrow:hover svg {
+  transform: translateX(-2px);
+}
+.title-page .title-back:focus-visible,
+.more-title-page .more-back--arrow:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+/* ---------------------------------------------------------------- the title's colour */
+.home-hero,
+.title-page,
+.more-hero,
+.more-title-page {
+  /* Softened to a pastel band so every title reads (label: a deep shade of the same hue). */
+  --tint: oklch(from var(--title-tint) clamp(0.74, l, 0.82) clamp(0.07, c, 0.14) h);
+  --tint-ink: oklch(from var(--title-tint) 0.22 0.04 h);
+}
+.title-page--anime {
+  --title-accent: var(--tint);
+  --title-accent-text: var(--tint);
+  --title-accent-ink: var(--tint-ink);
+}
+
+/* ---------------------------------------------------------------- softer buttons */
+.home-hero .title-primary,
+.title-page .title-primary,
+.title-page .anime-head-primary,
+.more-hero .more-btn-play,
+.more-title-page .more-btn-play {
+  height: 50px;
+  padding: 0 26px 0 22px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, color-mix(in oklch, var(--tint), white 14%), var(--tint));
+  box-shadow:
+    0 10px 28px -8px color-mix(in oklch, var(--tint) 70%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.45);
+  color: var(--tint-ink);
+  font-size: 16px;
+  font-weight: 700;
+  transition:
+    transform 140ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+.home-hero .title-primary svg,
+.title-page .title-primary svg,
+.title-page .anime-head-primary svg {
+  fill: currentColor;
+}
+.home-hero .title-primary:hover:not(:disabled),
+.title-page .title-primary:hover:not(:disabled),
+.title-page .anime-head-primary:hover:not(:disabled),
+.more-hero .more-btn-play:hover:not(:disabled),
+.more-title-page .more-btn-play:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--tint), white 22%),
+    color-mix(in oklch, var(--tint), white 8%)
+  );
+  box-shadow:
+    0 14px 34px -8px color-mix(in oklch, var(--tint) 85%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.5);
+  filter: none;
+  transform: translateY(-1px);
+}
+.home-hero .title-primary:active:not(:disabled),
+.title-page .title-primary:active:not(:disabled),
+.title-page .anime-head-primary:active:not(:disabled),
+.more-hero .more-btn-play:active:not(:disabled),
+.more-title-page .more-btn-play:active:not(:disabled) {
+  background: color-mix(in oklch, var(--tint), black 6%);
+  box-shadow: inset 0 2px 6px rgb(0 0 0 / 0.18);
+  transform: scale(0.98);
+}
+.home-hero .title-primary:focus-visible,
+.title-page .title-primary:focus-visible,
+.title-page .anime-head-primary:focus-visible,
+.more-hero .more-btn-play:focus-visible,
+.more-title-page .more-btn-play:focus-visible {
+  outline: 2px solid var(--tint);
+  outline-offset: 4px;
+}
+.title-page .title-primary:disabled,
+.title-page .anime-head-primary:disabled,
+.more-title-page .more-btn-play:disabled,
+.title-page .title-primary.is-upcoming,
+.title-page .anime-head-primary.is-upcoming {
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: none;
+  color: rgb(255 255 255 / 0.5);
+}
+/* Everything else on these screens is calm glass, so the one coloured button leads. */
+.home-hero .title-library,
+.title-page .title-library,
+.title-page .title-round,
+.title-page .anime-head-actions > button:not(.anime-head-primary),
+.title-page .anime-head-actions .title-feedback button,
+.more-hero .more-btn-pair,
+.more-title-page .more-btn-round,
+.more-title-page .more-btn-upnext,
+.more-title-page .more-btn-pair {
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  color: #fff;
+  backdrop-filter: blur(16px) saturate(1.3);
+}
+.home-hero .title-library,
+.title-page .title-library {
+  height: 50px;
+  border-radius: 16px;
+  font-weight: 600;
+}
+.title-page .title-round,
+.title-page .anime-head-actions > button:not(.anime-head-primary):not(.title-library),
+.title-page .anime-head-actions .title-feedback button,
+.more-title-page .more-btn-round {
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+}
+.more-hero .more-btn-pair,
+.more-title-page .more-btn-pair,
+.more-title-page .more-btn-upnext {
+  height: 50px;
+  border-radius: 16px;
+}
+.home-hero .title-library:hover,
+.title-page .title-library:hover,
+.title-page .title-round:hover,
+.title-page .anime-head-actions > button:not(.anime-head-primary):hover,
+.more-title-page .more-btn-round:hover,
+.more-title-page .more-btn-upnext:hover {
+  border-color: rgb(255 255 255 / 0.16);
+  background: rgb(255 255 255 / 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-platform="win32"]) .side-rail,
+  html:not([data-platform="win32"]) .side-rail-label,
+  html:not([data-platform="win32"]) .side-rail-item::after {
+    transition: none !important;
+  }
+}
+html[data-motion="reduce"] :is(.side-rail, .side-rail-label),
+html[data-motion="reduce"] .side-rail-item::after {
+  transition: none !important;
+}
+
+/* The current episode's outline and its progress line follow the title's colour too. */
+.title-page--anime .episode-tile.is-current .episode-tile-frame {
+  box-shadow: 0 0 0 2px var(--tint);
+}
+.title-page--anime .episode-watch-progress > span {
+  background: var(--tint);
+}
+
+/* Main-player notice: Retry and the backup player side by side. */
+.anime-embed-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.anime-embed-notice-actions button + button {
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.08);
+}
+
+/* The hero banner fades into the page itself, so no 1 px image edge shows at any window width. */
+.home-hero-band .title-band-art {
+  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 99%);
+  mask-image: linear-gradient(180deg, #000 55%, transparent 99%);
+}

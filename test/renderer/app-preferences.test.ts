@@ -22,6 +22,7 @@ describe("parseAppPreferences", () => {
         audio: "dub",
         reduceMotion: true,
         heroRotate: 0,
+        rememberSearches: false,
       }),
     ).toEqual({
       upNext: false,
@@ -32,6 +33,7 @@ describe("parseAppPreferences", () => {
       reduceMotion: true,
       startSection: "MORE",
       audio: "dub",
+      rememberSearches: false,
     });
     expect(parseAppPreferences({ startSection: "PROFILE", audio: "raw" })).toMatchObject({
       startSection: "ANIME",

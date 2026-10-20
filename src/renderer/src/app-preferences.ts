@@ -21,6 +21,8 @@ export interface AppPreferences {
   startSection: StartSection;
   /** Preferred audio when an episode offers both. */
   audio: AudioPreference;
+  /** Keep recent searches on this device between launches (user decision 2026-10-20). */
+  rememberSearches: boolean;
 }
 
 export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
@@ -32,6 +34,7 @@ export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
   reduceMotion: false,
   startSection: "ANIME",
   audio: "sub",
+  rememberSearches: true,
 };
 
 const STORAGE_KEY = "anistream.preferences";
@@ -53,6 +56,7 @@ export function parseAppPreferences(value: unknown): AppPreferences {
     latestUpdates: flag("latestUpdates"),
     heroRotate: flag("heroRotate"),
     reduceMotion: flag("reduceMotion"),
+    rememberSearches: flag("rememberSearches"),
     startSection:
       row.startSection === "ANIME" || row.startSection === "MANGA" || row.startSection === "MORE"
         ? row.startSection

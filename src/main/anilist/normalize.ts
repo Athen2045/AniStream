@@ -12,6 +12,8 @@ import type {
   AniListNamedPerson,
   AniListProfile,
   AniListRelation,
+  AniListSearchExtras,
+  AniListSearchPerson,
   AnimeSeriesNode,
   LatestAnimeUpdate,
   LatestUpdatesPage,
@@ -153,6 +155,88 @@ export function normalizeCatalogPage(
     },
     items: page.media.map((media) => normalizeCatalogMedia(media, expectedType)),
   };
+}
+
+const PEOPLE_LIMIT = 3;
+
+/**
+ * The extra parts of a page-1 search response. A character or studio is kept only when every
+ * word typed is a whole word of its name (AniList's own match is loose: "Toei" also finds
+ * "Toeic"); studios only for anime. Anything malformed is dropped, never thrown.
+ */
+export function normalizeSearchExtras(
+  response: { other?: unknown; characters?: unknown; studios?: unknown },
+  query: string,
+  type: AniListMediaType,
+): AniListSearchExtras {
+  const otherType: AniListMediaType = type === "ANIME" ? "MANGA" : "ANIME";
+  const otherMedia = isRecordValue(response.other) ? response.other.media : undefined;
+  const otherCount = Array.isArray(otherMedia) ? otherMedia.length : 0;
+  const words = searchWords(query);
+  const matches = (names: string[]): boolean =>
+    words.length > 0 &&
+    names.some((name) => {
+      const nameWords = new Set(searchWords(name));
+      return words.every((word) => nameWords.has(word));
+    });
+  const people: AniListSearchPerson[] = [];
+  const characters = isRecordValue(response.characters) ? response.characters.characters : [];
+  for (const raw of Array.isArray(characters) ? characters : []) {
+    if (!isRecordValue(raw) || typeof raw.id !== "number" || !isRecordValue(raw.name)) continue;
+    const full = optionalString(raw.name.full);
+    if (!full) continue;
+    const alternative = optionalStringArray(raw.name.alternative) ?? [];
+    if (!matches([full, ...alternative])) continue;
+    const nodes = isRecordValue(raw.media) && Array.isArray(raw.media.nodes) ? raw.media.nodes : [];
+    const first = nodes.find(isRecordValue);
+    const title = first && isRecordValue(first.title) ? first.title : undefined;
+    const knownFor = title
+      ? (optionalString(title.english) ?? optionalString(title.romaji))
+      : undefined;
+    if (!knownFor) continue;
+    const image = isRecordValue(raw.image) ? optionalString(raw.image.medium) : undefined;
+    people.push({ kind: "character", id: raw.id, name: full, imageUrl: image, knownFor });
+  }
+  const studios = isRecordValue(response.studios) ? response.studios.studios : [];
+  if (type === "ANIME")
+    for (const raw of Array.isArray(studios) ? studios : []) {
+      if (!isRecordValue(raw) || typeof raw.id !== "number") continue;
+      const name = optionalString(raw.name);
+      if (!name || raw.isAnimationStudio !== true || !matches([name])) continue;
+      people.push({ kind: "studio", id: raw.id, name });
+    }
+  return { otherType, otherCount, otherLimit: 9, people: people.slice(0, PEOPLE_LIMIT) };
+}
+
+function searchWords(value: string): string[] {
+  return value
+    .toLocaleLowerCase()
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+/** A character's or studio's titles of one type (other types and malformed rows dropped). */
+export function normalizePersonTitles(
+  value: unknown,
+  expectedType: AniListMediaType,
+): AniListCatalogMedia[] {
+  const owner = isRecordValue(value) ? value : undefined;
+  const nodes =
+    owner && isRecordValue(owner.media) && Array.isArray(owner.media.nodes)
+      ? owner.media.nodes
+      : [];
+  const items: AniListCatalogMedia[] = [];
+  for (const node of nodes) {
+    if (!isRecordValue(node) || node.type !== expectedType) continue;
+    try {
+      items.push(normalizeCatalogMedia(node, expectedType));
+    } catch {
+      // One bad row must not hide the rest.
+    }
+  }
+  return items;
 }
 
 export function normalizeCatalogMedia(

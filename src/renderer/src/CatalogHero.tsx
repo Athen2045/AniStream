@@ -7,7 +7,7 @@ import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
 import { motionTransition } from "./motion";
 import { useAppPreferences } from "./app-preferences";
-import { titleAccentStyle } from "./title-accent";
+import { titleAccentStyle, titleTintStyle } from "./title-accent";
 import { cachedArtworkUrl } from "../../shared/artwork";
 import { useDocumentVisible } from "./useDocumentVisible";
 import type { ContinueTitle } from "../../shared/personal-library";
@@ -69,7 +69,10 @@ export function CatalogHero({
   return (
     <motion.header
       className="home-hero"
-      style={type === "MANGA" ? titleAccentStyle(hero.coverColor) : undefined}
+      style={{
+        ...(type === "MANGA" ? titleAccentStyle(hero.coverColor) : undefined),
+        ...titleTintStyle(hero.coverColor),
+      }}
       aria-roledescription="carousel"
       aria-label={`Trending ${mediaName}`}
       initial={reducedMotion ? false : { opacity: 0 }}

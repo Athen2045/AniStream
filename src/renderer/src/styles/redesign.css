@@ -42,64 +42,7 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   height: 0;
   display: none;
 }
-.app-navbar {
-  padding-inline: var(--page-gutter);
-  background: #111412;
-  border-bottom: 1px solid var(--line-subtle);
-}
-.wordmark {
-  font-size: 18px;
-  letter-spacing: -0.5px;
-}
-.wordmark-logo {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  border-radius: 7px;
-  object-fit: cover;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
-}
-.wordmark > span.wordmark-name {
-  display: inline;
-  width: auto;
-  height: auto;
-  color: var(--text);
-  background: transparent;
-  box-shadow: none;
-  clip-path: none;
-  font-family: inherit;
-  font-size: 18px;
-  font-style: normal;
-  font-weight: 700;
-  line-height: 1;
-}
-.nav-links {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  padding: 0;
-}
-.nav-links button,
-.nav-links button.active {
-  height: var(--app-navbar-height);
-  border-radius: 0;
-  border-top: 2px solid transparent;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-}
-.nav-links button.active {
-  border-bottom-color: var(--primary-hover);
-}
-html[data-platform="darwin"] .app-navbar {
-  padding-left: 96px;
-}
 
-.nav-links button {
-  font-weight: 600;
-}
-.nav-account button {
-  box-shadow: none;
-}
 .catalog-page {
   padding-top: var(--app-navbar-height);
 }
@@ -712,10 +655,6 @@ html[data-platform="darwin"] .app-navbar {
   }
 }
 
-html[data-platform="win32"] .app-navbar {
-  background: #0b0e0c;
-  padding-left: var(--page-gutter);
-}
 html[data-platform="win32"] .catalog-content {
   background: transparent;
 }
@@ -728,12 +667,6 @@ html[data-platform="win32"] .catalog-content {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.nav-account > .avatar-button {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  flex: 0 0 32px;
 }
 .avatar-button img {
   width: 28px;
@@ -781,13 +714,6 @@ html[data-platform="win32"] .catalog-content {
   margin-bottom: 24px;
 }
 
-/* Native controls and app navigation share one uninterrupted title-bar surface. */
-.app-navbar {
-  backdrop-filter: none;
-}
-html[data-platform="win32"] .app-navbar {
-  padding-right: max(138px, calc(100vw - env(titlebar-area-width, 100vw) + 12px));
-}
 /* Watch/Read fill the whole app window, navbar included; fullscreen goes display-wide. */
 .watch-experience--player,
 .media-reader-surface {
@@ -895,15 +821,6 @@ html[data-platform="darwin"] {
 }
 .watch-caption-tool:hover {
   background: rgb(255 255 255 / 0.1);
-}
-.watch-caption-tool--text,
-.media-control-hotspot--text {
-  width: 58px;
-}
-.watch-caption-tool--text {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
 }
 .anime-embed-notice {
   position: absolute;
@@ -1028,117 +945,6 @@ html[data-platform="darwin"] {
   html:not([data-platform="win32"]) .media-control-layer {
     transition: none;
   }
-}
-
-/* The transparent navbar floats over the Anime/Manga hero, which grows by the navbar height so
-   its artwork starts at the top of the window (kept 2026-10-03). */
-.app-shell:has(> .app-navbar--overlay) .catalog-page {
-  padding-top: 0;
-}
-/* Navbar: one underline glides between sections (layoutId), and search collapses to a button. */
-.nav-links button {
-  position: relative;
-}
-.nav-links button.active {
-  border-bottom-color: transparent;
-}
-.nav-underline {
-  position: absolute;
-  right: 0;
-  bottom: -2px;
-  left: 0;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--primary-hover);
-  box-shadow: 0 0 10px rgb(48 144 102 / 0.55);
-}
-.nav-spacer {
-  min-width: 0;
-}
-/* Navbar actions share one glass-circle look: search, schedule, refresh, and account.
-   Hover lifts the glass; open or active turns the circle white with a dark icon. */
-.nav-account {
-  gap: 10px;
-}
-.nav-account > button,
-.nav-account .account-menu-trigger {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: 50%;
-  /* Small glass circles, readable over any artwork under the clear navbar (2026-10-19). */
-  background: rgb(7 8 7 / 0.5);
-  backdrop-filter: blur(14px) saturate(1.3);
-  box-shadow: none;
-  color: var(--text);
-  transition:
-    background-color var(--motion-fast) var(--motion-ease),
-    border-color var(--motion-fast) var(--motion-ease),
-    color var(--motion-fast) var(--motion-ease);
-}
-.nav-account > button:hover:not(:disabled),
-.nav-account .account-menu-trigger:hover {
-  border-color: var(--line);
-  background: rgb(255 255 255 / 0.12);
-  color: var(--text);
-}
-.nav-account > button.nav-search-button.active,
-.nav-account > button.nav-schedule-button.active,
-.nav-account .account-menu-trigger[aria-expanded="true"]:not(.account-menu-trigger--member) {
-  border-color: #fff;
-  background: #fff;
-  color: #0b0d0c;
-}
-.nav-account > button:disabled {
-  opacity: 0.6;
-}
-.nav-account > button svg {
-  width: 17px;
-  height: 17px;
-}
-/* The signed-in avatar fills the circle; open or on Profile, it gains a white ring instead. */
-.nav-account .account-menu-trigger--member {
-  padding: 2px;
-  overflow: hidden;
-}
-.nav-account .account-menu-trigger--member > img,
-.nav-account .account-menu-trigger--member > svg:first-child {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  border-radius: 50%;
-}
-.nav-account .account-menu-trigger--member[aria-expanded="true"],
-.nav-account .account-menu-trigger--member.active {
-  border: 2px solid #fff;
-  padding: 1px;
-  background: rgb(0 0 0 / 0.22);
-  box-shadow: none;
-}
-.nav-account .account-menu-trigger.active:not(.account-menu-trigger--member) {
-  box-shadow: none;
-}
-/* Guest keeps its label, as a glass pill matching the circles. */
-.nav-account .account-menu-trigger--guest {
-  display: inline-flex;
-  width: auto;
-  gap: 7px;
-  padding: 0 12px 0 9px;
-  border-radius: 999px;
-  font-size: 12.5px;
-}
-.nav-account .account-menu-trigger--guest > svg:first-child {
-  width: 18px;
-  height: 18px;
-}
-
-/* Profile joins the transparent navbar: its banner starts at the top of the window and fades into
-   the app's black, like the catalog heroes. */
-.app-shell:has(> .app-navbar--overlay) .profile-route-transition {
-  padding-top: 0;
 }
 
 /* Copyright & DMCA footer at the bottom of Anime, Manga and More, and its policy dialog. */

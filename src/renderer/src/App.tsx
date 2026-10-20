@@ -1,4 +1,16 @@
-import { CalendarDays, Download, ListVideo, RefreshCw, Search } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  Download,
+  Film,
+  ListVideo,
+  RefreshCw,
+  Search,
+  Settings,
+  Tv,
+  Bug,
+  UserRound,
+} from "lucide-react";
 import { DownloadsProvider, useDownloads } from "./DownloadsProvider";
 import { DownloadsView } from "./DownloadsView";
 import { AnimatePresence, motion } from "framer-motion";
@@ -25,7 +37,6 @@ import { mediaDetailInstanceKey } from "./viewer-access";
 import { createViewerSession } from "./viewer-session";
 import {
   motionTransition,
-  navIndicatorTransition,
   profileRouteVariants,
   routeVariants,
   sectionDirection,
@@ -46,7 +57,6 @@ import { SectionSearch, type SearchScope } from "./SectionSearch";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import { useSmoothDocumentScroll } from "./useSmoothDocumentScroll";
 import { ReadinessScreen } from "./ReadinessScreen";
-import { NavbarAccountMenu } from "./NavbarAccountMenu";
 import { ContinueUndoToast } from "./ContinueRemoveButton";
 import { getAppPreferences, useAppPreferences } from "./app-preferences";
 import { BingeProvider, useBinge } from "./BingeProvider";
@@ -55,7 +65,11 @@ import type { BingeItem } from "../../shared/binge";
 import type { MorePlayTarget } from "./more-format";
 import type { SettingsTab } from "./SettingsView";
 import { MoreView } from "./MoreView";
-import appIcon from "./assets/app-icon.png";
+import { SideRail } from "./SideRail";
+
+/** Bug reports go to the project's GitHub issues for now (user request 2026-10-09). */
+const BUG_REPORT_URL = "https://github.com/Athen2045/AniStream/issues";
+import { WindowControls } from "./WindowControls";
 import {
   createReadinessSession,
   createLaunchCatalogReadinessStage,
@@ -245,7 +259,6 @@ function AppContent(): React.JSX.Element {
   const [selectedMedia, setSelectedMedia] = useState<AniListCatalogMedia>();
   const [selectedMore, setSelectedMore] = useState<MoreCatalogItem>();
   const [selectedMoreAction, setSelectedMoreAction] = useState<"details" | "play">("details");
-  const [navbarScrolled, setNavbarScrolled] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>();
   const openMoreDetails = useCallback((item: MoreCatalogItem) => {
     setSelectedMoreAction("details");
@@ -330,30 +343,7 @@ function AppContent(): React.JSX.Element {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [cancelSmoothDocumentScroll, view]);
 
-  // The navbar floats over every section (clear at the top, frosted glass once content scrolls
-  // under it); title pages scroll inside their own layer, so their scroll counts too (2026-10-19).
   const direction = sectionDirection(previousView, view);
-  const sectionActive = (section: SearchScope): boolean =>
-    view === section || (view === "SEARCH" && searchScope === section);
-  const titleOpen = Boolean(selectedMedia);
-  // Pages without hero artwork need no shade under the navbar at all.
-  const flatPage =
-    !titleOpen &&
-    (view === "DOWNLOADS" ||
-      view === "SETTINGS" ||
-      view === "SEARCH" ||
-      view === "SCHEDULE" ||
-      view === "UPNEXT");
-  useEffect(() => {
-    const update = (): void => {
-      const titlePage = document.querySelector<HTMLElement>(".title-page");
-      setNavbarScrolled((titlePage ? titlePage.scrollTop : window.scrollY) > 24);
-    };
-    update();
-    // Capture: scroll events from the title page's own scroller do not bubble.
-    document.addEventListener("scroll", update, { capture: true, passive: true });
-    return () => document.removeEventListener("scroll", update, { capture: true });
-  }, [titleOpen, view]);
 
   useEffect(() => {
     const focusSearch = (event: KeyboardEvent): void => {
@@ -436,146 +426,139 @@ function AppContent(): React.JSX.Element {
             inert={activeReadiness ? true : undefined}
             aria-hidden={activeReadiness ? true : undefined}
           >
-            <nav
-              className={`app-navbar app-navbar--overlay${navbarScrolled ? " is-scrolled" : ""}${
-                flatPage ? " app-navbar--flat" : ""
-              }`}
-            >
-              <button
-                className="wordmark"
-                type="button"
-                aria-label="AniStream home"
-                onClick={() => openCatalog("ANIME")}
-              >
-                <img className="wordmark-logo" src={appIcon} alt="" aria-hidden="true" />
-                <span className="wordmark-name">Stream</span>
-              </button>
-              <div className="nav-links" aria-label="Main navigation">
-                <button
-                  className={sectionActive("ANIME") ? "active" : ""}
-                  type="button"
-                  onClick={() => openCatalog("ANIME")}
-                >
-                  Anime
-                  {sectionActive("ANIME") ? (
-                    <motion.span
-                      className="nav-underline"
-                      layoutId="nav-underline"
-                      transition={navIndicatorTransition(reducedMotion)}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                </button>
-                <button
-                  className={sectionActive("MANGA") ? "active" : ""}
-                  type="button"
-                  onClick={() => openCatalog("MANGA")}
-                >
-                  Manga
-                  {sectionActive("MANGA") ? (
-                    <motion.span
-                      className="nav-underline"
-                      layoutId="nav-underline"
-                      transition={navIndicatorTransition(reducedMotion)}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                </button>
-                <button
-                  className={sectionActive("MORE") ? "active" : ""}
-                  type="button"
-                  onClick={() => openMore()}
-                >
-                  More
-                  {sectionActive("MORE") ? (
-                    <motion.span
-                      className="nav-underline"
-                      layoutId="nav-underline"
-                      transition={navIndicatorTransition(reducedMotion)}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                </button>
-              </div>
-              <span className="nav-spacer" aria-hidden="true" />
-              <div className="nav-account">
-                <button
-                  type="button"
-                  className={`nav-search-button${view === "SEARCH" ? " active" : ""}`}
-                  aria-label={view === "SEARCH" ? "Close search" : "Search"}
-                  aria-pressed={view === "SEARCH"}
-                  title="Search (Ctrl+K)"
-                  onClick={() => openSearch(true)}
-                >
-                  <Search size={17} aria-hidden="true" />
-                </button>
-                {preferences.schedule ? (
-                  <button
-                    type="button"
-                    className={`nav-schedule-button${view === "SCHEDULE" ? " active" : ""}`}
-                    aria-label="Airing schedule"
-                    aria-pressed={view === "SCHEDULE"}
-                    title="Airing schedule"
-                    onClick={openSchedule}
-                  >
-                    <CalendarDays size={17} aria-hidden="true" />
-                  </button>
-                ) : null}
-                {preferences.upNext ? (
-                  <UpNextNavButton active={view === "UPNEXT"} onOpen={openUpNext} />
-                ) : null}
-                <DownloadsNavButton active={view === "DOWNLOADS"} onOpen={openDownloads} />
-                {viewerAccess.kind === "member" ? (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="Refresh library"
-                      title="Refresh library"
-                      disabled={syncing || libraryRefreshSpinning}
-                      onClick={() => {
-                        if (!reducedMotion) setLibraryRefreshSpinning(true);
-                        void viewerSession.refresh();
-                      }}
-                    >
-                      <RefreshCw
-                        size={17}
-                        className={libraryRefreshSpinning ? "refresh-spin-once" : undefined}
-                        aria-hidden="true"
-                        onAnimationEnd={() => setLibraryRefreshSpinning(false)}
-                      />
-                    </button>
-                    <NavbarAccountMenu
-                      kind="member"
-                      active={view === "PROFILE" || view === "SETTINGS"}
-                      name={viewerAccess.dashboard.profile.name}
-                      avatarUrl={accountPicture.url}
-                      subtitle={simklAuth ? "AniList + Simkl" : "AniList profile"}
-                      onOpenProfile={openProfile}
-                      onOpenSettings={() => openSettings()}
-                      onLogout={() => void viewerSession.logout()}
-                    />
-                  </>
-                ) : simklAuth ? (
-                  <NavbarAccountMenu
-                    kind="member"
-                    active={view === "PROFILE" || view === "SETTINGS"}
-                    name={simklAuth.userName ?? "Simkl"}
-                    avatarUrl={simklAuth.avatarUrl}
-                    subtitle="Simkl profile"
-                    onOpenProfile={openProfile}
-                    onOpenSettings={() => openSettings()}
-                    onLogout={() => void window.anistream.disconnectSimkl().catch(() => undefined)}
-                  />
-                ) : (
-                  <NavbarAccountMenu
-                    kind="guest"
-                    active={view === "PROFILE" || view === "SETTINGS"}
-                    onOpenSettings={() => openSettings()}
-                    onSignIn={openProfile}
-                  />
-                )}
-              </div>
-            </nav>
+            <RailCounts>
+              {(upNextCount, downloadsPending) => (
+                <SideRail
+                  reducedMotion={reducedMotion}
+                  onHome={() => openCatalog("ANIME")}
+                  sections={[
+                    {
+                      key: "search",
+                      label: "Search",
+                      icon: Search,
+                      active: view === "SEARCH",
+                      ariaLabel: view === "SEARCH" ? "Close search" : "Search",
+                      title: "Search (Ctrl+K)",
+                      onSelect: () => openSearch(true),
+                    },
+                    {
+                      key: "anime",
+                      label: "Anime",
+                      icon: Tv,
+                      active: view === "ANIME",
+                      onSelect: () => openCatalog("ANIME"),
+                    },
+                    {
+                      key: "manga",
+                      label: "Manga",
+                      icon: BookOpen,
+                      active: view === "MANGA",
+                      onSelect: () => openCatalog("MANGA"),
+                    },
+                    {
+                      key: "more",
+                      label: "More",
+                      icon: Film,
+                      active: view === "MORE",
+                      onSelect: () => openMore(),
+                    },
+                  ]}
+                  tools={[
+                    ...(preferences.schedule
+                      ? [
+                          {
+                            key: "schedule",
+                            label: "Schedule",
+                            icon: CalendarDays,
+                            active: view === "SCHEDULE",
+                            title: "Airing schedule",
+                            onSelect: openSchedule,
+                          },
+                        ]
+                      : []),
+                    ...(preferences.upNext
+                      ? [
+                          {
+                            key: "upnext",
+                            label: "Up Next",
+                            icon: ListVideo,
+                            active: view === "UPNEXT",
+                            badge: upNextCount,
+                            ariaLabel: upNextCount ? `Up Next, ${upNextCount} queued` : "Up Next",
+                            title: "Up Next and playlists",
+                            onSelect: openUpNext,
+                          },
+                        ]
+                      : []),
+                    {
+                      key: "downloads",
+                      label: "Downloads",
+                      icon: Download,
+                      active: view === "DOWNLOADS",
+                      badge: downloadsPending,
+                      ariaLabel: downloadsPending
+                        ? `Downloads, ${downloadsPending} in progress`
+                        : "Downloads",
+                      onSelect: openDownloads,
+                    },
+                  ]}
+                  footer={[
+                    ...(viewerAccess.kind === "member"
+                      ? [
+                          {
+                            key: "refresh",
+                            label: "Refresh library",
+                            icon: RefreshCw,
+                            disabled: syncing || libraryRefreshSpinning,
+                            iconClassName: libraryRefreshSpinning ? "refresh-spin-once" : undefined,
+                            onIconAnimationEnd: () => setLibraryRefreshSpinning(false),
+                            onSelect: () => {
+                              if (!reducedMotion) setLibraryRefreshSpinning(true);
+                              void viewerSession.refresh();
+                            },
+                          },
+                        ]
+                      : []),
+                    {
+                      key: "report-bug",
+                      label: "Report a bug",
+                      icon: Bug,
+                      title: "Report a bug on GitHub",
+                      // The main process hands https links to the default browser.
+                      onSelect: () => window.open(BUG_REPORT_URL, "_blank", "noopener"),
+                    },
+                    {
+                      key: "profile",
+                      label:
+                        viewerAccess.kind === "member"
+                          ? viewerAccess.dashboard.profile.name
+                          : simklAuth
+                            ? (simklAuth.userName ?? "Simkl")
+                            : "Sign in",
+                      icon: UserRound,
+                      imageUrl:
+                        viewerAccess.kind === "member"
+                          ? accountPicture.url
+                          : simklAuth
+                            ? simklAuth.avatarUrl
+                            : undefined,
+                      active: view === "PROFILE",
+                      ariaLabel:
+                        viewerAccess.kind === "member" || simklAuth ? "Your profile" : "Sign in",
+                      onSelect: openProfile,
+                    },
+                    {
+                      key: "settings",
+                      label: "Settings",
+                      icon: Settings,
+                      active: view === "SETTINGS",
+                      onSelect: () => openSettings(),
+                    },
+                  ]}
+                />
+              )}
+            </RailCounts>
+            <WindowControls />
             <UpdateNotice />
             <ContinueUndoToast />
 
@@ -639,7 +622,7 @@ function AppContent(): React.JSX.Element {
                 ) : view === "SEARCH" ? (
                   <motion.div
                     className="route-view"
-                    key={`search-${searchScope}`}
+                    key="search"
                     variants={profileRouteVariants}
                     initial={reducedMotion ? false : "initial"}
                     animate="animate"
@@ -647,7 +630,10 @@ function AppContent(): React.JSX.Element {
                     transition={motionTransition(reducedMotion)}
                   >
                     <SectionSearch
+                      // A new section starts its own search state; the query is carried over.
+                      key={searchScope}
                       scope={searchScope}
+                      onScopeChange={setSearchScope}
                       access={viewerAccess}
                       onOpenMedia={(media) => openMedia(media, "details")}
                       onPrimaryMedia={(media) =>
@@ -839,7 +825,6 @@ function AppContent(): React.JSX.Element {
                     }}
                     access={viewerAccess}
                     onLibrary={manageLibrary}
-                    onScrolledChange={setNavbarScrolled}
                   />
                 ) : null}
               </AnimatePresence>
@@ -1081,54 +1066,16 @@ function normalizePlaybackReadiness(
   return { status: "degraded", provider: "The anime player", canContinue: true };
 }
 
-/** Navbar entry to Up Next, with the queue length as a badge. */
-function UpNextNavButton({
-  active,
-  onOpen,
+/** The rail's badge counts: Up Next queue length, and episodes still downloading or waiting. */
+function RailCounts({
+  children,
 }: {
-  active: boolean;
-  onOpen: () => void;
-}): React.JSX.Element {
-  const { state } = useBinge();
-  const count = state.queue.length;
-  return (
-    <button
-      type="button"
-      className={`nav-upnext-button${active ? " active" : ""}`}
-      aria-label={count ? `Up Next, ${count} queued` : "Up Next"}
-      aria-pressed={active}
-      title="Up Next and playlists"
-      onClick={onOpen}
-    >
-      <ListVideo size={17} aria-hidden="true" />
-      {count ? <span className="nav-badge">{count > 99 ? "99+" : count}</span> : null}
-    </button>
-  );
-}
-
-/** Navbar entry to Downloads; the badge counts episodes still downloading or waiting. */
-function DownloadsNavButton({
-  active,
-  onOpen,
-}: {
-  active: boolean;
-  onOpen: () => void;
-}): React.JSX.Element {
-  const { state } = useDownloads();
+  children: (upNextCount: number, downloadsPending: number) => React.ReactNode;
+}): React.ReactNode {
+  const { state: binge } = useBinge();
+  const { state: downloads } = useDownloads();
   const pending =
-    state?.items.filter((item) => item.status === "downloading" || item.status === "queued")
+    downloads?.items.filter((item) => item.status === "downloading" || item.status === "queued")
       .length ?? 0;
-  return (
-    <button
-      type="button"
-      className={`nav-upnext-button${active ? " active" : ""}`}
-      aria-label={pending ? `Downloads, ${pending} in progress` : "Downloads"}
-      aria-pressed={active}
-      title="Downloads"
-      onClick={onOpen}
-    >
-      <Download size={17} aria-hidden="true" />
-      {pending ? <span className="nav-badge">{pending > 99 ? "99+" : pending}</span> : null}
-    </button>
-  );
+  return children(binge.queue.length, pending);
 }

@@ -224,6 +224,118 @@ export const BROWSE_MEDIA_QUERY = `
   ${CATALOG_MEDIA_FIELDS}
 `;
 
+/**
+ * Page-1 text search: the same media page as browse, plus (in this one request) up to 9 matches
+ * of the query in the other section and candidate characters and studios (2026-10-20 search
+ * redesign; verified live against AniList the same day).
+ */
+export const SEARCH_MEDIA_QUERY = `
+  query SearchAniStreamMedia(
+    $page: Int!
+    $perPage: Int!
+    $type: MediaType!
+    $otherType: MediaType!
+    $search: String
+    $genre: String
+    $sort: [MediaSort!]!
+    $format: MediaFormat
+    $status: MediaStatus
+    $season: MediaSeason
+    $seasonYear: Int
+    $startDateGreater: FuzzyDateInt
+    $startDateLesser: FuzzyDateInt
+    $countryOfOrigin: CountryCode
+    $tag: String
+    $averageScoreGreater: Int
+  ) {
+    Page(page: $page, perPage: $perPage) {
+      pageInfo {
+        currentPage
+        perPage
+        lastPage
+        hasNextPage
+      }
+      media(
+        type: $type
+        search: $search
+        genre: $genre
+        sort: $sort
+        format: $format
+        status: $status
+        season: $season
+        seasonYear: $seasonYear
+        startDate_greater: $startDateGreater
+        startDate_lesser: $startDateLesser
+        countryOfOrigin: $countryOfOrigin
+        tag: $tag
+        averageScore_greater: $averageScoreGreater
+      ) {
+        ...AniStreamCatalogMedia
+      }
+    }
+    other: Page(page: 1, perPage: 9) {
+      media(type: $otherType, search: $search, sort: [SEARCH_MATCH]) {
+        id
+      }
+    }
+    characters: Page(page: 1, perPage: 4) {
+      characters(search: $search, sort: [SEARCH_MATCH]) {
+        id
+        name {
+          full
+          alternative
+        }
+        image {
+          medium
+        }
+        media(perPage: 1, sort: [POPULARITY_DESC]) {
+          nodes {
+            title {
+              english
+              romaji
+            }
+          }
+        }
+      }
+    }
+    studios: Page(page: 1, perPage: 3) {
+      studios(search: $search, sort: [SEARCH_MATCH]) {
+        id
+        name
+        isAnimationStudio
+      }
+    }
+  }
+  ${CATALOG_MEDIA_FIELDS}
+`;
+
+/** The titles a character appears in, or a studio made (most popular first). */
+export const CHARACTER_TITLES_QUERY = `
+  query AniStreamCharacterTitles($id: Int!) {
+    Character(id: $id) {
+      media(page: 1, perPage: 30, sort: [POPULARITY_DESC]) {
+        nodes {
+          ...AniStreamCatalogMedia
+        }
+      }
+    }
+  }
+  ${CATALOG_MEDIA_FIELDS}
+`;
+
+export const STUDIO_TITLES_QUERY = `
+  query AniStreamStudioTitles($id: Int!) {
+    Studio(id: $id) {
+      media(page: 1, perPage: 30, sort: [POPULARITY_DESC], isMain: true) {
+        nodes {
+          ...AniStreamCatalogMedia
+        }
+      }
+    }
+  }
+  ${CATALOG_MEDIA_FIELDS}
+`;
+
 /** Genre and tag vocabularies for the catalog filter drawer; both change rarely. */
 export const FILTER_OPTIONS_QUERY = `
   query AniStreamFilterOptions {
@@ -406,6 +518,17 @@ export interface DashboardResponse {
 
 export interface BrowseResponse {
   Page?: unknown;
+}
+
+export interface SearchResponse extends BrowseResponse {
+  other?: unknown;
+  characters?: unknown;
+  studios?: unknown;
+}
+
+export interface PersonTitlesResponse {
+  Character?: unknown;
+  Studio?: unknown;
 }
 
 export interface FilterOptionsResponse {

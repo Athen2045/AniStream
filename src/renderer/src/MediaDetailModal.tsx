@@ -38,7 +38,7 @@ import type {
 } from "../../shared/contracts";
 import { CoverImage } from "./CoverImage";
 import { SimilarTitles } from "./SimilarTitles";
-import { titleAccentStyle } from "./title-accent";
+import { titleAccentStyle, titleTintStyle } from "./title-accent";
 import { cachedArtworkUrl } from "../../shared/artwork";
 import { formatMediaLabel } from "./format-label";
 import { decodeHtmlEntities } from "../../shared/text";
@@ -80,7 +80,6 @@ export function MediaDetailModal({
   onNavigate,
   access,
   onLibrary,
-  onScrolledChange,
 }: {
   media: AniListCatalogMedia;
   initialAction?: "details" | "play" | "read";
@@ -89,8 +88,6 @@ export function MediaDetailModal({
   onNavigate?: (media: AniListCatalogMedia) => void;
   access: ViewerAccess;
   onLibrary?: (media: AniListCatalogMedia) => Promise<void>;
-  /** Lets the shared overlay navbar gain its surface once the title page scrolls under it. */
-  onScrolledChange?: (scrolled: boolean) => void;
 }): React.JSX.Element {
   const personalized = hasPersonalizedAccess(access);
   const [detailSession] = useState(() =>
@@ -316,7 +313,8 @@ export function MediaDetailModal({
   }, [activeChapter, onClose]);
 
   // The title page is a full-window layer above the hidden route (App marks the route inert), so
-  // the document stays put underneath and the shared navbar remains usable on top.
+  // the document stays put underneath and the side rail remains usable beside it. Closing returns
+  // focus to the card that opened it, at the scroll spot it was left at.
   useEffect(() => {
     const previousFocus = document.activeElement;
     const previousOverflow = document.body.style.overflow;
@@ -324,17 +322,19 @@ export function MediaDetailModal({
     backButtonRef.current?.focus({ preventScroll: true });
     return () => {
       document.body.style.overflow = previousOverflow;
-      onScrolledChange?.(false);
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
         previousFocus.focus({ preventScroll: true });
     };
-  }, [onScrolledChange]);
+  }, []);
 
   const isAnime = resolved.type === "ANIME";
   const animeLayout: "series" | "movie" = resolved.format === "MOVIE" ? "movie" : "series";
   const online = useOnline();
   const libraryEntry = personalized ? access.libraryEntries.get(media.id) : undefined;
-  const accentStyle = isAnime ? undefined : titleAccentStyle(resolved.coverColor);
+  const accentStyle = {
+    ...(isAnime ? undefined : titleAccentStyle(resolved.coverColor)),
+    ...titleTintStyle(resolved.coverColor),
+  };
   const mangaProgress = Math.max(detail?.listEntry?.progress ?? 0, libraryProgress);
   // Nothing readable here (not on MangaDex, no chapters, or the feed failed) and no official-site
   // fallback: Continue would open nothing, so it is hidden (user decision 2026-10-06).
@@ -404,7 +404,6 @@ export function MediaDetailModal({
 
   const handleScroll = (event: React.UIEvent<HTMLDivElement>): void => {
     const page = event.currentTarget;
-    onScrolledChange?.(page.scrollTop > 24);
     let current = sections[0]?.id ?? "units";
     for (const section of sections) {
       const element = page.querySelector<HTMLElement>(`[data-title-section="${section.id}"]`);
@@ -452,9 +451,15 @@ export function MediaDetailModal({
       transition={motionTransition(reducedMotion, "emphasis")}
     >
       {isAnime ? null : <TitleBand media={resolved} />}
-      <button className="title-back" type="button" ref={backButtonRef} onClick={onClose}>
-        <ArrowLeft size={17} aria-hidden="true" />
-        Back
+      <button
+        className="title-back"
+        type="button"
+        ref={backButtonRef}
+        aria-label="Back"
+        title="Back"
+        onClick={onClose}
+      >
+        <ArrowLeft size={18} aria-hidden="true" />
       </button>
 
       {isAnime ? (

@@ -103,7 +103,7 @@ export const sectionVariants: Variants = {
   }),
 };
 
-/** Spring for indicators that glide between options (navbar underline, filter pills). */
+/** Spring for indicators that glide between options (side-rail section bar, filter pills). */
 export function navIndicatorTransition(reducedMotion: boolean | null): Transition {
   return reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 36 };
 }

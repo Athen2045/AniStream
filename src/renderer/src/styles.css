@@ -238,20 +238,6 @@ html[data-platform="win32"] .app-shell {
   box-shadow: none;
 }
 
-html[data-platform="win32"] .app-navbar {
-  top: 0;
-  right: 0;
-  left: 0;
-  width: auto;
-  border: 0;
-  border-radius: 0;
-  background: var(--surface-input);
-  backdrop-filter: none;
-  height: var(--app-navbar-height);
-  padding-right: 138px;
-  padding-left: 20px;
-}
-
 html[data-platform="win32"] .catalog-content {
   background: linear-gradient(180deg, rgb(42 131 95 / 0.06), transparent 22rem);
 }
@@ -268,118 +254,9 @@ html[data-platform="win32"] .catalog-content {
   }
 }
 
-.app-navbar {
-  position: fixed;
-  z-index: 100;
-  top: 0;
-  left: 0;
-  display: grid;
-  grid-template-columns: auto auto minmax(260px, 1fr) auto;
-  right: 0;
-  gap: 14px;
-  align-items: center;
-  width: auto;
-  height: var(--app-navbar-height);
-  padding: 0 3.7vw 0 86px;
-  border-bottom: 0;
-  background: linear-gradient(180deg, rgb(10 9 9 / 0.98), rgb(10 9 9 / 0.82) 72%, transparent);
-  backdrop-filter: blur(14px) saturate(1.04);
-  isolation: isolate;
-  -webkit-app-region: drag;
-}
-
-.app-navbar button,
-.app-navbar input {
-  -webkit-app-region: no-drag;
-}
-
-.wordmark {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  padding: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 1.08rem;
-  font-weight: 700;
-  letter-spacing: -0.045em;
-}
-
-.wordmark span {
-  display: grid;
-  width: 24px;
-  height: 28px;
-  place-items: center;
-  background: linear-gradient(
-    145deg,
-    var(--primary),
-    var(--primary-deep) 64%,
-    var(--secondary-coral)
-  );
-  clip-path: polygon(12% 0, 88% 0, 74% 100%, 26% 100%);
-  color: var(--on-primary);
-  font-family: Impact, sans-serif;
-  font-size: 1rem;
-}
-
-.nav-links {
-  display: flex;
-  gap: 4px;
-}
-
-.nav-links button {
-  padding: 7px 9px;
-  background: transparent;
-  color: var(--text-soft);
-  cursor: pointer;
-  font-size: 0.82rem;
-  transition: color var(--motion-fast) var(--motion-ease);
-}
-
-.nav-links button:hover,
-.nav-links button.active {
-  color: var(--text);
-}
-
-.nav-links button.active {
-  border-radius: 4px;
-  background: var(--surface-raised);
-}
-
-.nav-links button.active {
-  font-weight: 700;
-}
-
-.nav-account {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-}
-
-.nav-account > button {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-  color: var(--text-secondary);
-}
-
-.nav-account > button:hover {
-  background: var(--highlight-soft);
-}
-
 .avatar-button {
   overflow: hidden;
   border: 2px solid transparent;
-}
-
-/* Scoped to beat .nav-account > button's higher specificity without !important. */
-.nav-account > .avatar-button {
-  border-radius: 50%;
 }
 
 .avatar-button.active {
@@ -3225,12 +3102,6 @@ a.rail-card {
 }
 
 @media (max-width: 1100px) {
-  .app-navbar {
-    grid-template-columns: auto auto 1fr auto;
-    gap: 12px;
-    padding-right: 24px;
-  }
-
   .latest-updates-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { setCaptionControlsVisible, windowChromeOptions } from "./window-chrome";
+import { controlWindow, setCaptionControlsVisible, windowChromeOptions } from "./window-chrome";
 import { app, BrowserWindow, dialog, net, protocol, session, shell } from "electron";
 import { AniListClient } from "./anilist";
 import { AnimeSourceClient } from "./anime-source";
@@ -455,6 +455,14 @@ void app
       if (mainWindow && !mainWindow.isDestroyed())
         setCaptionControlsVisible(mainWindow, process.platform, visible);
     });
+    // The renderer draws its own window controls on Windows (TV-style rail, 2026-10-20).
+    registerTrustedIpcHandler(trustedRendererOrigin, "window:control", (_, action) => {
+      if (mainWindow && !mainWindow.isDestroyed()) controlWindow(mainWindow, action);
+    });
+    registerTrustedIpcHandler(trustedRendererOrigin, "window:state", () => ({
+      maximized: Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isMaximized()),
+      fullScreen: Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFullScreen()),
+    }));
 
     // Saved Trending / For You copies; background refreshes run one at a time after startup.
     const fieldSnapshots = new FieldSnapshots({

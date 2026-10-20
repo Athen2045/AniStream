@@ -1,34 +1,38 @@
 import type { BrowserWindow, BrowserWindowConstructorOptions } from "electron";
+import type { WindowControlAction } from "../shared/contracts";
 
-const WINDOWS_CAPTION_OVERLAY = { color: "#00000000", symbolColor: "#f3f5f7", height: 48 };
-
-/** Native caption controls occupy the renderer's 48px navbar, without a second title bar. */
+/**
+ * macOS keeps its native traffic lights. Windows has no native caption buttons: the renderer
+ * draws minimise / maximise / close in a glass pill and a thin drag strip along the top
+ * (TV-style rail, user decision 2026-10-20), so the window has no title bar of its own.
+ */
 export function windowChromeOptions(platform: string): BrowserWindowConstructorOptions {
   return {
     titleBarStyle: "hidden",
     ...(platform === "darwin"
-      ? { trafficLightPosition: { x: 12, y: 16 }, titleBarOverlay: true }
-      : {
-          titleBarOverlay: WINDOWS_CAPTION_OVERLAY,
-          roundedCorners: true,
-          backgroundMaterial: "none",
-        }),
+      ? { trafficLightPosition: { x: 10, y: 14 }, titleBarOverlay: true }
+      : { roundedCorners: true, backgroundMaterial: "none" }),
   };
 }
 
 /**
- * Full-window media hides the caption controls with its own auto-hiding controls. Windows
- * cannot remove the overlay at runtime, so its glyphs turn transparent instead.
+ * Full-window media hides the caption controls with its own auto-hiding controls. Only macOS
+ * has native ones to hide; on Windows the renderer hides its own.
  */
 export function setCaptionControlsVisible(
-  window: Pick<BrowserWindow, "setTitleBarOverlay" | "setWindowButtonVisibility">,
+  window: Pick<BrowserWindow, "setWindowButtonVisibility">,
   platform: string,
   visible: boolean,
 ): void {
   if (platform === "darwin") window.setWindowButtonVisibility(visible);
-  else
-    window.setTitleBarOverlay({
-      ...WINDOWS_CAPTION_OVERLAY,
-      symbolColor: visible ? WINDOWS_CAPTION_OVERLAY.symbolColor : "#00000000",
-    });
+}
+
+export function controlWindow(
+  window: Pick<BrowserWindow, "minimize" | "maximize" | "unmaximize" | "isMaximized" | "close">,
+  action: WindowControlAction,
+): void {
+  if (action === "minimize") window.minimize();
+  else if (action === "close") window.close();
+  else if (window.isMaximized()) window.unmaximize();
+  else window.maximize();
 }
