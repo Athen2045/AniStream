@@ -171,8 +171,147 @@ describe("matchDirectSeries", () => {
       "Sousou no Frieren 2nd Season",
       "Frieren Season 2",
       "Sousou no Frieren",
+      "Frieren",
     ]);
     expect(searchQueries(["ONE PIECE"])).toEqual(["ONE PIECE"]);
+  });
+
+  it("splits titles at punctuation, since the source matches whole phrases", () => {
+    expect(searchQueries(["Naruto: Shippuuden", "Naruto: Shippuden"])).toEqual([
+      "Naruto: Shippuuden",
+      "Naruto: Shippuden",
+      "Naruto",
+      "Shippuuden",
+      "Shippuden",
+    ]);
+    expect(
+      searchQueries([
+        "Ore dake Level Up na Ken: Season 2 -Arise from the Shadow-",
+        "Solo Leveling Season 2 -Arise from the Shadow-",
+      ]),
+    ).toEqual([
+      "Ore dake Level Up na Ken: Season 2 -Arise from the Shadow-",
+      "Solo Leveling Season 2 -Arise from the Shadow-",
+      "Ore dake Level Up na Ken",
+      "Arise from the Shadow",
+      "Solo Leveling Season 2",
+      "Ore dake Level Up na Ken: -Arise from the Shadow",
+      "Ore dake Level Up na Ken Arise from the Shadow",
+    ]);
+    // The season-free name keeps its hyphen first ("Chitose kun" alone finds nothing).
+    expect(searchQueries(["Chitose-kun wa Ramune Bin no Naka Part 2"])).toEqual([
+      "Chitose-kun wa Ramune Bin no Naka Part 2",
+      "Chitose-kun wa Ramune Bin no Naka",
+      "Chitose kun wa Ramune Bin no Naka",
+    ]);
+  });
+
+  it("treats the source's Web type as an ONA series", async () => {
+    expect(
+      await matchDirectSeries(
+        { ...target, format: "ONA", startDate: "2022-09-13", episodes: 10 },
+        source([item("edge", 2022, 10, "Web")], { edge: "2022-09-13" }),
+      ),
+    ).toBe("edge");
+  });
+
+  describe("airing shows whose card shows the planned total", () => {
+    const airing = {
+      ...target,
+      startDate: "2026-10-02",
+      episodes: 3,
+      plannedEpisodes: 12,
+      airing: true,
+    };
+    const listed = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        number: i + 1,
+        airDate: `2026-10-${String(2 + i * 7).padStart(2, "0")}`,
+      }));
+    const pages = (eps: DirectEpisode[]) => ({
+      search: async () => [item("s3", 2026, 12)],
+      episodes: async () => eps,
+    });
+
+    it("accepts it when the title page lists the aired episodes", async () => {
+      expect(await matchDirectSeries(airing, pages(listed(3)))).toBe("s3");
+    });
+
+    it("refuses a listed count far from the aired count, or a full page that may continue", async () => {
+      expect(
+        // 7 aired: the card's 12 is outside the slack, so the 3 listed episodes decide.
+        await matchDirectSeries({ ...airing, episodes: 7 }, pages(listed(3))),
+      ).toBeUndefined();
+      const full = Array.from({ length: 24 }, (_, i) => ({ number: i + 1, airDate: "2026-10-02" }));
+      expect(await matchDirectSeries(airing, pages(full))).toBeUndefined();
+    });
+
+    it("refuses a card count above AniList's planned total", async () => {
+      expect(
+        await matchDirectSeries({ ...airing, plannedEpisodes: 8 }, pages(listed(3))),
+      ).toBeUndefined();
+    });
+  });
+
+  describe("AniDB's facts as a second chance", () => {
+    const bebop = { ...target, startDate: "1998-04-03", episodes: 26 };
+    const aniDb = { titles: [], firstAirDate: "1998-10-24", episodeCount: 26 };
+
+    it("accepts the source's first air date when it matches AniDB's", async () => {
+      const pages = source([item("bebop", 1998, 26)], { bebop: "1998-10-24" });
+      expect(await matchDirectSeries(bebop, pages)).toBeUndefined();
+      expect(await matchDirectSeries({ ...bebop, aniDb }, pages)).toBe("bebop");
+      // AniDB's date must agree within two days.
+      expect(
+        await matchDirectSeries(
+          { ...bebop, aniDb: { ...aniDb, firstAirDate: "1998-10-20" } },
+          pages,
+        ),
+      ).toBeUndefined();
+    });
+
+    it("accepts AniDB's year for a December premiere and AniDB's count", async () => {
+      const shield = { ...target, startDate: "2019-01-09", episodes: 25 };
+      const pages = source([item("shield", 2018, 25)], { shield: "2018-12-27" });
+      expect(await matchDirectSeries(shield, pages)).toBeUndefined();
+      expect(
+        await matchDirectSeries(
+          { ...shield, aniDb: { titles: [], firstAirDate: "2018-12-27" } },
+          pages,
+        ),
+      ).toBe("shield");
+      expect(
+        await matchDirectSeries(
+          {
+            ...target,
+            startDate: "1992-04-13",
+            episodes: 1357,
+            aniDb: { titles: [], episodeCount: 1345 },
+          },
+          source([item("long", 1992, 1345)], { long: "1992-04-13" }),
+        ),
+      ).toBe("long");
+    });
+
+    it("searches AniDB's titles after AniList's and stops once one passes", async () => {
+      const searched: string[] = [];
+      const result = await matchDirectSeries(
+        {
+          ...target,
+          titles: ["Sousou no Frieren"],
+          aniDb: { titles: ["Frieren: Beyond Journey's End"] },
+        },
+        {
+          search: async (query) => {
+            searched.push(query);
+            return query === "Sousou no Frieren" ? [item("s1", 2023, 28)] : [];
+          },
+          episodes: async () => [{ number: 1, airDate: "2023-09-29" }],
+        },
+      );
+      expect(result).toBe("s1");
+      expect(searched).toEqual(["Sousou no Frieren"]);
+    });
   });
 });
 

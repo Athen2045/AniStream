@@ -98,6 +98,67 @@ describe("More player message validation", () => {
     ).toBeUndefined();
   });
 
+  it("accepts players that post JSON text with a string id", () => {
+    const text = JSON.stringify({
+      type: "PLAYER_EVENT",
+      data: {
+        event: "timeupdate",
+        currentTime: 0.17,
+        duration: 1588,
+        id: "322723",
+        mediaType: "tv",
+        season: 1,
+        episode: 1,
+      },
+    });
+    expect(parseMorePlayerMessage(text)).toEqual({
+      kind: "progress",
+      currentTime: 0.17,
+      duration: 1588,
+      id: "322723",
+      mediaType: "tv",
+      season: 1,
+      episode: 1,
+    });
+    // `type` as the media type; play events without a position carry no progress.
+    expect(
+      parseMorePlayerMessage(
+        JSON.stringify({
+          type: "PLAYER_EVENT",
+          data: { event: "ended", id: "27205", type: "movie" },
+        }),
+      ),
+    ).toEqual({ kind: "ended", id: "27205", mediaType: "movie" });
+  });
+
+  it("ignores text that is not a small JSON player event", () => {
+    expect(parseMorePlayerMessage("PLAYER_EVENT")).toBeUndefined();
+    expect(parseMorePlayerMessage("{not json")).toBeUndefined();
+    expect(
+      parseMorePlayerMessage(JSON.stringify({ type: "MEDIA_DATA", data: "{}" })),
+    ).toBeUndefined();
+    const huge = JSON.stringify({
+      type: "PLAYER_EVENT",
+      data: {
+        event: "timeupdate",
+        currentTime: 1,
+        duration: 2,
+        id: "1",
+        mediaType: "tv",
+        pad: "x".repeat(9_000),
+      },
+    });
+    expect(parseMorePlayerMessage(huge)).toBeUndefined();
+    // Ids must still be plain positive integers.
+    for (const id of ["0", "01", "12a", "-5", "1e3", ""])
+      expect(
+        parseMorePlayerMessage({
+          type: "PLAYER_EVENT",
+          data: { event: "timeupdate", currentTime: 1, duration: 2, id, mediaType: "tv" },
+        }),
+      ).toBeUndefined();
+  });
+
   it("carries the documented TV season and episode fields", () => {
     expect(
       parseMorePlayerMessage({

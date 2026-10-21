@@ -98,7 +98,7 @@ const GENRE_TILES: Record<SearchScope, ReadonlyArray<{ genre: string; color: str
     { genre: "Action", color: "#c2410c" },
     { genre: "Comedy", color: "#ca8a04" },
     { genre: "Drama", color: "#0369a1" },
-    { genre: "Science Fiction", color: "#6d28d9" },
+    { genre: "Sci-Fi", color: "#6d28d9" },
     { genre: "Crime", color: "#7f1d1d" },
     { genre: "Romance", color: "#be185d" },
     { genre: "Documentary", color: "#15803d" },
@@ -133,6 +133,13 @@ function keepFilters(scope: "ANIME" | "MANGA", filters: CatalogFilterState): voi
 }
 function keepMoreFilters(filters: MoreBrowseFilters): void {
   moreFiltersState = filters;
+}
+
+/** Makes the next Search page in `scope` open on one genre (a Genre row's View all). */
+export function presetSearchGenre(scope: SearchScope, genre: string): void {
+  keepQuery(scope, "");
+  if (scope === "MORE") keepMoreFilters({ ...emptyMoreFilters(), genre });
+  else keepFilters(scope, { ...emptyFilters(), genre });
 }
 
 type Results =
@@ -782,7 +789,9 @@ export function SectionSearch({
           : trending?.kind === "more"
             ? trending.items.find(
                 (item) =>
-                  item.genres.includes(tile.genre) &&
+                  // TMDB names the genre "Science Fiction"; the filter calls it "Sci-Fi".
+                  (item.genres.includes(tile.genre) ||
+                    (tile.genre === "Sci-Fi" && item.genres.includes("Science Fiction"))) &&
                   item.backdropUrl &&
                   !used.has(item.backdropUrl),
               )?.backdropUrl
@@ -1138,7 +1147,7 @@ export function SectionSearch({
                       {art ? (
                         <img src={cachedArtworkUrl(art)} alt="" aria-hidden="true" loading="lazy" />
                       ) : null}
-                      <span>{tile.genre === "Science Fiction" ? "Sci-Fi" : tile.genre}</span>
+                      <span>{tile.genre}</span>
                     </button>
                   );
                 })}

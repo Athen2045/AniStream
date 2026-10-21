@@ -14,8 +14,12 @@ export type MorePlayerMessage =
   | { kind: "error"; message?: string }
   | { kind: "status"; httpStatus: number };
 
+/** Players that post JSON text send small objects; anything longer is not a player event. */
+const MAX_MESSAGE_CHARS = 8_192;
+
 export function parseMorePlayerMessage(value: unknown): MorePlayerMessage | undefined {
-  const payload = isRecord(value) ? value : undefined;
+  const parsed = typeof value === "string" ? parseJsonText(value) : value;
+  const payload = isRecord(parsed) ? parsed : undefined;
   // Undocumented but observed 2026-10-01: after loading, the player posts the HTTP status of
   // its own server-list request. A 4xx/5xx here means no source could be loaded.
   if (payload?.event === "status") {
@@ -33,9 +37,11 @@ export function parseMorePlayerMessage(value: unknown): MorePlayerMessage | unde
   const event = data.event;
   if (event === "error") return { kind: "error", message: cleanMessage(data.message) };
 
-  const id = cleanId(data.tmdbId);
-  const mediaType =
-    data.mediaType === "movie" || data.mediaType === "tv" ? data.mediaType : undefined;
+  // Some players name the TMDB id `id` (as a string) and the media type `type`.
+  const id =
+    data.tmdbId !== undefined ? cleanId(data.tmdbId) : cleanId(numericText(data.id) ?? data.id);
+  const kind = data.mediaType ?? data.type;
+  const mediaType = kind === "movie" || kind === "tv" ? kind : undefined;
   if (!id || !mediaType) return undefined;
   // Season/episode are optional; TV auto-next changes them inside the same player.
   const position = mediaType === "tv" ? episodePosition(data.season, data.episode) : ({} as const);
@@ -94,6 +100,20 @@ function cleanId(value: unknown): string | undefined {
   )
     return undefined;
   return String(value);
+}
+
+/** A plain positive integer written as text ("322723"), as the `id` field may carry. */
+function numericText(value: unknown): number | undefined {
+  return typeof value === "string" && /^[1-9]\d{0,11}$/.test(value) ? Number(value) : undefined;
+}
+
+function parseJsonText(value: string): unknown {
+  if (value.length > MAX_MESSAGE_CHARS || !value.startsWith("{")) return undefined;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 function finiteNonNegative(value: unknown): number | undefined {

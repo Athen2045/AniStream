@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AniZipClient, parseAniZipEpisodeArt } from "../../src/main/anizip";
+import { AniZipClient, parseAniZipEpisodeArt, parseAniZipTitle } from "../../src/main/anizip";
 
 const image = (n: number) => `https://artworks.thetvdb.com/banners/v4/episode/${n}/screencap/x.jpg`;
 
@@ -88,5 +88,33 @@ describe("ani.zip episode titles and synopses", () => {
     expect(art.map((row) => row.number)).toEqual([1, 2, 4]);
     expect(art[2].title?.length).toBe(300);
     expect(art[2].synopsis?.endsWith("…")).toBe(true);
+  });
+});
+
+describe("ani.zip AniDB facts", () => {
+  it("keeps AniDB's titles, episode 1 date and episode count for matching", () => {
+    const title = parseAniZipTitle(
+      {
+        mappings: { anilist_id: 1 },
+        titles: { "x-jat": "Cowboy Bebop", en: "Cowboy Bebop", ja: "カウボーイビバップ" },
+        episodeCount: 26,
+        episodes: { "1": { airdate: "1998-10-24", airDate: "1998-04-03" } },
+      },
+      1,
+    );
+    expect(title.aniDb).toEqual({
+      titles: ["Cowboy Bebop"],
+      firstAirDate: "1998-10-24",
+      episodeCount: 26,
+    });
+  });
+
+  it("leaves AniDB facts out when the payload has none or another ID", () => {
+    expect(
+      parseAniZipTitle({ mappings: { anilist_id: 1 }, episodes: {} }, 1).aniDb,
+    ).toBeUndefined();
+    expect(
+      parseAniZipTitle({ mappings: { anilist_id: 2 }, titles: { en: "X" }, episodes: {} }, 1).aniDb,
+    ).toBeUndefined();
   });
 });

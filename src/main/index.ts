@@ -367,6 +367,7 @@ void app
     ]);
 
     database = await databasePromise;
+    animeDirect?.useMatchStore(database.directMatches);
     // Before any AniList request is normalized (English titles by default).
     const titlePreferences = database.titlePreferences;
     setPreferEnglishTitles(titlePreferences.read().english);
@@ -498,7 +499,7 @@ void app
       resolve: async (aniListId, episode) => {
         const source = animeDirect;
         if (!source || !aniList) throw new Error("The backup source is not configured.");
-        const { stream } = await resolveDirectEpisode(source, aniList, aniListId, episode);
+        const { stream } = await resolveDirectEpisode(source, aniList, aniListId, episode, aniZip);
         return {
           src: stream.src,
           headers: source.mediaHeaders(),

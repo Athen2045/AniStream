@@ -22,16 +22,26 @@ export interface ResolvedDirectEpisode {
 
 /**
  * Finds one episode's stream in the direct source: exact AniList match first (format, start year,
- * episode count, first air date), then the episode page. Throws a user-facing message otherwise.
- * Shared by playback and offline downloads so both use the same identity rules.
+ * episode count, first air date, with AniDB's facts as a second chance), then the episode page.
+ * Throws a user-facing message otherwise. Shared by playback and offline downloads so both use the
+ * same identity rules.
  */
 export async function resolveDirectEpisode(
   source: AnimeDirectSource,
   aniList: AniListClient,
   aniListId: number,
   episode: number,
+  anizip?: AniZipClient,
 ): Promise<ResolvedDirectEpisode> {
-  const detail = await aniList.getMediaDetail(aniListId, "ANIME");
+  const [detail, aniDb] = await Promise.all([
+    aniList.getMediaDetail(aniListId, "ANIME"),
+    // Best effort: without ani.zip, matching uses AniList's facts alone.
+    anizip?.getTitle(aniListId).then(
+      (title) => title.aniDb,
+      () => undefined,
+    ),
+  ]);
+  const airing = detail.status === "RELEASING";
   const aired = detail.nextAiringEpisode ? detail.nextAiringEpisode.episode - 1 : undefined;
   const slug = await source.match(aniListId, {
     titles: [detail.titleRomaji, detail.titleEnglish, detail.title].filter(
@@ -39,8 +49,10 @@ export async function resolveDirectEpisode(
     ),
     format: detail.format,
     startDate: detail.startDate,
-    episodes: detail.status === "RELEASING" ? aired : detail.totalProgress,
-    airing: detail.status === "RELEASING",
+    episodes: airing ? aired : detail.totalProgress,
+    ...(airing && detail.totalProgress ? { plannedEpisodes: detail.totalProgress } : {}),
+    airing,
+    ...(aniDb ? { aniDb } : {}),
   });
   if (!slug) throw new Error(UNMATCHED);
   const stream = await source.stream(slug, episode);
@@ -98,6 +110,7 @@ export function registerAnimeDirectDomain(
           aniList,
           input.aniListId,
           input.episode,
+          deps.anizip,
         );
         // Mislabel check: the stream's real length against the expected runtime. Best effort: a
         // failed measurement never blocks playback.

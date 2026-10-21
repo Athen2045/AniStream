@@ -26,12 +26,23 @@ export interface AniZipEpisodeIndexRow {
   runtimeMinutes?: number;
 }
 
+/** AniDB's own facts for the entry, used to confirm a match in an AniDB-based source. */
+export interface AniDbFacts {
+  /** AniDB main romaji (`x-jat`) and English titles: search terms only, never identity. */
+  titles: string[];
+  /** AniDB's air date of episode 1 (`YYYY-MM-DD`). */
+  firstAirDate?: string;
+  /** AniDB's regular episode count. */
+  episodeCount?: number;
+}
+
 /** Everything AniStream keeps from one ani.zip title response. */
 export interface AniZipTitle {
   art: AnimeEpisodeArt[];
   index: AniZipEpisodeIndexRow[];
   /** ani.zip's own TMDB mapping for the title, when it has one. */
   tmdbId?: number;
+  aniDb?: AniDbFacts;
 }
 
 const EMPTY_TITLE: AniZipTitle = { art: [], index: [] };
@@ -137,10 +148,35 @@ export function parseAniZipTitle(payload: unknown, aniListId: number): AniZipTit
     });
   }
   const tmdb = Number(payload.mappings.themoviedb_id);
+  const aniDb = parseAniDbFacts(payload);
   return {
     art: parseAniZipEpisodeArt(payload, aniListId),
     index: index.sort((a, b) => a.number - b.number),
     ...(Number.isInteger(tmdb) && tmdb > 0 ? { tmdbId: tmdb } : {}),
+    ...(aniDb ? { aniDb } : {}),
+  };
+}
+
+function parseAniDbFacts(payload: Record<string, unknown>): AniDbFacts | undefined {
+  const names = isRecord(payload.titles) ? payload.titles : {};
+  const titles = [names["x-jat"], names.en].flatMap((value) => {
+    const text = cleanText(value, MAX_TITLE_LENGTH);
+    return text ? [text.replace(/’/g, "'")] : [];
+  });
+  const first = isRecord(payload.episodes) ? payload.episodes["1"] : undefined;
+  const firstAirDate = isRecord(first)
+    ? (readDate(first.airdate) ?? readDate(first.airDate))
+    : undefined;
+  const count = payload.episodeCount;
+  const episodeCount =
+    typeof count === "number" && Number.isInteger(count) && count > 0 && count <= 5_000
+      ? count
+      : undefined;
+  if (!titles.length && !firstAirDate && !episodeCount) return undefined;
+  return {
+    titles: [...new Set(titles)],
+    ...(firstAirDate ? { firstAirDate } : {}),
+    ...(episodeCount ? { episodeCount } : {}),
   };
 }
 

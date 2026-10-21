@@ -53,7 +53,7 @@ import {
   type LibrarySort,
 } from "./profile-library";
 import { EntryEditor } from "./EntryEditor";
-import { SectionSearch, type SearchScope } from "./SectionSearch";
+import { presetSearchGenre, SectionSearch, type SearchScope } from "./SectionSearch";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import { useSmoothDocumentScroll } from "./useSmoothDocumentScroll";
 import { ReadinessScreen } from "./ReadinessScreen";
@@ -584,6 +584,7 @@ function AppContent(): React.JSX.Element {
                       onPrimary={(media, targetUnit) =>
                         openMedia(media, view === "ANIME" ? "play" : "read", targetUnit)
                       }
+                      onBrowseGenre={(genre) => browseGenre(view, genre)}
                     />
                   </motion.div>
                 ) : view === "MORE" ? (
@@ -598,6 +599,7 @@ function AppContent(): React.JSX.Element {
                     transition={motionTransition(reducedMotion)}
                   >
                     <MoreView
+                      onBrowseGenre={(genre) => browseGenre("MORE", genre)}
                       viewer={
                         viewerAccess.kind === "member"
                           ? String(viewerAccess.dashboard.profile.id)
@@ -872,6 +874,15 @@ function AppContent(): React.JSX.Element {
       return;
     }
     if (view === "ANIME" || view === "MANGA" || view === "MORE") setSearchScope(view);
+    setSelectedMedia(undefined);
+    setSelectedMore(undefined);
+    setView("SEARCH");
+  }
+
+  /** A Genre row's View all: Search in that section, filtered to the genre. */
+  function browseGenre(scope: SearchScope, genre: string): void {
+    presetSearchGenre(scope, genre);
+    setSearchScope(scope);
     setSelectedMedia(undefined);
     setSelectedMore(undefined);
     setView("SEARCH");
