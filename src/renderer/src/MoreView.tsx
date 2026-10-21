@@ -37,6 +37,8 @@ import { HERO_SLIDES, mixHeroPicks, withTrendingSlide } from "./hero-picks";
 import { usePersonalHero } from "./usePersonalHero";
 import { hasHiddenGenre, useHiddenTags } from "./hidden-tags";
 import { LegalFooter } from "./LegalFooter";
+import { genreRowInput, moreStarterRows, type MoreStarterRow } from "./starter-rows";
+import { GenreRail } from "./GenreRail";
 
 /** Home rails, or the full grid behind one rail's "View all". */
 type MoreFilter = "ALL" | "MOVIE" | "TV" | "LIST";
@@ -69,8 +71,11 @@ export function MoreView({
   onSelect,
   onPrimary,
   onCloseTitle,
+  onBrowseGenre,
 }: {
   selection?: MoreSelection;
+  /** A Genre row's View all: Search filtered to that genre. */
+  onBrowseGenre?: (genre: string) => void;
   /** The signed-in AniList account ID, or "guest"; More For You belongs to this viewer. */
   viewer: string;
   onSelect: (item: MoreCatalogItem) => void;
@@ -520,6 +525,38 @@ export function MoreView({
                       const lists = simklRows
                         .filter((row) => row.kind === "list")
                         .map((row) => <SimklRail key={row.id} row={row} actions={actions} />);
+                      // Starter rows until For You has learned enough (`starter-rows.ts`).
+                      const starter =
+                        !preferences.forYou ||
+                        forYou.feed?.status === "learning" ||
+                        forYou.feed?.status === "unavailable" ? (
+                          <MoreStarterRails
+                            actions={actions}
+                            exclude={
+                              new Set(
+                                [...trendingMovies.items, ...trendingShows.items].map(moreKey),
+                              )
+                            }
+                          />
+                        ) : null;
+                      // The Genre row closes the page, for every viewer (`GenreRail.tsx`).
+                      const genreRail = (
+                        <GenreRail<MoreCatalogItem>
+                          section="MORE"
+                          load={async (genre) =>
+                            (
+                              await window.anistream.browseMore({
+                                ...genreRowInput("MORE", genre),
+                                page: 1,
+                              })
+                            ).items.filter((item) => !hasHiddenGenre(item.genres, hiddenTags))
+                          }
+                          renderCard={(item) => (
+                            <MorePosterCard key={moreKey(item)} item={item} actions={actions} />
+                          )}
+                          onViewAll={onBrowseGenre}
+                        />
+                      );
                       // With For You on, the page's rails sit between its rows (`feed-layout.ts`).
                       return preferences.forYou ? (
                         <MoreForYouRails
@@ -528,8 +565,18 @@ export function MoreView({
                           slots={{
                             afterMain: watchList,
                             afterContinuation: movies,
-                            middle: shows,
-                            end: lists,
+                            middle: (
+                              <>
+                                {shows}
+                                {starter}
+                              </>
+                            ),
+                            end: (
+                              <>
+                                {genreRail}
+                                {lists}
+                              </>
+                            ),
                           }}
                         />
                       ) : (
@@ -537,6 +584,8 @@ export function MoreView({
                           {watchList}
                           {movies}
                           {shows}
+                          {starter}
+                          {genreRail}
                           {lists}
                         </>
                       );
@@ -748,15 +797,17 @@ function PosterRail({
   items: MoreCatalogItem[];
   actions: MoreCardActions;
   ranked?: boolean;
-  onViewAll: () => void;
+  onViewAll?: () => void;
 }): React.JSX.Element {
   return (
     <section className="more-section more-rail" aria-label={title}>
       <div className="more-section-head rail-heading">
         <h2>{title}</h2>
-        <button className="more-link" type="button" onClick={onViewAll}>
-          View all <ArrowRight size={15} aria-hidden="true" />
-        </button>
+        {onViewAll ? (
+          <button className="more-link" type="button" onClick={onViewAll}>
+            View all <ArrowRight size={15} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
       <ContentCarousel label={title}>
         {items.map((item, index) => (
@@ -770,6 +821,71 @@ function PosterRail({
       </ContentCarousel>
     </section>
   );
+}
+
+/** More's starter rows, each loaded from TMDB discover as it nears the viewport. */
+function MoreStarterRails({
+  actions,
+  exclude,
+}: {
+  actions: MoreCardActions;
+  /** Titles already on the page (Trending), left out so rows do not repeat them. */
+  exclude: ReadonlySet<string>;
+}): React.JSX.Element {
+  // Fixed for the visit; the next day's visit picks another genre and language.
+  const [openedAt] = useState(() => Date.now());
+  const rows = useMemo(() => moreStarterRows(openedAt), [openedAt]);
+  return (
+    <>
+      {rows.map((row) => (
+        <MoreStarterRail key={row.id} row={row} actions={actions} exclude={exclude} />
+      ))}
+    </>
+  );
+}
+
+function MoreStarterRail({
+  row,
+  actions,
+  exclude,
+}: {
+  row: MoreStarterRow;
+  actions: MoreCardActions;
+  exclude: ReadonlySet<string>;
+}): React.JSX.Element | null {
+  const anchor = useRef<HTMLDivElement>(null);
+  const [items, setItems] = useState<MoreCatalogItem[]>();
+  const [failed, setFailed] = useState(false);
+  const hiddenTags = useHiddenTags();
+  useEffect(() => {
+    let cancelled = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        window.anistream
+          .browseMore({ ...row.input, page: 1 })
+          .then((page) => {
+            if (!cancelled) setItems(page.items);
+          })
+          .catch(() => {
+            if (!cancelled) setFailed(true);
+          });
+      },
+      { rootMargin: "400px" },
+    );
+    if (anchor.current) observer.observe(anchor.current);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [row]);
+  const shown = (items ?? []).filter(
+    (item) => !exclude.has(moreKey(item)) && !hasHiddenGenre(item.genres, hiddenTags),
+  );
+  if (failed || (items && shown.length < 4)) return null;
+  if (!items) return <div ref={anchor} className="more-starter-anchor" aria-hidden="true" />;
+  return <PosterRail title={row.title} items={shown} actions={actions} />;
 }
 
 /** A Simkl Trending or Custom List row; the heading names Simkl, as its attribution rule asks. */

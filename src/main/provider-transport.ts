@@ -9,6 +9,12 @@ export interface ProviderTransportOptions {
   gate: RequestGate;
   fetcher?: Fetcher;
   timeoutMs: number;
+  /**
+   * When set, `timeoutMs` covers only the request itself and this caps the wait for a gate slot,
+   * so a busy queue (several lookups in a row) does not turn into false timeouts. When unset, one
+   * deadline covers both, so a rate-limit pause surfaces as an error quickly.
+   */
+  queueTimeoutMs?: number;
   headers?: HeadersInit;
   redirect?: RequestRedirect;
 }
@@ -66,14 +72,21 @@ export class ProviderTransport {
     priority = false,
   ): Promise<T> {
     const timeout = new AbortController();
-    const timeoutId = setTimeout(
-      () => timeout.abort(new DOMException("Provider request timed out.", "TimeoutError")),
-      this.options.timeoutMs,
-    );
+    const expire = () =>
+      timeout.abort(new DOMException("Provider request timed out.", "TimeoutError"));
+    const { timeoutMs, queueTimeoutMs } = this.options;
+    let timeoutId = setTimeout(expire, queueTimeoutMs ?? timeoutMs);
     const combined = combineAbortSignals(callerSignal, timeout.signal);
     const request = this.options.gate.run(
       dedupeKey,
-      () => dispatch(combined.signal),
+      () => {
+        // Separate budgets: the request's own deadline starts once it leaves the queue.
+        if (queueTimeoutMs !== undefined) {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(expire, timeoutMs);
+        }
+        return dispatch(combined.signal);
+      },
       combined.signal,
       { priority },
     );

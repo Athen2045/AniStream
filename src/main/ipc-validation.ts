@@ -409,6 +409,12 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     if (typeof visible !== "boolean") fail();
     return [visible];
   },
+  "window:control": (value) => {
+    const [action] = argsOfLength(value, 1);
+    if (action !== "minimize" && action !== "toggle-maximize" && action !== "close") fail();
+    return [action];
+  },
+  "window:state": noArgs,
   "anime:provider-readiness": noArgs,
   "app:update-status": noArgs,
   "app:check-updates": noArgs,
@@ -463,6 +469,11 @@ export const ipcArgValidators: IpcArgValidatorMap = {
   "anilist:cached-dashboard": noArgs,
   "anilist:pending-changes": noArgs,
   "anilist:dashboard": noArgs,
+  "anilist:person-titles": (value) => {
+    const [kind, id, type] = argsOfLength(value, 3);
+    if (kind !== "character" && kind !== "studio") fail();
+    return [kind, asPositiveInt(id), asMediaType(type)];
+  },
   "anilist:browse": (value) => {
     const [input] = argsOfLength(value, 1);
     return [browseAniListInput(input)];

@@ -29,6 +29,9 @@ import { LegalFooter } from "./LegalFooter";
 import { hasHiddenGenre, useHiddenTags } from "./hidden-tags";
 import { useOnline } from "./useOnline";
 import { DownloadedTitlesRail } from "./DownloadedTitlesRail";
+import { StarterRails } from "./StarterRails";
+import { GenreRail } from "./GenreRail";
+import { genreRowInput } from "./starter-rows";
 
 const NO_AVAILABILITY_MEDIA: [] = [];
 const HERO_SIZE = 6;
@@ -40,8 +43,11 @@ export function CatalogView({
   onSelect,
   onPrimary,
   onLibrary,
+  onBrowseGenre,
 }: {
   type: AniListMediaType;
+  /** A Genre row's View all: Search filtered to that genre. */
+  onBrowseGenre?: (genre: string) => void;
   onLibrary?: (media: AniListCatalogMedia) => Promise<void>;
   access: ViewerAccess;
   onSelect: (media: AniListCatalogMedia) => void;
@@ -85,11 +91,10 @@ export function CatalogView({
   const { state: libraryState } = usePersonalLibrary();
   const continuing = libraryState.continuing[type];
 
-  // One For You feed per section and viewer, shared by the hero and the For You rail.
-  const forYouKey =
-    access.kind === "member" && preferences.forYou
-      ? `${type}:${access.dashboard.profile.id}`
-      : undefined;
+  // One For You feed per section and viewer, shared by the hero and the For You rail. Without
+  // AniList it learns from what is watched or read on this device (owner "guest").
+  const viewerKey = access.kind === "member" ? String(access.dashboard.profile.id) : "guest";
+  const forYouKey = preferences.forYou ? `${type}:${viewerKey}` : undefined;
   const forYouSession = useMemo(
     () => (forYouKey ? sharedDiscoverySession(forYouKey, type) : undefined),
     [forYouKey, type],
@@ -110,7 +115,7 @@ export function CatalogView({
   // From three titles watched/read here, the hero mixes For You with "Because you…" picks.
   const personalHero = usePersonalHero<AniListCatalogMedia>({
     section: type,
-    owner: access.kind === "member" ? String(access.dashboard.profile.id) : undefined,
+    owner: viewerKey,
     enabled: Boolean(forYouKey),
     feedKey: forYouFeed?.requestId,
     sectionTitles: forYouFeed?.sectionTitles,
@@ -175,7 +180,63 @@ export function CatalogView({
   // The hero image gets the early paint; everything below it stays lazy to protect scrolling.
   // Trending: the page's popular anchor. With For You on it sits after the next-seasons row
   // (`feed-layout.ts`); otherwise it keeps its place after Continue.
-  const forYouShown = access.kind === "member" && Boolean(forYouSession);
+  const forYouShown = Boolean(forYouSession);
+  // Starter rows fill the page until For You has learned enough (`starter-rows.ts`).
+  // A guest's feed is usually still learning, so their starter rows show without waiting for it.
+  const starterShown =
+    !forYouSession ||
+    forYouFeed?.status === "learning" ||
+    forYouFeed?.status === "unavailable" ||
+    (!forYouFeed && access.kind !== "member");
+  const trendingIds = useMemo(() => new Set(trending.map((media) => media.id)), [trending]);
+  const starterRails = starterShown ? (
+    <StarterRails
+      key={`starter:${type}`}
+      type={type}
+      exclude={trendingIds}
+      inLibrary={(media) => personalized && access.libraryEntries.has(media.id)}
+      onSelect={onSelect}
+      onPrimary={onPrimary}
+      onLibrary={
+        onLibrary ??
+        (personalized
+          ? async (title) => {
+              await access.addToLibrary(title);
+            }
+          : undefined)
+      }
+    />
+  ) : null;
+  // The Genre row closes the page, for every viewer (`GenreRail.tsx`).
+  const genreRail = (
+    <GenreRail<AniListCatalogMedia>
+      key={`genre:${type}`}
+      section={type}
+      load={async (genre) =>
+        (
+          await window.anistream.browseAniList({ ...genreRowInput(type, genre), page: 1 })
+        ).items.filter((media) => !hasHiddenGenre(media.genres, hiddenTags))
+      }
+      renderCard={(media) => (
+        <CatalogCard
+          key={media.id}
+          media={media}
+          inLibrary={personalized && access.libraryEntries.has(media.id)}
+          onSelect={onSelect}
+          onPrimary={onPrimary}
+          onLibrary={
+            onLibrary ??
+            (personalized
+              ? async (title) => {
+                  await access.addToLibrary(title);
+                }
+              : undefined)
+          }
+        />
+      )}
+      onViewAll={onBrowseGenre}
+    />
+  );
   const trendingRails = (
     <>
       {trending.length ? (
@@ -311,7 +372,7 @@ export function CatalogView({
             {/* For You right after Continue: the most relevant picks first. */}
             {forYouShown && forYouSession ? (
               <ForYouRail
-                slots={{ afterContinuation: trendingRails }}
+                slots={{ afterContinuation: trendingRails, middle: starterRails, end: genreRail }}
                 key={`for-you:${forYouKey}`}
                 session={forYouSession}
                 type={type}
@@ -323,6 +384,8 @@ export function CatalogView({
             ) : null}
 
             {forYouShown ? null : trendingRails}
+            {forYouShown ? null : starterRails}
+            {forYouShown ? null : genreRail}
 
             {type === "ANIME" && preferences.latestUpdates ? (
               <section

@@ -1,26 +1,46 @@
 import { describe, expect, it, vi } from "vitest";
-import { setCaptionControlsVisible } from "../../src/main/window-chrome";
+import {
+  controlWindow,
+  setCaptionControlsVisible,
+  windowChromeOptions,
+} from "../../src/main/window-chrome";
 
-function fakeWindow() {
-  return { setTitleBarOverlay: vi.fn(), setWindowButtonVisibility: vi.fn() };
+function fakeWindow(maximized = false) {
+  return {
+    setWindowButtonVisibility: vi.fn(),
+    minimize: vi.fn(),
+    maximize: vi.fn(),
+    unmaximize: vi.fn(),
+    close: vi.fn(),
+    isMaximized: vi.fn(() => maximized),
+  };
 }
 
-describe("caption controls visibility", () => {
-  it("turns the Windows caption glyphs transparent and back", () => {
-    const window = fakeWindow();
-    setCaptionControlsVisible(window, "win32", false);
-    setCaptionControlsVisible(window, "win32", true);
-    expect(window.setTitleBarOverlay.mock.calls).toEqual([
-      [{ color: "#00000000", symbolColor: "#00000000", height: 48 }],
-      [{ color: "#00000000", symbolColor: "#f3f5f7", height: 48 }],
-    ]);
-    expect(window.setWindowButtonVisibility).not.toHaveBeenCalled();
+describe("window chrome", () => {
+  it("gives Windows no native caption buttons (the renderer draws its own)", () => {
+    const options = windowChromeOptions("win32");
+    expect(options.titleBarStyle).toBe("hidden");
+    expect(options).not.toHaveProperty("titleBarOverlay");
+    expect(windowChromeOptions("darwin")).toMatchObject({ titleBarOverlay: true });
   });
 
-  it("hides the macOS traffic lights", () => {
+  it("hides the macOS traffic lights and leaves Windows to the renderer", () => {
     const window = fakeWindow();
     setCaptionControlsVisible(window, "darwin", false);
-    expect(window.setWindowButtonVisibility).toHaveBeenCalledWith(false);
-    expect(window.setTitleBarOverlay).not.toHaveBeenCalled();
+    setCaptionControlsVisible(window, "win32", false);
+    expect(window.setWindowButtonVisibility.mock.calls).toEqual([[false]]);
+  });
+
+  it("minimises, toggles maximise and closes", () => {
+    const window = fakeWindow();
+    controlWindow(window, "minimize");
+    controlWindow(window, "toggle-maximize");
+    controlWindow(window, "close");
+    expect(window.minimize).toHaveBeenCalledOnce();
+    expect(window.maximize).toHaveBeenCalledOnce();
+    expect(window.close).toHaveBeenCalledOnce();
+    const maximized = fakeWindow(true);
+    controlWindow(maximized, "toggle-maximize");
+    expect(maximized.unmaximize).toHaveBeenCalledOnce();
   });
 });

@@ -31,6 +31,8 @@ import type { PersonalAiringUpdate } from "../../shared/personal-library";
 import {
   normalizeAiringUpdatesPage,
   normalizeCatalogPage,
+  normalizePersonTitles,
+  normalizeSearchExtras,
   normalizeGroups,
   normalizeListEntry,
   normalizeMediaDetail,
@@ -41,6 +43,9 @@ import {
   ADD_ENTRY_MUTATION,
   AIRING_UPDATES_QUERY,
   BROWSE_MEDIA_QUERY,
+  CHARACTER_TITLES_QUERY,
+  SEARCH_MEDIA_QUERY,
+  STUDIO_TITLES_QUERY,
   FILTER_OPTIONS_QUERY,
   DASHBOARD_QUERY,
   DELETE_ENTRY_MUTATION,
@@ -51,6 +56,8 @@ import {
   VIEWER_QUERY,
   type AiringUpdatesResponse,
   type BrowseResponse,
+  type PersonTitlesResponse,
+  type SearchResponse,
   type FilterOptionsResponse,
   type DashboardResponse,
   type GraphQlEnvelope,
@@ -434,12 +441,16 @@ export class AniListClient {
     // AniList's seasonYear describes anime seasons; a manga's year is its start date.
     const animeYear = input.type === "ANIME" ? filters.year : undefined;
     const mangaYear = input.type === "MANGA" ? filters.year : undefined;
-    const response = await this.publicRequest<BrowseResponse>(
-      BROWSE_MEDIA_QUERY,
+    // A first page of a text search also asks for the other section's matches and matching
+    // characters and studios, in the same request (no extra AniList call).
+    const withExtras = Boolean(query) && input.page === 1;
+    const response = await this.publicRequest<SearchResponse>(
+      withExtras ? SEARCH_MEDIA_QUERY : BROWSE_MEDIA_QUERY,
       {
         page: input.page,
         perPage,
         type: input.type,
+        ...(withExtras ? { otherType: input.type === "ANIME" ? "MANGA" : "ANIME" } : {}),
         search: query || undefined,
         genre: genre || undefined,
         sort: [sort],
@@ -458,8 +469,27 @@ export class AniListClient {
       signal,
     );
     const page = normalizeCatalogPage(response.Page, input.type);
+    if (withExtras && query) page.searchExtras = normalizeSearchExtras(response, query, input.type);
     this.browseCache.set(cacheKey, page);
     return page;
+  }
+
+  /** The titles a search's character appears in, or its studio made, of one type. */
+  public async getPersonTitles(
+    kind: "character" | "studio",
+    id: number,
+    type: AniListMediaType,
+    signal?: AbortSignal,
+  ): Promise<AniListCatalogMedia[]> {
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Invalid AniList id.");
+    const cacheKey = `person:${kind}:${id}`;
+    const response = await this.publicRequest<PersonTitlesResponse>(
+      kind === "character" ? CHARACTER_TITLES_QUERY : STUDIO_TITLES_QUERY,
+      { id },
+      cacheKey,
+      signal,
+    );
+    return normalizePersonTitles(kind === "character" ? response.Character : response.Studio, type);
   }
 
   public async getLatestAnimeUpdates(page: number): Promise<LatestUpdatesPage<LatestAnimeUpdate>> {

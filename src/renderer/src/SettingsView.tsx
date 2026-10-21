@@ -46,6 +46,7 @@ import type { ViewerAccess } from "./viewer-access";
 import { TasteMapDialog } from "./TasteMapDialog";
 import { ForceLayout } from "./taste-map-layout";
 import { Pills, Toggle } from "./SettingsControls";
+import { clearRecentSearches } from "./recent-searches";
 import { useOptionalDownloads } from "./DownloadsProvider";
 import {
   DOWNLOAD_LIMIT_CHOICES,
@@ -300,6 +301,22 @@ function GeneralPane(): React.JSX.Element {
       <Label>Titles</Label>
       <div className="set-card">
         <EnglishTitlesRow />
+      </div>
+      <Label>Search</Label>
+      <div className="set-card">
+        <Row
+          title="Remember recent searches"
+          hint="Kept only on this device. Turning this off deletes them."
+        >
+          <Toggle
+            label="Remember recent searches"
+            checked={preferences.rememberSearches}
+            onChange={(on) => {
+              setAppPreference("rememberSearches", on);
+              if (!on) clearRecentSearches();
+            }}
+          />
+        </Row>
       </div>
       <Label>Motion</Label>
       <div className="set-card">

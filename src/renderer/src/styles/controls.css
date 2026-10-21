@@ -21,55 +21,6 @@ button:not(:disabled):active {
   transform: translateY(1px) scale(0.985);
 }
 
-.wordmark {
-  min-height: 34px;
-  padding: 3px 8px 3px 3px;
-  border-radius: 9px;
-  transition:
-    background-color 180ms var(--ease-out, ease),
-    transform 180ms var(--ease-out, ease);
-}
-
-.wordmark:hover {
-  background: rgb(255 255 255 / 0.07);
-  transform: translateY(-1px);
-}
-
-.wordmark span {
-  border-radius: 5px;
-}
-
-.nav-links {
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--line-subtle);
-  border-radius: 9px;
-  background: rgb(17 20 24 / 0.72);
-}
-
-.nav-links button {
-  min-height: 30px;
-  padding: 5px 10px;
-  border-radius: 7px;
-  font-weight: 600;
-  transition:
-    background-color 180ms var(--ease-out, ease),
-    color 180ms var(--ease-out, ease),
-    transform 180ms var(--ease-out, ease);
-}
-
-.nav-links button:hover {
-  background: rgb(255 255 255 / 0.06);
-  transform: none;
-}
-
-.nav-links button.active {
-  background: var(--surface-raised);
-  box-shadow:
-    inset 0 1px rgb(255 255 255 / 0.08),
-    0 3px 12px rgb(0 0 0 / 0.16);
-}
-
 .avatar-button {
   transition:
     background-color 180ms var(--ease-out, ease),

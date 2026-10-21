@@ -118,6 +118,14 @@ export function registerTrackerDomain(
     }
     return dashboard;
   });
+  registerTrustedIpcHandler(
+    trustedRendererOrigin,
+    "anilist:person-titles",
+    async (_event, kind, id, type) => {
+      if (!aniList) throw new Error("AniList is not ready.");
+      return aniList.getPersonTitles(kind, id, type);
+    },
+  );
   registerTrustedIpcHandler(trustedRendererOrigin, "anilist:browse", async (_event, input) => {
     if (!aniList) throw new Error("AniList is not ready.");
     const client = aniList;

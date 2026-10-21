@@ -25,6 +25,8 @@ import type {
   AnimePlaybackInput,
   AnimePlaybackResult,
   AppInfo,
+  WindowControlAction,
+  WindowState,
   BrowseAniListInput,
   LatestAnimeUpdate,
   LatestMangaUpdate,
@@ -131,6 +133,8 @@ export interface IpcInvokeChannelMap {
   "activity:retry": { args: []; result: LocalActivity[] };
   "app:get-info": { args: []; result: AppInfo };
   "window:caption-controls": { args: [visible: boolean]; result: void };
+  "window:control": { args: [action: WindowControlAction]; result: void };
+  "window:state": { args: []; result: WindowState };
   "anime:provider-readiness": { args: []; result: ProviderReadiness };
   "anilist:auth-state": { args: []; result: AniListAuthState };
   "anilist:login": { args: []; result: void };
@@ -140,6 +144,10 @@ export interface IpcInvokeChannelMap {
   "anilist:cached-dashboard": { args: []; result: AniListDashboard | undefined };
   "anilist:dashboard": { args: []; result: AniListDashboard };
   "anilist:browse": { args: [input: BrowseAniListInput]; result: AniListCatalogPage };
+  "anilist:person-titles": {
+    args: [kind: "character" | "studio", id: number, type: AniListMediaType];
+    result: AniListCatalogMedia[];
+  };
   "anilist:media-by-ids": {
     args: [ids: number[], type: AniListMediaType];
     result: AniListCatalogMedia[];

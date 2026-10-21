@@ -8,6 +8,8 @@ import { formatDuration, formatScore, moreKey, releaseState } from "./more-forma
 import { ReleasePill } from "./ReleasePill";
 import { useAppPreferences } from "./app-preferences";
 import { useDocumentVisible } from "./useDocumentVisible";
+import { useArtworkTint } from "./artwork-tint";
+import { titleTintStyle } from "./title-accent";
 
 const ROTATE_MS = 9_000;
 
@@ -80,6 +82,7 @@ export function MoreHero({
     return () => window.clearTimeout(timer);
   }, [index, items.length, paused, rotates]);
 
+  const tint = useArtworkTint(active?.posterUrl);
   if (!active) return null;
   const detail = details[moreKey(active)];
   const backdrop = detail?.heroBackdropUrl ?? active.backdropUrl ?? active.posterUrl;
@@ -99,6 +102,7 @@ export function MoreHero({
   return (
     <header
       className="more-hero"
+      style={titleTintStyle(tint)}
       aria-roledescription="carousel"
       aria-label="Featured movies and shows"
       onMouseEnter={() => setPaused(true)}

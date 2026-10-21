@@ -2,6 +2,7 @@ import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
 import type { AnimeDirectSubtitle } from "../shared/contracts";
 import { assToVtt } from "./ass-to-vtt";
+import type { DirectMatchStore } from "./direct-match-store";
 import type { AnimeDirectHlsProvider } from "./provider-config";
 import { PROVIDER_USER_AGENT, ProviderTransport } from "./provider-transport";
 
@@ -15,8 +16,15 @@ import { PROVIDER_USER_AGENT, ProviderTransport } from "./provider-transport";
  * AniList AND its first episode aired within a month of AniList's start date (online premieres run
  * up to a few weeks ahead of TV: JJK 2020-09-19 vs 2020-10-03), and exactly one
  * candidate passes. Title similarity alone never decides.
+ *
+ * The source's data follows AniDB (dates, counts, titles), so AniDB's own facts for the same entry
+ * (from ani.zip's exact AniList-ID mapping) are a second chance for the year, count and first air
+ * date: Cowboy Bebop's AniDB episode 1 is 1998-10-24 while AniList starts at 1998-04-03.
+ * Measured 2026-10-21 on 189 titles: 163 matched, none wrong (docs/research).
  */
 const REQUEST_TIMEOUT_MS = 15_000;
+/** How long a request may wait for the rate gate before it counts as failed. */
+const QUEUE_TIMEOUT_MS = 120_000;
 // No published limit; conservative application policy.
 const REQUESTS_PER_MINUTE = 20;
 const REFUSED_PAUSE_MS = 5 * 60_000;
@@ -25,6 +33,13 @@ const DAY_MS = 86_400_000;
 const MAX_SUBTITLE_CHARS = 8_000_000;
 /** Year, format and exact episode count must already agree; this only absorbs early premieres. */
 const AIR_DATE_SLACK_DAYS = 31;
+/** AniDB's date is the source's own reference, so it must agree almost exactly. */
+const ANIDB_AIR_DATE_SLACK_DAYS = 2;
+/** A title page lists this many episodes before paging, so a full page says nothing about the end. */
+const EPISODES_PER_PAGE = 24;
+const MAX_SEARCHES = 7;
+/** Title pieces that only name a season; searched alone they match unrelated shows. */
+const SEASON_MARKER = /^(?:(?:season|part|cour)\s*\d+|\d+(?:st|nd|rd|th)\s+season|final season)$/i;
 
 export interface DirectSearchItem {
   slug: string;
@@ -66,7 +81,11 @@ export interface DirectMatchTarget {
   startDate?: string;
   /** AniList's total, or the aired count while airing. */
   episodes?: number;
+  /** AniList's planned total while airing, when announced. */
+  plannedEpisodes?: number;
   airing: boolean;
+  /** AniDB's facts for the same entry (exact AniList-ID mapping), when known. */
+  aniDb?: { titles: string[]; firstAirDate?: string; episodeCount?: number };
 }
 
 export class AnimeDirectSource {
@@ -78,17 +97,26 @@ export class AnimeDirectSource {
   private readonly matches = createBoundedCache<string>({ maxEntries: 200, ttlMs: 24 * 3_600_000 });
   // A miss can be a momentary empty search page, so it is retried after half an hour.
   private readonly misses = createBoundedCache<true>({ maxEntries: 200, ttlMs: 30 * 60_000 });
+  private store?: DirectMatchStore;
 
   public constructor(
     private readonly config: AnimeDirectHlsProvider,
     private readonly fetcher: typeof fetch = fetch,
+    private readonly now: () => number = Date.now,
   ) {
     this.transport = new ProviderTransport({
       gate: this.gate,
       fetcher,
       timeoutMs: REQUEST_TIMEOUT_MS,
+      // One match runs several searches back to back; waiting for the gate is not a timeout.
+      queueTimeoutMs: QUEUE_TIMEOUT_MS,
       headers: { Accept: "text/html", "User-Agent": PROVIDER_USER_AGENT },
     });
+  }
+
+  /** Keeps matches across launches (the database opens after the source is created). */
+  public useMatchStore(store: DirectMatchStore): void {
+    this.store = store;
   }
 
   /** Headers the stream proxy may add for this source's media (config opt-in only). */
@@ -101,14 +129,32 @@ export class AnimeDirectSource {
     const key = String(aniListId);
     const cached = this.matches.get(key);
     if (cached) return cached;
-    if (this.misses.get(key)) return undefined;
+    const stored = this.store?.get(aniListId, this.now());
+    if (stored && !stored.stale) {
+      this.matches.set(key, stored.slug);
+      return stored.slug;
+    }
+    if (this.misses.get(key) && !stored) return undefined;
     const slug = await matchDirectSeries(target, {
       search: (query) => this.search(query),
       episodes: (candidate) => this.episodes(candidate),
+    }).catch((reason: unknown) => {
+      // A failed re-check of a stored match keeps the stored one; a first lookup still fails.
+      if (stored) return undefined;
+      throw reason;
     });
-    if (slug) this.matches.set(key, slug);
-    else this.misses.set(key, true);
-    return slug;
+    if (slug) {
+      this.matches.set(key, slug);
+      this.store?.save(aniListId, slug, this.now());
+      return slug;
+    }
+    // A re-check that finds nothing may be a momentary empty search: keep the stored match.
+    if (stored) {
+      this.matches.set(key, stored.slug);
+      return stored.slug;
+    }
+    this.misses.set(key, true);
+    return undefined;
   }
 
   public async search(query: string): Promise<DirectSearchItem[]> {
@@ -195,64 +241,133 @@ export async function matchDirectSeries(
   },
 ): Promise<string | undefined> {
   if (!target.startDate || !/^\d{4}-\d{2}-\d{2}$/.test(target.startDate)) return undefined;
-  const year = Number(target.startDate.slice(0, 4));
-  const startMs = Date.parse(`${target.startDate}T00:00:00Z`);
-  const wanted = formatClass(target.format);
-  const candidates = new Map<string, DirectSearchItem>();
-  for (const query of searchQueries(target.titles)) {
-    for (const item of await source.search(query)) candidates.set(item.slug, item);
-  }
-  const plausible = [...candidates.values()].filter(
-    (item) =>
-      item.startYear === year &&
-      (!wanted || !item.type || formatClass(item.type) === wanted) &&
-      episodesAgree(item.episodeCount, target),
-  );
   const confirmed: string[] = [];
-  for (const item of plausible.slice(0, 3)) {
-    const first = (await source.episodes(item.slug)).find((episode) => episode.number === 1);
-    if (!first?.airDate) continue;
-    const airMs = Date.parse(`${first.airDate.slice(0, 10)}T00:00:00Z`);
-    if (Math.abs(airMs - startMs) <= AIR_DATE_SLACK_DAYS * DAY_MS) confirmed.push(item.slug);
+  const seen = new Set<string>();
+  for (const query of searchQueries([...target.titles, ...(target.aniDb?.titles ?? [])])) {
+    for (const item of await source.search(query)) {
+      if (seen.has(item.slug)) continue;
+      seen.add(item.slug);
+      if (await confirms(item, target, source)) confirmed.push(item.slug);
+    }
+    // Something passed every check: stop searching (later terms are only broader).
+    if (confirmed.length) break;
   }
   return confirmed.length === 1 ? confirmed[0] : undefined;
 }
 
-function episodesAgree(count: number | undefined, target: DirectMatchTarget): boolean {
-  if (count === undefined || target.episodes === undefined) return false;
-  // While airing, the source may be an episode ahead or behind AniList's aired count.
+/** Year, format, episode count and first air date, against AniList or AniDB's facts. */
+async function confirms(
+  item: DirectSearchItem,
+  target: DirectMatchTarget,
+  source: { episodes: (slug: string) => Promise<DirectEpisode[]> },
+): Promise<boolean> {
+  // Early premieres can fall in the previous year (Shield Hero: 2018-12-27 vs AniList 2019).
+  const years = [target.startDate, target.aniDb?.firstAirDate].flatMap((date) =>
+    date ? [Number(date.slice(0, 4))] : [],
+  );
+  if (item.startYear === undefined || !years.includes(item.startYear)) return false;
+  const wanted = formatClass(target.format);
+  if (wanted && item.type && formatClass(item.type) !== wanted) return false;
+  const count = cardCount(item.episodeCount, target);
+  if (count === "no") return false;
+  const episodes = await source.episodes(item.slug);
+  const airMs = dayMs(episodes.find((episode) => episode.number === 1)?.airDate);
+  if (airMs === undefined) return false;
+  if (
+    !within(airMs, dayMs(target.startDate), AIR_DATE_SLACK_DAYS) &&
+    !within(airMs, dayMs(target.aniDb?.firstAirDate), ANIDB_AIR_DATE_SLACK_DAYS)
+  )
+    return false;
+  if (count === "check-listed") {
+    // The card shows the planned total; the title page lists only aired episodes. A full page is
+    // paged, so it cannot show where the list ends.
+    if (episodes.length >= EPISODES_PER_PAGE) return false;
+    const listed = Math.max(0, ...episodes.map((episode) => episode.number));
+    if (!episodesAgree(listed, target)) return false;
+  }
+  return true;
+}
+
+/**
+ * Finished: the card's count equals AniList's total or AniDB's. Airing: the card may already show
+ * the planned total (12 while 3 have aired), which is then confirmed against the listed episodes.
+ */
+function cardCount(
+  count: number | undefined,
+  target: DirectMatchTarget,
+): "ok" | "check-listed" | "no" {
+  if (count === undefined || target.episodes === undefined) return "no";
+  if (!target.airing)
+    return count === target.episodes || count === target.aniDb?.episodeCount ? "ok" : "no";
+  if (episodesAgree(count, target)) return "ok";
+  const planned = target.plannedEpisodes;
+  return count > target.episodes && (planned === undefined || count <= planned)
+    ? "check-listed"
+    : "no";
+}
+
+function episodesAgree(count: number, target: DirectMatchTarget): boolean {
+  if (target.episodes === undefined) return false;
   // While airing, the source may list a few episodes ahead of (or behind) AniList's aired count;
   // long runners get 1% of their length. The first-air-date check still has to pass.
   const slack = Math.max(3, Math.round(target.episodes * 0.01));
   return target.airing ? Math.abs(count - target.episodes) <= slack : count === target.episodes;
 }
 
+function within(ms: number, reference: number | undefined, days: number): boolean {
+  return reference !== undefined && Math.abs(ms - reference) <= days * DAY_MS;
+}
+
+function dayMs(date: string | undefined): number | undefined {
+  if (!date || !/^\d{4}-\d{2}-\d{2}/.test(date)) return undefined;
+  const ms = Date.parse(`${date.slice(0, 10)}T00:00:00Z`);
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
 /**
- * Search terms only (never identity): AniList's titles, then the first title without season/part
- * markers, because the source may name a sequel "Title (2026)" rather than "Title 2nd Season".
+ * Search terms only (never identity). The source matches phrases against its stored titles, so
+ * punctuation matters both ways ("Naruto: Shippuuden" finds nothing, "Chitose-kun" needs its
+ * hyphen): the full titles, then their pieces split at ":", " - ", "(" or "–", then the name
+ * without season/part markers (punctuation kept, then removed).
  */
 export function searchQueries(titles: readonly string[]): string[] {
+  const out: string[] = [];
+  const add = (query: string) => {
+    const value = query.replace(/\s{2,}/g, " ").trim();
+    if (value.length >= 3 && !out.some((known) => known.toLowerCase() === value.toLowerCase()))
+      out.push(value);
+  };
   const named = titles.map((title) => title.trim()).filter(Boolean);
-  const base = named
-    .map((title) =>
-      title
-        .replace(/\b\d+(st|nd|rd|th)\s+season\b/gi, "")
-        .replace(/\b(season|part|cour)\s+\d+\b/gi, "")
-        .replace(/\s*[:\-–]\s*$/, "")
-        .replace(/\s{2,}/g, " ")
-        .trim(),
-    )
-    .find((title, index) => title && title !== named[index]);
-  return [...new Set([...named.slice(0, 2), ...(base ? [base] : [])])].slice(0, 3);
+  for (const title of named) add(title);
+  for (const title of named) {
+    const pieces = title
+      .split(/\s*[:–—([]\s*|\s+-\s*|\s*-\s+|^-|-$/)
+      .map((piece) => piece.replace(/[)\]-]+$/g, "").trim());
+    if (pieces.filter(Boolean).length < 2) continue;
+    // A bare "Season 2" or "2nd Season" would match unrelated shows.
+    for (const piece of pieces) if (!SEASON_MARKER.test(piece)) add(piece);
+  }
+  for (const title of named) {
+    const base = title
+      .replace(/\b\d+(st|nd|rd|th)\s+season\b/gi, "")
+      .replace(/\b(season|part|cour)\s+\d+\b/gi, "")
+      .replace(/\s*[:\-–]\s*$/, "")
+      .trim();
+    if (base === title) continue;
+    add(base);
+    add(base.replace(/[^\p{L}\p{N}' ]+/gu, " "));
+  }
+  return out.slice(0, MAX_SEARCHES);
 }
 
 function formatClass(format: string | undefined): string | undefined {
   const value = format?.toUpperCase().replace(/[^A-Z]/g, "");
   if (!value) return undefined;
   if (value.includes("MOVIE")) return "movie";
-  if (value === "OVA" || value === "SPECIAL" || value === "OAD") return "special";
-  if (value === "TV" || value === "TVSHORT" || value === "ONA" || value.startsWith("TV"))
-    return "series";
+  if (value === "OVA" || value === "OAD" || value.includes("SPECIAL")) return "special";
+  // The source labels ONAs "Web".
+  if (value === "TV" || value === "TVSHORT" || value === "ONA" || value === "WEB") return "series";
+  if (value.startsWith("TV")) return "series";
   return undefined;
 }
 

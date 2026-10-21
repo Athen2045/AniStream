@@ -1,32 +1,5 @@
 /* Up Next and playlists (UpNextView.tsx, UpNextButton.tsx, AutoplayNext.tsx). */
 
-/* ---------- Navbar badge ---------- */
-.nav-account > button.nav-upnext-button {
-  position: relative;
-}
-.nav-account > button.nav-upnext-button.active {
-  border-color: #fff;
-  background: #fff;
-  color: #0b0d0c;
-}
-.nav-badge {
-  position: absolute;
-  top: -4px;
-  right: -5px;
-  display: grid;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  place-items: center;
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  background: var(--primary-hover);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-}
-
 /* ---------- Page ---------- */
 .upnext-page {
   min-height: 100vh;

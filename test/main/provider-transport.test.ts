@@ -63,6 +63,59 @@ describe("ProviderTransport", () => {
     }
   });
 
+  it("can give the queue its own budget so waiting is not counted as the request's timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn<typeof fetch>(
+        (_input, init) =>
+          new Promise<Response>((_resolve, reject) =>
+            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason)),
+          ),
+      );
+      const gate = createRequestGate({ requestsPerMinute: 10 });
+      gate.reportRateLimited(5_000);
+      const transport = new ProviderTransport({
+        fetcher,
+        gate,
+        timeoutMs: 1_000,
+        queueTimeoutMs: 30_000,
+      });
+      const request = transport.request(new URL("https://example.com"));
+      const assertion = expect(request).rejects.toMatchObject({ name: "TimeoutError" });
+
+      // Five seconds in the queue: past the request timeout, but still within the queue budget.
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(fetcher).toHaveBeenCalledOnce();
+      // Now the request's own one-second deadline applies.
+      await vi.advanceTimersByTimeAsync(1_001);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("caps the queue wait when it has its own budget", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn<typeof fetch>();
+      const gate = createRequestGate({ requestsPerMinute: 10 });
+      gate.reportRateLimited(60_000);
+      const transport = new ProviderTransport({
+        fetcher,
+        gate,
+        timeoutMs: 1_000,
+        queueTimeoutMs: 10_000,
+      });
+      const request = transport.request(new URL("https://example.com"));
+      const assertion = expect(request).rejects.toMatchObject({ name: "TimeoutError" });
+      await vi.advanceTimersByTimeAsync(10_001);
+      await assertion;
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("preserves an already-aborted caller reason", async () => {
     const fetcher = vi.fn<typeof fetch>();
     const transport = new ProviderTransport({

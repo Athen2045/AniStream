@@ -122,7 +122,11 @@ describe("guest personalization boundary", () => {
     expect(markup).toContain("Trending anime");
     expect(markup).toContain("Latest Anime Updates");
     expect(markup).not.toContain("Continue watching");
-    expect(markup).not.toContain("For You");
+    // For You learns from what a guest watches on this device (user feedback 2026-10-20), and
+    // starter rows fill the page until it has enough.
+    expect(markup).toContain("For You");
+    expect(markup).toContain("Airing this season");
+    expect(markup).toContain("All-time favourites");
     expect(markup).not.toContain("Fresh episodes from AniList airing data");
     expect(markup).not.toContain("From your watch/read history · AniList");
     expect(markup).not.toContain("Add Trending title to your list");

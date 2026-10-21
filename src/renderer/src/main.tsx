@@ -5,7 +5,6 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import "./styles.css";
 import "./styles/controls.css";
 import "./styles/redesign.css";
-import "./styles/account-menu.css";
 import "./styles/more.css";
 import "./styles/search.css";
 import "./styles/title.css";
@@ -24,6 +23,7 @@ import "./styles/profile-simkl.css";
 import "./styles/loading.css";
 import "./styles/anime-simplify.css";
 import "./styles/player.css";
+import "./styles/tv-ui.css";
 
 document.documentElement.dataset.platform = navigator.userAgent.includes("Windows")
   ? "win32"

@@ -31,6 +31,7 @@ import {
 import { createSimklLibraryStore, type SimklLibraryStore } from "./simkl/library";
 import { createSimklCatalogStore, type SimklCatalogStore } from "./simkl/collaborative";
 import { createMangaDexMappingStore, type MangaDexMappingStore } from "./mangadex-mappings";
+import { createDirectMatchStore, type DirectMatchStore } from "./direct-match-store";
 import { createSnapshotStore, type SnapshotStore } from "./field-snapshots";
 import {
   createPersonalizationStore,
@@ -62,6 +63,8 @@ export interface AppDatabase
   readonly simklLibrary: SimklLibraryStore;
   readonly simklCatalog: SimklCatalogStore;
   readonly mangaDexMappings: MangaDexMappingStore;
+  /** Saved AniList → direct-source matches, so later launches skip the title search. */
+  readonly directMatches: DirectMatchStore;
   readonly fieldSnapshots: SnapshotStore;
   readonly personalization: PersonalizationStore;
   readonly backup: BackupRepository;
@@ -229,6 +232,7 @@ export function openAppDatabase(path: string): AppDatabase {
     simklLibrary: createSimklLibraryStore(database),
     simklCatalog: createSimklCatalogStore(database),
     mangaDexMappings: createMangaDexMappingStore(database),
+    directMatches: createDirectMatchStore(database),
     fieldSnapshots: createSnapshotStore(database),
     personalization: createPersonalizationStore(database),
     backup: createBackupRepository(database, bingeRepository),
