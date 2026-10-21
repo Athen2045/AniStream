@@ -3,10 +3,24 @@
 All notable changes to AniStream are listed here. Each release has full notes in
 [`.github/releases/`](.github/releases/), which also become the GitHub Release text.
 
-Legend: 🎉 new feature · 💄 design · ⚡️ improvement · 🦺 fix · 🏗️ internal or compatibility ·
-⬆️ dependency update
+Legend: 🎉 new feature · 💄 design · ⚡️ improvement · 🦺 fix · 🔒 security · 🏗️ internal or
+compatibility · ⬆️ dependency update
 
-## v2.0.0 (unreleased)
+## v2.0.1 (2026-10-11)
+
+In-app updates on Windows, a taste map, smarter For You, and about half the memory at idle.
+[Full notes](.github/releases/v2.0.1.md)
+
+- 🎉 Windows updates: New releases download in the background and install when you choose
+  Restart to update, checked against the release's SHA-512 hash
+- 🎉 Taste map: See your taste as a graph of what you've liked, grouped into named tastes
+- ⚡️ For You: Picks you keep scrolling past fade out, sequels and next films get their own rows,
+  and you can hide genres and tags
+- ⚡️ About half the memory at idle, and more freed when minimized
+- ⚡️ Smaller install (about 37 MB less on disk) and less code to load at startup
+- 🔒 The installed app can no longer be run as a plain Node.js process
+
+## v2.0.0 (2026-10-09)
 
 A full redesign, plus movies and shows, an airing schedule, Up Next and playlists, and offline
 library edits. [Full notes](.github/releases/v2.0.0.md)
