@@ -22,3 +22,24 @@ export function moreTrendingQuery(
     gcTime: Number.POSITIVE_INFINITY,
   });
 }
+
+export type MoreForYouApi = Pick<AniStreamBridge, "getMoreForYou">;
+
+/** Every viewer's More For You feed; `[...moreForYouKey, viewer]` is one viewer's. */
+export const moreForYouKey = ["more", "for-you"] as const;
+
+/**
+ * One viewer's More For You feed (`viewer` is the AniList account ID or "guest"), kept for the app
+ * session with its local "Not interested" removals. Until a feed is shown the main process may
+ * answer with its saved one; reloading a shown feed (Refresh, Undo, a finished Simkl import) asks
+ * it to rebuild.
+ */
+export function moreForYouQuery(viewer: string, api: MoreForYouApi = window.anistream) {
+  return queryOptions({
+    queryKey: [...moreForYouKey, viewer] as const,
+    queryFn: ({ client, queryKey }) =>
+      api.getMoreForYou(client.getQueryData(queryKey) !== undefined),
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+  });
+}

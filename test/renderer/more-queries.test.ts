@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MoreCatalogPage } from "../../src/shared/contracts";
-import { moreTrendingKey, moreTrendingQuery } from "../../src/renderer/src/more-queries";
+import {
+  moreForYouQuery,
+  moreTrendingKey,
+  moreTrendingQuery,
+} from "../../src/renderer/src/more-queries";
+import type { MoreDiscoveryFeed } from "../../src/shared/discovery";
 import { createAppQueryClient } from "../../src/renderer/src/query-client";
 
 function page(currentPage: number): MoreCatalogPage {
@@ -40,5 +45,38 @@ describe("moreTrendingQuery", () => {
 
     await client.resetQueries({ queryKey: moreTrendingKey });
     await expect(client.fetchQuery(moreTrendingQuery("TV", 1, api))).resolves.toEqual(page(1));
+  });
+});
+
+describe("moreForYouQuery", () => {
+  const feed = (requestId: string): MoreDiscoveryFeed => ({
+    status: "ready",
+    items: [],
+    requestId,
+  });
+
+  it("may use the saved feed first and asks for a rebuild on every reload", async () => {
+    const api = {
+      getMoreForYou: vi.fn(async (fresh?: boolean) => feed(fresh ? "rebuilt" : "saved")),
+    };
+    const client = createAppQueryClient();
+
+    const first = await client.fetchQuery(moreForYouQuery("guest", api));
+    await client.refetchQueries({ queryKey: moreForYouQuery("guest", api).queryKey });
+
+    expect(first.requestId).toBe("saved");
+    expect(client.getQueryData(moreForYouQuery("guest", api).queryKey)?.requestId).toBe("rebuilt");
+    expect(api.getMoreForYou.mock.calls).toEqual([[false], [true]]);
+  });
+
+  it("keeps one feed per viewer", async () => {
+    const api = { getMoreForYou: vi.fn(async () => feed("any")) };
+    const client = createAppQueryClient();
+
+    await client.fetchQuery(moreForYouQuery("guest", api));
+    await client.fetchQuery(moreForYouQuery("123", api));
+    await client.fetchQuery(moreForYouQuery("guest", api));
+
+    expect(api.getMoreForYou).toHaveBeenCalledTimes(2);
   });
 });

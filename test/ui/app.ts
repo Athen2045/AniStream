@@ -1,6 +1,7 @@
 import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { _electron as electron, type ElectronApplication, type Page } from "@playwright/test";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -19,9 +20,12 @@ export interface TestApp {
 /**
  * Launches the built app (`npm run build` first) with a throwaway profile, the example provider
  * config (`.example` hosts only) and the fixture network from `fixtures/network.json`: no request
- * from the main process or the window reaches a real provider.
+ * from the main process or the window reaches a real provider. `seed` edits the profile's
+ * database between a first launch (which creates it) and the launch the test uses.
  */
-export async function launchApp(options: { tmdb?: boolean } = {}): Promise<TestApp> {
+export async function launchApp(
+  options: { tmdb?: boolean; seed?: (database: string) => void } = {},
+): Promise<TestApp> {
   const workDir = mkdtempSync(join(tmpdir(), "anistream-ui-"));
   copyFileSync(join(ROOT, "providers.example.json"), join(workDir, "providers.local.json"));
   const env: Record<string, string> = {};
@@ -34,11 +38,28 @@ export async function launchApp(options: { tmdb?: boolean } = {}): Promise<TestA
     ANISTREAM_ANIME_SOURCE_ENABLED: "0",
     ...(options.tmdb === false ? {} : { ANISTREAM_TMDB_ACCESS_TOKEN: "fixture-token" }),
   });
-  const app = await electron.launch({
-    args: [ROOT],
-    cwd: workDir,
-    env,
-  });
+  if (options.seed) {
+    const first = await start(workDir, env);
+    await waitForShell(first.window);
+    await first.app.close();
+    options.seed(join(workDir, "profile", "anistream.sqlite"));
+  }
+  const { app, window } = await start(workDir, env);
+  return {
+    app,
+    window,
+    async close() {
+      await app.close();
+      rmSync(workDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    },
+  };
+}
+
+async function start(
+  workDir: string,
+  env: Record<string, string>,
+): Promise<{ app: ElectronApplication; window: Page }> {
+  const app = await electron.launch({ args: [ROOT], cwd: workDir, env });
   app.process().stderr?.on("data", (chunk: Buffer) => {
     const text = chunk.toString();
     if (text.includes("[AniStream test]")) process.stderr.write(text);
@@ -54,14 +75,21 @@ export async function launchApp(options: { tmdb?: boolean } = {}): Promise<TestA
       ? route.fulfill({ status: 200, contentType: "image/png", body: BLANK_PNG })
       : route.abort(),
   );
-  return {
-    app,
-    window,
-    async close() {
-      await app.close();
-      rmSync(workDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-    },
-  };
+  return { app, window };
+}
+
+/** Saves `value` as a home field's saved copy (`field_snapshot_v1`), for both title languages. */
+export function seedFieldSnapshot(database: string, key: string, value: unknown): void {
+  const db = new DatabaseSync(database);
+  try {
+    const write = db.prepare(
+      "INSERT OR REPLACE INTO field_snapshot_v1 (key, payload, saved_at) VALUES (?, ?, ?)",
+    );
+    for (const scope of ["titles-en", "titles-anilist"])
+      write.run(`${scope}:${key}`, JSON.stringify(value), Date.now());
+  } finally {
+    db.close();
+  }
 }
 
 /** Waits for the launch checks to finish and the app shell to take input. */
