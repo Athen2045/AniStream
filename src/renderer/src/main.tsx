@@ -1,7 +1,9 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { appQueryClient } from "./query-client";
 import "./styles.css";
 import "./styles/controls.css";
 import "./styles/redesign.css";
@@ -35,7 +37,9 @@ if (!root) throw new Error("AniStream renderer root was not found");
 createRoot(root).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <QueryClientProvider client={appQueryClient}>
+        <App />
+      </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>,
 );

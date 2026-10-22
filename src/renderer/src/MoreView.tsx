@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Bookmark, Film, KeyRound } from "lucide-react";
 import {
@@ -13,7 +14,6 @@ import {
 import { arrangeFeed, type FeedSlot } from "./feed-layout";
 import type {
   MoreCatalogItem,
-  MoreCatalogPage,
   MoreLibrary,
   MoreMediaType,
   MoreTitleStatusAction,
@@ -26,6 +26,7 @@ import { MoreTitlePage } from "./MoreTitlePage";
 import { Pagination } from "./Pagination";
 import { friendlyRemoteError } from "./remote-error";
 import { moreKey, moreSnapshot, type MorePlayTarget } from "./more-format";
+import { moreTrendingKey, moreTrendingQuery } from "./more-queries";
 import { motionEase } from "./motion";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import { useMoreForYou } from "./useMoreForYou";
@@ -62,9 +63,6 @@ export interface MoreSelection {
   backLabel?: string;
 }
 
-/** Trending rails for the whole app session; More remounts each time it is opened. */
-const appTrending: { movies?: MoreCatalogPage; shows?: MoreCatalogPage } = {};
-
 export function MoreView({
   selection,
   viewer,
@@ -84,54 +82,29 @@ export function MoreView({
 }): React.JSX.Element {
   const reducedMotion = useAppReducedMotion();
   const [filter, setFilter] = useState<MoreFilter>("ALL");
-  const [moviePage, setMoviePage] = useState<MoreCatalogPage | undefined>(appTrending.movies);
-  const [tvPage, setTvPage] = useState<MoreCatalogPage | undefined>(appTrending.shows);
   const [gridPage, setGridPage] = useState(1);
-  const [grid, setGrid] = useState<{ key: string; page?: MoreCatalogPage; error?: string }>();
   const [library, setLibrary] = useState<MoreLibrary>(EMPTY_LIBRARY);
-  const [loading, setLoading] = useState(!appTrending.movies || !appTrending.shows);
-  const [error, setError] = useState<string>();
-  const [configurationMissing, setConfigurationMissing] = useState(false);
-  const [refreshAttempt, setRefreshAttempt] = useState(0);
   const homeScroll = useRef(0);
   // Time to play starts when More opens.
   useEffect(() => startBrowsing("MORE"), []);
 
-  useEffect(() => {
-    // Returning to More shows the rails it already has; Retry (refreshAttempt) still reloads.
-    if (refreshAttempt === 0 && appTrending.movies && appTrending.shows) return;
-    let active = true;
-    void Promise.all([
-      window.anistream.getMoreTrending("MOVIE", 1),
-      window.anistream.getMoreTrending("TV", 1),
-    ])
-      .then(([movies, shows]) => {
-        appTrending.movies = movies;
-        appTrending.shows = shows;
-        if (!active) return;
-        setMoviePage(movies);
-        setTvPage(shows);
-        setError(undefined);
-        setConfigurationMissing(false);
+  // Trending rails stay cached for the app session (`more-queries.ts`); Retry reloads them.
+  const queryClient = useQueryClient();
+  const movieQuery = useQuery(moreTrendingQuery("MOVIE", 1));
+  const tvQuery = useQuery(moreTrendingQuery("TV", 1));
+  const moviePage = movieQuery.data;
+  const tvPage = tvQuery.data;
+  const loading = movieQuery.isPending || tvQuery.isPending;
+  const trendingFailure = movieQuery.error ?? tvQuery.error;
+  const configurationMissing =
+    Boolean(trendingFailure) && isTmdbConfigurationError(trendingFailure);
+  const error = trendingFailure
+    ? friendlyRemoteError(trendingFailure, {
+        provider: "TMDB",
+        operation: "More catalog",
+        fallback: "Movies and shows are unavailable right now. Configure TMDB, then try again.",
       })
-      .catch((reason: unknown) => {
-        if (!active) return;
-        setConfigurationMissing(isTmdbConfigurationError(reason));
-        setError(
-          friendlyRemoteError(reason, {
-            provider: "TMDB",
-            operation: "More catalog",
-            fallback: "Movies and shows are unavailable right now. Configure TMDB, then try again.",
-          }),
-        );
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [refreshAttempt]);
+    : undefined;
 
   const loadLibrary = useCallback(() => {
     void window.anistream
@@ -144,30 +117,11 @@ export function MoreView({
   // Movies/Shows filters page through the full trending list; page 1 reuses the home rails.
   const gridType: MoreMediaType | undefined =
     filter === "MOVIE" || filter === "TV" ? filter : undefined;
-  useEffect(() => {
-    if (!gridType || gridPage === 1) return;
-    let active = true;
-    const key = `${gridType}:${gridPage}`;
-    void window.anistream
-      .getMoreTrending(gridType, gridPage)
-      .then((page) => {
-        if (active) setGrid({ key, page });
-      })
-      .catch((reason: unknown) => {
-        if (active)
-          setGrid({
-            key,
-            error: friendlyRemoteError(reason, {
-              provider: "TMDB",
-              operation: "More catalog",
-              fallback: "This page could not be loaded.",
-            }),
-          });
-      });
-    return () => {
-      active = false;
-    };
-  }, [gridPage, gridType]);
+  // Page 1 is the rail's own cache entry; later pages load as they are opened.
+  const gridQuery = useQuery({
+    ...moreTrendingQuery(gridType ?? "MOVIE", gridPage),
+    enabled: gridType !== undefined,
+  });
 
   // Leave the home scrolled where it was when a title page opens and closes.
   const selectionKey = selection ? moreKey(selection.item) : undefined;
@@ -370,10 +324,15 @@ export function MoreView({
         Date.parse(entry.updatedAt) || 0,
       ),
   );
-  const currentGrid = grid?.key === `${gridType}:${gridPage}` ? grid : undefined;
-  const gridError = gridPage > 1 ? currentGrid?.error : undefined;
-  const gridSource =
-    gridType && gridPage > 1 ? currentGrid?.page : gridType === "MOVIE" ? moviePage : tvPage;
+  const gridError =
+    gridPage > 1 && gridQuery.error
+      ? friendlyRemoteError(gridQuery.error, {
+          provider: "TMDB",
+          operation: "More catalog",
+          fallback: "This page could not be loaded.",
+        })
+      : undefined;
+  const gridSource = gridType ? gridQuery.data : undefined;
   const showHero = filter === "ALL" && heroItems.length > 0;
   const gridTitle =
     filter === "LIST" ? WATCH_LIST : filter === "MOVIE" ? "Trending Movies" : "Trending Shows";
@@ -627,12 +586,7 @@ export function MoreView({
   }
 
   function retry(): void {
-    setMoviePage(undefined);
-    setTvPage(undefined);
-    setError(undefined);
-    setConfigurationMissing(false);
-    setLoading(true);
-    setRefreshAttempt((attempt) => attempt + 1);
+    void queryClient.resetQueries({ queryKey: moreTrendingKey });
   }
 }
 

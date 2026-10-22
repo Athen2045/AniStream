@@ -1,0 +1,511 @@
+[
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixture Broken\""],
+    "status": 500,
+    "json": {
+      "errors": [
+        {
+          "message": "Internal Server Error",
+          "status": 500
+        }
+      ]
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixture Quest\"", "\"page\":1,"],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 1,
+            "perPage": 30,
+            "lastPage": 2,
+            "hasNextPage": true
+          },
+          "media": [
+            {
+              "id": 8400001,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Quest",
+                "english": "Fixture Quest",
+                "userPreferred": "Fixture Quest"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8400001.jpg"
+              },
+              "format": "TV",
+              "status": "FINISHED",
+              "episodes": 12,
+              "genres": ["Adventure"],
+              "averageScore": 70,
+              "popularity": 500,
+              "seasonYear": 2024,
+              "siteUrl": "https://anilist.co/anime/8400001"
+            },
+            {
+              "id": 8400002,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Quest Returns",
+                "english": "Fixture Quest Returns",
+                "userPreferred": "Fixture Quest Returns"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8400002.jpg"
+              },
+              "format": "TV",
+              "status": "FINISHED",
+              "episodes": 12,
+              "genres": ["Adventure"],
+              "averageScore": 70,
+              "popularity": 500,
+              "seasonYear": 2024,
+              "siteUrl": "https://anilist.co/anime/8400002"
+            }
+          ]
+        },
+        "other": {
+          "media": []
+        },
+        "characters": {
+          "characters": []
+        },
+        "studios": {
+          "studios": []
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixture Quest\"", "\"page\":2,"],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 2,
+            "perPage": 30,
+            "lastPage": 2,
+            "hasNextPage": false
+          },
+          "media": [
+            {
+              "id": 8400003,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Quest Finale",
+                "english": "Fixture Quest Finale",
+                "userPreferred": "Fixture Quest Finale"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8400003.jpg"
+              },
+              "format": "TV",
+              "status": "FINISHED",
+              "episodes": 12,
+              "genres": ["Adventure"],
+              "averageScore": 70,
+              "popularity": 500,
+              "seasonYear": 2024,
+              "siteUrl": "https://anilist.co/anime/8400003"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixtre Quest\""],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 1,
+            "perPage": 30,
+            "lastPage": 1,
+            "hasNextPage": false
+          },
+          "media": []
+        },
+        "other": {
+          "media": []
+        },
+        "characters": {
+          "characters": []
+        },
+        "studios": {
+          "studios": []
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixtre\""],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 1,
+            "perPage": 15,
+            "lastPage": 1,
+            "hasNextPage": false
+          },
+          "media": [
+            {
+              "id": 8400001,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Quest",
+                "english": "Fixture Quest",
+                "userPreferred": "Fixture Quest"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8400001.jpg"
+              },
+              "format": "TV",
+              "status": "FINISHED",
+              "episodes": 12,
+              "genres": ["Adventure"],
+              "averageScore": 70,
+              "popularity": 500,
+              "seasonYear": 2024,
+              "siteUrl": "https://anilist.co/anime/8400001"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["TRENDING_DESC", "\"type\":\"ANIME\""],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 1,
+            "perPage": 20,
+            "lastPage": 1,
+            "hasNextPage": false
+          },
+          "media": [
+            {
+              "id": 8000001,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Anime One",
+                "english": "Fixture Anime One",
+                "userPreferred": "Fixture Anime One"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8000001.jpg",
+                "extraLarge": "https://img.anilist.example/8000001.jpg"
+              },
+              "bannerImage": "https://img.anilist.example/8000001-banner.jpg",
+              "format": "TV",
+              "status": "RELEASING",
+              "episodes": 12,
+              "genres": ["Action"],
+              "averageScore": 75,
+              "popularity": 1000,
+              "siteUrl": "https://anilist.co/anime/8000001",
+              "description": "A fixture anime."
+            },
+            {
+              "id": 8000002,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Anime Two",
+                "english": "Fixture Anime Two",
+                "userPreferred": "Fixture Anime Two"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8000002.jpg",
+                "extraLarge": "https://img.anilist.example/8000002.jpg"
+              },
+              "bannerImage": "https://img.anilist.example/8000002-banner.jpg",
+              "format": "TV",
+              "status": "RELEASING",
+              "episodes": 12,
+              "genres": ["Action"],
+              "averageScore": 75,
+              "popularity": 1000,
+              "siteUrl": "https://anilist.co/anime/8000002",
+              "description": "A fixture anime."
+            },
+            {
+              "id": 8000003,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Anime Three",
+                "english": "Fixture Anime Three",
+                "userPreferred": "Fixture Anime Three"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8000003.jpg",
+                "extraLarge": "https://img.anilist.example/8000003.jpg"
+              },
+              "bannerImage": "https://img.anilist.example/8000003-banner.jpg",
+              "format": "TV",
+              "status": "RELEASING",
+              "episodes": 12,
+              "genres": ["Action"],
+              "averageScore": 75,
+              "popularity": 1000,
+              "siteUrl": "https://anilist.co/anime/8000003",
+              "description": "A fixture anime."
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["AniStreamAiringUpdates", "\"page\":1,"],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 1,
+            "perPage": 50,
+            "lastPage": 2,
+            "hasNextPage": true
+          },
+          "airingSchedules": [
+            {
+              "episode": 5,
+              "airingAt": 1792000000,
+              "media": {
+                "id": 8100001,
+                "type": "ANIME",
+                "title": {
+                  "romaji": "Fixture Latest One",
+                  "english": "Fixture Latest One",
+                  "userPreferred": "Fixture Latest One"
+                },
+                "coverImage": {
+                  "large": "https://img.anilist.example/8100001.jpg",
+                  "extraLarge": "https://img.anilist.example/8100001.jpg"
+                },
+                "bannerImage": "https://img.anilist.example/8100001-banner.jpg",
+                "format": "TV",
+                "status": "RELEASING",
+                "episodes": 12,
+                "genres": ["Action"],
+                "averageScore": 75,
+                "popularity": 1000,
+                "siteUrl": "https://anilist.co/anime/8100001",
+                "description": "A fixture anime."
+              }
+            },
+            {
+              "episode": 5,
+              "airingAt": 1791996400,
+              "media": {
+                "id": 8100002,
+                "type": "ANIME",
+                "title": {
+                  "romaji": "Fixture Latest Two",
+                  "english": "Fixture Latest Two",
+                  "userPreferred": "Fixture Latest Two"
+                },
+                "coverImage": {
+                  "large": "https://img.anilist.example/8100002.jpg",
+                  "extraLarge": "https://img.anilist.example/8100002.jpg"
+                },
+                "bannerImage": "https://img.anilist.example/8100002-banner.jpg",
+                "format": "TV",
+                "status": "RELEASING",
+                "episodes": 12,
+                "genres": ["Action"],
+                "averageScore": 75,
+                "popularity": 1000,
+                "siteUrl": "https://anilist.co/anime/8100002",
+                "description": "A fixture anime."
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["AniStreamAiringUpdates", "\"page\":2,"],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 2,
+            "perPage": 50,
+            "lastPage": 2,
+            "hasNextPage": false
+          },
+          "airingSchedules": [
+            {
+              "episode": 5,
+              "airingAt": 1792000000,
+              "media": {
+                "id": 8100003,
+                "type": "ANIME",
+                "title": {
+                  "romaji": "Fixture Latest Three",
+                  "english": "Fixture Latest Three",
+                  "userPreferred": "Fixture Latest Three"
+                },
+                "coverImage": {
+                  "large": "https://img.anilist.example/8100003.jpg",
+                  "extraLarge": "https://img.anilist.example/8100003.jpg"
+                },
+                "bannerImage": "https://img.anilist.example/8100003-banner.jpg",
+                "format": "TV",
+                "status": "RELEASING",
+                "episodes": 12,
+                "genres": ["Action"],
+                "averageScore": 75,
+                "popularity": 1000,
+                "siteUrl": "https://anilist.co/anime/8100003",
+                "description": "A fixture anime."
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["TRENDING_DESC"],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 1,
+            "perPage": 20,
+            "lastPage": 1,
+            "hasNextPage": false
+          },
+          "media": []
+        }
+      }
+    }
+  },
+  {
+    "match": "/3/trending/movie/week?page=1&",
+    "json": {
+      "page": 1,
+      "total_pages": 2,
+      "total_results": 6,
+      "results": [
+        {
+          "id": 9000001,
+          "title": "Fixture Movie One",
+          "overview": "The first fixture movie.",
+          "poster_path": "/fixture-movie-1.jpg",
+          "backdrop_path": "/fixture-movie-1-backdrop.jpg",
+          "release_date": "2026-01-10",
+          "vote_average": 7.4,
+          "vote_count": 120,
+          "genre_ids": [28]
+        },
+        {
+          "id": 9000002,
+          "title": "Fixture Movie Two",
+          "overview": "The second fixture movie.",
+          "poster_path": "/fixture-movie-2.jpg",
+          "backdrop_path": "/fixture-movie-2-backdrop.jpg",
+          "release_date": "2026-02-14",
+          "vote_average": 6.8,
+          "vote_count": 80,
+          "genre_ids": [35]
+        },
+        {
+          "id": 9000003,
+          "title": "Fixture Movie Three",
+          "overview": "The third fixture movie.",
+          "poster_path": "/fixture-movie-3.jpg",
+          "backdrop_path": "/fixture-movie-3-backdrop.jpg",
+          "release_date": "2025-11-02",
+          "vote_average": 8.1,
+          "vote_count": 300,
+          "genre_ids": [18]
+        }
+      ]
+    }
+  },
+  {
+    "match": "/3/trending/movie/week?page=2&",
+    "json": {
+      "page": 2,
+      "total_pages": 2,
+      "total_results": 6,
+      "results": [
+        {
+          "id": 9000004,
+          "title": "Fixture Movie Four",
+          "overview": "A movie only on page two.",
+          "poster_path": "/fixture-movie-4.jpg",
+          "release_date": "2024-07-20",
+          "vote_average": 6.1,
+          "vote_count": 40,
+          "genre_ids": [27]
+        }
+      ]
+    }
+  },
+  {
+    "match": "/3/trending/tv/week?page=1&",
+    "json": {
+      "page": 1,
+      "total_pages": 1,
+      "total_results": 2,
+      "results": [
+        {
+          "id": 9100001,
+          "name": "Fixture Show One",
+          "overview": "The first fixture show.",
+          "poster_path": "/fixture-show-1.jpg",
+          "backdrop_path": "/fixture-show-1-backdrop.jpg",
+          "first_air_date": "2025-09-01",
+          "vote_average": 7.9,
+          "vote_count": 210,
+          "genre_ids": [18]
+        },
+        {
+          "id": 9100002,
+          "name": "Fixture Show Two",
+          "overview": "The second fixture show.",
+          "poster_path": "/fixture-show-2.jpg",
+          "first_air_date": "2026-03-03",
+          "vote_average": 7.0,
+          "vote_count": 65,
+          "genre_ids": [35]
+        }
+      ]
+    }
+  },
+  {
+    "match": "db.org/3/",
+    "json": {
+      "page": 1,
+      "total_pages": 1,
+      "total_results": 0,
+      "results": []
+    }
+  }
+]

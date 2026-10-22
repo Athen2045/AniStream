@@ -3157,10 +3157,13 @@ a.rail-card {
   align-items: center;
   gap: 6px;
 }
+/* Top corner, above the hover actions: at the bottom it sat under their Info button and could not
+   be clicked. */
 .for-you-dismiss {
   position: absolute;
+  z-index: 3;
+  top: 8px;
   right: 8px;
-  bottom: 8px;
   display: grid;
   width: 25px;
   height: 25px;

@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 import type { MoreDiscoveryFeed, MoreRecommendation } from "../../shared/discovery";
+import { moreForYouKey, moreForYouQuery } from "./more-queries";
 import { friendlyRemoteError } from "./remote-error";
 
 export interface MoreForYouState {
@@ -11,17 +13,9 @@ export interface MoreForYouState {
 }
 
 /**
- * The last feed shown and whose it was, so reopening More shows it at once (the main process keeps
- * the same per viewer). Another viewer never sees it.
- */
-let appFeed: { viewer: string; feed: MoreDiscoveryFeed } | undefined;
-const feedFor = (viewer: string): MoreDiscoveryFeed | undefined =>
-  appFeed?.viewer === viewer ? appFeed.feed : undefined;
-
-/**
- * Loads More For You once per mount and keeps "Not interested" choices local and reversible.
- * `viewer` identifies the signed-in AniList account (or the guest); a change loads that viewer's
- * picks instead of keeping the previous account's.
+ * More For You for one viewer (`more-queries.ts`), with "Not interested" choices local and
+ * reversible. `viewer` identifies the signed-in AniList account (or the guest); a change shows that
+ * viewer's picks and drops the previous account's.
  */
 export function useMoreForYou(
   enabled: boolean,
@@ -31,60 +25,58 @@ export function useMoreForYou(
   dismiss: (entry: MoreRecommendation) => void;
   undoDismiss: () => void;
 } {
-  const [state, setState] = useState<MoreForYouState>(() => ({
-    feed: feedFor(viewer),
-    loading: enabled && !feedFor(viewer),
-  }));
-  // The viewer this state belongs to; a feed is remembered only under it.
-  const stateViewer = useRef(viewer);
-  useEffect(() => {
-    if (state.feed && stateViewer.current === viewer) appFeed = { viewer, feed: state.feed };
-  }, [state.feed, viewer]);
-  const generation = useRef(0);
+  const queryClient = useQueryClient();
+  const options = moreForYouQuery(viewer);
+  const query = useQuery({ ...options, enabled });
+  const feed = query.data;
+  const { refetch } = query;
 
-  /** Resolves one request into state unless a newer request or unmount superseded it. */
-  const request = useCallback((current: number, fresh: boolean) => {
-    window.anistream
-      .getMoreForYou(fresh)
-      .then((feed) => {
-        if (current === generation.current) setState({ feed, loading: false });
-      })
-      .catch((reason: unknown) => {
-        if (current !== generation.current) return;
-        setState((previous) => ({
-          ...previous,
-          loading: false,
-          error: friendlyRemoteError(reason, {
-            provider: "TMDB",
-            operation: "suggestions",
-            retained: Boolean(previous.feed?.items.length),
-            fallback: "Recommendations could not be loaded. Try again shortly.",
-          }),
-        }));
-      });
-  }, []);
+  // Signed out or into another account: no other viewer's picks stay in memory.
+  useEffect(() => {
+    queryClient.removeQueries({
+      queryKey: moreForYouKey,
+      predicate: (other) => other.queryKey[2] !== viewer,
+    });
+  }, [queryClient, viewer]);
+
+  // Undo belongs to the viewer who dismissed the title and to this visit of More.
+  const [undoState, setUndoState] = useState<{ viewer: string; entry: MoreRecommendation }>();
+  const undo = undoState?.viewer === viewer ? undoState.entry : undefined;
+
+  const send = (entry: MoreRecommendation, action: "dismiss" | "undo"): Promise<void> => {
+    const requestId = feed?.requestId;
+    if (!requestId) return Promise.resolve();
+    return window.anistream.recordMoreDiscoveryFeedback({
+      requestId,
+      type: entry.item.type,
+      tmdbId: entry.item.id,
+      action,
+    });
+  };
+  const dismissal = useMutation({
+    mutationFn: (entry: MoreRecommendation) => send(entry, "dismiss"),
+    onSuccess: (_result, entry) => {
+      queryClient.setQueryData(options.queryKey, (current) =>
+        current ? withoutTitle(current, entry) : current,
+      );
+      setUndoState({ viewer, entry });
+    },
+  });
+  const restoral = useMutation({
+    mutationFn: (entry: MoreRecommendation) => send(entry, "undo"),
+    onSuccess: () => {
+      setUndoState(undefined);
+      void refetch();
+    },
+  });
+  const { reset: resetDismissal } = dismissal;
+  const { reset: resetRestoral } = restoral;
 
   const refresh = useCallback(() => {
-    const current = ++generation.current;
-    setState((previous) => ({ ...previous, loading: true, error: undefined }));
-    request(current, true);
-  }, [request]);
-
-  useEffect(() => {
-    const counter = generation;
-    if (stateViewer.current !== viewer) {
-      // Signed out or into another account: drop the previous viewer's picks and their Undo.
-      stateViewer.current = viewer;
-      setState({ feed: feedFor(viewer), loading: enabled && !feedFor(viewer) });
-    }
-    // Reopening More keeps the feed already shown (with its local "Not interested" removals).
-    // Otherwise this asks for the session's or saved feed; Refresh, Undo and a finished Simkl
-    // import rebuild it.
-    if (enabled && !feedFor(viewer)) request(++counter.current, false);
-    return () => {
-      counter.current++;
-    };
-  }, [enabled, request, viewer]);
+    resetDismissal();
+    resetRestoral();
+    void refetch();
+  }, [refetch, resetDismissal, resetRestoral]);
 
   // A finished Simkl import changes the evidence, so the picks reload once it lands.
   useEffect(() => {
@@ -97,56 +89,30 @@ export function useMoreForYou(
     });
   }, [enabled, refresh]);
 
-  const send = useCallback(
-    (entry: MoreRecommendation, action: "dismiss" | "undo"): Promise<void> => {
-      const requestId = state.feed?.requestId;
-      if (!requestId) return Promise.resolve();
-      return window.anistream.recordMoreDiscoveryFeedback({
-        requestId,
-        type: entry.item.type,
-        tmdbId: entry.item.id,
-        action,
-      });
+  const error = restoral.isError
+    ? "Could not undo this choice. Refresh and try again."
+    : dismissal.isError
+      ? "Could not save Not interested. Your recommendations are unchanged."
+      : query.error && !query.isFetching
+        ? friendlyRemoteError(query.error, {
+            provider: "TMDB",
+            operation: "suggestions",
+            retained: Boolean(feed?.items.length),
+            fallback: "Recommendations could not be loaded. Try again shortly.",
+          })
+        : undefined;
+
+  return {
+    feed,
+    loading: query.isFetching,
+    error,
+    undo,
+    refresh,
+    dismiss: (entry) => dismissal.mutate(entry),
+    undoDismiss: () => {
+      if (undo) restoral.mutate(undo);
     },
-    [state.feed?.requestId],
-  );
-
-  const dismiss = useCallback(
-    (entry: MoreRecommendation) => {
-      void send(entry, "dismiss")
-        .then(() =>
-          setState((previous) => ({
-            ...previous,
-            undo: entry,
-            feed: previous.feed && withoutTitle(previous.feed, entry),
-          })),
-        )
-        .catch(() =>
-          setState((previous) => ({
-            ...previous,
-            error: "Could not save Not interested. Your recommendations are unchanged.",
-          })),
-        );
-    },
-    [send],
-  );
-
-  const undoDismiss = useCallback(() => {
-    if (!state.undo) return;
-    void send(state.undo, "undo")
-      .then(() => {
-        setState((previous) => ({ ...previous, undo: undefined }));
-        refresh();
-      })
-      .catch(() =>
-        setState((previous) => ({
-          ...previous,
-          error: "Could not undo this choice. Refresh and try again.",
-        })),
-      );
-  }, [refresh, send, state.undo]);
-
-  return { ...state, refresh, dismiss, undoDismiss };
+  };
 }
 
 function withoutTitle(feed: MoreDiscoveryFeed, entry: MoreRecommendation): MoreDiscoveryFeed {

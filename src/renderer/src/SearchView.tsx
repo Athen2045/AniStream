@@ -1,12 +1,14 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Search, X } from "lucide-react";
 import type { AniListCatalogMedia, AniListMediaType } from "../../shared/contracts";
+import { friendlyRemoteError } from "./remote-error";
 import {
-  createSearchSession,
-  type SearchFilters,
-  type SearchType,
-  type SearchSort,
-} from "./search-session";
+  profileSearchQuery,
+  type ProfileSearchFilters as SearchFilters,
+  type ProfileSearchSort as SearchSort,
+  type ProfileSearchType as SearchType,
+} from "./search-queries";
 import { CatalogCard } from "./CatalogCard";
 import { Pagination } from "./Pagination";
 import type { ViewerAccess } from "./viewer-access";
@@ -27,28 +29,32 @@ export function SearchView({
   onPrimary: (media: AniListCatalogMedia) => void;
   onLibrary: (media: AniListCatalogMedia) => Promise<void>;
 }): React.JSX.Element {
-  const [session] = useState(() => createSearchSession(window.anistream));
-  const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const [draft, setDraft] = useState(query ?? "");
   const [genre, setGenre] = useState("");
-  useEffect(() => {
-    session.activate();
-    return () => session.dispose();
-  }, [session]);
-  useEffect(() => {
-    if (query !== undefined)
-      void session.search({
-        query,
-        type: restrictedType ?? "ALL",
-        genre: "",
-        sort: "POPULARITY_DESC",
-      });
-  }, [query, restrictedType, session]);
+  const initialFilters = (): SearchFilters => ({
+    query: query?.trim() ?? "",
+    type: restrictedType ?? "ALL",
+    genre: "",
+    sort: "POPULARITY_DESC",
+  });
+  const [filters, setFilters] = useState<SearchFilters>(initialFilters);
+  // A new search starts each section on page 1.
+  const [pages, setPages] = useState<Record<AniListMediaType, number>>({ ANIME: 1, MANGA: 1 });
+  // A new `query` from the caller starts that search.
+  const [shownQuery, setShownQuery] = useState(query);
+  if (query !== shownQuery) {
+    setShownQuery(query);
+    if (query !== undefined) {
+      setFilters(initialFilters());
+      setPages({ ANIME: 1, MANGA: 1 });
+    }
+  }
   const apply = (patch: Partial<SearchFilters>) => {
-    void session.search({ ...state.filters, ...patch });
+    const next = { ...filters, ...patch };
+    setFilters({ ...next, query: next.query.trim(), genre: next.genre.trim() });
+    setPages({ ANIME: 1, MANGA: 1 });
   };
-  const types: AniListMediaType[] =
-    state.filters.type === "ALL" ? ["ANIME", "MANGA"] : [state.filters.type];
+  const types: AniListMediaType[] = filters.type === "ALL" ? ["ANIME", "MANGA"] : [filters.type];
   return (
     <section
       className={`search-page${restrictedType ? " search-page-inline" : ""}`}
@@ -69,7 +75,7 @@ export function SearchView({
           apply({
             query: String(new FormData(event.currentTarget).get("query") ?? ""),
             genre,
-            type: restrictedType ?? state.filters.type,
+            type: restrictedType ?? filters.type,
           });
         }}
       >
@@ -111,7 +117,7 @@ export function SearchView({
         </label>
         <Select<SearchSort>
           ariaLabel="Sort search results"
-          value={state.filters.sort}
+          value={filters.sort}
           onChange={(sort) => apply({ sort })}
           options={[
             { value: "POPULARITY_DESC", label: "Popularity" },
@@ -130,7 +136,7 @@ export function SearchView({
             <button
               key={type}
               type="button"
-              aria-pressed={state.filters.type === type}
+              aria-pressed={filters.type === type}
               onClick={() => apply({ type })}
             >
               {type === "ALL" ? "All" : type === "ANIME" ? "Anime" : "Manga"}
@@ -138,69 +144,110 @@ export function SearchView({
           ))}
         </div>
       ) : null}
-      {state.filters.query.length < 2 ? (
+      {filters.query.length < 2 ? (
         <p className="empty-state">Enter at least two characters to find a title.</p>
       ) : (
-        types.map((type) => {
-          const group = state.groups[type];
-          return (
-            <section
-              key={type}
-              className="search-result-group"
-              aria-label={`${type === "ANIME" ? "Anime" : "Manga"} results`}
-            >
-              <div className="rail-heading">
-                <h2>{type === "ANIME" ? "Anime" : "Manga"}</h2>
-                <span className="rail-count">
-                  {group.loading ? "Searching…" : `Results for “${state.filters.query}”`}
-                </span>
-              </div>
-              {group.error ? (
-                <div className="error-banner" role="alert">
-                  {group.error}{" "}
-                  <button type="button" onClick={() => void session.retry(type)}>
-                    Retry {type === "ANIME" ? "Anime" : "Manga"}
-                  </button>
-                </div>
-              ) : null}
-              <div className="search-result-grid" aria-busy={group.loading}>
-                {group.result?.items.map((media) => (
-                  <CatalogCard
-                    key={media.id}
-                    media={media}
-                    inLibrary={access.kind === "member" && access.libraryEntries.has(media.id)}
-                    onSelect={onSelect}
-                    onPrimary={onPrimary}
-                    onLibrary={onLibrary}
-                  />
-                ))}
-                {group.loading && !group.result
-                  ? Array.from({ length: 6 }, (_, index) => (
-                      <div key={index} className="rail-card-skeleton" aria-hidden="true" />
-                    ))
-                  : null}
-              </div>
-              {!group.loading && !group.error && group.result?.items.length === 0 ? (
-                <p className="empty-state">
-                  No matching {type === "ANIME" ? "anime" : "manga"}. Try a different title or clear
-                  the genre.
-                </p>
-              ) : null}
-              {group.result ? (
-                <div className={group.loading ? "pagination-pending" : ""}>
-                  <Pagination
-                    label={`${type} search pages`}
-                    page={group.page}
-                    totalPages={group.result.pageInfo.lastPage}
-                    hasNextPage={group.result.pageInfo.hasNextPage}
-                    onPageChange={(page) => void session.page(type, page)}
-                  />
-                </div>
-              ) : null}
-            </section>
-          );
-        })
+        types.map((type) => (
+          <SearchResultGroup
+            key={type}
+            type={type}
+            filters={filters}
+            page={pages[type]}
+            onPage={(page) => setPages((current) => ({ ...current, [type]: page }))}
+            access={access}
+            onSelect={onSelect}
+            onPrimary={onPrimary}
+            onLibrary={onLibrary}
+          />
+        ))
       )}
+    </section>
+  );
+}
+
+/** One section's results, page by page (`profileSearchQuery`). */
+function SearchResultGroup({
+  type,
+  filters,
+  page,
+  onPage,
+  access,
+  onSelect,
+  onPrimary,
+  onLibrary,
+}: {
+  type: AniListMediaType;
+  filters: SearchFilters;
+  page: number;
+  onPage: (page: number) => void;
+  access: ViewerAccess;
+  onSelect: (media: AniListCatalogMedia) => void;
+  onPrimary: (media: AniListCatalogMedia) => void;
+  onLibrary: (media: AniListCatalogMedia) => Promise<void>;
+}): React.JSX.Element {
+  const search = useQuery(profileSearchQuery(type, filters, page));
+  const result = search.data;
+  const loading = search.isFetching;
+  const error =
+    search.error && !loading
+      ? friendlyRemoteError(search.error, {
+          provider: "AniList",
+          operation: "search results",
+          retained: Boolean(result?.items.length),
+          fallback: "Search is unavailable right now. Try again shortly.",
+        })
+      : undefined;
+  const name = type === "ANIME" ? "Anime" : "Manga";
+  return (
+    <section className="search-result-group" aria-label={`${name} results`}>
+      <div className="rail-heading">
+        <h2>{name}</h2>
+        <span className="rail-count">
+          {loading ? "Searching…" : `Results for “${filters.query}”`}
+        </span>
+      </div>
+      {error ? (
+        <div className="error-banner" role="alert">
+          {error}{" "}
+          <button type="button" onClick={() => void search.refetch()}>
+            Retry {name}
+          </button>
+        </div>
+      ) : null}
+      <div className="search-result-grid" aria-busy={loading}>
+        {result?.items.map((media) => (
+          <CatalogCard
+            key={media.id}
+            media={media}
+            inLibrary={access.kind === "member" && access.libraryEntries.has(media.id)}
+            onSelect={onSelect}
+            onPrimary={onPrimary}
+            onLibrary={onLibrary}
+          />
+        ))}
+        {loading && !result
+          ? Array.from({ length: 6 }, (_, index) => (
+              <div key={index} className="rail-card-skeleton" aria-hidden="true" />
+            ))
+          : null}
+      </div>
+      {!loading && !error && result?.items.length === 0 ? (
+        <p className="empty-state">
+          No matching {type === "ANIME" ? "anime" : "manga"}. Try a different title or clear the
+          genre.
+        </p>
+      ) : null}
+      {result ? (
+        <div className={loading ? "pagination-pending" : ""}>
+          <Pagination
+            label={`${type} search pages`}
+            page={page}
+            totalPages={result.pageInfo.lastPage}
+            hasNextPage={result.pageInfo.hasNextPage}
+            onPageChange={onPage}
+          />
+        </div>
+      ) : null}
     </section>
   );
 }

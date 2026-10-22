@@ -41,7 +41,7 @@ const [
   readFile("src/main/database.ts", "utf8"),
   readFile("src/main/domains/tracker.ts", "utf8"),
   readFile("src/main/ipc-validation.ts", "utf8"),
-  readFile("src/renderer/src/catalog-data.ts", "utf8"),
+  readFile("src/renderer/src/catalog-queries.ts", "utf8"),
   readFile("src/renderer/src/local-activity.ts", "utf8"),
   readFile("src/main/activity/repository.ts", "utf8"),
 ]);
@@ -86,7 +86,7 @@ for (const [name, source, fragments] of [
       "Latest Anime Updates",
       "Latest Manga Updates",
       "latest-updates-grid",
-      "getMangaDexAvailability",
+      "getLatestMangaUpdates",
     ],
   ],
   ["latest grid styles", catalogStyles, ["grid-template-columns: repeat(7", "latest-update-card"]],

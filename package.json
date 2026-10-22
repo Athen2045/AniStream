@@ -24,6 +24,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:ui": "npm run build && playwright test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -33,6 +34,7 @@
     "package:win": "npm run build && node scripts/write-app-keys.mjs && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.104.5",
     "@videojs/react": "10.1.0",
     "better-sqlite3": "13.0.3",
     "electron-updater": "6.8.9",
@@ -46,6 +48,7 @@
     "@babel/preset-typescript": "^8.0.7",
     "@electron/asar": "^3.4.1",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.64.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
