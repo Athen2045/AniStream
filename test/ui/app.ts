@@ -106,7 +106,10 @@ export async function waitForShell(window: Page): Promise<void> {
 }
 
 /** Opens a side-rail section. The buttons' hidden labels overhang the page, so click the icon. */
-export async function openSection(window: Page, name: "Anime" | "Manga" | "More"): Promise<void> {
+export async function openSection(
+  window: Page,
+  name: "Search" | "Anime" | "Manga" | "More",
+): Promise<void> {
   await window
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("button", { name, exact: true })

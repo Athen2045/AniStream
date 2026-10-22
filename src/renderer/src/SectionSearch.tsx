@@ -1,27 +1,22 @@
 import { Clock3, Info, Play, Plus, Search, SlidersHorizontal, UserRound, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AniListCatalogMedia,
-  AniListCatalogPage,
-  AniListSearchExtras,
   AniListSearchPerson,
   MoreCatalogItem,
-  MoreCatalogPage,
-  MoreMediaType,
 } from "../../shared/contracts";
 import {
   COUNTRY_LABELS,
   FORMAT_LABELS,
   SEASON_LABELS,
   STATUS_LABELS,
-  type AniListFilterOptions,
 } from "../../shared/anilist-filters";
 import { cachedArtworkUrl } from "../../shared/artwork";
 import {
   MORE_LANGUAGES,
   MORE_SORT_LABELS,
   moreFilterCount,
-  moreTypesFor,
   type MoreBrowseFilters,
   type MoreSort,
 } from "../../shared/more-filters";
@@ -30,7 +25,6 @@ import {
   DEFAULT_SORT,
   SORT_LABELS,
   activeFilterCount,
-  browseInput,
   emptyFilters,
   filterKey,
   type CatalogFilterState,
@@ -47,17 +41,24 @@ import {
   useRecentSearches,
 } from "./recent-searches";
 import { friendlyRemoteError } from "./remote-error";
-import { closestTitle, highlightMatch, isConfidentMatch, searchNormalize } from "./search-helpers";
+import { highlightMatch, isConfidentMatch, searchNormalize } from "./search-helpers";
 import { SearchFiltersPanel } from "./SearchFiltersPanel";
+import {
+  didYouMeanQuery,
+  filterOptionsQuery,
+  personTitlesQuery,
+  searchResultsQuery,
+  searchTrendingQuery,
+  type SearchResults as Results,
+  type SearchScope,
+} from "./search-queries";
 import { titleTintStyle } from "./title-accent";
 import type { ViewerAccess } from "./viewer-access";
 
-export type SearchScope = "ANIME" | "MANGA" | "MORE";
+export type { SearchScope } from "./search-queries";
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY = 2;
-const PAGE_SIZE = 30;
-const TRENDING_SIZE = 16;
 const SUGGESTION_TITLES = 4;
 
 const SCOPES: ReadonlyArray<{ id: SearchScope; label: string }> = [
@@ -114,17 +115,6 @@ const filtersByScope: Record<"ANIME" | "MANGA", CatalogFilterState> = {
   MANGA: emptyFilters(),
 };
 let moreFiltersState: MoreBrowseFilters = emptyMoreFilters();
-let filterOptionsRequest: Promise<AniListFilterOptions> | undefined;
-
-function loadFilterOptions(): Promise<AniListFilterOptions> {
-  filterOptionsRequest ??= window.anistream.getAniListFilterOptions().catch((reason: unknown) => {
-    // Let a later visit try again instead of caching the failure.
-    filterOptionsRequest = undefined;
-    throw reason;
-  });
-  return filterOptionsRequest;
-}
-
 function keepQuery(scope: SearchScope, query: string): void {
   queryByScope[scope] = query;
 }
@@ -142,72 +132,8 @@ export function presetSearchGenre(scope: SearchScope, genre: string): void {
   else keepFilters(scope, { ...emptyFilters(), genre });
 }
 
-type Results =
-  | {
-      kind: "anilist";
-      items: AniListCatalogMedia[];
-      page: number;
-      hasNext: boolean;
-      extras?: AniListSearchExtras;
-    }
-  | {
-      kind: "more";
-      items: MoreCatalogItem[];
-      /** Next page per type while filtered browsing has more. */
-      next?: Partial<Record<MoreMediaType, number>>;
-    };
-
-/** One batch of filtered More pages (one per type) merged in the chosen order. */
-async function browseMoreBatch(
-  query: string,
-  filters: MoreBrowseFilters,
-  pages: Partial<Record<MoreMediaType, number>>,
-): Promise<{ items: MoreCatalogItem[]; next: Partial<Record<MoreMediaType, number>> }> {
-  const types = (Object.keys(pages) as MoreMediaType[]).filter((type) => pages[type]);
-  const responses = await Promise.allSettled(
-    types.map((type) =>
-      window.anistream.browseMore({
-        type,
-        page: pages[type]!,
-        sort: filters.sort,
-        ...(query ? { query } : {}),
-        ...(filters.genre ? { genre: filters.genre } : {}),
-        ...(filters.language ? { language: filters.language } : {}),
-        ...(filters.year !== undefined ? { year: filters.year } : {}),
-        ...(filters.minScore !== undefined ? { minScore: filters.minScore } : {}),
-      }),
-    ),
-  );
-  const fulfilled: Array<[MoreMediaType, MoreCatalogPage]> = [];
-  responses.forEach((response, index) => {
-    if (response.status === "fulfilled") fulfilled.push([types[index], response.value]);
-  });
-  if (!fulfilled.length) {
-    const failure = responses.find((response) => response.status === "rejected");
-    if (failure?.status === "rejected") throw failure.reason;
-  }
-  const next: Partial<Record<MoreMediaType, number>> = {};
-  for (const [type, page] of fulfilled)
-    if (page.pageInfo.hasNextPage) next[type] = page.pageInfo.currentPage + 1;
-  return {
-    items: mergeMore(
-      fulfilled.map(([, page]) => page.items),
-      filters.sort,
-    ),
-    next,
-  };
-}
-
-/** Movies and shows together: alternating for popularity, by rating or date otherwise. */
-function mergeMore(lists: MoreCatalogItem[][], sort: MoreSort): MoreCatalogItem[] {
-  if (sort === "rated") return lists.flat().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  if (sort === "newest")
-    return lists.flat().sort((a, b) => (b.releaseDate ?? "").localeCompare(a.releaseDate ?? ""));
-  const mixed: MoreCatalogItem[] = [];
-  for (let index = 0; index < Math.max(0, ...lists.map((list) => list.length)); index += 1)
-    for (const list of lists) if (list[index]) mixed.push(list[index]);
-  return mixed;
-}
+/** Keeps the person-titles query's shape while no studio or character is open (it stays off). */
+const PLACEHOLDER_PERSON: AniListSearchPerson = { kind: "studio", id: 0, name: "" };
 
 type PersonView = {
   /** The search it was opened from; a new search leaves it. */
@@ -257,9 +183,6 @@ export function SectionSearch({
   const [submitted, setSubmitted] = useState(() =>
     queryByScope[scope].trim().length >= MIN_QUERY ? queryByScope[scope].trim() : "",
   );
-  const [results, setResults] = useState<{ key: string; data?: Results; error?: string }>();
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [trending, setTrending] = useState<Results>();
   const recent = useRecentSearches(scope);
   const [savedMore, setSavedMore] = useState<Set<string>>(new Set());
   const catalogScope = scope === "MORE" ? undefined : scope;
@@ -271,12 +194,10 @@ export function SectionSearch({
     scope === "MORE" &&
     (moreFilterCount(moreFilters) > 0 || moreFilters.sort !== DEFAULT_MORE_SORT);
   const filterCount = catalogScope ? activeFilterCount(filters) : moreFilterCount(moreFilters);
-  const [filterOptions, setFilterOptions] = useState<AniListFilterOptions>();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
-  const [personState, setPerson] = useState<PersonView>();
-  const [didYouMean, setDidYouMean] = useState<{ query: string; title: string }>();
+  const [personState, setPerson] = useState<Pick<PersonView, "query" | "person">>();
   // Filters (or a non-default sort) browse the catalog even with an empty search field.
   const browsing = catalogScope ? filterCount > 0 || filters.sort !== DEFAULT_SORT : moreFiltered;
   const searchKey =
@@ -293,18 +214,7 @@ export function SectionSearch({
     setMoreFilters(next);
   };
 
-  useEffect(() => {
-    if (!catalogScope || filterOptions) return;
-    let active = true;
-    void loadFilterOptions()
-      .then((options) => {
-        if (active) setFilterOptions(options);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [catalogScope, filterOptions]);
+  const filterOptions = useQuery({ ...filterOptionsQuery(), enabled: Boolean(catalogScope) }).data;
 
   useEffect(() => inputRef.current?.focus(), []);
 
@@ -331,35 +241,7 @@ export function SectionSearch({
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  useEffect(() => {
-    let active = true;
-    const load: Promise<Results> =
-      scope === "MORE"
-        ? Promise.allSettled([
-            window.anistream.getMoreTrending("MOVIE", 1),
-            window.anistream.getMoreTrending("TV", 1),
-          ]).then(([movies, shows]) => {
-            const left = movies.status === "fulfilled" ? movies.value.items : [];
-            const right = shows.status === "fulfilled" ? shows.value.items : [];
-            const mixed: MoreCatalogItem[] = [];
-            for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
-              if (left[index]) mixed.push(left[index]);
-              if (right[index]) mixed.push(right[index]);
-            }
-            return { kind: "more", items: mixed.slice(0, TRENDING_SIZE) };
-          })
-        : window.anistream
-            .browseAniList({ type: scope, page: 1, perPage: TRENDING_SIZE, sort: "TRENDING_DESC" })
-            .then((page) => ({ kind: "anilist", items: page.items, page: 1, hasNext: false }));
-    void load
-      .then((data) => {
-        if (active) setTrending(data);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [scope]);
+  const trending = useQuery(searchTrendingQuery(scope)).data;
 
   useEffect(() => {
     if (scope !== "MORE") return;
@@ -369,59 +251,29 @@ export function SectionSearch({
       .catch(() => undefined);
   }, [scope]);
 
-  useEffect(() => {
-    if (!searchKey) return;
-    let active = true;
-    const search: Promise<Results> = moreFiltered
-      ? browseMoreBatch(
-          submitted,
-          moreFilters,
-          Object.fromEntries(moreTypesFor(moreFilters).map((type) => [type, 1])),
-        ).then(({ items, next }): Results => ({ kind: "more", items, next }))
-      : scope === "MORE"
-        ? Promise.allSettled([
-            window.anistream.searchMore(submitted, "MOVIE", 1),
-            window.anistream.searchMore(submitted, "TV", 1),
-          ]).then((responses) => {
-            const fulfilled = responses.flatMap((response) =>
-              response.status === "fulfilled" ? response.value.items : [],
-            );
-            if (!fulfilled.length) {
-              const failure = responses.find((response) => response.status === "rejected");
-              if (failure?.status === "rejected") throw failure.reason;
-            }
-            return {
-              kind: "more",
-              items: fulfilled.sort((a, b) => (b.voteCount ?? 0) - (a.voteCount ?? 0)),
-            };
-          })
-        : window.anistream
-            .browseAniList(browseInput(scope, 1, PAGE_SIZE, submitted, filters))
-            .then(toAniListResults);
-    void search
-      .then((data) => {
-        if (active) setResults({ key: searchKey, data });
-      })
-      .catch((reason: unknown) => {
-        if (active)
-          setResults({
-            key: searchKey,
-            error: friendlyRemoteError(reason, {
+  // Each search (query plus filters) has its own cache entry, so a late answer never shows under
+  // another search.
+  const resultsQuery = useInfiniteQuery({
+    ...searchResultsQuery({ scope, query: submitted, filters, moreFilters, moreFiltered }),
+    enabled: Boolean(searchKey),
+  });
+  const loadingMore = resultsQuery.isFetchingNextPage;
+
+  const showingResults = Boolean(searchKey);
+  // A failed "Show more" keeps the results shown; the button stays for another try.
+  const current = showingResults
+    ? resultsQuery.data
+      ? { data: resultsQuery.data }
+      : resultsQuery.error
+        ? {
+            error: friendlyRemoteError(resultsQuery.error, {
               provider: scope === "MORE" ? "TMDB" : "AniList",
               operation: "search results",
               fallback: "Search is unavailable right now. Try again shortly.",
             }),
-          });
-      });
-    return () => {
-      active = false;
-    };
-    // `searchKey` already encodes `submitted` and `filters`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, searchKey]);
-
-  const showingResults = Boolean(searchKey);
-  const current = showingResults && results?.key === searchKey ? results : undefined;
+          }
+        : undefined
+    : undefined;
   const pending = showingResults && !current;
   const count = current?.data?.items.length ?? 0;
   const noMatches = Boolean(showingResults && current?.data && !count);
@@ -437,87 +289,20 @@ export function SectionSearch({
 
   // "Did you mean": only for an unfiltered Anime/Manga search that found nothing. One extra
   // AniList lookup on the first word, by popularity; accepted only within two typos.
-  useEffect(() => {
-    if (!noMatches || looksUnfinished || !catalogScope || filterCount > 0 || !submitted) return;
-    const first = submitted.split(/\s+/)[0] ?? "";
-    if (first.length < MIN_QUERY) return;
-    let active = true;
-    void window.anistream
-      .browseAniList({
-        type: catalogScope,
-        page: 1,
-        perPage: 15,
-        sort: "POPULARITY_DESC",
-        query: first,
-      })
-      .then((page) => {
-        const title = closestTitle(
-          submitted,
-          page.items.map((item) => item.title),
-        );
-        if (active && title) setDidYouMean({ query: submitted, title });
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [catalogScope, filterCount, looksUnfinished, noMatches, submitted]);
+  const didYouMeanTitle = useQuery({
+    ...didYouMeanQuery(catalogScope ?? "ANIME", submitted),
+    enabled:
+      noMatches &&
+      !looksUnfinished &&
+      Boolean(catalogScope) &&
+      filterCount === 0 &&
+      (submitted.split(/\s+/)[0] ?? "").length >= MIN_QUERY,
+  }).data;
+  const didYouMean = didYouMeanTitle ? { query: submitted, title: didYouMeanTitle } : undefined;
 
-  const loadMore = useCallback(async () => {
-    if (results?.data?.kind === "more") {
-      const next = results.data.next;
-      if (!next || !Object.keys(next).length) return;
-      setLoadingMore(true);
-      try {
-        const batch = await browseMoreBatch(submitted, moreFilters, next);
-        setResults((state) => {
-          if (state?.key !== results.key || state.data?.kind !== "more") return state;
-          const seen = new Set(state.data.items.map(moreKey));
-          return {
-            ...state,
-            data: {
-              kind: "more",
-              items: [
-                ...state.data.items,
-                ...batch.items.filter((item) => !seen.has(moreKey(item))),
-              ],
-              next: batch.next,
-            },
-          };
-        });
-      } catch {
-        // Keep the results already shown; the button stays available for another try.
-      } finally {
-        setLoadingMore(false);
-      }
-      return;
-    }
-    if (scope === "MORE" || results?.data?.kind !== "anilist" || !results.data.hasNext) return;
-    const currentPage = results.data;
-    setLoadingMore(true);
-    try {
-      const next = await window.anistream.browseAniList(
-        browseInput(scope, currentPage.page + 1, PAGE_SIZE, submitted, filters),
-      );
-      setResults((state) =>
-        state?.key === results.key && state.data?.kind === "anilist"
-          ? {
-              ...state,
-              data: {
-                ...state.data,
-                items: [...state.data.items, ...next.items],
-                page: next.pageInfo.currentPage,
-                hasNext: next.pageInfo.hasNextPage,
-              },
-            }
-          : state,
-      );
-    } catch {
-      // Keep the results already shown; the button stays available for another try.
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [filters, moreFilters, results, scope, submitted]);
+  const loadMore = (): void => {
+    if (!resultsQuery.isFetching) void resultsQuery.fetchNextPage();
+  };
 
   const remember = (): void => addRecentSearch(scope, query, rememberSearches);
 
@@ -543,29 +328,25 @@ export function SectionSearch({
     remember();
     setSuggestOpen(false);
     setPerson({ query: submitted, person: next });
-    void window.anistream
-      .getAniListPersonTitles(next.kind, next.id, catalogScope)
-      .then((items) =>
-        setPerson((state) => (state?.person.id === next.id ? { ...state, items } : state)),
-      )
-      .catch((reason: unknown) =>
-        setPerson((state) =>
-          state?.person.id === next.id
-            ? {
-                ...state,
-                error: friendlyRemoteError(reason, {
-                  provider: "AniList",
-                  operation: "titles",
-                  fallback: "Their titles are unavailable right now.",
-                }),
-              }
-            : state,
-        ),
-      );
   };
 
   // ---------------------------------------------------------------- what is shown
-  const person = personState?.query === submitted ? personState : undefined;
+  const openedPerson = personState?.query === submitted ? personState : undefined;
+  const personTitles = useQuery({
+    ...personTitlesQuery(openedPerson?.person ?? PLACEHOLDER_PERSON, catalogScope ?? "ANIME"),
+    enabled: Boolean(openedPerson && catalogScope),
+  });
+  const person: PersonView | undefined = openedPerson && {
+    ...openedPerson,
+    items: personTitles.data,
+    error: personTitles.error
+      ? friendlyRemoteError(personTitles.error, {
+          provider: "AniList",
+          operation: "titles",
+          fallback: "Their titles are unavailable right now.",
+        })
+      : undefined,
+  };
   const grid: Results | undefined = person
     ? person.items
       ? { kind: "anilist", items: person.items, page: 1, hasNext: false }
@@ -930,7 +711,6 @@ export function SectionSearch({
               setQuery(event.target.value);
               setSuggestOpen(true);
               setHighlight(-1);
-              setDidYouMean(undefined);
             }}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") {
@@ -1592,16 +1372,6 @@ function TopResult({
       </div>
     </article>
   );
-}
-
-function toAniListResults(page: AniListCatalogPage): Results {
-  return {
-    kind: "anilist",
-    items: page.items,
-    page: page.pageInfo.currentPage,
-    hasNext: page.pageInfo.hasNextPage,
-    extras: page.searchExtras,
-  };
 }
 
 function formatTag(format: string | undefined): string | undefined {

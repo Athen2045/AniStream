@@ -2,6 +2,179 @@
   {
     "match": "graphql.anilist.co",
     "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixture Quest\"", "\"page\":1,"],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 1,
+            "perPage": 30,
+            "lastPage": 2,
+            "hasNextPage": true
+          },
+          "media": [
+            {
+              "id": 8400001,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Quest",
+                "english": "Fixture Quest",
+                "userPreferred": "Fixture Quest"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8400001.jpg"
+              },
+              "format": "TV",
+              "status": "FINISHED",
+              "episodes": 12,
+              "genres": ["Adventure"],
+              "averageScore": 70,
+              "popularity": 500,
+              "seasonYear": 2024,
+              "siteUrl": "https://anilist.co/anime/8400001"
+            },
+            {
+              "id": 8400002,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Quest Returns",
+                "english": "Fixture Quest Returns",
+                "userPreferred": "Fixture Quest Returns"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8400002.jpg"
+              },
+              "format": "TV",
+              "status": "FINISHED",
+              "episodes": 12,
+              "genres": ["Adventure"],
+              "averageScore": 70,
+              "popularity": 500,
+              "seasonYear": 2024,
+              "siteUrl": "https://anilist.co/anime/8400002"
+            }
+          ]
+        },
+        "other": {
+          "media": []
+        },
+        "characters": {
+          "characters": []
+        },
+        "studios": {
+          "studios": []
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixture Quest\"", "\"page\":2,"],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 2,
+            "perPage": 30,
+            "lastPage": 2,
+            "hasNextPage": false
+          },
+          "media": [
+            {
+              "id": 8400003,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Quest Finale",
+                "english": "Fixture Quest Finale",
+                "userPreferred": "Fixture Quest Finale"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8400003.jpg"
+              },
+              "format": "TV",
+              "status": "FINISHED",
+              "episodes": 12,
+              "genres": ["Adventure"],
+              "averageScore": 70,
+              "popularity": 500,
+              "seasonYear": 2024,
+              "siteUrl": "https://anilist.co/anime/8400003"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixtre Quest\""],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 1,
+            "perPage": 30,
+            "lastPage": 1,
+            "hasNextPage": false
+          },
+          "media": []
+        },
+        "other": {
+          "media": []
+        },
+        "characters": {
+          "characters": []
+        },
+        "studios": {
+          "studios": []
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixtre\""],
+    "json": {
+      "data": {
+        "Page": {
+          "pageInfo": {
+            "currentPage": 1,
+            "perPage": 15,
+            "lastPage": 1,
+            "hasNextPage": false
+          },
+          "media": [
+            {
+              "id": 8400001,
+              "type": "ANIME",
+              "title": {
+                "romaji": "Fixture Quest",
+                "english": "Fixture Quest",
+                "userPreferred": "Fixture Quest"
+              },
+              "coverImage": {
+                "large": "https://img.anilist.example/8400001.jpg"
+              },
+              "format": "TV",
+              "status": "FINISHED",
+              "episodes": 12,
+              "genres": ["Adventure"],
+              "averageScore": 70,
+              "popularity": 500,
+              "seasonYear": 2024,
+              "siteUrl": "https://anilist.co/anime/8400001"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
     "bodyIncludes": ["TRENDING_DESC", "\"type\":\"ANIME\""],
     "json": {
       "data": {
