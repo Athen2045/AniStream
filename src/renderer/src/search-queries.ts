@@ -6,6 +6,7 @@ import type {
   AniListSearchExtras,
   AniListSearchPerson,
   AniStreamBridge,
+  BrowseAniListInput,
   MoreCatalogItem,
   MoreCatalogPage,
   MoreMediaType,
@@ -210,6 +211,39 @@ export function personTitlesQuery(
   return queryOptions({
     queryKey: ["search", "person", person.kind, person.id, type] as const,
     queryFn: () => api.getAniListPersonTitles(person.kind, person.id, type),
+    staleTime: RESULTS_STALE_MS,
+  });
+}
+
+export type ProfileSearchType = "ALL" | AniListMediaType;
+export type ProfileSearchSort = NonNullable<BrowseAniListInput["sort"]>;
+export interface ProfileSearchFilters {
+  query: string;
+  type: ProfileSearchType;
+  genre: string;
+  sort: ProfileSearchSort;
+}
+
+/**
+ * One page of the Profile page's "Add title" search in one section. A new page keeps the previous
+ * one on screen while it loads; a new search (query, genre or sort) starts empty.
+ */
+export function profileSearchQuery(
+  type: AniListMediaType,
+  filters: ProfileSearchFilters,
+  page: number,
+  api: SearchApi = window.anistream,
+) {
+  const { query, genre, sort } = filters;
+  return queryOptions({
+    queryKey: ["search", "profile", type, query, genre, sort, page] as const,
+    queryFn: () =>
+      api.browseAniList({ type, page, perPage: 24, query, genre: genre || undefined, sort }),
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey.slice(0, 6).join("|") ===
+      ["search", "profile", type, query, genre, sort].join("|")
+        ? previous
+        : undefined,
     staleTime: RESULTS_STALE_MS,
   });
 }

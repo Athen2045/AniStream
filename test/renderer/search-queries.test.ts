@@ -12,6 +12,8 @@ import { createAppQueryClient } from "../../src/renderer/src/query-client";
 import {
   didYouMeanQuery,
   mergeSearchPages,
+  profileSearchQuery,
+  type ProfileSearchFilters,
   searchResultsQuery,
   searchTrendingQuery,
   type SearchResults,
@@ -122,5 +124,42 @@ describe("search queries", () => {
       query: "Freiren",
       sort: "POPULARITY_DESC",
     });
+  });
+});
+
+describe("profileSearchQuery", () => {
+  const filters: ProfileSearchFilters = {
+    query: "Frieren",
+    type: "ALL",
+    genre: "",
+    sort: "POPULARITY_DESC",
+  };
+
+  it("asks for one section's page of 24 and leaves an empty genre out", async () => {
+    const bridge = api();
+    await createAppQueryClient().fetchQuery(profileSearchQuery("MANGA", filters, 2, bridge));
+    expect(bridge.browseAniList).toHaveBeenCalledWith({
+      type: "MANGA",
+      page: 2,
+      perPage: 24,
+      query: "Frieren",
+      genre: undefined,
+      sort: "POPULARITY_DESC",
+    });
+  });
+
+  it("keeps the previous page on screen only within the same search and section", () => {
+    const placeholder = profileSearchQuery("ANIME", filters, 2, api()).placeholderData as (
+      previous: AniListCatalogPage | undefined,
+      previousQuery: { queryKey: readonly unknown[] } | undefined,
+    ) => AniListCatalogPage | undefined;
+    const previous = catalogPage(1, [1], true);
+    const key = (type: string, query: string, page: number) => ({
+      queryKey: ["search", "profile", type, query, "", "POPULARITY_DESC", page],
+    });
+
+    expect(placeholder(previous, key("ANIME", "Frieren", 1))).toBe(previous);
+    expect(placeholder(previous, key("ANIME", "Naruto", 1))).toBeUndefined();
+    expect(placeholder(previous, key("MANGA", "Frieren", 1))).toBeUndefined();
   });
 });

@@ -2,6 +2,20 @@
   {
     "match": "graphql.anilist.co",
     "method": "POST",
+    "bodyIncludes": ["\"search\":\"Fixture Broken\""],
+    "status": 500,
+    "json": {
+      "errors": [
+        {
+          "message": "Internal Server Error",
+          "status": 500
+        }
+      ]
+    }
+  },
+  {
+    "match": "graphql.anilist.co",
+    "method": "POST",
     "bodyIncludes": ["\"search\":\"Fixture Quest\"", "\"page\":1,"],
     "json": {
       "data": {

@@ -141,3 +141,38 @@ export async function watchPainted(
       id,
     );
 }
+
+/** The fixture AniList account `stubMember` signs in (renderer only; no token exists anywhere). */
+export const FIXTURE_MEMBER = {
+  id: 7_000_001,
+  name: "FixtureViewer",
+  avatarUrl: "https://img.anilist.example/avatar.png",
+  siteUrl: "https://anilist.co/user/FixtureViewer",
+  animeCount: 0,
+  episodesWatched: 0,
+  minutesWatched: 0,
+  mangaCount: 0,
+  chaptersRead: 0,
+  volumesRead: 0,
+};
+
+/**
+ * A `launchApp({ setup })` step: answers the window's AniList sign-in and library calls with a
+ * signed-in fixture member and empty lists, so member-only screens (Profile, library) can be
+ * tested. The main process itself stays signed out.
+ */
+export async function stubMember(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ ipcMain }, profile) => {
+    const dashboard = {
+      profile,
+      animeLists: [],
+      mangaLists: [],
+      fetchedAt: new Date().toISOString(),
+    };
+    for (const channel of ["anilist:auth-state", "anilist:dashboard", "anilist:cached-dashboard"])
+      ipcMain.removeHandler(channel);
+    ipcMain.handle("anilist:auth-state", () => ({ status: "signed-in", profile }));
+    ipcMain.handle("anilist:dashboard", () => dashboard);
+    ipcMain.handle("anilist:cached-dashboard", () => dashboard);
+  }, FIXTURE_MEMBER);
+}
