@@ -63,6 +63,7 @@ import { WindowsUpdateInstaller, type UpdaterAdapter } from "./update-install";
 import { UpdateService } from "./update-service";
 import { trackUpdateWindowHealth } from "./update-window-health";
 import { startDevTiming } from "./dev-performance";
+import { installTestMode } from "./test-mode";
 import { ArtworkCache } from "./artwork-cache";
 import { FieldSnapshots } from "./field-snapshots";
 import { PROVIDER_USER_AGENT } from "./provider-transport";
@@ -108,6 +109,10 @@ protocol.registerSchemesAsPrivileged([
   { scheme: ARTWORK_SCHEME, privileges: { standard: true, secure: true } },
   streamSchemePrivileges(),
 ]);
+
+// Development-only Playwright runs: fixture network and a throwaway profile (see test-mode.ts).
+// Before the single-instance lock, which is keyed by the profile folder.
+const testMode = installTestMode();
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
@@ -248,7 +253,8 @@ void app
       ? Promise.resolve(undefined)
       : startRendererServer(join(__dirname, "../renderer"), {
           frameOrigins: embeddedPlayerOrigins(),
-          port: RENDERER_PORT,
+          // A test run never takes the real profile's saved-origin port.
+          port: testMode ? 0 : RENDERER_PORT,
         });
     // Keep server startup and database opening concurrent, but wait for both before
     // exposing a BrowserWindow. That gives the renderer one trustworthy IPC boundary.

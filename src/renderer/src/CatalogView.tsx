@@ -33,7 +33,6 @@ import { StarterRails } from "./StarterRails";
 import { GenreRail } from "./GenreRail";
 import { genreRowInput } from "./starter-rows";
 
-const NO_AVAILABILITY_MEDIA: [] = [];
 const HERO_SIZE = 6;
 const noSubscribe = (): (() => void) => () => undefined;
 
@@ -77,8 +76,6 @@ export function CatalogView({
     setLatestPage,
   } = useCatalogData({
     type,
-    availabilityMedia: NO_AVAILABILITY_MEDIA,
-    trackAvailabilityNow: false,
     latest: preferences.latestUpdates,
   });
   // Genres hidden in Settings stay out of Trending and the hero.

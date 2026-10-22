@@ -44,3 +44,7 @@ prototypes/
 
 # Personal library snapshots for the recommendation evaluation harness
 /test/fixtures/personal/
+
+# Playwright UI test output
+test-results/
+playwright-report/
