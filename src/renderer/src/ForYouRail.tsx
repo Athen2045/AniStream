@@ -1,12 +1,12 @@
 import { RefreshCw, ThumbsDown } from "lucide-react";
-import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { AniListCatalogMedia, AniListMediaType } from "../../shared/contracts";
 import type { RecommendationResult } from "../../shared/recommendations";
 import { ContentCarousel } from "./ContentCarousel";
 import { RailHoverActions } from "./RailHoverActions";
 import { CoverImage } from "./CoverImage";
 import type { ViewerAccess } from "./viewer-access";
-import type { createDiscoverySession } from "./discovery-session";
+import type { ForYou } from "./useForYou";
 import { friendlyRemoteError } from "./remote-error";
 import { arrangeFeed, type FeedSlot } from "./feed-layout";
 
@@ -16,32 +16,31 @@ export function ForYouRail({
   onPrimary,
   onLibrary,
   access,
-  session,
+  forYou: state,
   slots = {},
 }: {
   type: AniListMediaType;
   /** The page's own rails, placed between the For You rows (see `feed-layout.ts`). */
   slots?: Partial<Record<FeedSlot, ReactNode>>;
   /** Owned by the page, which shares the feed with its hero. */
-  session: ReturnType<typeof createDiscoverySession>;
+  forYou: ForYou;
   onSelect: (media: AniListCatalogMedia) => void;
   onPrimary?: (media: AniListCatalogMedia) => void;
   onLibrary?: (media: AniListCatalogMedia) => Promise<void>;
   access?: ViewerAccess;
 }): React.JSX.Element {
-  const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const section = useRef<HTMLElement>(null);
+  const { ensure } = state;
   const [refreshSpin, setRefreshSpin] = useState(0);
   useEffect(() => {
     let visible = false;
     // Scrolling to the rail or returning to the window only fills an empty rail; the viewer's own
     // activity rebuilds a feed older than a minute.
     const show = (): void => {
-      if (visible && document.visibilityState === "visible")
-        void session.ensure(Number.POSITIVE_INFINITY);
+      if (visible && document.visibilityState === "visible") ensure(Number.POSITIVE_INFINITY);
     };
     const load = (): void => {
-      if (visible && document.visibilityState === "visible") void session.ensure(60_000);
+      if (visible && document.visibilityState === "visible") ensure(60_000);
     };
     const observer = new IntersectionObserver(
       (entries) => {
@@ -60,7 +59,7 @@ export function ForYouRail({
       window.removeEventListener("anistream:activity-updated", load);
       document.removeEventListener("visibilitychange", show);
     };
-  }, [session]);
+  }, [ensure]);
   const items = state.feed?.items ?? [];
   // Rows whose titles were all dismissed disappear rather than leaving an empty heading.
   const rows = (state.feed?.rows ?? []).filter((row) => row.items.length);
@@ -74,10 +73,10 @@ export function ForYouRail({
       onLibrary={onLibrary}
       inLibrary={access?.kind === "member" && access.libraryEntries.has(item.anilistId)}
       busy={state.busy}
-      onVisible={() => void session.visible(item)}
-      onDismiss={() => void session.dismiss(item)}
+      onVisible={() => state.visible(item)}
+      onDismiss={() => state.dismiss(item)}
       onOpen={() => {
-        void session.explore(item);
+        state.explore(item);
         onSelect({
           id: item.anilistId,
           type: item.mediaType,
@@ -107,7 +106,7 @@ export function ForYouRail({
             disabled={state.loading || state.busy}
             onClick={() => {
               setRefreshSpin((spin) => spin + 1);
-              void session.load();
+              state.refresh();
             }}
           >
             <RefreshCw
@@ -137,7 +136,7 @@ export function ForYouRail({
         {state.undo ? (
           <p className="personal-sync" role="status">
             Title hidden from For You.{" "}
-            <button type="button" disabled={state.busy} onClick={() => void session.undo()}>
+            <button type="button" disabled={state.busy} onClick={state.undoDismiss}>
               Undo
             </button>
           </p>

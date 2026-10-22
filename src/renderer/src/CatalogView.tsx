@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { motion, useScroll, useSpring } from "framer-motion";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListMediaType,
@@ -21,8 +21,7 @@ import { useAppReducedMotion } from "./useAppReducedMotion";
 import { AniListSourceIcon } from "./AniListSourceIcon";
 import { usePersonalLibrary } from "./PersonalLibraryProvider";
 import { startBrowsing } from "./play-timer";
-import { sharedDiscoverySession } from "./discovery-session";
-import type { DiscoveryFeed } from "../../shared/discovery";
+import { useForYou } from "./useForYou";
 import { HERO_SLIDES, mixHeroPicks, withTrendingSlide } from "./hero-picks";
 import { usePersonalHero } from "./usePersonalHero";
 import { LegalFooter } from "./LegalFooter";
@@ -34,7 +33,6 @@ import { GenreRail } from "./GenreRail";
 import { genreRowInput } from "./starter-rows";
 
 const HERO_SIZE = 6;
-const noSubscribe = (): (() => void) => () => undefined;
 
 export function CatalogView({
   type,
@@ -91,29 +89,15 @@ export function CatalogView({
   // One For You feed per section and viewer, shared by the hero and the For You rail. Without
   // AniList it learns from what is watched or read on this device (owner "guest").
   const viewerKey = access.kind === "member" ? String(access.dashboard.profile.id) : "guest";
-  const forYouKey = preferences.forYou ? `${type}:${viewerKey}` : undefined;
-  const forYouSession = useMemo(
-    () => (forYouKey ? sharedDiscoverySession(forYouKey, type) : undefined),
-    [forYouKey, type],
-  );
-  useEffect(() => {
-    if (!forYouSession) return;
-    forYouSession.activate();
-    // Shared for the app session: returning to this section shows the feed it already has.
-    void forYouSession.ensure(Number.POSITIVE_INFINITY);
-  }, [forYouSession]);
-  const forYouFeedSnapshot = (): DiscoveryFeed | undefined => forYouSession?.getSnapshot().feed;
-  const forYouFeed = useSyncExternalStore(
-    forYouSession?.subscribe ?? noSubscribe,
-    forYouFeedSnapshot,
-    forYouFeedSnapshot,
-  );
+  // Kept for the app session: returning to this section shows the feed it already has.
+  const forYou = useForYou(type, viewerKey, preferences.forYou);
+  const forYouFeed = forYou.feed;
   const verb = type === "MANGA" ? "read" : "watched";
   // From three titles watched/read here, the hero mixes For You with "Because you…" picks.
   const personalHero = usePersonalHero<AniListCatalogMedia>({
     section: type,
     owner: viewerKey,
-    enabled: Boolean(forYouKey),
+    enabled: preferences.forYou,
     feedKey: forYouFeed?.requestId,
     sectionTitles: forYouFeed?.sectionTitles,
     build: async () => {
@@ -177,11 +161,11 @@ export function CatalogView({
   // The hero image gets the early paint; everything below it stays lazy to protect scrolling.
   // Trending: the page's popular anchor. With For You on it sits after the next-seasons row
   // (`feed-layout.ts`); otherwise it keeps its place after Continue.
-  const forYouShown = Boolean(forYouSession);
+  const forYouShown = preferences.forYou;
   // Starter rows fill the page until For You has learned enough (`starter-rows.ts`).
   // A guest's feed is usually still learning, so their starter rows show without waiting for it.
   const starterShown =
-    !forYouSession ||
+    !forYouShown ||
     forYouFeed?.status === "learning" ||
     forYouFeed?.status === "unavailable" ||
     (!forYouFeed && access.kind !== "member");
@@ -367,11 +351,11 @@ export function CatalogView({
             />
 
             {/* For You right after Continue: the most relevant picks first. */}
-            {forYouShown && forYouSession ? (
+            {forYouShown ? (
               <ForYouRail
                 slots={{ afterContinuation: trendingRails, middle: starterRails, end: genreRail }}
-                key={`for-you:${forYouKey}`}
-                session={forYouSession}
+                key={`for-you:${type}:${viewerKey}`}
+                forYou={forYou}
                 type={type}
                 onSelect={onSelect}
                 onPrimary={onPrimary}

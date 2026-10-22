@@ -1,4 +1,5 @@
 import React from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type {
@@ -79,6 +80,7 @@ vi.mock("../../src/renderer/src/useCatalogData", () => ({
 import { CatalogView } from "../../src/renderer/src/CatalogView";
 import { PersonalLibraryProvider } from "../../src/renderer/src/PersonalLibraryProvider";
 import { MediaDetailModal } from "../../src/renderer/src/MediaDetailModal";
+import { createAppQueryClient } from "../../src/renderer/src/query-client";
 
 const guestAccess: ViewerAccess = { kind: "guest" };
 const memberAccess: ViewerAccess = {
@@ -100,13 +102,16 @@ function renderCatalog(access: ViewerAccess): string {
   });
   try {
     return renderToStaticMarkup(
-      React.createElement(PersonalLibraryProvider, {
-        access,
-        children: React.createElement(CatalogView, {
-          type: "ANIME",
+      React.createElement(QueryClientProvider, {
+        client: createAppQueryClient(),
+        children: React.createElement(PersonalLibraryProvider, {
           access,
-          onSelect: vi.fn(),
-          onPrimary: vi.fn(),
+          children: React.createElement(CatalogView, {
+            type: "ANIME",
+            access,
+            onSelect: vi.fn(),
+            onPrimary: vi.fn(),
+          }),
         }),
       }),
     );

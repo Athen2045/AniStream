@@ -21,10 +21,15 @@ export interface TestApp {
  * Launches the built app (`npm run build` first) with a throwaway profile, the example provider
  * config (`.example` hosts only) and the fixture network from `fixtures/network.json`: no request
  * from the main process or the window reaches a real provider. `seed` edits the profile's
- * database between a first launch (which creates it) and the launch the test uses.
+ * database between a first launch (which creates it) and the launch the test uses. `setup` runs
+ * before the window loads the renderer the test uses, e.g. to stub a main-process handler.
  */
 export async function launchApp(
-  options: { tmdb?: boolean; seed?: (database: string) => void } = {},
+  options: {
+    tmdb?: boolean;
+    seed?: (database: string) => void;
+    setup?: (app: ElectronApplication) => Promise<void>;
+  } = {},
 ): Promise<TestApp> {
   const workDir = mkdtempSync(join(tmpdir(), "anistream-ui-"));
   copyFileSync(join(ROOT, "providers.example.json"), join(workDir, "providers.local.json"));
@@ -44,7 +49,7 @@ export async function launchApp(
     await first.app.close();
     options.seed(join(workDir, "profile", "anistream.sqlite"));
   }
-  const { app, window } = await start(workDir, env);
+  const { app, window } = await start(workDir, env, options.setup);
   return {
     app,
     window,
@@ -58,6 +63,7 @@ export async function launchApp(
 async function start(
   workDir: string,
   env: Record<string, string>,
+  setup?: (app: ElectronApplication) => Promise<void>,
 ): Promise<{ app: ElectronApplication; window: Page }> {
   const app = await electron.launch({ args: [ROOT], cwd: workDir, env });
   app.process().stderr?.on("data", (chunk: Buffer) => {
@@ -65,6 +71,7 @@ async function start(
     if (text.includes("[AniStream test]")) process.stderr.write(text);
   });
   const window = await app.firstWindow();
+  await setup?.(app);
   // Settings > Reduce motion (Windows ignores the system setting): no animation left half-run.
   await window.evaluate(() =>
     localStorage.setItem("anistream.preferences", JSON.stringify({ reduceMotion: true })),
