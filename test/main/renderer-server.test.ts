@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -49,5 +49,19 @@ describe("renderer loopback port", () => {
     const again = await startRendererServer(root, { frameOrigins: [], port });
     expect(again.origin).toBe(`http://127.0.0.1:${port}`);
     await again.close();
+  });
+
+  it("serves WebAssembly as application/wasm, so the subtitle renderer can compile it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "anistream-renderer-"));
+    mkdirSync(join(root, "assets"));
+    writeFileSync(join(root, "assets", "renderer-worker.wasm"), Buffer.from([0, 97, 115, 109]));
+    const server = await startRendererServer(root, { frameOrigins: [], port: 0 });
+    try {
+      const response = await fetch(new URL("/assets/renderer-worker.wasm", server.url));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("application/wasm");
+    } finally {
+      await server.close();
+    }
   });
 });
