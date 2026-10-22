@@ -26,6 +26,9 @@ updates:
       # Electron majors change the Chromium runtime and native ABI (better-sqlite3); upgrade by hand.
       - dependency-name: electron
         update-types: [version-update:semver-major]
+      # Node types must match the Node bundled in Electron (Electron 44 runs Node 24); move with Electron.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
