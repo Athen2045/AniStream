@@ -12,6 +12,7 @@ import type {
 import { getAppPreferences } from "../app-preferences";
 import { saveAnimeActivity } from "../local-activity";
 import { PlayerStarting } from "../PlayerStarting";
+import { NextUpButton } from "./NextUpButton";
 import { PlayerControls, type PlayerOption } from "./PlayerControls";
 import {
   baseLanguage,
@@ -82,6 +83,8 @@ export function OwnAnimePlayer({
   const [resumedAt, setResumedAt] = useState<number | null>(null);
   const [autoplay, setAutoplay] = useState(readAutoplay);
   const [upNext, setUpNext] = useState<number | null>(null);
+  // The next-episode button after the end, also once its countdown is cancelled or autoplay is off.
+  const [nextOffered, setNextOffered] = useState(false);
   const lastSaveRef = useRef(0);
   const watchedRef = useRef(false);
   // Opening/ending for the Skip button (AniSkip, by MAL id), and where playback is inside one.
@@ -333,7 +336,9 @@ export function OwnAnimePlayer({
 
   const onEnded = (): void => {
     markWatched();
-    if (autoplay && nextEpisode) setUpNext(AUTOPLAY_SECONDS);
+    if (!nextEpisode) return;
+    setNextOffered(true);
+    if (autoplay) setUpNext(AUTOPLAY_SECONDS);
   };
 
   useEffect(() => {
@@ -363,15 +368,20 @@ export function OwnAnimePlayer({
   const [runtimeDismissed, setRuntimeDismissed] = useState(false);
   const runtimeWarning = ready?.runtime?.mismatch && !runtimeDismissed ? ready.runtime : undefined;
 
+  // The end-of-episode prompt sits where Skip opening does, visible while the controls hide.
+  const nextUp =
+    nextOffered && nextEpisode ? (
+      <NextUpButton
+        heading="Next episode"
+        title={episodeLabel(nextEpisode)}
+        remaining={upNext ?? undefined}
+        total={AUTOPLAY_SECONDS}
+        onPlay={() => onNext(nextEpisode)}
+        onCancel={() => setUpNext(null)}
+      />
+    ) : null;
   const note =
-    upNext !== null && nextEpisode ? (
-      <span role="status">
-        Next episode in {upNext}
-        <button type="button" onClick={() => setUpNext(null)}>
-          Cancel
-        </button>
-      </span>
-    ) : resumedAt !== null ? (
+    resumedAt !== null ? (
       <span role="status">
         Resumed at {clock(resumedAt)}
         <button
@@ -509,6 +519,7 @@ export function OwnAnimePlayer({
             subtitles={{ options: subtitleOptions, current: subtitleId, choose: chooseSubtitle }}
             audio={{ options: audioTracks, current: audioCurrent, choose: chooseAudio }}
           />
+          {nextUp}
         </Container>
       </VideoPlayer>
     </div>

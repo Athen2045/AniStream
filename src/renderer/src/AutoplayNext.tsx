@@ -1,9 +1,9 @@
-import { SkipForward, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { BingeEntry } from "../../shared/binge";
 import { useOptionalBinge } from "./BingeProvider";
 import { bingeItemTitle } from "./binge-session";
 import { useAppPreferences } from "./app-preferences";
+import { NextUpButton } from "./player/NextUpButton";
 
 /** Seconds before autoplay starts what comes next (user decision 2026-10-06). */
 export const AUTOPLAY_SECONDS = 5;
@@ -64,35 +64,13 @@ export function AutoplayNext({ next }: { next: NextUp }): React.JSX.Element {
   }, [counting, remaining]);
 
   return (
-    <div className="next-preview-wrap">
-      <button
-        className="next-preview"
-        type="button"
-        onClick={next.play}
-        style={
-          counting
-            ? ({
-                "--autoplay-progress": `${(AUTOPLAY_SECONDS - remaining) / AUTOPLAY_SECONDS}`,
-              } as React.CSSProperties)
-            : undefined
-        }
-      >
-        <span>{counting ? `${next.heading} in ${remaining}` : next.heading}</span>
-        <strong>{next.title}</strong>
-        <SkipForward size={22} />
-        {counting ? <i className="next-preview-progress" aria-hidden="true" /> : null}
-      </button>
-      {counting ? (
-        <button
-          type="button"
-          className="next-preview-cancel"
-          aria-label="Cancel autoplay"
-          title="Cancel autoplay"
-          onClick={() => setCancelled(true)}
-        >
-          <X size={16} aria-hidden="true" />
-        </button>
-      ) : null}
-    </div>
+    <NextUpButton
+      heading={next.heading}
+      title={next.title}
+      remaining={counting ? remaining : undefined}
+      total={AUTOPLAY_SECONDS}
+      onPlay={next.play}
+      onCancel={() => setCancelled(true)}
+    />
   );
 }

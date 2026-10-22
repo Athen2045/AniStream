@@ -83,8 +83,10 @@ function episodePosition(season: unknown, episode: unknown): { season?: number; 
   return s !== undefined && e !== undefined ? { season: s, episode: e } : {};
 }
 
+/** A positive integer, also when a player posts it as text ("3"). */
 function positiveInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+  const number = typeof value === "string" ? numericText(value) : value;
+  return typeof number === "number" && Number.isInteger(number) && number > 0 ? number : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
