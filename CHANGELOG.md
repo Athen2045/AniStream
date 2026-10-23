@@ -6,6 +6,22 @@ All notable changes to AniStream are listed here. Each release has full notes in
 Legend: 🎉 new feature · 💄 design · ⚡️ improvement · 🦺 fix · 🔒 security · 🏗️ internal or
 compatibility · ⬆️ dependency update
 
+## v2.1.0 (2026-10-22)
+
+A new look, a new Search, our own video player with Skip opening and ending, and anime downloads
+you can watch offline. [Full notes](.github/releases/v2.1.0.md)
+
+- 🎉 New look: A slim side rail replaces the top bar, with a darker theme
+- 🎉 Search: Anime, Manga or Movies & TV with results as you type, filters and "Did you mean"
+- 🎉 Own player: Skip opening and ending, seek previews, audio and subtitle choice, automatic backup
+- 🎉 Downloads: Watch anime episodes offline; title pages you've opened work offline too
+- 🎉 For You without an account, learning from what you watch and read on this device
+- ⚡️ Trending, For You and Search stay loaded when you switch sections
+- ⚡️ Next-episode countdown matches Skip opening and shows in fullscreen
+- ⚡️ Aired episodes that aren't available yet are named instead of showing broken tiles
+- 🦺 Movies & TV: Next episodes watched inside the player now update Continue Watching
+- 🦺 For You: Not interested works again, and titles opened from it list every episode
+
 ## v2.0.1 (2026-10-11)
 
 In-app updates on Windows, a taste map, smarter For You, and about half the memory at idle.

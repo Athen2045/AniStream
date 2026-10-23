@@ -98,7 +98,6 @@ export function MoreWatchExperience({
         season: playbackInput.season,
         episode: playbackInput.episode,
         saveResume: (input) => window.anistream.saveMorePlaybackResume(input),
-        clearResume: () => window.anistream.clearMorePlaybackResume(playbackInput),
       }),
     [item.id, item.type, playbackInput, attempt.id],
   );
@@ -427,7 +426,10 @@ export function MoreWatchExperience({
           />
         )}
 
-        {snapshot.ended && nextUp ? <AutoplayNext next={nextUp} /> : null}
+        {/* The next episode follows the one opened; once the player moved on by itself, it does. */}
+        {snapshot.ended && nextUp && snapshot.episode === playbackInput.episode ? (
+          <AutoplayNext next={nextUp} />
+        ) : null}
 
         {snapshot.persistenceError ? (
           <div className="watch-player-error" role="alert">

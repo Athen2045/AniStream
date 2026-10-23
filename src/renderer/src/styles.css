@@ -1182,42 +1182,6 @@ a.rail-card {
   opacity: 0.62;
 }
 
-.next-preview {
-  position: absolute;
-  z-index: 4;
-  right: 20px;
-  bottom: 84px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px 16px;
-  align-items: center;
-  width: min(290px, 45%);
-  padding: 13px;
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  background: var(--surface-overlay);
-  cursor: pointer;
-  text-align: left;
-}
-
-.next-preview span {
-  color: var(--muted);
-  font-size: 0.64rem;
-  text-transform: uppercase;
-}
-
-.next-preview strong {
-  overflow: hidden;
-  font-size: 0.75rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.next-preview svg {
-  grid-row: 1 / 3;
-  grid-column: 2;
-}
-
 /* Episode browser and immersive anime player surface */
 .watch-experience {
   margin: 0 0 42px;
@@ -1681,13 +1645,6 @@ a.rail-card {
 
 .watch-player-view .player-unavailable > p {
   max-width: 620px;
-}
-
-.watch-player-view .next-preview {
-  z-index: 25;
-  right: clamp(24px, 4vw, 62px);
-  bottom: clamp(92px, 13vh, 150px);
-  width: min(350px, 42vw);
 }
 
 .watch-player-error {

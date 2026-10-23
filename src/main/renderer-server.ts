@@ -201,6 +201,9 @@ function contentType(filePath: string): string {
       return "font/woff2";
     case ".ttf":
       return "font/ttf";
+    // The subtitle renderer's WebAssembly compiles only when served as application/wasm.
+    case ".wasm":
+      return "application/wasm";
     default:
       return "application/octet-stream";
   }

@@ -14,16 +14,18 @@ interface FixtureRoute {
 }
 
 /**
- * Development-only switch for Playwright runs (ANISTREAM_TEST_FIXTURES=<routes.json>): every
- * main-process `fetch` is answered from the fixture file and anything else is refused, so a test
- * never reaches a real provider. ANISTREAM_TEST_USER_DATA keeps the run out of the real profile.
- * Ignored in packaged builds. Must run before any client is constructed.
+ * Development-only switches for Playwright runs, ignored in packaged builds; call before any client
+ * is constructed. ANISTREAM_TEST_USER_DATA keeps a run out of the real profile (also for paced
+ * live checks against real providers). ANISTREAM_TEST_FIXTURES=<routes.json> answers every
+ * main-process `fetch` from that file and refuses anything else, so a test never reaches a real
+ * provider.
  */
 export function installTestMode(): boolean {
   const fixtureFile = process.env.ANISTREAM_TEST_FIXTURES;
-  if (app.isPackaged || !fixtureFile) return false;
   const userData = process.env.ANISTREAM_TEST_USER_DATA;
+  if (app.isPackaged || (!fixtureFile && !userData)) return false;
   if (userData) app.setPath("userData", userData);
+  if (!fixtureFile) return true;
   const routes = parseRoutes(JSON.parse(readFileSync(fixtureFile, "utf8")) as unknown);
   globalThis.fetch = async (input, init) => {
     const request = input instanceof Request ? input : undefined;

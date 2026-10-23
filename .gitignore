@@ -45,6 +45,7 @@ prototypes/
 # Personal library snapshots for the recommendation evaluation harness
 /test/fixtures/personal/
 
-# Playwright UI test output
+# Playwright UI test output, and local live-check scripts (real providers: never committed)
 test-results/
 playwright-report/
+test/ui/tmp/

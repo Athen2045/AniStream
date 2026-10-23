@@ -26,7 +26,6 @@ describe("MorePlaybackSession", () => {
       type: "MOVIE",
       attempt: 0,
       saveResume: vi.fn().mockResolvedValue(undefined),
-      clearResume: vi.fn().mockResolvedValue(undefined),
     });
     const at = (currentTime: number): MorePlayerMessage => ({
       ...progress("27205", "movie"),
@@ -50,7 +49,6 @@ describe("MorePlaybackSession", () => {
       type: "MOVIE",
       attempt: 0,
       saveResume: vi.fn(),
-      clearResume: vi.fn(),
     });
     other.handleEvent(at(10));
     other.handleEvent(at(20));
@@ -68,7 +66,6 @@ describe("MorePlaybackSession", () => {
       episode: 1,
       attempt: 0,
       saveResume,
-      clearResume: vi.fn().mockResolvedValue(undefined),
     });
 
     session.handleEvent(progress("93405", "tv", { season: 1, episode: 1 }));
@@ -91,7 +88,6 @@ describe("MorePlaybackSession", () => {
       type: "MOVIE",
       attempt: 0,
       saveResume,
-      clearResume: vi.fn(),
     });
 
     session.handleEvent(progress("1", "movie"));
@@ -101,25 +97,56 @@ describe("MorePlaybackSession", () => {
     session.dispose();
   });
 
-  it("ignores TV events for another episode after the player auto-advances", () => {
+  it("follows the player to the next episode and saves progress under it", () => {
     const saveResume = vi.fn().mockResolvedValue(undefined);
-    const clearResume = vi.fn().mockResolvedValue(undefined);
     const session = createMorePlaybackSession({
       tmdbId: 93405,
       type: "TV",
       season: 1,
-      episode: 1,
+      episode: 2,
       attempt: 0,
       saveResume,
-      clearResume,
     });
 
     session.handleEvent(progress("93405", "tv", { season: 1, episode: 2 }));
-    session.handleEvent(progress("93405", "tv", { season: 2, episode: 1 }));
+    // The viewer pressed the player's own Next: it now reports episode 3.
+    session.handleEvent(progress("93405", "tv", { season: 1, episode: 3 }));
+
+    expect(saveResume.mock.calls.map(([input]) => [input.episode, input.positionSeconds])).toEqual([
+      [2, 20],
+      [2, 20],
+      [3, 20],
+    ]);
+    expect(session.getSnapshot()).toMatchObject({ season: 1, episode: 3, ended: false });
+    // A late "ended" for the episode it left is ignored.
     session.handleEvent({ kind: "ended", id: "93405", mediaType: "tv", season: 1, episode: 2 });
+    expect(session.getSnapshot().ended).toBe(false);
     session.dispose();
-    expect(saveResume).not.toHaveBeenCalled();
-    expect(clearResume).not.toHaveBeenCalled();
+  });
+
+  it("keeps a finished episode as watched to the end, so the next one is offered", () => {
+    const saveResume = vi.fn().mockResolvedValue(undefined);
+    const session = createMorePlaybackSession({
+      tmdbId: 93405,
+      type: "TV",
+      season: 1,
+      episode: 2,
+      attempt: 0,
+      saveResume,
+    });
+
+    session.handleEvent({ ...progress("93405", "tv", { season: 1, episode: 2 }), currentTime: 91 });
+
+    expect(session.getSnapshot().ended).toBe(true);
+    expect(saveResume).toHaveBeenLastCalledWith({
+      tmdbId: 93405,
+      type: "TV",
+      season: 1,
+      episode: 2,
+      positionSeconds: 100,
+      durationSeconds: 100,
+    });
+    session.dispose();
   });
 
   it("surfaces a failed player server status without raw codes", () => {
@@ -128,7 +155,6 @@ describe("MorePlaybackSession", () => {
       type: "MOVIE",
       attempt: 0,
       saveResume: vi.fn(),
-      clearResume: vi.fn(),
     });
 
     session.handleEvent({ kind: "status", httpStatus: 200 });
@@ -148,7 +174,6 @@ describe("MorePlaybackSession", () => {
       type: "MOVIE",
       attempt: 0,
       saveResume,
-      clearResume: vi.fn(),
     });
     session.dispose();
     session.handleEvent(progress("27205", "movie"));

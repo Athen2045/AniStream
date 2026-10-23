@@ -36,6 +36,12 @@ export interface MorePlaybackSessionSnapshot {
   /** Last playing state the player reported; undefined until it reports one. */
   playing?: boolean;
   /**
+   * The episode playing now. It differs from the one opened once the player moves on by itself
+   * (its own next-episode button or autoplay); progress is then saved under the new episode.
+   */
+  season?: number;
+  episode?: number;
+  /**
    * True once the reported position has advanced, i.e. the player really plays this title. A
    * loaded page alone proves nothing: players show "no source" pages without reporting an error.
    */
@@ -49,7 +55,6 @@ export function createMorePlaybackSession(options: {
   season?: number;
   episode?: number;
   saveResume: (input: SaveMorePlaybackResumeInput) => Promise<void>;
-  clearResume: () => Promise<void>;
 }): {
   activate(): void;
   getSnapshot(): MorePlaybackSessionSnapshot;
@@ -66,6 +71,8 @@ export function createMorePlaybackSession(options: {
     hasError: false,
     ended: false,
     started: false,
+    season: options.season,
+    episode: options.episode,
   };
   let latest: { currentTime: number; duration: number } | undefined;
   let firstPosition: number | undefined;
@@ -75,18 +82,14 @@ export function createMorePlaybackSession(options: {
     snapshot = { ...snapshot, ...changes };
     listeners.forEach((listener) => listener());
   };
-  const save = (force: boolean): void => {
-    if (!latest || snapshot.ended) return;
-    const now = Date.now();
-    if (!force && now - lastSavedAt < SAVE_INTERVAL_MS) return;
-    lastSavedAt = now;
+  const write = (positionSeconds: number, durationSeconds: number): void => {
     const input: SaveMorePlaybackResumeInput = {
       tmdbId: options.tmdbId,
       type: options.type,
-      season: options.season,
-      episode: options.episode,
-      positionSeconds: latest.currentTime,
-      durationSeconds: latest.duration,
+      season: snapshot.season,
+      episode: snapshot.episode,
+      positionSeconds,
+      durationSeconds,
     };
     void options.saveResume(input).then(
       () => publish({ persistenceError: undefined }),
@@ -97,16 +100,50 @@ export function createMorePlaybackSession(options: {
         }),
     );
   };
+  const save = (force: boolean): void => {
+    if (!latest || snapshot.ended) return;
+    const now = Date.now();
+    if (!force && now - lastSavedAt < SAVE_INTERVAL_MS) return;
+    lastSavedAt = now;
+    write(latest.currentTime, latest.duration);
+  };
+  /**
+   * Saved as watched to the end (kept, not removed): Continue Watching then offers the next
+   * episode, and a finished movie leaves it (`more-library.ts`).
+   */
   const complete = (): void => {
     if (snapshot.ended) return;
     publish({ ended: true, loaded: true });
-    void options.clearResume().catch((reason: unknown) =>
-      publish({
-        persistenceError:
-          reason instanceof Error ? reason.message : "Unable to clear local progress.",
-      }),
-    );
+    if (latest) write(latest.duration, latest.duration);
   };
+  /** The player moved to another episode itself: keep the last one's progress, follow it. */
+  const follow = (season: number, episode: number): void => {
+    save(true);
+    latest = undefined;
+    firstPosition = undefined;
+    lastSavedAt = 0;
+    publish({ ended: false, season, episode });
+  };
+  const track = (event: Extract<MorePlayerMessage, { kind: "progress" | "ended" }>): void => {
+    if (event.kind === "ended") {
+      complete();
+    } else {
+      latest = { currentTime: event.currentTime, duration: event.duration };
+      firstPosition ??= event.currentTime;
+      const started =
+        snapshot.started || event.currentTime >= firstPosition + START_ADVANCE_SECONDS;
+      publish({
+        loaded: true,
+        started,
+        hasError: false,
+        errorMessage: undefined,
+        ...(event.playing === undefined ? {} : { playing: event.playing }),
+      });
+      if ((event.currentTime / event.duration) * 100 >= COMPLETE_PERCENT) complete();
+      else save(false);
+    }
+  };
+
   return {
     activate() {
       disposed = false;
@@ -133,28 +170,20 @@ export function createMorePlaybackSession(options: {
         if (errorMessage) publish({ hasError: true, errorMessage });
       } else if (
         event.id !== String(options.tmdbId) ||
-        event.mediaType !== (options.type === "MOVIE" ? "movie" : "tv") ||
-        // After autoNext the same player reports the next episode; never save it under this one.
-        (event.episode !== undefined &&
-          (event.season !== options.season || event.episode !== options.episode))
+        event.mediaType !== (options.type === "MOVIE" ? "movie" : "tv")
       ) {
         return;
-      } else if (event.kind === "ended") {
-        complete();
       } else {
-        latest = { currentTime: event.currentTime, duration: event.duration };
-        firstPosition ??= event.currentTime;
-        const started =
-          snapshot.started || event.currentTime >= firstPosition + START_ADVANCE_SECONDS;
-        publish({
-          loaded: true,
-          started,
-          hasError: false,
-          errorMessage: undefined,
-          ...(event.playing === undefined ? {} : { playing: event.playing }),
-        });
-        if ((event.currentTime / event.duration) * 100 >= COMPLETE_PERCENT) complete();
-        else save(false);
+        if (
+          event.season !== undefined &&
+          event.episode !== undefined &&
+          (event.season !== snapshot.season || event.episode !== snapshot.episode)
+        ) {
+          // Only a progress event switches episodes: an "ended" for another episode is stale.
+          if (event.kind === "ended") return;
+          follow(event.season, event.episode);
+        }
+        track(event);
       }
     },
     retryPersistence() {

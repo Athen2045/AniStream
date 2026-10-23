@@ -186,6 +186,13 @@ describe("More player message validation", () => {
         data: { event: "ended", tmdbId: 93405, mediaType: "tv", season: 0, episode: "2" },
       }),
     ).toEqual({ kind: "ended", id: "93405", mediaType: "tv" });
+    // Players that post numbers as text still say which episode is playing.
+    expect(
+      parseMorePlayerMessage({
+        type: "PLAYER_EVENT",
+        data: { event: "ended", tmdbId: 93405, mediaType: "tv", season: "1", episode: "3" },
+      }),
+    ).toEqual({ kind: "ended", id: "93405", mediaType: "tv", season: 1, episode: 3 });
   });
 
   it("parses the server-list status message the player posts after loading", () => {
