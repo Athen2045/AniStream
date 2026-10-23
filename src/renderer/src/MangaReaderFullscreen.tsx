@@ -452,10 +452,10 @@ function ReaderContent({
             type="button"
             className="reader-round manga-reader-close"
             onClick={onClose}
-            aria-label="Close reader"
-            title="Close reader (Esc)"
+            aria-label="Back"
+            title="Back (Esc)"
           >
-            <ArrowLeft size={19} />
+            <ArrowLeft size={18} aria-hidden="true" />
           </button>
           <div className="reader-title">
             <strong>{title}</strong>

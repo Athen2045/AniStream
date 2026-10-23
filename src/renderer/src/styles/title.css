@@ -956,14 +956,17 @@
   max-width: 820px;
   padding-bottom: 4px;
 }
+/* Two lines at most. The clip box reaches 0.14em below the text (padding offset by the margin) so
+   descenders (g, p, y) are not cut off; layout spacing is unchanged. */
 .home-hero-copy h1 {
   display: -webkit-box;
-  margin: 10px 0;
+  margin: 10px 0 calc(10px - 0.14em);
+  padding-bottom: 0.14em;
   overflow: hidden;
   font-size: clamp(28px, 2.8vw, 40px);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.06;
+  line-height: 1.1;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }

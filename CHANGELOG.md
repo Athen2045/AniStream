@@ -6,6 +6,20 @@ All notable changes to AniStream are listed here. Each release has full notes in
 Legend: 🎉 new feature · 💄 design · ⚡️ improvement · 🦺 fix · 🔒 security · 🏗️ internal or
 compatibility · ⬆️ dependency update
 
+## v2.1.1 (2026-10-23)
+
+Smoother downloads and navigation, and a handful of fixes for small annoyances.
+[Full notes](.github/releases/v2.1.1.md)
+
+- ⚡️ Back returns you to where you started watching or reading, not to the title page
+- ⚡️ Season downloads ask in a clear pop-up with the episode count, quality and size
+- ⚡️ The season picker only shows when there is something to pick (One Piece keeps its arcs)
+- 💄 One Back button everywhere: title pages, players and the manga reader
+- 🦺 Download all and the Up Next menu could be cut off on anime title pages
+- 🦺 Escape on a pop-up also closed the title page behind it
+- 🦺 Letters like g, p and y were cut off at the bottom of home page titles
+- 🦺 The Back button on movie and show pages was partly hidden
+
 ## v2.1.0 (2026-10-22)
 
 A new look, a new Search, our own video player with Skip opening and ending, and anime downloads

@@ -1,4 +1,4 @@
-import { Check, CircleCheck, Clock3, Download, Pause, Play, RotateCcw } from "lucide-react";
+import { Check, CircleCheck, Clock3, Download, Pause, Play, RotateCcw, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { AniListCatalogMedia } from "../../shared/contracts";
 import {
@@ -128,6 +128,10 @@ function ProgressRing({ value }: { value: number }): React.JSX.Element {
 }
 
 /** Title-page action: download every aired episode not already downloaded or queued. */
+/**
+ * The title page's Download: a centred dialog (above everything, so nothing on the page can cut it
+ * off) that says how many episodes, at which quality and roughly how big, before anything starts.
+ */
 export function TitleDownloadButton({
   media,
   airedEpisodes,
@@ -141,25 +145,12 @@ export function TitleDownloadButton({
 }): React.JSX.Element | null {
   const downloads = useOptionalDownloads();
   const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const panelId = useId();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent): void => {
-      if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent): void => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      setOpen(false);
-    };
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape, true);
-    return () => {
-      document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", escape, true);
-    };
+    const element = dialog.current;
+    if (open && element && !element.open) element.showModal();
   }, [open]);
 
   if (!downloads || airedEpisodes < 1) return null;
@@ -170,16 +161,16 @@ export function TitleDownloadButton({
   const quality = downloads.state?.settings.quality ?? "1080p";
   const estimate = missing.length * estimateDownloadBytes(minutes ?? 24, quality);
   const all = missing.length === 0;
+  const close = (): void => dialog.current?.close();
 
   return (
-    <div className="upnext-menu-root" ref={root}>
+    <>
       <button
         type="button"
         className={className}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
+        aria-haspopup="dialog"
         title={all ? "Every aired episode is downloaded or queued" : "Download to watch offline"}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(true)}
       >
         {all ? (
           <CircleCheck size={16} aria-hidden="true" />
@@ -189,40 +180,65 @@ export function TitleDownloadButton({
         {all ? "Downloaded" : "Download"}
       </button>
       {open ? (
-        <div
-          className="upnext-menu download-panel"
-          id={panelId}
-          role="dialog"
-          aria-label="Download episodes"
+        <dialog
+          ref={dialog}
+          className="download-dialog"
+          aria-labelledby={titleId}
+          onClose={() => setOpen(false)}
+          onClick={(event) => {
+            // A click on the backdrop (the dialog element itself) closes it.
+            if (event.target === event.currentTarget) close();
+          }}
         >
-          {all ? (
-            <p>All {airedEpisodes} aired episodes are downloaded or in the queue.</p>
-          ) : (
-            <>
-              <p>
-                Download <strong>{missing.length}</strong>{" "}
-                {missing.length === 1 ? "episode" : "episodes"} at {quality}, up to{" "}
-                <strong>{formatBytes(estimate)}</strong>.
-              </p>
-              <p className="download-panel-note">
-                Episodes come from the backup player and play offline in AniStream. Single episodes
-                can be downloaded from their tiles.
-              </p>
+          <div className="download-dialog-body">
+            <header>
+              <h2 id={titleId}>Download episodes</h2>
               <button
                 type="button"
-                className="download-panel-confirm"
-                onClick={() => {
-                  setOpen(false);
-                  void downloads.add(missing.map((episode) => request(media, episode, minutes)));
-                }}
+                className="download-dialog-close"
+                aria-label="Close"
+                onClick={close}
               >
-                <Download size={15} aria-hidden="true" />
-                Download {missing.length === airedEpisodes ? "all" : "the rest"}
+                <X size={16} aria-hidden="true" />
               </button>
-            </>
-          )}
-        </div>
+            </header>
+            <p className="download-dialog-title">{media.title}</p>
+            {all ? (
+              <p>All {airedEpisodes} aired episodes are downloaded or in the queue.</p>
+            ) : (
+              <>
+                <p>
+                  Download <strong>{missing.length}</strong>{" "}
+                  {missing.length === 1 ? "episode" : "episodes"} at {quality}, up to{" "}
+                  <strong>{formatBytes(estimate)}</strong>.
+                </p>
+                <p className="download-dialog-note">
+                  Episodes come from the backup player and play offline in AniStream. Single
+                  episodes can be downloaded from their tiles.
+                </p>
+                <div className="download-dialog-actions">
+                  <button type="button" className="download-dialog-cancel" onClick={close}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="download-dialog-confirm"
+                    onClick={() => {
+                      close();
+                      void downloads.add(
+                        missing.map((episode) => request(media, episode, minutes)),
+                      );
+                    }}
+                  >
+                    <Download size={15} aria-hidden="true" />
+                    Download {missing.length === airedEpisodes ? "all" : "the rest"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </dialog>
       ) : null}
-    </div>
+    </>
   );
 }

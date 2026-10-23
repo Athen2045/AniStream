@@ -84,6 +84,8 @@ export function MoreTitlePage({
   const [newestFirst, setNewestFirst] = useState(false);
   const [playing, setPlaying] = useState<Playing>();
   const autoPlay = useRef(initialAction === "play");
+  // Back from a player a Play shortcut opened returns to where it was clicked, not this page.
+  const [backToOrigin, setBackToOrigin] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -157,8 +159,9 @@ export function MoreTitlePage({
   }, [item.id, season]);
 
   const play = useCallback(
-    (target?: MorePlayTarget) => {
+    (target?: MorePlayTarget, fromShortcut = false) => {
       void window.anistream.rememberMoreTitle(moreSnapshot(detail ?? item)).catch(() => undefined);
+      setBackToOrigin(fromShortcut);
       setPlaying(
         item.type === "MOVIE"
           ? { kind: "movie" }
@@ -179,7 +182,7 @@ export function MoreTitlePage({
     // The flag flips only when playback actually starts, so a StrictMode re-run still plays.
     const start = window.setTimeout(() => {
       autoPlay.current = false;
-      play(initialTarget);
+      play(initialTarget, true);
     }, 0);
     return () => window.clearTimeout(start);
   }, [detail, initialTarget, play, ready, release.unreleased]);
@@ -296,9 +299,13 @@ export function MoreTitlePage({
           season={playing.kind === "episode" ? playing.season : 1}
           episode={playing.kind === "episode" ? playing.episode : 1}
           onClose={() => {
+            onProgressChanged();
+            if (backToOrigin) {
+              onBack();
+              return;
+            }
             setPlaying(undefined);
             loadProgress();
-            onProgressChanged();
           }}
         />
       ) : null}
@@ -311,8 +318,8 @@ export function MoreTitlePage({
           <button
             className="more-back more-back--arrow"
             type="button"
-            aria-label={backLabel}
-            title={backLabel}
+            aria-label={`Back to ${backLabel}`}
+            title={`Back to ${backLabel}`}
             onClick={onBack}
           >
             <ArrowLeft size={18} aria-hidden="true" />

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ChevronLeft } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight } from "lucide-react";
 import { PlayerStarting } from "./PlayerStarting";
 import appIcon from "./assets/app-icon.png";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -347,11 +347,11 @@ export function MoreWatchExperience({
             ref={backButtonRef}
             type="button"
             className="watch-player-back"
-            aria-label="Back to details"
-            title="Back to details (Esc)"
+            aria-label="Back"
+            title="Back (Esc)"
             onClick={close}
           >
-            <ChevronLeft size={22} />
+            <ArrowLeft size={18} aria-hidden="true" />
           </button>
           {/* Title, fullscreen, and pause/play stay in the player's own controls; F still
               toggles display fullscreen. */}

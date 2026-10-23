@@ -82,37 +82,95 @@
   transition: stroke-dashoffset 400ms linear;
 }
 
-/* ---------- Title page panel ---------- */
-.download-panel {
-  min-width: 300px;
-  max-width: 340px;
-  gap: 10px;
-  padding: 14px;
-}
-.download-panel p {
-  margin: 0;
+/* ---------- Title page dialog (centred, above everything) ---------- */
+.download-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-panel);
   color: var(--text-secondary);
+  box-shadow: 0 24px 60px var(--shadow-deep);
+}
+.download-dialog::backdrop {
+  background: rgb(0 0 0 / 0.62);
+}
+.download-dialog-body {
+  display: grid;
+  gap: 12px;
+  padding: 20px 22px 22px;
+}
+.download-dialog-body header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.download-dialog-body h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.15rem;
+}
+.download-dialog-body p {
+  margin: 0;
   font-size: 14px;
   line-height: 1.45;
 }
-.download-panel p.download-panel-note {
+.download-dialog-body p.download-dialog-title {
+  margin-top: -6px;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.download-dialog-body p.download-dialog-note {
   color: var(--muted);
   font-size: 12.5px;
 }
-.download-panel .download-panel-confirm {
+.download-dialog-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+.download-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.download-dialog-actions button {
   display: inline-flex;
   gap: 8px;
   align-items: center;
   justify-content: center;
   height: 38px;
-  border: 0;
+  padding: 0 18px;
   border-radius: 999px;
-  background: #fff;
-  color: #0b0d0c;
   font: inherit;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+}
+.download-dialog-cancel {
+  border: 1px solid var(--line-strong);
+  background: none;
+  color: var(--text);
+}
+.download-dialog-confirm {
+  border: 0;
+  background: #fff;
+  color: #0b0d0c;
+}
+.download-dialog-close:focus-visible,
+.download-dialog-actions button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }
 
 /* ---------- Downloads page ---------- */

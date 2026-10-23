@@ -345,9 +345,14 @@ export function MoreView({
       ) : (
         <div className="more-plain-top">
           {filter !== "ALL" ? (
-            <button className="more-back" type="button" onClick={() => chooseFilter("ALL")}>
-              <ArrowLeft size={17} aria-hidden="true" />
-              More
+            <button
+              className="more-back more-back--arrow"
+              type="button"
+              aria-label="Back to More"
+              title="Back to More"
+              onClick={() => chooseFilter("ALL")}
+            >
+              <ArrowLeft size={18} aria-hidden="true" />
             </button>
           ) : null}
         </div>
