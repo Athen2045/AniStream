@@ -20,6 +20,7 @@
     "check:anilist-oauth": "node scripts/verify-anilist-oauth.mjs",
     "check:product-slice": "node scripts/verify-product-slice.mjs",
     "check:release-version": "node scripts/verify-release-version.mjs",
+    "build:website": "node scripts/build-website.mjs",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
