@@ -1,12 +1,20 @@
-<h1 align="center"><img src="assets/app-icon/AniStream-128.png" alt="Ani" width="64" height="64" align="center" /> Stream</h1>
+<p align="center">
+  <img src="assets/app-icon/AniStream-128.png" alt="AniStream logo" width="96" height="96" />
+</p>
+
+<h1 align="center">AniStream</h1>
 
 <p align="center">
-<img src="assets/screenshots/anime.webp" alt="AniStream Anime home" width="100%" />
+  Anime, manga, movies and shows in one ad-free desktop app.
+</p>
+
+<p align="center">
+<img src="assets/screenshots/home.jpg" alt="AniStream Anime home with Continue watching and For You" width="100%" />
 </p>
 
 <p align="center">
   <a href="https://github.com/Athen2045/AniStream/releases/latest">Download</a> |
-  <a href=".github/releases/v2.0.1.md">Release notes</a> |
+  <a href=".github/releases/v2.1.0.md">Release notes</a> |
   <a href="CHANGELOG.md">Changelog</a> |
   <a href="LEGAL.md">Copyright</a>
 </p>
@@ -31,39 +39,65 @@ Leave a star if you like the project! ⭐️
 
 ## About
 
-AniStream is a **desktop app** for anime and manga. Browse what's trending, watch episodes, read
-chapters, and pick up exactly where you left off. Your progress stays on your computer, and you can
-connect AniList to sync your lists if you want to.
+AniStream is a **desktop app** for anime, manga, movies and shows. Browse what's trending, watch
+episodes, read chapters, and pick up exactly where you left off. Everything you do stays on your
+computer, and you can connect AniList or Simkl to sync your lists if you want to.
 
 > [!IMPORTANT]
 > AniStream does not host, store, or distribute any videos or manga. Streaming and reading
 > availability depends on outside providers and can change without notice. Only watch or read media
 > you are legally allowed to access where you live.
 
-## Features
+## Why AniStream
 
-- **Watch**: Anime with sub or dub, continuing from the last episode you watched
-- **Offline**: Download anime episodes (one, or every aired episode) and watch them without a
-  connection, within a storage limit you set (25 GB by default)
-- **Read**: Manga in a fullscreen reader that remembers your page
-- **Discover**: Trending titles, latest updates, and full title pages with similar picks
-- **For You**: Personal recommendations that run entirely on your device
-  - Ranks titles by AniList recommendations from what you liked, how closely their tags, genres,
-    and creators match your taste (rarer themes count more), and their popularity and rating
-  - Recent history counts more than old history, and no single title can fill your rows
-  - "Because you watched…" and "Because you like…" rows rotate through your whole history
-  - One slot is saved for a well-rated pick outside your usual taste
-  - Mark titles **Not interested** to teach it, or turn off **Learn from my activity** in Settings
-- **Track**: Progress saved locally, with optional AniList sync
-- **No ads, no telemetry**: Your data stays on your device, and you can back it up anytime
+- **No ads, ever.** No banners, no pop-ups, no trackers, not even inside the video players.
+- **A player made for anime.** **Skip opening** and **Skip ending**, sub or dub, your choice of
+  audio and subtitles, previews when you seek, and the next episode lined up with a countdown. If
+  one player can't play an episode, a backup takes over by itself.
+- **Watch offline.** Download one episode or a whole season and watch it without a connection,
+  within a storage limit you set.
+- **Read manga without the clutter.** A fullscreen reader that remembers your page, chapters
+  grouped by volume, and quick shortcuts for chapters, fit and fullscreen.
+- **Movies and shows too.** The More section brings trending films and series, season grids and
+  your own watch list.
+- **Recommendations that get you.** For You learns from what you watch and read, right on your
+  device, and works without an account. Mark a title **Not interested** and it listens.
+- **Never miss an episode.** An airing schedule, a "Ready for you" list of new episodes and
+  chapters, and an **Up Next** queue you can save as playlists.
+- **Find anything fast.** One search for Anime, Manga, or Movies & TV, with results as you type,
+  filters, and "Did you mean" for typos.
+- **Your lists, your choice.** Track progress locally, or sync with AniList (anime and manga) and
+  Simkl (movies and shows). Edits made offline sync once you're back online.
+- **Private by default.** No telemetry and nothing sold or shared. Back up your data whenever you
+  like.
+- **Stays up to date.** On Windows, new versions download in the background and install with one
+  click.
 
-<p align="center">
-<img src="assets/screenshots/title-page.webp" alt="AniStream title page" width="100%" />
-</p>
+### Watch
 
-<p align="center">
-<img src="assets/screenshots/manga.webp" alt="AniStream Manga home" width="100%" />
-</p>
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/anime-detail.jpg" alt="Anime title page with episodes, Watch and Download" /></td>
+    <td width="50%"><img src="assets/screenshots/player.jpg" alt="AniStream's own video player with subtitles" /></td>
+  </tr>
+  <tr>
+    <td align="center">Title pages with episodes, downloads and ratings</td>
+    <td align="center">AniStream's own player</td>
+  </tr>
+</table>
+
+### Read
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/manga.jpg" alt="Manga home with Continue Reading" /></td>
+    <td width="50%"><img src="assets/screenshots/manga-detail.jpg" alt="Manga title page with scores from AniList, MyAnimeList and MangaUpdates" /></td>
+  </tr>
+  <tr>
+    <td align="center">Manga home with Continue Reading</td>
+    <td align="center">Manga title pages with scores from every source</td>
+  </tr>
+</table>
 
 ## Get started
 
@@ -72,33 +106,40 @@ Download the installer for your platform from the
 
 | Platform | File                        | Requires                           |
 | -------- | --------------------------- | ---------------------------------- |
-| Windows  | `AniStream.Setup.2.0.1.exe` | Windows 10 or 11, x64              |
-| macOS    | `AniStream-2.0.1-arm64.dmg` | macOS 12 or newer on Apple Silicon |
+| Windows  | `AniStream.Setup.2.1.0.exe` | Windows 10 or 11, x64              |
+| macOS    | `AniStream-2.1.0-arm64.dmg` | macOS 12 or newer on Apple Silicon |
 
 Both installers are unsigned. On Windows, select **More info → Run anyway** if SmartScreen warns
 you. On macOS, open **System Settings → Privacy & Security** and choose **Open Anyway** after the
 first launch. Each release includes a `SHA256SUMS.txt` file to verify your download.
 
-**Updating from 0.1.x or 2.0.0?** Install 2.0.1 over your existing copy. Your progress, settings, and
-AniList session are kept.
-
-**Updates after 2.0.1:** on Windows, AniStream checks GitHub when it starts, downloads a new
-release in the background, and shows **Restart to update** when it is ready. Nothing installs
-until you choose it, and your data is never touched. Turn off background downloads, or choose to
-install when you quit, in **Settings → Updates**. Each download is checked against the release's
-SHA-512 hash. On macOS, AniStream links you to the release to install it yourself.
+> [!TIP]
+> Already have AniStream? Install the new version over your existing copy; your progress,
+> settings and AniList session are kept. From 2.0.1 on, Windows updates itself: AniStream downloads
+> new releases in the background and shows **Restart to update** when they're ready. Nothing
+> installs until you choose it. On macOS, AniStream links you to the release to install yourself.
 
 ## Goal
 
-This is a one-person project. It is built around a few rules: no ads, your data stays on your
-device, nothing is sold or shared, and every integration is optional.
+I wanted one place to enjoy anime, manga and movies that feels good to use: no ads jumping in the
+way, no hunting for where I left off, and recommendations that actually match what I like.
+AniStream is my attempt at that, and honestly, it's a fun project to work on. Every update is a
+chance to try a new idea, polish a small detail, or learn something new.
+
+It is built around a few simple rules: no ads, your data stays on your device, nothing is sold or
+shared, and every integration is optional.
 
 ## Tech stack
 
-- Desktop: [Electron](https://www.electronjs.org/)
-- Frontend: [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/),
-  [electron-vite](https://electron-vite.org/)
-- Storage: [SQLite](https://www.sqlite.org/) via `better-sqlite3`
+| Area      | Tools                                                                                                                                                                              |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop   | [Electron](https://www.electronjs.org/), [electron-builder](https://www.electron.build/) and [electron-updater](https://www.electron.build/auto-update) for installers and updates |
+| Interface | [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Framer Motion](https://motion.dev/), [Lucide](https://lucide.dev/) icons                              |
+| Data      | [TanStack Query](https://tanstack.com/query) for fetching and caching, [SQLite](https://www.sqlite.org/) via `better-sqlite3` for local storage                                    |
+| Video     | [Video.js](https://videojs.org/), [hls.js](https://github.com/video-dev/hls.js) for streaming, [JASSUB](https://github.com/ThaUnknown/jassub) for styled subtitles                 |
+| Build     | [electron-vite](https://electron-vite.org/) and [Vite](https://vite.dev/)                                                                                                          |
+| Quality   | [Vitest](https://vitest.dev/), [Playwright](https://playwright.dev/), ESLint, Prettier, GitHub Actions                                                                             |
+| Data from | [AniList](https://anilist.co/), [MangaDex](https://mangadex.org/), [TMDB](https://www.themoviedb.org/), [MyAnimeList](https://myanimelist.net/), [Simkl](https://simkl.com/)       |
 
 ## Development and Build
 
@@ -124,4 +165,5 @@ privately as described in [SECURITY.md](.github/SECURITY.md).
 
 > [!NOTE]
 > AniStream is an independent personal project and is not affiliated with AniList, MangaDex,
-> MyAnimeList, or any playback provider. For copyright-related requests, see [LEGAL.md](LEGAL.md).
+> MyAnimeList, TMDB, Simkl, or any playback provider. For copyright-related requests, see
+> [LEGAL.md](LEGAL.md).
