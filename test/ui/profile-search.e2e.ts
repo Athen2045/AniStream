@@ -31,10 +31,11 @@ test.describe("Profile Add title search", () => {
 
   test("pages through the results", async () => {
     const { window } = session;
+    // From the keyboard: on a small screen (CI) the pinned search form can sit over the button.
     await animeResults(window)
       .getByRole("navigation", { name: "ANIME search pages" })
       .getByRole("button", { name: "Go to next page" })
-      .click();
+      .press("Enter");
     await expect(animeResults(window).getByText("Fixture Quest Finale").first()).toBeVisible();
     await expect(animeResults(window).getByText("Fixture Quest Returns")).toHaveCount(0);
   });
