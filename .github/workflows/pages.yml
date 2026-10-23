@@ -1,0 +1,76 @@
+name: Website
+
+# Publishes the landing page (website/) to GitHub Pages. Download links point at the latest
+# release, so the page is rebuilt after every production release as well as on page changes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "assets/screenshots/**"
+      - "assets/app-icon/**"
+      - "scripts/build-website.mjs"
+      - ".github/workflows/pages.yml"
+  # Releases are published with GITHUB_TOKEN, which does not fire `release` events.
+  workflow_run:
+    workflows: ["Promote production release"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Build site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/build-website.mjs
+
+      - name: Check release links
+        run: |
+          grep -q 'releases/download/v' dist-website/index.html \
+            || { echo "::error::No installer links in the built page"; exit 1; }
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist-website
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

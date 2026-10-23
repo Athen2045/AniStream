@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AniStream</title>
+    <meta
+      name="description"
+      content="AniStream is a free desktop app for anime and manga. Watch, read, download and track, with no ads and your data kept on your computer."
+    />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta property="og:title" content="AniStream" />
+    <meta
+      property="og:description"
+      content="Anime and manga in one desktop app. No ads, no telemetry."
+    />
+    <meta property="og:image" content="https://athen2045.github.io/AniStream/img/home.jpg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png" />
+    <link rel="apple-touch-icon" href="img/icon-256.png" />
+    <link
+      rel="preload"
+      href="fonts/plus-jakarta-sans-variable.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="nav" data-nav>
+      <a class="brand" href="#top" aria-label="AniStream home">
+        <img src="img/icon-128.png" alt="" width="28" height="28" />
+        <span>AniStream</span>
+      </a>
+      <nav class="nav-links" aria-label="Main">
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+        <a
+          class="nav-icon"
+          href="https://github.com/Athen2045/AniStream"
+          aria-label="GitHub"
+          title="GitHub"
+        >
+          <svg viewBox="0 0 512 512" aria-hidden="true">
+            <path
+              fill-rule="evenodd"
+              d="M256 6.3C114.6 6.3 0 120.9 0 262.3c0 113.3 73.3 209 175 242.9 12.8 2.2 17.6-5.4 17.6-12.2 0-6.1-.3-26.2-.3-47.7-64.3 11.8-81-15.7-86.1-30.1-2.9-7.4-15.4-30.1-26.2-36.2-9-4.8-21.8-16.6-.3-17 20.2-.3 34.6 18.6 39.4 26.2 23 38.7 59.8 27.8 74.6 21.1 2.2-16.6 9-27.8 16.3-34.2-57-6.4-116.5-28.5-116.5-126.4 0-27.8 9.9-50.9 26.2-68.8-2.6-6.4-11.5-32.6 2.6-67.8 0 0 21.4-6.7 70.4 26.2 20.5-5.8 42.2-8.6 64-8.6s43.5 2.9 64 8.6c49-33.3 70.4-26.2 70.4-26.2 14.1 35.2 5.1 61.4 2.6 67.8 16.3 17.9 26.2 40.6 26.2 68.8 0 98.2-59.8 120-116.8 126.4 9.3 8 17.3 23.4 17.3 47.4 0 34.2-.3 61.8-.3 70.4 0 6.7 4.8 14.7 17.6 12.2C438.7 471.3 512 375.3 512 262.3c0-141.4-114.6-256-256-256"
+            />
+          </svg>
+        </a>
+        <a class="nav-cta" href="#download">Download</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="hero-copy">
+          <img class="hero-icon rise" src="img/icon-256.png" alt="" width="72" height="72" />
+          <h1 class="rise">
+            Watch anime. Read manga.<br />
+            <em>Keep it yours.</em>
+          </h1>
+          <p class="lede rise">
+            AniStream is a free desktop app for anime, manga, movies and shows. Find something new,
+            pick up where you left off, and keep your progress on your own computer.
+          </p>
+          <div class="hero-actions rise">
+            <a class="btn btn-primary" href="{{WIN_URL}}" data-download>
+              <svg class="os-icon" data-os-icon viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M3 5.5 10.5 4.4v7.1H3zm8.5-1.2L21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zm8.5 0H21V21l-9.5-1.3z"
+                />
+              </svg>
+              <span data-download-label>Download for Windows</span>
+            </a>
+            <a class="btn btn-ghost" href="#download">Other platforms</a>
+          </div>
+          <p class="meta rise">{{VERSION}} · Windows x64 · macOS Apple Silicon</p>
+        </div>
+
+        <div class="stage" data-stage>
+          <div class="window crop">
+            <img
+              src="img/home.jpg"
+              alt="AniStream's Anime home with a featured title, Continue watching and For You"
+              width="1160"
+              height="763"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <header class="section-head reveal">
+          <p class="eyebrow">Features</p>
+          <h2>Everything in one place</h2>
+          <p>From the next episode to the next chapter, without juggling tabs or dodging ads.</p>
+        </header>
+        <div class="grid">
+          <article class="card reveal">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z" /></svg>
+            <h3>A player made for anime</h3>
+            <p>
+              Skip opening and ending, sub or dub, seek previews, and the next episode lined up.
+            </p>
+          </article>
+          <article class="card reveal">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" />
+            </svg>
+            <h3>Watch offline</h3>
+            <p>Download one episode or a whole season, within a storage limit you set.</p>
+          </article>
+          <article class="card reveal">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 5.5c3-1 5.5-.5 8 1.5 2.5-2 5-2.5 8-1.5v13c-3-1-5.5-.5-8 1.5-2.5-2-5-2.5-8-1.5zM12 7v13"
+              />
+            </svg>
+            <h3>Read manga</h3>
+            <p>A fullscreen reader that remembers your page, with chapters grouped by volume.</p>
+          </article>
+          <article class="card reveal">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+              <path d="M8 3.5 12 5.5l4-2" />
+            </svg>
+            <h3>Movies and shows</h3>
+            <p>Trending films and series, season grids and your own watch list.</p>
+          </article>
+          <article class="card reveal">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m12 3.5 2.4 5.3 5.6.6-4.2 3.8 1.2 5.6L12 16l-5 2.8 1.2-5.6L4 9.4l5.6-.6z" />
+            </svg>
+            <h3>For You</h3>
+            <p>Recommendations worked out on your computer. No account needed.</p>
+          </article>
+          <article class="card reveal">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="5" width="16" height="15" rx="2" />
+              <path d="M4 9.5h16M8.5 3v4M15.5 3v4" />
+            </svg>
+            <h3>Never miss an episode</h3>
+            <p>
+              An airing schedule, new episodes and chapters ready for you, and an Up Next queue.
+            </p>
+          </article>
+          <article class="card reveal">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5 9 17.5 20 6.5" /></svg>
+            <h3>Your lists, your choice</h3>
+            <p>Track locally, or sync with AniList and Simkl. Offline edits sync later.</p>
+          </article>
+          <article class="card reveal">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m16 16 4 4" />
+            </svg>
+            <h3>Find anything fast</h3>
+            <p>One search for anime, manga, movies and TV, with filters and typo fixes.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section showcase">
+        <div class="row">
+          <div class="row-copy reveal">
+            <p class="eyebrow">Title pages</p>
+            <h2>All of a show on one page</h2>
+            <p>
+              Episodes, downloads and ratings together, with a button that takes you straight to the
+              next episode.
+            </p>
+          </div>
+          <figure class="shot crop reveal from-right">
+            <img
+              src="img/anime-detail.jpg"
+              alt="Anime title page with episodes, Watch and Download"
+              width="1160"
+              height="762"
+              loading="lazy"
+            />
+          </figure>
+        </div>
+        <div class="row flip">
+          <div class="row-copy reveal">
+            <p class="eyebrow">Player</p>
+            <h2>A player made for anime</h2>
+            <p>
+              Skip the opening and ending, choose audio and subtitles, and if one player can't play
+              an episode, a backup takes over by itself.
+            </p>
+          </div>
+          <figure class="shot crop reveal from-left">
+            <img
+              src="img/player.jpg"
+              alt="AniStream's own video player with subtitles"
+              width="1160"
+              height="762"
+              loading="lazy"
+            />
+          </figure>
+        </div>
+        <div class="row">
+          <div class="row-copy reveal">
+            <p class="eyebrow">Manga</p>
+            <h2>Pick up the next chapter</h2>
+            <p>
+              Continue Reading keeps your place across every series, and For You suggests what to
+              read next.
+            </p>
+          </div>
+          <figure class="shot crop reveal from-right">
+            <img
+              src="img/manga.jpg"
+              alt="Manga home with Continue Reading"
+              width="1160"
+              height="762"
+              loading="lazy"
+            />
+          </figure>
+        </div>
+        <div class="row flip">
+          <div class="row-copy reveal">
+            <p class="eyebrow">Manga title pages</p>
+            <h2>Scores from every source</h2>
+            <p>
+              AniList, MyAnimeList, MangaUpdates and MangaDex ratings side by side, with chapters
+              one click away.
+            </p>
+          </div>
+          <figure class="shot crop reveal from-left">
+            <img
+              src="img/manga-detail.jpg"
+              alt="Manga title page with scores from AniList, MyAnimeList and MangaUpdates"
+              width="1160"
+              height="762"
+              loading="lazy"
+            />
+          </figure>
+        </div>
+      </section>
+
+      <section class="section privacy" id="privacy">
+        <div class="privacy-inner reveal">
+          <p class="eyebrow">Privacy</p>
+          <h2>Your data stays on your computer</h2>
+          <ul>
+            <li>
+              <strong>No ads.</strong>
+              <span>Not in the app, and the players it opens run without their ad scripts.</span>
+            </li>
+            <li>
+              <strong>No telemetry.</strong>
+              <span>AniStream doesn't report what you watch or read to anyone.</span>
+            </li>
+            <li>
+              <strong>Yours to keep.</strong>
+              <span
+                >Progress lives in a local database you can back up, and every account link is
+                optional.</span
+              >
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="download">
+        <header class="section-head reveal">
+          <p class="eyebrow">Download</p>
+          <h2>Get AniStream</h2>
+          <p>{{VERSION}}. Free, with updates delivered from GitHub.</p>
+        </header>
+        <div class="downloads">
+          <a class="dl reveal" href="{{WIN_URL}}">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M3 5.5 10.5 4.4v7.1H3zm8.5-1.2L21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zm8.5 0H21V21l-9.5-1.3z"
+              />
+            </svg>
+            <span class="dl-name">Windows</span>
+            <span class="dl-req">Windows 10 or 11, x64</span>
+            <span class="dl-go">Download .exe</span>
+          </a>
+          <a class="dl reveal" href="{{MAC_URL}}">
+            <svg viewBox="0 0 24 24" aria-hidden="true" data-mac-icon>
+              <path
+                d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.8-3.5.8s-1.8-.8-3-.8C7 7.2 5.5 8.1 4.7 9.6c-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.7 2.4 2.9 2.4 1.2-.1 1.6-.8 3-.8s1.8.8 3 .8c1.3 0 2-1.2 2.8-2.3.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-.9-2.5-4.1zM14.1 5.5c.6-.8 1.1-1.8 1-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2-.5 2.7-1.3z"
+              />
+            </svg>
+            <span class="dl-name">macOS</span>
+            <span class="dl-req">macOS 12 or newer, Apple Silicon</span>
+            <span class="dl-go">Download .dmg</span>
+          </a>
+        </div>
+        <p class="note reveal">
+          The installers aren't code-signed yet. On Windows, choose <b>More info → Run anyway</b> if
+          SmartScreen warns you. On macOS, open <b>System Settings → Privacy &amp; Security</b> and
+          choose <b>Open Anyway</b>. Every release lists SHA-256 checksums on
+          <a href="{{RELEASE_URL}}">its release page</a>.
+        </p>
+      </section>
+
+      <section class="section disclaimer">
+        <h2>Disclaimer</h2>
+        <p>
+          AniStream does not host, store, or distribute any videos or manga. Streaming and reading
+          availability depends on outside providers and can change without notice. Only watch or
+          read media you are legally allowed to access where you live. For copyright questions, see
+          <a href="https://github.com/Athen2045/AniStream/blob/main/LEGAL.md">LEGAL.md</a>.
+        </p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="brand">
+        <img src="img/icon-32.png" alt="" width="20" height="20" />
+        <span>AniStream</span>
+      </div>
+      <nav aria-label="Footer">
+        <a href="https://github.com/Athen2045/AniStream">GitHub</a>
+        <a href="https://github.com/Athen2045/AniStream/releases">Releases</a>
+        <a href="https://github.com/Athen2045/AniStream/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/Athen2045/AniStream/blob/main/LEGAL.md">Copyright</a>
+      </nav>
+      <p>© 2026 AniStream</p>
+    </footer>
+
+    <script>
+      // Offer the Mac installer to Mac visitors.
+      const platform = navigator.userAgentData?.platform ?? navigator.platform ?? "";
+      if (/mac/i.test(platform)) {
+        const button = document.querySelector("[data-download]");
+        button.href = "{{MAC_URL}}";
+        button.querySelector("[data-download-label]").textContent = "Download for macOS";
+        button.querySelector("[data-os-icon]").innerHTML =
+          document.querySelector("[data-mac-icon]").innerHTML;
+      }
+
+      // Solid nav once the page scrolls.
+      const nav = document.querySelector("[data-nav]");
+      const stage = document.querySelector("[data-stage]");
+      const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      let ticking = false;
+      function onScroll() {
+        nav.classList.toggle("scrolled", scrollY > 8);
+        if (!still) {
+          // The hero window tilts back and straightens as it scrolls into view.
+          const rect = stage.getBoundingClientRect();
+          const progress = Math.min(
+            1,
+            Math.max(0, 1 - (rect.top - innerHeight * 0.2) / (innerHeight * 0.6)),
+          );
+          stage.style.setProperty("--tilt", progress.toFixed(3));
+        }
+        ticking = false;
+      }
+      addEventListener(
+        "scroll",
+        () => {
+          if (!ticking) (requestAnimationFrame(onScroll), (ticking = true));
+        },
+        { passive: true },
+      );
+      onScroll();
+
+      // Fade sections in as they arrive.
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("in");
+              observer.unobserve(entry.target);
+            }
+          }
+        },
+        { rootMargin: "0px 0px -10% 0px" },
+      );
+      document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+
+      // Cards light up where the pointer is.
+      document.querySelectorAll(".card, .dl").forEach((card) => {
+        card.addEventListener("pointermove", (event) => {
+          const box = card.getBoundingClientRect();
+          card.style.setProperty("--x", `${event.clientX - box.left}px`);
+          card.style.setProperty("--y", `${event.clientY - box.top}px`);
+        });
+      });
+    </script>
+  </body>
+</html>

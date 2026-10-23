@@ -49,3 +49,6 @@ prototypes/
 test-results/
 playwright-report/
 test/ui/tmp/
+
+# Built landing page (scripts/build-website.mjs).
+dist-website/
