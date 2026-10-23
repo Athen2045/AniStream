@@ -268,7 +268,9 @@ html[data-platform="win32"] {
   position: fixed;
   z-index: 60;
   top: 0;
-  left: var(--rail-width);
+  /* Starts past the Back button's spot, so the strip never sits on top of it (the More title
+     page's Back sits below this layer and lost its top half to it). */
+  left: calc(var(--rail-width) + var(--page-gutter) + 46px);
   right: 150px;
   height: 32px;
   -webkit-app-region: drag;
@@ -328,12 +330,16 @@ textarea,
 }
 
 /* ---------------------------------------------------------------- Back: an arrow, level with them */
+/* One Back everywhere: a 38px glass circle centred on the window controls (top 10px). Title
+   pages pin it at the content edge so it stays while the page scrolls; players and the reader
+   pin it at the window edge, mirroring the controls' 12px margin. */
 .title-page .title-back,
-.more-title-page .more-back--arrow {
-  position: absolute;
+.more-title-page .more-back--arrow,
+.more-plain-top .more-back--arrow {
+  position: fixed;
   z-index: 6;
   top: 10px;
-  left: var(--page-gutter);
+  left: calc(var(--rail-width) + var(--page-gutter));
   display: grid;
   place-items: center;
   width: 38px;
@@ -349,24 +355,51 @@ textarea,
 .more-title-page .more-hero-top:has(.more-back--arrow) {
   top: 0;
 }
-.more-title-page .more-back--arrow {
-  left: 0;
+.watch-player-back,
+.media-control-hotspot--back {
+  top: 10px;
+  width: 38px;
+  height: 38px;
+}
+.reader-top {
+  top: 10px;
+  left: calc(var(--caption-inset-left) - 4px);
+}
+.reader-top .reader-round {
+  width: 38px;
+  height: 38px;
+}
+.reader-top .reader-title {
+  height: 38px;
+}
+/* The More player's switch tool sits on the same line, just left of the window controls. */
+.watch-caption-tool,
+.media-control-hotspot--caption {
+  top: 10px;
+  right: calc(var(--caption-controls-width) + 4px);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
 }
 .title-page .title-back svg,
-.more-title-page .more-back--arrow svg {
+.more-title-page .more-back--arrow svg,
+.more-plain-top .more-back--arrow svg {
   transition: transform 160ms ease;
 }
 .title-page .title-back:hover,
-.more-title-page .more-back--arrow:hover {
+.more-title-page .more-back--arrow:hover,
+.more-plain-top .more-back--arrow:hover {
   border-color: rgb(255 255 255 / 0.22);
   background: rgb(255 255 255 / 0.16);
 }
 .title-page .title-back:hover svg,
-.more-title-page .more-back--arrow:hover svg {
+.more-title-page .more-back--arrow:hover svg,
+.more-plain-top .more-back--arrow:hover svg {
   transform: translateX(-2px);
 }
 .title-page .title-back:focus-visible,
-.more-title-page .more-back--arrow:focus-visible {
+.more-title-page .more-back--arrow:focus-visible,
+.more-plain-top .more-back--arrow:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 3px;
 }

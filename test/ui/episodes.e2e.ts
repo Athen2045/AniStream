@@ -1,123 +1,6 @@
-import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { launchApp, openSection, waitForShell, type TestApp } from "./app";
-
-/** Titles as AniList describes them; For You cards carry only id, title and cover. */
-const TITLES = {
-  8500001: { title: "Fixture Finished Show", status: "FINISHED", episodes: 12, listed: 12 },
-  // Episode 9 airs next week, so 8 have aired; the source lists only 6.
-  8500002: { title: "Fixture Airing Show", status: "RELEASING", episodes: 12, listed: 6, next: 9 },
-  // The first episode-list request fails; Retry gets 3 episodes.
-  8500003: { title: "Fixture Flaky Show", status: "FINISHED", episodes: 3, listed: 3, flaky: true },
-} as const;
-
-interface CatalogCall {
-  aniListId: number;
-  totalEpisodes: number;
-}
-
-/**
- * Stubs the main process for these titles: For You lists them, title details answer after half a
- * second (as AniList does), and the episode list answers from the source's numbers above.
- */
-async function stubTitles(app: ElectronApplication): Promise<void> {
-  await app.evaluate(({ ipcMain }, titles) => {
-    const calls: unknown[] = [];
-    (globalThis as { catalogCalls?: unknown[] }).catalogCalls = calls;
-    const failed = new Set<number>();
-    const card = (id: string) => ({
-      anilistId: Number(id),
-      mediaType: "ANIME",
-      title: titles[id as keyof typeof titles].title,
-      coverUrl: `https://img.anilist.example/${id}.jpg`,
-      score: 0.8,
-      reasonCodes: ["highly-rated"],
-    });
-    for (const channel of ["discovery:for-you", "anilist:media-detail", "anime:episode-catalog"])
-      ipcMain.removeHandler(channel);
-    ipcMain.handle("discovery:for-you", (_event, type: string) =>
-      type === "ANIME"
-        ? { status: "ready", requestId: "episodes-feed", items: Object.keys(titles).map(card) }
-        : { status: "learning", items: [] },
-    );
-    ipcMain.handle("anilist:media-detail", async (_event, id: number) => {
-      await new Promise((done) => setTimeout(done, 500));
-      const known = titles[String(id) as keyof typeof titles] as {
-        title: string;
-        status: string;
-        episodes: number;
-        next?: number;
-      };
-      return {
-        id,
-        type: "ANIME",
-        title: known.title,
-        coverUrl: `https://img.anilist.example/${id}.jpg`,
-        format: "TV",
-        status: known.status,
-        totalProgress: known.episodes,
-        genres: ["Drama"],
-        season: "SPRING",
-        seasonYear: 2026,
-        siteUrl: `https://anilist.co/anime/${id}`,
-        ...(known.next
-          ? {
-              nextAiringEpisode: {
-                episode: known.next,
-                airingAt: Math.floor(Date.now() / 1000) + 7 * 86_400,
-              },
-            }
-          : {}),
-        synonyms: [],
-        studios: [],
-        producers: [],
-        characters: [],
-        staff: [],
-        relations: [],
-        recommendations: [],
-        externalLinks: [],
-      };
-    });
-    ipcMain.handle(
-      "anime:episode-catalog",
-      (_event, input: { aniListId: number; totalEpisodes: number }) => {
-        calls.push({ aniListId: input.aniListId, totalEpisodes: input.totalEpisodes });
-        const known = titles[String(input.aniListId) as keyof typeof titles] as {
-          listed: number;
-          flaky?: boolean;
-        };
-        if (known.flaky && !failed.has(input.aniListId)) {
-          failed.add(input.aniListId);
-          throw new Error("The episode index timed out.");
-        }
-        return {
-          status: "available",
-          provider: "anime-source",
-          checkedAt: new Date().toISOString(),
-          seasons: [
-            {
-              id: `index:${input.aniListId}:season:1`,
-              number: 1,
-              title: "Season 1",
-              episodes: Array.from({ length: known.listed }, (_, index) => ({
-                id: `${input.aniListId}-${index + 1}`,
-                number: index + 1,
-              })),
-            },
-          ],
-        };
-      },
-    );
-  }, TITLES);
-}
-
-const catalogCalls = (app: ElectronApplication, id: number): Promise<CatalogCall[]> =>
-  app.evaluate(
-    (_electron, wanted) =>
-      ((globalThis as { catalogCalls?: CatalogCall[] }).catalogCalls ?? []).filter(
-        (call) => call.aniListId === wanted,
-      ),
-    id,
-  );
+import { catalogCalls, stubTitles } from "./stub-titles";
 
 async function openFromForYou(window: Page, title: string): Promise<void> {
   await openSection(window, "Anime");
@@ -170,5 +53,29 @@ test.describe("Anime episode list", () => {
     await expect(list.getByText(/3 episodes/)).toBeVisible();
     await expect(retry).toHaveCount(0);
     expect(await catalogCalls(app, 8500003)).toHaveLength(2);
+  });
+
+  test("hides the season box for a show with nothing else to pick", async () => {
+    const { window } = session;
+    await openFromForYou(window, "Fixture Finished Show");
+    const list = episodes(window, "Fixture Finished Show");
+    await expect(list.getByText(/12 episodes/)).toBeVisible();
+    await expect(list.locator(".season-picker")).toHaveCount(0);
+  });
+
+  test("keeps the season box when there is another season", async () => {
+    const { window } = session;
+    await openFromForYou(window, "Fixture Airing Show");
+    await expect(
+      episodes(window, "Fixture Airing Show").getByRole("button", { name: /Season 2/ }),
+    ).toBeVisible();
+  });
+
+  test("keeps the season box for a long runner browsed by arc", async () => {
+    const { window } = session;
+    await openFromForYou(window, "Fixture Long Runner");
+    await expect(
+      episodes(window, "Fixture Long Runner").getByRole("button", { name: /Fixture Arc One/ }),
+    ).toBeVisible();
   });
 });

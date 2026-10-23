@@ -3,19 +3,22 @@
    Watching episode cards, the offline Downloaded row, and the Downloads page. */
 
 /* ---------- Anime title header ---------- */
+/* Only the art is clipped: the header's own menus (Download, Up Next) open below it and must stay
+   whole and above the episode list. */
 .anime-head {
   position: relative;
+  z-index: 1;
   isolation: isolate;
   display: flex;
   align-items: flex-end;
   min-height: 560px;
   padding: calc(var(--app-navbar-height) + 80px) var(--page-gutter) 34px;
-  overflow: hidden;
 }
 .anime-head-art {
   position: absolute;
   z-index: -1;
   inset: 0;
+  overflow: hidden;
   background: var(--surface-panel);
 }
 .anime-head-art img {

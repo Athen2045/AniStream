@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { PlayerStarting } from "./PlayerStarting";
 import { OwnAnimePlayer } from "./player/OwnAnimePlayer";
-import { Check, ChevronDown, ChevronLeft, Clock3, LoaderCircle, Play } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Clock3, LoaderCircle, Play } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useMediaFullscreen } from "./useMediaFullscreen";
 import { getAppPreferences, preferredAudioSource } from "./app-preferences";
@@ -77,6 +77,7 @@ export function AnimeWatchExperience({
   onEpisodeWatched,
   onNavigate,
   hideEpisodes = false,
+  onLeave,
 }: {
   media: AniListCatalogMedia | AniListMediaDetail;
   initialEpisode: number;
@@ -87,6 +88,8 @@ export function AnimeWatchExperience({
   autoPlayRequest?: number;
   onEpisodeWatched: (episode: number) => Promise<void>;
   onNavigate?: (media: AniListCatalogMedia) => void;
+  /** Back from a player a Play shortcut opened returns to where it was clicked, not this page. */
+  onLeave?: () => void;
 }): React.JSX.Element {
   const rootRef = useRef<HTMLElement>(null);
   const { fullscreen, exitFullscreen, isFullscreenEscape } = useMediaFullscreen(rootRef);
@@ -95,6 +98,7 @@ export function AnimeWatchExperience({
   const reducedMotion = useAppReducedMotion();
   const transitionCommitted = useRef(false);
   const handledAutoPlayRequest = useRef(0);
+  const leaveOnBack = useRef(false);
   const pendingEpisodeRef = useRef<AnimeProviderEpisode | null>(null);
   const [catalog, setCatalog] = useState<AnimeEpisodeCatalog>();
   const [activeEpisode, setActiveEpisode] = useState<AnimeProviderEpisode>(() =>
@@ -454,14 +458,18 @@ export function AnimeWatchExperience({
       return;
     }
     handledAutoPlayRequest.current = autoPlayRequest;
+    leaveOnBack.current = Boolean(onLeave);
     playEpisode(activeEpisode);
-  }, [activeEpisode, autoPlayRequest, loadingCatalog, playEpisode]);
+  }, [activeEpisode, autoPlayRequest, loadingCatalog, onLeave, playEpisode]);
 
   const returnToEpisodes = useCallback((): void => {
     void exitFullscreen()
       .catch(() => undefined)
-      .then(() => transitionTo("episodes"));
-  }, [exitFullscreen, transitionTo]);
+      .then(() => {
+        if (leaveOnBack.current && onLeave) onLeave();
+        else transitionTo("episodes");
+      });
+  }, [exitFullscreen, onLeave, transitionTo]);
 
   useEffect(() => {
     if (view !== "player") return;
@@ -533,7 +541,10 @@ export function AnimeWatchExperience({
             }}
             onNavigate={onNavigate}
             onSeasonNumberResolved={setResolvedSeasonNumber}
-            onPlay={playEpisode}
+            onPlay={(episode) => {
+              leaveOnBack.current = false;
+              playEpisode(episode);
+            }}
           />
         )
       ) : (
@@ -579,11 +590,11 @@ export function AnimeWatchExperience({
               ref={backButtonRef}
               type="button"
               className="watch-player-back"
-              aria-label="Back to episode list"
-              title="Back to episode list (Esc)"
+              aria-label="Back"
+              title="Back (Esc)"
               onClick={returnToEpisodes}
             >
-              <ChevronLeft size={22} />
+              <ArrowLeft size={18} aria-hidden="true" />
             </button>
           </div>
 
@@ -959,7 +970,7 @@ function SeasonPicker({
   activeRange?: AnimeEpisodeRange;
   onSelectRange: (range: AnimeEpisodeRange) => void;
   onArcModeChange: (arcMode: boolean) => void;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -1118,6 +1129,14 @@ function SeasonPicker({
         : awaitingSeasonNumber && !error
           ? "Checking AniList"
           : episodeCountLabel(selected.episodeCount);
+
+  // Nothing to pick: AniList lists no prequel, sequel, movie or special for this show, and it is not
+  // a long runner browsed by arc (One Piece keeps the box for its arcs). Details that link no other
+  // anime at all settle it before the series walk, so the box never flashes up first.
+  const standalone =
+    "relations" in media && !media.relations.some((relation) => relation.media.type === "ANIME");
+  if (!arcMode && (loaded ? seasons.length <= 1 && extras.length === 0 : standalone && !ranges))
+    return null;
 
   return (
     <div className="season-picker" ref={pickerRef}>

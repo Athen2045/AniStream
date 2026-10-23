@@ -109,6 +109,9 @@ export function MediaDetailModal({
   const [adding, setAdding] = useState(false);
   const [libraryError, setLibraryError] = useState<string>();
   const [autoPlayRequest, setAutoPlayRequest] = useState(0);
+  // Opened by a Play/Read shortcut: Back from that player or reader returns to where it was
+  // clicked. Watching or reading from this page itself returns here instead.
+  const [backToOrigin, setBackToOrigin] = useState(initialAction !== "details");
   // MangaDex chapters found unreadable this session, mapped to the mirror copy that replaced them.
   const [swappedChapters, setSwappedChapters] = useState<
     ReadonlyMap<string, MangaDexReaderChapter>
@@ -294,9 +297,13 @@ export function MediaDetailModal({
   );
 
   const closeReader = useCallback((): void => {
+    if (backToOrigin) {
+      onClose();
+      return;
+    }
     setActiveChapter(undefined);
     void detailSession.refreshResume();
-  }, [detailSession]);
+  }, [backToOrigin, detailSession, onClose]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent): void => {
@@ -304,7 +311,9 @@ export function MediaDetailModal({
         event.key === "Escape" &&
         !document.fullscreenElement &&
         !activeChapter &&
-        !document.querySelector(".watch-player-view")
+        !document.querySelector(".watch-player-view") &&
+        // Escape in an open dialog (Download, Copyright) closes only that dialog.
+        !document.querySelector("dialog[open]")
       )
         onClose();
     };
@@ -496,7 +505,10 @@ export function MediaDetailModal({
           loading={loading}
           primaryLabel={primaryLabel}
           blockedLabel={blockedLabel}
-          onPrimary={() => setAutoPlayRequest((request) => request + 1)}
+          onPrimary={() => {
+            setBackToOrigin(false);
+            setAutoPlayRequest((request) => request + 1);
+          }}
           minutes={detail?.duration}
           studio={detail?.studios[0]}
           facts={
@@ -663,6 +675,7 @@ export function MediaDetailModal({
                   type="button"
                   disabled={Boolean(blockedLabel)}
                   onClick={() => {
+                    setBackToOrigin(false);
                     if (isAnime) setAutoPlayRequest((request) => request + 1);
                     else void openPreferredChapter();
                   }}
@@ -938,6 +951,7 @@ export function MediaDetailModal({
                 onEpisodeWatched={markEpisodeWatched}
                 onNavigate={onNavigate}
                 hideEpisodes={animeLayout === "movie"}
+                onLeave={backToOrigin ? onClose : undefined}
               />
             </Suspense>
           ) : (
@@ -952,8 +966,18 @@ export function MediaDetailModal({
               onPreferenceChange={changeMangaPreferences}
               onRetry={() => void detailSession.retryReader()}
               openError={chapterOpenError}
-              onRead={openChapter}
-              onContinue={mangaUnreadable ? undefined : () => void openPreferredChapter()}
+              onRead={(chapter) => {
+                setBackToOrigin(false);
+                openChapter(chapter);
+              }}
+              onContinue={
+                mangaUnreadable
+                  ? undefined
+                  : () => {
+                      setBackToOrigin(false);
+                      void openPreferredChapter();
+                    }
+              }
               continueLabel={primaryLabel}
               releaseNotice={releaseNotice}
             />
