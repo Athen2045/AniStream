@@ -7,6 +7,47 @@ import {
 const ORIGIN = "https://player.example";
 
 describe("AnimePlaybackSession", () => {
+  it("reports the position in whole seconds, telling listeners only when the second changes", () => {
+    const session = createAnimePlaybackSession({
+      mediaId: 7,
+      playerOrigin: ORIGIN,
+      episode: 2,
+      saveResume: vi.fn(),
+      clearResume: vi.fn(),
+      onWatched: vi.fn(),
+    });
+    const frame = {} as Window;
+    const heard = vi.fn();
+    session.subscribe(heard);
+    const tick = (time: number): void =>
+      session.handleMessage({ event: "time", time, duration: 1420 }, ORIGIN, frame, frame);
+    tick(30.1);
+    expect(session.getSnapshot().position).toEqual({ seconds: 30, duration: 1420 });
+    const calls = heard.mock.calls.length;
+    tick(30.4);
+    tick(30.7);
+    expect(heard.mock.calls.length).toBe(calls);
+    tick(31.0);
+    expect(session.getSnapshot().position).toEqual({ seconds: 31, duration: 1420 });
+    expect(heard.mock.calls.length).toBe(calls + 1);
+    session.dispose();
+  });
+  it("marks the episode watched once when asked (skipping its ending)", async () => {
+    const onWatched = vi.fn();
+    const session = createAnimePlaybackSession({
+      mediaId: 7,
+      playerOrigin: ORIGIN,
+      episode: 2,
+      saveResume: vi.fn(),
+      clearResume: vi.fn(),
+      onWatched,
+    });
+    session.markWatched();
+    session.markWatched();
+    await vi.waitFor(() => expect(onWatched).toHaveBeenCalledWith(2));
+    expect(onWatched).toHaveBeenCalledTimes(1);
+    session.dispose();
+  });
   it("never lets a stale checkpoint undercut the requested Continue episode", () => {
     expect(
       chooseInitialAnimeEpisode({

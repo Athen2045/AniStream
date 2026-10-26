@@ -26,6 +26,8 @@
 }
 .continue-card:hover .continue-remove,
 .continue-card:focus-within .continue-remove,
+.anime-continue-card:hover .continue-remove,
+.anime-continue-card:focus-within .continue-remove,
 .more-continue:hover .continue-remove,
 .more-continue:focus-within .continue-remove {
   opacity: 1;

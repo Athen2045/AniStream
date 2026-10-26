@@ -335,6 +335,16 @@ function updatePreferencesArgs(
   return [{ autoDownload: input.autoDownload, installOnQuit: input.installOnQuit }];
 }
 
+/** Links AniStream hands to the default browser: https only, no credentials in the URL. */
+export function isExternalLinkUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 function noArgs(value: unknown[]): [] {
   argsOfLength(value, 0);
   return [];
@@ -404,6 +414,11 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     return [];
   },
   "app:get-info": noArgs,
+  "app:open-link": (value) => {
+    const [url] = argsOfLength(value, 1);
+    if (typeof url !== "string" || !isExternalLinkUrl(url)) fail();
+    return [url];
+  },
   "window:caption-controls": (value) => {
     const [visible] = argsOfLength(value, 1);
     if (typeof visible !== "boolean") fail();

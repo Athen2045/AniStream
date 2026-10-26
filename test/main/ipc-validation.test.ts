@@ -29,6 +29,15 @@ describe("IPC argument validation", () => {
     expect(() => ipcArgValidators["window:caption-controls"](["false"])).toThrow(/malformed/);
     expect(() => ipcArgValidators["window:caption-controls"]([])).toThrow(/malformed/);
   });
+  it("opens only https links without credentials in the browser", () => {
+    const validate = ipcArgValidators["app:open-link"];
+    expect(validate(["https://anilist.co/anime/1"])).toEqual(["https://anilist.co/anime/1"]);
+    expect(() => validate(["http://anilist.co/"])).toThrow(/malformed/);
+    expect(() => validate(["file:///C:/Windows/system32/cmd.exe"])).toThrow(/malformed/);
+    expect(() => validate(["https://user:pass@anilist.co/"])).toThrow(/malformed/);
+    expect(() => validate(["not a url"])).toThrow(/malformed/);
+    expect(() => validate([])).toThrow(/malformed/);
+  });
   it("rejects the wrong argument count for a no-arg channel", () => {
     expect(() => ipcArgValidators["app:get-info"]([])).not.toThrow();
     expect(() => ipcArgValidators["app:get-info"](["unexpected"])).toThrow(/malformed/);

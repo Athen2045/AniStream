@@ -524,8 +524,7 @@ function AppContent(): React.JSX.Element {
                       label: "Report a bug",
                       icon: Bug,
                       title: "Report a bug on GitHub",
-                      // The main process hands https links to the default browser.
-                      onSelect: () => window.open(BUG_REPORT_URL, "_blank", "noopener"),
+                      onSelect: () => void window.anistream.openLink(BUG_REPORT_URL),
                     },
                     {
                       key: "profile",

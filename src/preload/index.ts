@@ -56,6 +56,7 @@ const bridge: AniStreamBridge = {
   applyBingeChange: (change) => invoke("binge:apply", change),
   retryActivitySync: () => invoke("activity:retry"),
   getAppInfo: () => invoke("app:get-info"),
+  openLink: (url) => invoke("app:open-link", url),
   setCaptionControlsVisible: (visible) => invoke("window:caption-controls", visible),
   controlWindow: (action) => invoke("window:control", action),
   getWindowState: () => invoke("window:state"),

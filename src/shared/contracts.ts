@@ -1056,6 +1056,8 @@ export interface AniStreamBridge {
   applyBingeChange(change: import("./binge").BingeChange): Promise<import("./binge").BingeState>;
   retryActivitySync(): Promise<LocalActivity[]>;
   getAppInfo(): Promise<AppInfo>;
+  /** Opens an https link in the default browser (the only way AniStream opens one). */
+  openLink(url: string): Promise<void>;
   /** Full-window media surfaces hide the native window controls along with their own. */
   setCaptionControlsVisible(visible: boolean): Promise<void>;
   /** The app's own minimise / maximise / close buttons (Windows; macOS keeps its native ones). */

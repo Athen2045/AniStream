@@ -26,7 +26,15 @@ const babelOptions = {
 
 export default [
   {
-    ignores: ["dist/**", "out/**", "node_modules/**", "prototypes/**", "**/*.tsbuildinfo"],
+    // test/ui/tmp/ holds gitignored scratch checks.
+    ignores: [
+      "dist/**",
+      "out/**",
+      "node_modules/**",
+      "prototypes/**",
+      "test/ui/tmp/**",
+      "**/*.tsbuildinfo",
+    ],
   },
   js.configs.recommended,
   {

@@ -132,6 +132,7 @@ export interface IpcInvokeChannelMap {
   "binge:apply": { args: [change: BingeChange]; result: BingeState };
   "activity:retry": { args: []; result: LocalActivity[] };
   "app:get-info": { args: []; result: AppInfo };
+  "app:open-link": { args: [url: string]; result: void };
   "window:caption-controls": { args: [visible: boolean]; result: void };
   "window:control": { args: [action: WindowControlAction]; result: void };
   "window:state": { args: []; result: WindowState };

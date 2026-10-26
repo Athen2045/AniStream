@@ -14,6 +14,8 @@ export interface AnimePlaybackSessionSnapshot {
   errorMessage?: string;
   ended: boolean;
   persistenceError?: string;
+  /** Where the player is, in whole seconds (updates once a second while it plays). */
+  position?: { seconds: number; duration: number };
 }
 
 export interface AnimePlaybackSessionOptions {
@@ -33,6 +35,8 @@ export interface AnimePlaybackSession {
   getSnapshot(): AnimePlaybackSessionSnapshot;
   subscribe(listener: () => void): () => void;
   markLoaded(): void;
+  /** Records the episode as watched now (e.g. when the viewer skips its ending to the next). */
+  markWatched(): void;
   retryPersistence(): void;
   handleMessage(
     data: unknown,
@@ -93,6 +97,8 @@ export function createAnimePlaybackSession(
   let timer = startLoadTimer();
 
   const updateSnapshot = (changes: Partial<AnimePlaybackSessionSnapshot>): void => {
+    const keys = Object.keys(changes) as (keyof AnimePlaybackSessionSnapshot)[];
+    if (keys.every((key) => snapshot[key] === changes[key])) return;
     snapshot = { ...snapshot, ...changes };
     for (const listener of listeners) listener();
   };
@@ -164,6 +170,8 @@ export function createAnimePlaybackSession(
       if (!disposed) updateSnapshot({ loaded: true });
     },
 
+    markWatched,
+
     retryPersistence() {
       if (completionRequested) markWatched();
       else persistLatest(true);
@@ -183,12 +191,18 @@ export function createAnimePlaybackSession(
       if (!message) return;
 
       if (message.kind === "progress") {
+        const seconds = Math.floor(message.currentTime);
         updateSnapshot({
           loaded: true,
           hasProgressed: true,
           loadTimedOut: false,
           hasError: false,
           errorMessage: undefined,
+          // Ticks arrive about four times a second; listeners hear of whole seconds only.
+          position:
+            snapshot.position?.seconds === seconds
+              ? snapshot.position
+              : { seconds, duration: message.duration },
         });
         const ratio = message.percent ?? (message.currentTime / message.duration) * 100;
         if (ratio >= COMPLETE_PERCENT) {
