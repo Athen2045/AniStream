@@ -51,9 +51,9 @@ computer, and you can connect AniList or Simkl to sync your lists if you want to
 ## Why AniStream
 
 - **No ads, ever.** No banners, no pop-ups, no trackers, not even inside the video players.
-- **A player made for anime.** **Skip opening** and **Skip ending**, sub or dub, your choice of
-  audio and subtitles, previews when you seek, and the next episode lined up with a countdown. If
-  one player can't play an episode, a backup takes over by itself.
+- **A player made for anime.** **Skip opening**, and skip the ending straight to the **next
+  episode**. Sub or dub, your choice of audio and subtitles, previews when you seek, and keyboard
+  shortcuts. If one player can't play an episode, a backup takes over by itself.
 - **Watch offline.** Download one episode or a whole season and watch it without a connection,
   within a storage limit you set.
 - **Read manga without the clutter.** A fullscreen reader that remembers your page, chapters

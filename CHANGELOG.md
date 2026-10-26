@@ -6,6 +6,19 @@ All notable changes to AniStream are listed here. Each release has full notes in
 Legend: 🎉 new feature · 💄 design · ⚡️ improvement · 🦺 fix · 🔒 security · 🏗️ internal or
 compatibility · ⬆️ dependency update
 
+## v2.1.2 (2026-10-26)
+
+No more ad pop-ups from the new movie and show players, keyboard controls that keep working, and a
+quicker way to the next episode. [Full notes](.github/releases/v2.1.2.md)
+
+- ⚡️ During an episode's ending, Skip becomes Next episode (own player and main anime player)
+- ⚡️ Players take the keyboard as soon as they start
+- 🔒 Movies & TV players could open ads in your web browser (#38)
+- 🦺 Own player shortcuts stopped working after clicking its buttons or sliders (#38)
+- 🦺 Space right after a player opened went back to the title page
+- 🦺 Escape on the own player's settings menu also closed the player
+- 🦺 The X to remove a show from Anime's Continue Watching didn't appear
+
 ## v2.1.1 (2026-10-23)
 
 Smoother downloads and navigation, and a handful of fixes for small annoyances.

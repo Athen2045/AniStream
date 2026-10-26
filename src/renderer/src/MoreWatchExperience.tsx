@@ -1,4 +1,5 @@
 import { ArrowLeft, ArrowLeftRight } from "lucide-react";
+import { takePlayerFocus } from "./player-focus";
 import { PlayerStarting } from "./PlayerStarting";
 import appIcon from "./assets/app-icon.png";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -380,6 +381,7 @@ export function MoreWatchExperience({
               referrerPolicy="strict-origin-when-cross-origin"
               onLoad={() => {
                 session.markLoaded();
+                takePlayerFocus(iframeRef.current);
                 // Documented status request; sent only to the exact configured player origin.
                 iframeRef.current?.contentWindow?.postMessage(
                   { command: "getStatus" },

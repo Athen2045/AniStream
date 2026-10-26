@@ -1,0 +1,2 @@
+# Test video segments for the own player UI tests.
+test/ui/fixtures/stream/*.bin binary

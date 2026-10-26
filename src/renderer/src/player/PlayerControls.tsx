@@ -43,12 +43,32 @@ export type PlayerControlsProps = {
     choose: (id: string | null) => void;
   };
   audio: { options: PlayerOption[]; current: string | null; choose: (id: string) => void };
-  /** The opening or ending playing now, with how far through it is (0–1). */
-  skip?: { segment: AnimeSkipSegment; progress: number; go: () => void } | null;
+  /**
+   * The opening or ending playing now, with how far through it is (0–1). During an ending,
+   * `next` names the next episode: the button then plays it instead of skipping to the end.
+   */
+  skip?: { segment: AnimeSkipSegment; progress: number; next?: string; go: () => void } | null;
   thumbnails?: SeekThumbnails | null;
 };
 
 type MenuPage = "main" | "subtitles" | "audio" | "speed";
+
+/**
+ * For the player's `onPointerUpCapture`: a clicked button or slider keeps keyboard focus, and the
+ * shortcuts skip a focused control (Space presses the button again, arrows move the slider), so
+ * hand focus back to the player after a click. Checked a tick later, once the control has done
+ * its own focusing (sliders focus their thumb on release, Settings focuses its menu). The menu
+ * keeps its focus; keyboard users who Tab to a control are unaffected (issue 38).
+ */
+export function returnFocusToPlayer(event: React.PointerEvent<HTMLElement>): void {
+  const player = event.currentTarget;
+  setTimeout(() => {
+    const active = document.activeElement;
+    if (!active || active === player || !player.contains(active)) return;
+    if (!active.closest("button, [role=slider]") || active.closest(".vmenu")) return;
+    player.focus({ preventScroll: true });
+  });
+}
 
 function SkipIcon({ forward }: { forward?: boolean }): React.JSX.Element {
   return (
@@ -561,12 +581,15 @@ function SeekBar({
 function SkipSegmentButton({
   segment,
   progress,
+  next,
   go,
 }: {
   segment: AnimeSkipSegment;
   progress: number;
+  next?: string;
   go: () => void;
 }): React.JSX.Element {
+  const toNext = segment.kind === "ending" && next !== undefined;
   const left = Math.max(
     0,
     Math.round(segment.end - segment.start - progress * (segment.end - segment.start)),
@@ -576,14 +599,18 @@ function SkipSegmentButton({
       type="button"
       className="vplayer-skip"
       onClick={go}
-      title={`Skip to ${clock(segment.end)}`}
+      aria-label={toNext ? `Next episode: ${next}` : undefined}
+      title={toNext ? `Skip the ending and play ${next}` : `Skip to ${clock(segment.end)}`}
       style={
         { "--skip-progress": String(Math.min(1, Math.max(0, progress))) } as React.CSSProperties
       }
     >
       <span className="vplayer-skip-fill" aria-hidden="true" />
-      <PlayerIcon name="skip" />
-      <span>{segment.kind === "opening" ? "Skip opening" : "Skip ending"}</span>
+      <PlayerIcon name={toNext ? "next" : "skip"} />
+      <span>
+        {toNext ? "Next episode" : segment.kind === "opening" ? "Skip opening" : "Skip ending"}
+      </span>
+      {toNext ? <small className="vplayer-next-title">{next}</small> : null}
       <small aria-hidden="true">{clock(left)}</small>
     </button>
   );

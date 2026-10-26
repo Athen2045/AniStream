@@ -42,6 +42,7 @@ import { registerDownloadsDomain } from "./domains/downloads";
 import { DownloadManager } from "./downloads/download-manager";
 import { StreamProxy, streamSchemePrivileges } from "./stream-proxy";
 import { registerTrustedIpcHandler, sendTypedIpcEvent } from "./ipc";
+import { isExternalLinkUrl } from "./ipc-validation";
 import { registerTrackerDomain } from "./domains/tracker";
 import { registerAnimeDomain } from "./domains/anime";
 import { registerMangaDomain } from "./domains/manga";
@@ -167,19 +168,18 @@ function createWindow(rendererUrl: string): void {
   });
 
   const trustedRendererOrigin = new URL(rendererUrl).origin;
-  mainWindow.webContents.setWindowOpenHandler(({ url, referrer }) => {
-    // Anime embeds can request ad/pop-up windows. Keep the playback surface in-app and
-    // never hand provider-created windows to the user's external browser.
-    const referrerOrigin = safeOrigin(referrer.url);
-    if (referrerOrigin && embeddedPlayerOrigins().includes(referrerOrigin))
-      return { action: "deny" };
-    if (isSafeExternalUrl(url)) void shell.openExternal(url);
-    return { action: "deny" };
-  });
-  mainWindow.webContents.on("will-navigate", (event, url) => {
+  // No frame may open a window. Embedded players request ad pop-ups, often from nested frames or
+  // with no referrer, so the opener cannot be told apart reliably; AniStream's own links reach the
+  // browser through the trusted `app:open-link` call instead (issue 38).
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.on("will-navigate", (event) => {
+    const { url, initiator } = event;
     if (safeOrigin(url) === trustedRendererOrigin) return;
     event.preventDefault();
-    if (isSafeExternalUrl(url)) void shell.openExternal(url);
+    // A player frame can try to move the whole window to an ad page; only AniStream's own page
+    // may send a link to the browser this way.
+    if (initiator?.origin === trustedRendererOrigin && isExternalLinkUrl(url))
+      void shell.openExternal(url);
   });
 
   morePlayerFrameUa = providerConfig.more.media.some((player) => player.stripElectronUserAgent)
@@ -458,6 +458,9 @@ void app
       databaseReady: database?.ready ?? false,
       videoSourceStatus: animeSource ? "configured" : "unavailable",
     }));
+    registerTrustedIpcHandler(trustedRendererOrigin, "app:open-link", (_, url) =>
+      shell.openExternal(url),
+    );
     registerTrustedIpcHandler(trustedRendererOrigin, "window:caption-controls", (_, visible) => {
       if (mainWindow && !mainWindow.isDestroyed())
         setCaptionControlsVisible(mainWindow, process.platform, visible);
@@ -666,15 +669,6 @@ function safeOrigin(value: string): string | undefined {
     return new URL(value).origin;
   } catch {
     return undefined;
-  }
-}
-
-function isSafeExternalUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password;
-  } catch {
-    return false;
   }
 }
 

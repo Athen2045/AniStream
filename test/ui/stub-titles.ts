@@ -116,6 +116,7 @@ export async function stubTitles(app: ElectronApplication): Promise<void> {
         };
         return {
           id,
+          malId: id - 8_000_000,
           type: "ANIME",
           title: known.title,
           coverUrl: `https://img.anilist.example/${id}.jpg`,

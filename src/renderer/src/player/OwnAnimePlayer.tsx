@@ -13,7 +13,8 @@ import { getAppPreferences } from "../app-preferences";
 import { saveAnimeActivity } from "../local-activity";
 import { PlayerStarting } from "../PlayerStarting";
 import { NextUpButton } from "./NextUpButton";
-import { PlayerControls, type PlayerOption } from "./PlayerControls";
+import { takePlayerFocus } from "../player-focus";
+import { PlayerControls, returnFocusToPlayer, type PlayerOption } from "./PlayerControls";
 import {
   baseLanguage,
   readAudioLanguage,
@@ -76,6 +77,7 @@ export function OwnAnimePlayer({
   const [audioTracks, setAudioTracks] = useState<PlayerOption[]>([]);
   const [audioCurrent, setAudioCurrent] = useState<string | null>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [subtitlePick, setSubtitlePick] = useState<{ stream: string; id: string | null }>();
   const [subtitleData, setSubtitleData] = useState<{ id: string; data: AnimeDirectSubtitle }>();
   // A track the ASS renderer could not show falls back to text-only WebVTT.
@@ -90,6 +92,10 @@ export function OwnAnimePlayer({
   // Opening/ending for the Skip button (AniSkip, by MAL id), and where playback is inside one.
   const [skipSegments, setSkipSegments] = useState<AnimeSkipSegment[]>([]);
   const [skipNow, setSkipNow] = useState<{ index: number; progress: number } | null>(null);
+
+  useEffect(() => {
+    if (video) takePlayerFocus(containerRef.current);
+  }, [video]);
 
   // Resolve the episode's stream (match, then the episode page) in the main process.
   useEffect(() => {
@@ -432,7 +438,7 @@ export function OwnAnimePlayer({
   return (
     <div className="anistream-player own-player">
       <VideoPlayer>
-        <Container className="vplayer">
+        <Container ref={containerRef} className="vplayer" onPointerUpCapture={returnFocusToPlayer}>
           <Video
             ref={setVideo}
             // Stable volume (Web Audio) needs CORS-clean media; the stream proxy allows it.
@@ -495,9 +501,16 @@ export function OwnAnimePlayer({
                 ? {
                     segment: skipSegments[skipNow.index],
                     progress: skipNow.progress,
+                    next: nextEpisode ? episodeLabel(nextEpisode) : undefined,
                     go: () => {
                       const segment = skipSegments[skipNow.index];
                       if (!video || !segment) return;
+                      // Skipping an ending goes straight to the next episode, when there is one.
+                      if (segment.kind === "ending" && nextEpisode) {
+                        markWatched();
+                        onNext(nextEpisode);
+                        return;
+                      }
                       // Past the last half second the episode simply ends (and Up next starts).
                       seekTo(video, Math.min(segment.end, video.duration - 0.5));
                       setSkipNow(null);

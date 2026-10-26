@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { takePlayerFocus } from "./player-focus";
 import { PlayerStarting } from "./PlayerStarting";
 import { OwnAnimePlayer } from "./player/OwnAnimePlayer";
 import { ArrowLeft, Check, ChevronDown, Clock3, LoaderCircle, Play } from "lucide-react";
@@ -25,8 +26,10 @@ import type {
   AnimePlaybackCandidate,
   AnimeProviderEpisode,
   AnimeProviderSeason,
+  AnimeSkipSegment,
   PlaybackResume,
 } from "../../shared/contracts";
+import { NextUpButton } from "./player/NextUpButton";
 import { chooseInitialAnimeEpisode, createAnimePlaybackSession } from "./anime-playback-session";
 import { saveAnimeActivity } from "./local-activity";
 import {
@@ -474,7 +477,8 @@ export function AnimeWatchExperience({
   useEffect(() => {
     if (view !== "player") return;
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
+      // An open menu (the own player's Settings) closes first, on its own Esc.
+      if (event.key === "Escape" && !rootRef.current?.querySelector('[role="menu"]')) {
         event.stopImmediatePropagation();
         if (!isFullscreenEscape()) returnToEpisodes();
       }
@@ -1383,6 +1387,35 @@ function AnimeEmbedPlayer({
     return () => session.dispose();
   }, [session]);
 
+  // The episode's ending (AniSkip, by MAL id, once the player reports its length): while it
+  // plays, a "Next episode" pill in the Skip style plays the next one, as in the own player.
+  const [endings, setEndings] = useState<AnimeSkipSegment[]>([]);
+  const length =
+    sessionState.position === undefined ? undefined : Math.round(sessionState.position.duration);
+  const hasNext = nextEpisode !== undefined;
+  useEffect(() => {
+    if (!length || !media.malId || !hasNext) return;
+    let active = true;
+    void window.anistream
+      .getAnimeSkipTimes({
+        aniListId: media.id,
+        malId: media.malId,
+        episode: episode.number,
+        durationSeconds: length,
+      })
+      .then((segments) => {
+        if (active) setEndings(segments.filter((segment) => segment.kind === "ending"));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [episode.number, hasNext, length, media.id, media.malId]);
+  const seconds = sessionState.position?.seconds;
+  const inEnding =
+    seconds !== undefined &&
+    endings.some((segment) => seconds >= segment.start && seconds < segment.end - 1);
+
   useEffect(() => {
     const handleMessage = (event: MessageEvent<unknown>): void => {
       session.handleMessage(
@@ -1407,7 +1440,10 @@ function AnimeEmbedPlayer({
         allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
-        onLoad={() => session.markLoaded()}
+        onLoad={() => {
+          session.markLoaded();
+          takePlayerFocus(iframeRef.current);
+        }}
       />
 
       {sessionState.loadTimedOut || sessionState.hasError ? (
@@ -1448,6 +1484,19 @@ function AnimeEmbedPlayer({
 
       {sessionState.ended && nextUp ? (
         <AutoplayNext key={`${mediaId}:${episode.number}`} next={nextUp} />
+      ) : inEnding && nextEpisode ? (
+        // Above the player's own Skip Outro button, which sits where the pill usually does.
+        <div className="anime-embed-ending">
+          <NextUpButton
+            heading="Next episode"
+            title={`E${nextEpisode.number} · ${nextEpisode.title ?? `Episode ${nextEpisode.number}`}`}
+            total={1}
+            onPlay={() => {
+              session.markWatched();
+              onNext(nextEpisode);
+            }}
+          />
+        </div>
       ) : null}
     </div>
   );

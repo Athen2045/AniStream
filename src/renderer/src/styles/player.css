@@ -628,6 +628,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The embedded anime player's ending pill sits above that player's own Skip button. */
+.anime-embed-ending .vplayer-next {
+  bottom: 216px;
+}
 .vplayer-next > .vplayer-next-cancel {
   flex: none;
   justify-content: center;
