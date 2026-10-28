@@ -1,3 +1,5 @@
+import type { EnhanceMode } from "./anime4k-enhancer";
+
 /**
  * Own-player conveniences kept in this device's local storage (ported from the user's own player,
  * 2026-10-18): volume and mute, autoplay, the last subtitle and audio language, and the last
@@ -8,6 +10,9 @@ const AUTOPLAY_KEY = "anistream.player.autoplay";
 const SUBTITLE_KEY = "anistream.player.subtitles";
 const AUDIO_KEY = "anistream.player.audio";
 const BANDWIDTH_KEY = "anistream.player.bandwidth";
+const ENHANCE_KEY = "anistream.player.enhance";
+/** Anime4K is on hold as an experiment (user decision 2026-10-28): hidden unless this is "on". */
+const ENHANCE_EXPERIMENT_KEY = "anistream.experimental.anime4k";
 /** Bits per second; outside this range a saved estimate is ignored. */
 const BANDWIDTH_RANGE = [250_000, 200_000_000] as const;
 
@@ -80,6 +85,26 @@ export function readAudioLanguage(): string | undefined {
 
 export function writeAudioLanguage(language: string): void {
   write(AUDIO_KEY, language);
+}
+
+/**
+ * Anime4K is an experiment on hold (2026-10-28): switching it on in full screen closed the app in
+ * testing, so it stays hidden and off unless a developer sets `anistream.experimental.anime4k` to
+ * "on" in this device's storage.
+ */
+export function anime4kExperimentEnabled(): boolean {
+  return read(ENHANCE_EXPERIMENT_KEY) === "on";
+}
+
+/** Anime4K in the own player: off unless the viewer turns it on (it works the GPU hard). */
+export function readEnhanceMode(): EnhanceMode {
+  if (!anime4kExperimentEnabled()) return "off";
+  const saved = read(ENHANCE_KEY);
+  return saved === "light" || saved === "strong" ? saved : "off";
+}
+
+export function writeEnhanceMode(mode: EnhanceMode): void {
+  write(ENHANCE_KEY, mode);
 }
 
 /** The base language of a tag: `pt-BR` → `pt`, `eng` → `eng` (lower-cased). */

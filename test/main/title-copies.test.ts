@@ -78,6 +78,8 @@ describe("title copies (offline title pages)", () => {
     copies.write("art:7:28:0", 7, [{ episode: 1, stillUrl: "kept" }]);
     copies.write("episodes:7", 7, { seasons: [] });
     copies.write("art:8:12:0", 8, [{ episode: 1, stillUrl: "not kept" }]);
-    expect(copies.pinned("art:")).toEqual([[{ episode: 1, stillUrl: "kept" }]]);
+    expect(copies.pinned("art:")).toEqual([
+      { key: "art:7:28:0", value: [{ episode: 1, stillUrl: "kept" }] },
+    ]);
   });
 });

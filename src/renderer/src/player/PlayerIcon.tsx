@@ -19,6 +19,12 @@ const paths = {
     </>
   ),
   wave: <path d="M4 12h2M8 8v8M12 5v14M16 8v8M20 12h-2" />,
+  sparkle: (
+    <>
+      <path d="M11 4.5 12.6 9l4.4 1.6-4.4 1.6L11 16.7l-1.6-4.5L5 10.6 9.4 9Z" />
+      <path d="M18 15.5v4M16 17.5h4" />
+    </>
+  ),
   /** Skip opening/ending: two forward chevrons. */
   skip: <path d="m5.5 6 6 6-6 6M12.5 6l6 6-6 6" />,
   autoplay: (

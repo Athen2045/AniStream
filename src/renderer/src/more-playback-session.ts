@@ -24,13 +24,22 @@ export function readMorePlayerMessage(input: {
   return parseMorePlayerMessage(input.data);
 }
 const COMPLETE_PERCENT = 90;
+/** Within this many seconds of the end, the episode has played out (players stop just short). */
+const FINISHED_SECONDS = 2;
 /** Seconds the reported position must advance before playback counts as started. */
 const START_ADVANCE_SECONDS = 0.5;
 
 export interface MorePlaybackSessionSnapshot {
   loaded: boolean;
   hasError: boolean;
+  /** Watched: past 90 % (the credits), saved as completed. */
   ended: boolean;
+  /**
+   * Played to the very end (the player said so, or the position reached the last seconds). Only
+   * then does AniStream's Next episode prompt and its countdown appear; during the credits the
+   * player's own Next button is left alone (user report 2026-10-28).
+   */
+  finished: boolean;
   errorMessage?: string;
   persistenceError?: string;
   /** Last playing state the player reported; undefined until it reports one. */
@@ -70,6 +79,7 @@ export function createMorePlaybackSession(options: {
     loaded: false,
     hasError: false,
     ended: false,
+    finished: false,
     started: false,
     season: options.season,
     episode: options.episode,
@@ -122,11 +132,12 @@ export function createMorePlaybackSession(options: {
     latest = undefined;
     firstPosition = undefined;
     lastSavedAt = 0;
-    publish({ ended: false, season, episode });
+    publish({ ended: false, finished: false, season, episode });
   };
   const track = (event: Extract<MorePlayerMessage, { kind: "progress" | "ended" }>): void => {
     if (event.kind === "ended") {
       complete();
+      if (!snapshot.finished) publish({ finished: true });
     } else {
       latest = { currentTime: event.currentTime, duration: event.duration };
       firstPosition ??= event.currentTime;
@@ -141,6 +152,8 @@ export function createMorePlaybackSession(options: {
       });
       if ((event.currentTime / event.duration) * 100 >= COMPLETE_PERCENT) complete();
       else save(false);
+      if (!snapshot.finished && event.duration - event.currentTime <= FINISHED_SECONDS)
+        publish({ finished: true });
     }
   };
 

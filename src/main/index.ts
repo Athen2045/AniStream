@@ -42,6 +42,11 @@ import { registerAnimeDirectDomain, resolveDirectEpisode } from "./domains/anime
 import { registerDownloadsDomain } from "./domains/downloads";
 import { DownloadManager } from "./downloads/download-manager";
 import { ChapterDownloadManager } from "./downloads/chapter-download-manager";
+import {
+  createDownloadExtras,
+  keptStillSources,
+  readDownloadPlaylist,
+} from "./downloads/download-extras";
 import { StreamProxy, streamSchemePrivileges } from "./stream-proxy";
 import { BackgroundMode } from "./background-mode";
 import { DEFAULT_BACKGROUND_PREFERENCES } from "../shared/background";
@@ -390,15 +395,7 @@ void app
       maxBytes: 60 * 1024 * 1024,
       maxFiles: 800,
       // Downloaded titles keep their episode stills, so their episodes still preview offline.
-      keep: () =>
-        (database?.titleCopies.pinned("art:") ?? []).flatMap((rows) =>
-          (Array.isArray(rows) ? rows : []).flatMap((row: unknown) => {
-            const still = (row as { stillUrl?: unknown } | null)?.stillUrl;
-            const source =
-              typeof still === "string" ? episodeArtSourceFromCacheUrl(still) : undefined;
-            return source ? [source] : [];
-          }),
-        ),
+      keep: () => (database ? keptStillSources(database.titleCopies) : []),
     });
     // Only allowlisted artwork and episode-image URLs resolve; the renderer never names a file.
     // Own-player streams: opaque anistream-media:// URLs proxied by this process.
@@ -563,10 +560,12 @@ void app
           sendTypedIpcEvent(mainWindow.webContents, "activity:changed", undefined);
       },
     });
+    // One AniSkip client (one rate limit) for the player and for saving downloads' skip times.
+    const skipTimes = new SkipTimesClient();
     registerAnimeDomain(trustedRendererOrigin, {
       animeSource,
       copies: database.titleCopies,
-      skipTimes: new SkipTimesClient(),
+      skipTimes,
       mal: isDatabaseEnabled(providerConfig, "anime", "mal") ? mal : undefined,
       episodeArt: {
         anizip: aniZip,
@@ -576,9 +575,18 @@ void app
     });
     // Offline anime downloads (user decision 2026-10-18): Videos/AniStream/Downloads by default.
     let downloadsChangedTimer: ReturnType<typeof setTimeout> | undefined;
+    // Each downloaded episode's still and skip times, saved while online (download-extras.ts).
+    const downloadExtras = createDownloadExtras({
+      downloads: () => database?.downloads.list() ?? [],
+      copies: database.titleCopies,
+      stills: episodeArtCache,
+      skipTimes,
+      readPlaylist: readDownloadPlaylist((id, relative) => downloadManager?.filePath(id, relative)),
+    });
     const downloadsChanged = (): void => {
       background.downloadsChanged();
       saveDownloadCovers();
+      downloadExtras.save();
       // Progress arrives often; the renderer re-reads at most a few times a second.
       if (downloadsChangedTimer) return;
       downloadsChangedTimer = setTimeout(() => {
@@ -657,6 +665,7 @@ void app
     downloadManager.start();
     chapterDownloads.start();
     saveDownloadCovers();
+    downloadExtras.save();
     registerAnimeDirectDomain(trustedRendererOrigin, {
       source: animeDirect,
       proxy: streamProxy,

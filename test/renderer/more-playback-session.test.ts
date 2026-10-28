@@ -149,6 +149,36 @@ describe("MorePlaybackSession", () => {
     session.dispose();
   });
 
+  it("offers the next episode only once the episode has played out, not in the credits", () => {
+    const session = createMorePlaybackSession({
+      tmdbId: 93405,
+      type: "TV",
+      season: 1,
+      episode: 2,
+      attempt: 0,
+      saveResume: vi.fn().mockResolvedValue(undefined),
+    });
+    const at = (currentTime: number): MorePlayerMessage => ({
+      ...progress("93405", "tv", { season: 1, episode: 2 }),
+      currentTime,
+    });
+
+    // Credits: watched, but the player's own Next button has the screen to itself.
+    session.handleEvent(at(91));
+    expect(session.getSnapshot()).toMatchObject({ ended: true, finished: false });
+    session.handleEvent(at(98.5));
+    expect(session.getSnapshot().finished).toBe(true);
+
+    // The player moved on by itself: the prompt goes with the old episode.
+    session.handleEvent({ ...progress("93405", "tv", { season: 1, episode: 3 }), currentTime: 1 });
+    expect(session.getSnapshot()).toMatchObject({ episode: 3, ended: false, finished: false });
+
+    // A player that reports the end itself.
+    session.handleEvent({ kind: "ended", id: "93405", mediaType: "tv", season: 1, episode: 3 });
+    expect(session.getSnapshot().finished).toBe(true);
+    session.dispose();
+  });
+
   it("surfaces a failed player server status without raw codes", () => {
     const session = createMorePlaybackSession({
       tmdbId: 550,
