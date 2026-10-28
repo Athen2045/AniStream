@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Loads the small set of local development/runtime settings used by the main process.
@@ -23,4 +24,17 @@ export function loadEnvironmentFile(path: string): void {
     }
     if (!(key in process.env)) process.env[key] = value;
   }
+}
+
+/**
+ * The `.env` files to load, in precedence order. The working-directory file is a development
+ * convenience only: an installed app can be started from any folder, and a `.env` planted there
+ * must not set keys or tuning. The user-data file is the user's own and always applies.
+ */
+export function environmentFiles(input: {
+  packaged: boolean;
+  cwd: string;
+  userData: string;
+}): string[] {
+  return [...(input.packaged ? [] : [join(input.cwd, ".env")]), join(input.userData, ".env")];
 }

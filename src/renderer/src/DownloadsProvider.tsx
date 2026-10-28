@@ -9,11 +9,14 @@ import {
   type ReactNode,
 } from "react";
 import {
+  chapterDownloadKey,
   downloadKey,
   type AnimeDownload,
   type DownloadChange,
+  type DownloadChapterRequest,
   type DownloadEpisodeRequest,
   type DownloadsState,
+  type MangaChapterDownload,
 } from "../../shared/downloads";
 
 interface DownloadsContextValue {
@@ -22,9 +25,12 @@ interface DownloadsContextValue {
   notice?: string;
   dismissNotice: () => void;
   byEpisode: ReadonlyMap<string, AnimeDownload>;
+  /** Manga chapter downloads by `chapterDownloadKey(source, chapterId)`. */
+  byChapter: ReadonlyMap<string, MangaChapterDownload>;
   /** Bytes per second for each running download, smoothed over its recent updates. */
   speeds: ReadonlyMap<string, number>;
   add: (episodes: DownloadEpisodeRequest[]) => Promise<void>;
+  addChapters: (chapters: DownloadChapterRequest[]) => Promise<void>;
   apply: (change: Exclude<DownloadChange, { op: "add" }>) => Promise<void>;
   chooseFolder: () => Promise<void>;
 }
@@ -45,7 +51,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   const setState = useCallback((next: DownloadsState) => {
     const now = performance.now();
     const rates = new Map<string, number>();
-    for (const item of next.items) {
+    for (const item of [...next.items, ...next.chapters]) {
       if (item.status !== "downloading") {
         samples.current.delete(item.id);
         continue;
@@ -87,6 +93,18 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
     },
     [setState],
   );
+  const addChapters = useCallback(
+    async (chapters: DownloadChapterRequest[]) => {
+      try {
+        const result = await window.anistream.addChapterDownloads(chapters);
+        setState(result.state);
+        setNotice(result.message);
+      } catch {
+        setNotice("Those chapters could not be queued for download. Try again.");
+      }
+    },
+    [setState],
+  );
   const apply = useCallback(
     async (change: Exclude<DownloadChange, { op: "add" }>) => {
       try {
@@ -113,18 +131,30 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
       ),
     [state],
   );
+  const byChapter = useMemo(
+    () =>
+      new Map(
+        (state?.chapters ?? []).map((item) => [
+          chapterDownloadKey(item.chapter.source, item.chapter.id),
+          item,
+        ]),
+      ),
+    [state],
+  );
   const value = useMemo(
     () => ({
       state,
       notice,
       dismissNotice: () => setNotice(undefined),
       byEpisode,
+      byChapter,
       speeds,
       add,
+      addChapters,
       apply,
       chooseFolder,
     }),
-    [add, apply, byEpisode, chooseFolder, notice, speeds, state],
+    [add, addChapters, apply, byChapter, byEpisode, chooseFolder, notice, speeds, state],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

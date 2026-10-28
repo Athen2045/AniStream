@@ -51,8 +51,11 @@ export function assertTrustedIpcSender(
   event: Pick<IpcMainInvokeEvent, "senderFrame">,
   trustedRendererOrigin: string,
 ): void {
-  const senderUrl = event.senderFrame?.url;
-  if (!senderUrl || safeOrigin(senderUrl) !== trustedRendererOrigin) {
+  const frame = event.senderFrame;
+  const senderUrl = frame?.url;
+  // Only the window's own top-level page: the preload bridge exists nowhere else, and a nested
+  // frame (even one on the app's origin) is never trusted.
+  if (!senderUrl || frame.parent || safeOrigin(senderUrl) !== trustedRendererOrigin) {
     throw new Error("AniStream rejected IPC from an untrusted frame.");
   }
 }

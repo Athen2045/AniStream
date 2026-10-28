@@ -181,7 +181,12 @@ export function registerMoreDomain(
     // creates the iframe so its first request already has the right UA.
     if (player.stripElectronUserAgent) await frameUserAgent()?.arm(player.origin);
     else frameUserAgent()?.disarm();
-    return { url, providerIndex, providerCount: players.length };
+    return {
+      url,
+      providerIndex,
+      providerCount: players.length,
+      sandboxed: player.sandboxed === true,
+    };
   });
   registerTrustedIpcHandler(trustedRendererOrigin, "more:player-release", () => {
     frameUserAgent()?.disarm();

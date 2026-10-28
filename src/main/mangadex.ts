@@ -203,10 +203,9 @@ export class MangaDexClient {
           message: "MangaDex has no exact AniList mapping for this title.",
         });
       }
-      const [archive, statistics] = await Promise.all([
-        this.getChapters(mapping.id, translatedLanguage, signal),
-        this.getStatistics(mapping.id, signal),
-      ]);
+      // No per-title statistics request: the title page no longer shows MangaDex's score or
+      // follows (user decision 2026-10-28), so only what reading needs is asked.
+      const archive = await this.getChapters(mapping.id, translatedLanguage, signal);
       const availableGroups = collectScanlationGroups(archive.chapters);
       return this.rememberReader(cacheKey, {
         status: "available",
@@ -220,7 +219,6 @@ export class MangaDexClient {
         archiveStatus: archive.complete ? "complete" : "partial",
         chapters: archive.chapters,
         externalChapters: archive.externalChapters,
-        statistics,
         message: archive.chapters.length
           ? undefined
           : `No readable chapters are currently available in the chosen language (${translatedLanguage.toLocaleUpperCase()}).`,
@@ -619,19 +617,6 @@ export class MangaDexClient {
     };
   }
 
-  /** Optional community rating/follows; a failure here never blocks the chapter list. */
-  private async getStatistics(
-    mangaDexId: string,
-    signal?: AbortSignal,
-  ): Promise<MangaDexStatistics | undefined> {
-    try {
-      const url = new URL(`/statistics/manga/${mangaDexId}`, MANGADEX_API_URL);
-      return parseMangaStatistics(await this.requestJson(url, signal), mangaDexId);
-    } catch {
-      return undefined;
-    }
-  }
-
   private async getAtHomeNode(chapterId: string): Promise<AtHomeNode> {
     const forcePort443 = this.options.forcePort443?.() ?? false;
     const cacheKey = atHomeCacheKey(chapterId, forcePort443);
@@ -754,6 +739,11 @@ interface ExactMangaDexMapping {
   availableLanguages: string[];
   /** A colored or other variant edition of the same work (from MangaDex's own titles). */
   variant: boolean;
+}
+
+/** MangaDex refused the request (403/429): callers stop instead of retrying. */
+export function isMangaDexRefusal(error: unknown): boolean {
+  return error instanceof MangaDexRequestError && (error.status === 403 || error.status === 429);
 }
 
 class MangaDexRequestError extends Error {

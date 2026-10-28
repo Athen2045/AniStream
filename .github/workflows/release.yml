@@ -28,16 +28,32 @@ jobs:
     outputs:
       commit_sha: ${{ steps.commit.outputs.sha }}
     steps:
+      # The version is free text typed into the dispatch form: accept only plain X.Y.Z, and read it
+      # through the environment (never pasted into a script). A real release must be started from
+      # main, so the workflow file that runs is main's own.
+      - name: Check the version and the starting branch
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Version must look like 2.2.0."; exit 1; }
+          if [[ "$DRY_RUN" != "true" && "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::A real release must be started from main (this run: $GITHUB_REF)."
+            exit 1
+          fi
+
       # A real release always builds protected main. A dry run builds the branch the workflow was
       # started from (for example develop) so both installers can be tested before merging.
       - name: Check out release source
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ inputs.dry_run && github.ref || 'main' }}
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "npm"
@@ -49,7 +65,9 @@ jobs:
         run: npm ci
 
       - name: Check version and release notes
-        run: npm run check:release-version -- "${{ inputs.version }}"
+        env:
+          VERSION: ${{ inputs.version }}
+        run: npm run check:release-version -- "$VERSION"
 
       - name: Run release checks
         run: |
@@ -74,12 +92,13 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Check out validated main commit
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.commit_sha }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "npm"
@@ -113,7 +132,7 @@ jobs:
           npm run check:win-installer -- "dist/AniStream.Setup.$version.exe"
 
       - name: Upload Windows release artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: AniStream-release-win-x64-${{ inputs.version }}
           path: |
@@ -130,12 +149,13 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Check out validated main commit
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.commit_sha }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "npm"
@@ -163,7 +183,7 @@ jobs:
         run: npm run check:mac-package
 
       - name: Upload macOS release artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: AniStream-release-mac-arm64-${{ inputs.version }}
           path: dist/*.dmg
@@ -202,21 +222,26 @@ jobs:
     environment: production
     permissions:
       contents: write
+      # Build provenance: the builds are unsigned, so anyone can check an installer came from this
+      # workflow with `gh attestation verify <file> --repo Athen2045/AniStream`.
+      id-token: write
+      attestations: write
     steps:
       # This job is the only place allowed to create the tag or mutate a release.
       - name: Check out validated release notes
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.validate.outputs.commit_sha }}
 
       - name: Download Windows artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: AniStream-release-win-x64-${{ inputs.version }}
           path: dist
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: AniStream-release-mac-arm64-${{ inputs.version }}
           path: dist
@@ -241,21 +266,35 @@ jobs:
           sha256sum AniStream.Setup.*.exe AniStream-*.dmg > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Create tag and GitHub Release
-        uses: softprops/action-gh-release@v3
+      - name: Attest the installers
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          token: ${{ github.token }}
-          tag_name: v${{ inputs.version }}
-          target_commitish: ${{ needs.validate.outputs.commit_sha }}
-          body_path: .github/releases/v${{ inputs.version }}.md
-          make_latest: "true"
-          files: |
+          subject-path: |
             dist/AniStream.Setup.*.exe
-            dist/AniStream.Setup.*.exe.blockmap
-            dist/latest.yml
             dist/*.dmg
-            dist/SHA256SUMS.txt
-          fail_on_unmatched_files: true
+
+      - name: Create tag and GitHub Release
+        # GitHub's own CLI (preinstalled): no third-party code runs with this job's write token.
+        working-directory: dist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          TARGET: ${{ needs.validate.outputs.commit_sha }}
+        run: |
+          shopt -s nullglob
+          files=()
+          for pattern in "AniStream.Setup.*.exe" "AniStream.Setup.*.exe.blockmap" latest.yml "*.dmg" SHA256SUMS.txt; do
+            matches=($pattern)
+            [ ${#matches[@]} -gt 0 ] && [ -e "${matches[0]}" ] || { echo "::error::No file matches $pattern."; exit 1; }
+            files+=("${matches[@]}")
+          done
+          gh release create "v$VERSION" "${files[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET" \
+            --title "v$VERSION" \
+            --notes-file "../.github/releases/v$VERSION.md" \
+            --latest
 
       - name: Write run summary
         shell: bash

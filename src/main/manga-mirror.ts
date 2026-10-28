@@ -26,6 +26,9 @@ export const MIRROR_LANGUAGE = "en";
 
 type Fetcher = typeof fetch;
 
+/** The mirror refused a request (403/429); its gate is already paused. */
+export class MirrorRefusedError extends Error {}
+
 /** One chapter as the mirror lists it. */
 export interface MirrorChapter {
   id: string;
@@ -133,7 +136,9 @@ export class MangaMirrorClient {
       });
       if (response.status === 429 || response.status === 403) {
         this.imageGate.reportRateLimited(REFUSED_PAUSE_MS);
-        throw new Error(`${this.config.label} refused the page image (${response.status}).`);
+        throw new MirrorRefusedError(
+          `${this.config.label} refused the page image (${response.status}).`,
+        );
       }
       if (!response.ok) throw new Error(`${this.config.label} page failed (${response.status}).`);
       const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
@@ -173,7 +178,7 @@ export class MangaMirrorClient {
         onResponse: (response, gate) => {
           if (response.status === 429 || response.status === 403) {
             gate.reportRateLimited(REFUSED_PAUSE_MS);
-            throw new Error(
+            throw new MirrorRefusedError(
               `${this.config.label} temporarily refused requests (${response.status}).`,
             );
           }

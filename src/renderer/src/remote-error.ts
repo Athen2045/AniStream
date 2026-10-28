@@ -13,6 +13,11 @@ function rawMessage(reason: unknown): string {
 export function friendlyRemoteError(reason: unknown, options: FriendlyRemoteErrorOptions): string {
   const raw = rawMessage(reason);
   const retained = options.retained ? ` Your previous ${options.operation} remain available.` : "";
+  // The device has no connection: say so, whatever the service's error reads like.
+  if (deviceOffline())
+    return ACTIONS.has(options.operation)
+      ? `You're offline.${retained} Reconnect and try again.`
+      : `You're offline.${retained} Reconnect to load ${options.operation}.`;
 
   if (/connect (?:your )?anilist|sign.?in (?:to )?anilist/i.test(raw))
     return "Connect AniList from Profile to manage your library.";
@@ -39,6 +44,8 @@ export function friendlyRemoteError(reason: unknown, options: FriendlyRemoteErro
 
 /** Hides opaque embed/provider codes while giving the viewer a useful recovery choice. */
 export function friendlyPlaybackError(reason: unknown): string {
+  if (deviceOffline())
+    return "You're offline. Downloaded episodes still play; this one needs a connection.";
   const raw = rawMessage(reason);
   if (/timeout|timed out|timeouterror|taking longer|aborterror/i.test(raw))
     return "The player is taking longer than expected. Retry the player in a moment.";
@@ -87,4 +94,12 @@ export function friendlyMorePlayerError(reason: unknown): string {
   if (/network|offline|enotfound|name_not_resolved|econn|dns|internet/i.test(raw))
     return "The player could not be reached. Check your connection and retry playback.";
   return "The player could not start playback. Retry it or try another title.";
+}
+
+/** Operations that are actions rather than something to load. */
+const ACTIONS = new Set(["sign-in", "library changes"]);
+
+/** The device reports no connection (false when it cannot tell). */
+export function deviceOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
 }

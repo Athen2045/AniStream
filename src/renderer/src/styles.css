@@ -1045,24 +1045,6 @@ a.rail-card {
   text-overflow: ellipsis;
 }
 
-.external-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.external-links a {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  padding: 8px 11px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-  text-decoration: none;
-}
-
 .watch-view-transition {
   position: fixed;
   z-index: 2100;
@@ -1222,67 +1204,95 @@ a.rail-card {
   letter-spacing: -0.035em;
 }
 
+/* Season picker (redesign 2026-10-28, mockup option A): a pill in the title's colour with a
+   season badge, opening a frosted menu where each season shows its art, year, episodes and the
+   viewer's progress from this device. */
 .season-picker {
+  --season-tint: var(--tint, var(--primary-hover));
+  --season-tint-ink: var(--tint-ink, #06130d);
   position: relative;
-  width: min(290px, 42vw);
+  max-width: min(380px, 46vw);
 }
 
 .season-picker-trigger {
   display: flex;
-  width: 100%;
-  min-height: 52px;
+  max-width: 100%;
+  height: 44px;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 8px 15px 8px 17px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  gap: 10px;
+  padding: 0 14px 0 6px;
+  border: 1px solid color-mix(in oklch, var(--season-tint), transparent 62%);
+  border-radius: 999px;
   color: var(--text);
-  background: var(--surface-raised);
-  box-shadow: 0 10px 28px rgb(0 0 0 / 0.18);
+  background: color-mix(in oklch, var(--season-tint), transparent 88%);
+  backdrop-filter: blur(16px);
   cursor: pointer;
   text-align: left;
   transition:
     border-color var(--motion-fast) var(--motion-ease),
-    background var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
     transform var(--motion-fast) var(--motion-ease);
 }
-
+.season-picker-trigger--plain {
+  padding-left: 18px;
+}
 .season-picker-trigger:hover,
 .season-picker-trigger[aria-expanded="true"] {
-  border-color: rgb(95 209 154 / 0.48);
-  background: var(--surface-hover);
+  border-color: color-mix(in oklch, var(--season-tint), transparent 40%);
+  background: color-mix(in oklch, var(--season-tint), transparent 80%);
 }
-
 .season-picker-trigger:active {
-  transform: scale(0.992);
+  transform: scale(0.985);
+}
+.season-picker-trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
-.season-picker-trigger > span {
+.season-picker-badge {
   display: grid;
-  min-width: 0;
-  gap: 2px;
+  flex: none;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--season-tint-ink);
+  background: var(--season-tint);
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-.season-picker-trigger strong {
-  overflow: hidden;
-  font-size: 0.85rem;
-  text-overflow: ellipsis;
+.season-picker-trigger-copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
   white-space: nowrap;
 }
-
-.season-picker-trigger small {
-  color: var(--muted);
-  font-size: 0.68rem;
+.season-picker-trigger-copy strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+.season-picker-trigger-copy small {
+  flex: none;
+  color: var(--text-soft);
+  font-size: 13.5px;
   font-weight: 500;
+}
+.season-picker-trigger-copy small::before {
+  content: "· ";
 }
 
 .season-picker-trigger > svg {
   flex: 0 0 auto;
-  color: var(--text-secondary);
+  margin-left: 2px;
+  color: var(--text-soft);
   transition: transform var(--motion-standard) var(--motion-ease);
 }
-
 .season-picker-trigger > svg.is-open {
   transform: rotate(180deg);
 }
@@ -1290,16 +1300,19 @@ a.rail-card {
 .season-picker-menu {
   position: absolute;
   z-index: 80;
-  top: calc(100% + 9px);
+  top: calc(100% + 10px);
   right: 0;
-  width: min(380px, 52vw);
-  max-height: min(390px, 52vh);
+  width: min(420px, calc(100vw - var(--rail-width, 0px) - 2 * var(--page-gutter)));
+  max-height: min(540px, 64vh);
   overflow-y: auto;
-  padding: 7px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgb(20 19 19 / 0.98);
-  box-shadow: 0 22px 64px var(--shadow-deep);
+  padding: 8px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 20px;
+  background: rgb(17 20 18 / 0.88);
+  backdrop-filter: blur(28px) saturate(1.3);
+  box-shadow:
+    0 30px 80px rgb(0 0 0 / 0.6),
+    0 0 0 1px rgb(0 0 0 / 0.4);
   scrollbar-width: thin;
   scrollbar-color: var(--surface-hover) transparent;
   transform-origin: top right;
@@ -1309,86 +1322,176 @@ a.rail-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px 9px;
-  color: var(--text-soft);
-  font-size: 0.7rem;
+  padding: 8px 10px 6px;
+  color: var(--muted);
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-
-/* "Movies & specials" below the seasons or arcs. */
-.season-picker-menu-heading--group {
-  margin-top: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-
 .season-picker-menu-heading small {
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: 11.5px;
   font-weight: 500;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* "Movies & specials" below the seasons or arcs. */
+.season-picker-menu-heading--group {
+  margin: 6px 10px 0;
+  padding: 12px 0 6px;
+  border-top: 1px solid var(--line);
 }
 
 .season-picker-menu > button {
   display: flex;
   width: 100%;
-  min-height: 58px;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 9px 11px;
-  border: 1px solid transparent;
-  border-radius: 10px;
+  gap: 12px;
+  padding: 8px;
+  border: 0;
+  border-radius: 13px;
   color: var(--text);
   background: transparent;
   cursor: pointer;
   text-align: left;
-  transition:
-    border-color var(--motion-fast) var(--motion-ease),
-    background var(--motion-fast) var(--motion-ease);
+  transition: background-color var(--motion-fast) var(--motion-ease);
 }
-
 .season-picker-menu > button:hover,
 .season-picker-menu > button:focus-visible {
-  border-color: var(--line);
+  outline: none;
+  background: rgb(255 255 255 / 0.07);
+}
+.season-picker-menu > button.is-current {
+  background: color-mix(in oklch, var(--season-tint), transparent 86%);
+}
+.season-picker-menu > button:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.season-picker-thumb {
+  flex: none;
+  width: 88px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
   background: var(--surface-hover);
 }
-
-.season-picker-menu > button.is-current {
-  border-color: rgb(95 209 154 / 0.28);
-  background: var(--primary-soft);
-}
-
-.season-picker-menu > button > svg {
-  flex: 0 0 auto;
-  color: var(--success);
+.season-picker-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .season-picker-option-copy {
   display: grid;
   min-width: 0;
+  flex: 1;
   gap: 3px;
 }
-
 .season-picker-option-copy strong {
-  font-size: 0.78rem;
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.season-picker-option-copy strong span {
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-
 .season-picker-option-copy small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 0.67rem;
+  font-size: 12.5px;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.season-picker-progress {
+  height: 3px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.12);
+}
+.season-picker-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--season-tint);
+}
+
+.season-picker-tag {
+  flex: none;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: var(--season-tint-ink);
+  background: var(--season-tint);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.season-picker-tag--done {
+  color: var(--text-soft);
+  background: rgb(255 255 255 / 0.08);
+}
+
+/* Arcs of a long runner: text rows with the episode range and a search field. */
+.season-picker-menu > button.season-picker-arc {
+  padding: 11px 12px;
+}
+.season-picker-arc strong {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.season-picker-arc small {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.season-picker-arc > svg,
+.season-picker-arc > i {
+  flex: none;
+  width: 16px;
+  color: var(--season-tint);
+}
+.season-picker-filler {
+  padding: 2px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.season-picker-search {
+  position: sticky;
+  z-index: 1;
+  top: -8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  margin: -8px -8px 6px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: rgb(17 20 18 / 0.96);
+}
+.season-picker-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: none;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+}
+.season-picker-search:focus-within {
+  color: var(--text-soft);
 }
 
 .season-picker-status {
@@ -1398,11 +1501,10 @@ a.rail-card {
   margin: 4px 6px 2px;
   padding: 10px;
   color: var(--text-soft);
-  font-size: 0.7rem;
+  font-size: 13px;
 }
-
 .season-picker-status svg {
-  color: var(--primary-hover);
+  color: var(--season-tint);
   animation: spin 800ms linear infinite;
 }
 
@@ -1410,21 +1512,21 @@ a.rail-card {
   display: grid;
   gap: 8px;
   margin: 5px;
-  padding: 10px;
+  padding: 10px 12px;
   border: 1px solid var(--error-line);
-  border-radius: 9px;
+  border-radius: 12px;
   color: var(--error-text);
   background: var(--error-soft);
-  font-size: 0.68rem;
+  font-size: 13px;
   line-height: 1.45;
 }
-
 .season-picker-error button {
   justify-self: start;
-  padding: 6px 10px;
-  border-radius: 7px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
   color: var(--text);
-  background: var(--surface-raised);
+  background: transparent;
   cursor: pointer;
 }
 
@@ -1923,6 +2025,12 @@ a.rail-card {
   font-size: 0.64rem;
   font-weight: 600;
   text-decoration: none;
+}
+
+/* Official sites in the "not available to read here" message. */
+.chapter-empty-links {
+  justify-content: flex-start;
+  margin-top: 10px;
 }
 
 .chapter-range-links a:hover,

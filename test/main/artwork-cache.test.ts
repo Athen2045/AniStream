@@ -12,7 +12,10 @@ import {
 const banner = "https://s4.anilist.co/file/anilistcdn/media/anime/banner/1.jpg";
 const directories: string[] = [];
 
-async function cache(fetchImpl: typeof fetch, options: { maxFiles?: number } = {}) {
+async function cache(
+  fetchImpl: typeof fetch,
+  options: { maxFiles?: number; keep?: () => string[] } = {},
+) {
   const directory = await mkdtemp(join(tmpdir(), "anistream-art-"));
   directories.push(directory);
   return {
@@ -56,6 +59,17 @@ describe("offline artwork cache", () => {
     for (const id of [1, 2, 3]) await artwork.get(banner.replace("1.jpg", `${id}.jpg`));
     await artwork.evict();
     expect(await readdir(directory)).toHaveLength(2);
+  });
+
+  it("never evicts kept covers (downloaded titles), however long ago they were shown", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => image());
+    const kept = banner.replace("1.jpg", "kept.jpg");
+    const { cache: artwork } = await cache(fetchImpl, { maxFiles: 1, keep: () => [kept] });
+    await artwork.get(kept);
+    for (const id of [1, 2, 3]) await artwork.get(banner.replace("1.jpg", `${id}.jpg`));
+    await artwork.evict();
+    fetchImpl.mockRejectedValue(new Error("offline"));
+    expect(await artwork.get(kept)).toBeDefined();
   });
 
   it("round-trips only allowlisted URLs through the artwork scheme", () => {

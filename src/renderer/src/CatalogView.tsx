@@ -154,9 +154,10 @@ export function CatalogView({
   // Time to play starts when this section opens.
   useEffect(() => startBrowsing(type), [type]);
   const mediaName = type === "ANIME" ? "anime" : "manga";
-  // Offline, Anime shows only its hero and the titles with downloads (user decision 2026-10-18).
+  // Offline, Anime and Manga show only their hero and the titles with downloads (user decisions
+  // 2026-10-18, 2026-10-28).
   const online = useOnline();
-  const offlineAnime = type === "ANIME" && !online;
+  const offline = !online;
 
   // The hero image gets the early paint; everything below it stays lazy to protect scrolling.
   // Trending: the page's popular anchor. With For You on it sits after the next-seasons row
@@ -322,8 +323,8 @@ export function CatalogView({
       ) : null}
 
       <div className="catalog-content">
-        {offlineAnime ? <DownloadedTitlesRail onSelect={onSelect} /> : null}
-        {offlineAnime ? null : (
+        {offline ? <DownloadedTitlesRail type={type} onSelect={onSelect} /> : null}
+        {offline ? null : (
           <>
             {error ? <p className="error-banner">{error}</p> : null}
             {trendingLoading && !trending.length && !malTrendingFallback.length ? (

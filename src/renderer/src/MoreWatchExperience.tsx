@@ -48,6 +48,8 @@ interface PlayerAttempt {
  * provider config and arms a frame-scoped User-Agent override before the iframe exists (see
  * more-player-frame-ua.ts).
  */
+const MORE_PLAYER_SANDBOX = "allow-scripts allow-same-origin allow-presentation";
+
 export function MoreWatchExperience({
   item,
   season,
@@ -217,6 +219,9 @@ export function MoreWatchExperience({
     onClose();
   }, [onClose]);
 
+  // Closed to the tray (background mode): stop playing, as Back would.
+  useEffect(() => window.anistream.onWindowHidden(close), [close]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       // Keys only reach the app while focus is outside the player frame.
@@ -376,6 +381,9 @@ export function MoreWatchExperience({
               className="anime-embed-frame"
               src={src}
               aria-label={`Player for ${item.title}`}
+              // For players that accept it: scripts and their own storage only, on top of the
+              // window-level pop-up and navigation denials (audit finding 6, 2026-10-28).
+              sandbox={source?.sandboxed ? MORE_PLAYER_SANDBOX : undefined}
               allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
               allowFullScreen
               referrerPolicy="strict-origin-when-cross-origin"

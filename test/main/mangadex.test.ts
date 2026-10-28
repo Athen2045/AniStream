@@ -399,10 +399,6 @@ describe("MangaDex normalization", () => {
           ],
         });
       if (url.pathname === "/manga/manga-1/feed") return Response.json({ data: [], total: 0 });
-      if (url.pathname === "/statistics/manga/manga-1")
-        return Response.json({
-          statistics: { "manga-1": { rating: { average: 8.4, bayesian: 8.1234 }, follows: 4321 } },
-        });
       throw new Error("Unexpected fetch.");
     };
     const client = new MangaDexClient("en", fetcher as typeof fetch);
@@ -419,8 +415,8 @@ describe("MangaDex normalization", () => {
     expect(session.availableLanguages).toEqual(["en", "ja"]);
     expect(session.chapters).toEqual([]);
     expect(session.message).toMatch(/chosen language/i);
-    expect(session.statistics).toEqual({ rating: 8.12, follows: 4321 });
-    expect(requestedUrls).toHaveLength(3);
+    // Search and feed only: no per-title statistics request.
+    expect(requestedUrls).toHaveLength(2);
     const [search, feed] = requestedUrls.map((url) => new URL(url));
     // Relevance order keeps exact matches near the top (the default ranks by latest upload).
     expect(search.searchParams.get("order[relevance]")).toBe("desc");
@@ -466,7 +462,6 @@ describe("MangaDex normalization", () => {
           ],
           total: 1,
         });
-      if (url.pathname === "/statistics/manga/right-id") return Response.json({ statistics: {} });
       throw new Error(`Unexpected fetch ${url.pathname}`);
     };
     const mappingHint = vi.fn(async () => ["wrong-id", "right-id", "../bad"]);
@@ -535,7 +530,6 @@ describe("MangaDex normalization", () => {
       translatedLanguage: "pt-br",
     });
     expect(session.translatedLanguage).toBe("en");
-    expect(session.statistics).toBeUndefined();
     const feed = new URL(requestedUrls.find((url) => url.includes("/feed"))!);
     expect(feed.searchParams.getAll("translatedLanguage[]")).toEqual(["en"]);
   });

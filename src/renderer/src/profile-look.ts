@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { PicturePalette, SimklProfile, SimklStatus } from "../../shared/contracts";
+import { isPicturePaletteUrl, paletteFromPixels } from "../../shared/picture-palette";
 
 /** Which connected account's picture the navbar and profile show. */
 export type PictureSource = "anilist" | "simkl";
@@ -156,14 +157,49 @@ export async function clearProfileHeroImage(): Promise<void> {
 // ---- Colours from a picture ----
 
 const palettes = new Map<string, PicturePalette | null>();
+const PALETTE_TIMEOUT_MS = 10_000;
+const PALETTE_SIZE = 24;
+
+/**
+ * The picture's colours, read from a 24×24 canvas. The picture loads with CORS (both allowed hosts
+ * send it), so its pixels can be read here; nothing is decoded in the main process (audit finding
+ * 10). Any failure (no CORS, timeout, decode error) gives undefined: the brand colours.
+ */
+export async function picturePaletteFromUrl(url: string): Promise<PicturePalette | undefined> {
+  if (!isPicturePaletteUrl(url)) return undefined;
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.referrerPolicy = "no-referrer";
+  image.decoding = "async";
+  const loaded = new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error("timeout")), PALETTE_TIMEOUT_MS);
+    image.onload = () => {
+      window.clearTimeout(timer);
+      resolve();
+    };
+    image.onerror = () => {
+      window.clearTimeout(timer);
+      reject(new Error("load failed"));
+    };
+  });
+  image.src = url;
+  await loaded;
+  const canvas = document.createElement("canvas");
+  canvas.width = PALETTE_SIZE;
+  canvas.height = PALETTE_SIZE;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return undefined;
+  context.drawImage(image, 0, 0, PALETTE_SIZE, PALETTE_SIZE);
+  const { data } = context.getImageData(0, 0, PALETTE_SIZE, PALETTE_SIZE);
+  return paletteFromPixels(data, PALETTE_SIZE, PALETTE_SIZE);
+}
 
 export function usePicturePalette(url: string | undefined): PicturePalette | undefined {
   const [, bump] = useState(0);
   useEffect(() => {
     if (!url || palettes.has(url)) return;
     let alive = true;
-    window.anistream
-      .getPicturePalette(url)
+    picturePaletteFromUrl(url)
       .catch(() => undefined)
       .then((palette) => {
         palettes.set(url, palette ?? null);

@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { ipcArgValidators, isPicturePaletteUrl } from "../../src/main/ipc-validation";
-import { paletteFromBitmap } from "../../src/main/picture-palette";
+import { ipcArgValidators } from "../../src/main/ipc-validation";
+import { isPicturePaletteUrl, paletteFromPixels } from "../../src/shared/picture-palette";
 import { simklAvatarUrl } from "../../src/main/simkl/client";
 import {
   createSimklLibraryStore,
@@ -148,7 +148,8 @@ describe("Profile look IPC", () => {
     expect(isPicturePaletteUrl("https://simkl.in/posters/1/a.jpg")).toBe(false);
     expect(isPicturePaletteUrl("https://example.com/a.png")).toBe(false);
     expect(isPicturePaletteUrl("http://s4.anilist.co/a.png")).toBe(false);
-    expect(() => ipcArgValidators["profile:palette"](["https://example.com/a.png"])).toThrow();
+    // The colours are read in the renderer now: there is no palette channel into main.
+    expect("profile:palette" in ipcArgValidators).toBe(false);
   });
 
   it("accepts only bounded JPEG bytes for the hero", () => {
@@ -166,9 +167,9 @@ describe("Profile look IPC", () => {
 
 describe("Picture palette", () => {
   it("returns one vivid colour per third", () => {
-    // 3×1 BGRA: red, green, blue.
-    const bitmap = new Uint8Array([0, 0, 200, 255, 0, 200, 0, 255, 200, 0, 0, 255]);
-    const [left, middle, right] = paletteFromBitmap(bitmap, 3, 1);
+    // 3×1 RGBA (canvas order): red, green, blue.
+    const bitmap = new Uint8Array([200, 0, 0, 255, 0, 200, 0, 255, 0, 0, 200, 255]);
+    const [left, middle, right] = paletteFromPixels(bitmap, 3, 1);
     const hue = (hex: string) => {
       const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
       return r! > g! && r! > b! ? "r" : g! > b! ? "g" : "b";
@@ -177,6 +178,6 @@ describe("Picture palette", () => {
   });
 
   it("falls back to brand green for a transparent band", () => {
-    expect(paletteFromBitmap(new Uint8Array(12), 3, 1)).toEqual(["#369d73", "#369d73", "#369d73"]);
+    expect(paletteFromPixels(new Uint8Array(12), 3, 1)).toEqual(["#369d73", "#369d73", "#369d73"]);
   });
 });

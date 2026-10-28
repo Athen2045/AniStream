@@ -1,4 +1,5 @@
 import type { Session, WebFrameMain, WebRequestFilter } from "electron";
+import { APP_SCHEME_PATTERNS, isAppSchemeUrl, isForeignSchemeFrame } from "./scheme-access";
 
 type RequestType = NonNullable<WebRequestFilter["types"]>[number];
 /** Any embedded player: its frame origin and the script rules it opted into. */
@@ -112,16 +113,24 @@ const BEACON_TYPES: readonly RequestType[] = ["image", "ping", "xhr"];
 export function installPlayerScriptFilter(
   session: Session,
   players: readonly EmbeddedPlayer[],
+  /** The app page's origin: only it may load AniStream's own schemes (scheme-access.ts). */
+  appOrigin?: string,
 ): void {
   const policies = playerScriptPolicies(players);
-  if (!policies.length) return;
-  // Electron keeps one onBeforeRequest listener per session, so beacons share this one. `types`
-  // keeps media, images and XHRs off the main thread unless a player blocks request hosts.
+  if (!policies.length && !appOrigin) return;
+  // Electron keeps one onBeforeRequest listener per session, so scripts, beacons and the app's
+  // own schemes share this one. `types` keeps media, images and XHRs off the main thread unless a
+  // player blocks request hosts or the app's schemes need guarding (their loads are XHRs, images
+  // and media too, and a filter cannot combine "these schemes" with "these types").
   const blocksBeacons = policies.some((policy) => policy.blockedHosts.length > 0);
-  const types: RequestType[] = ["script", ...(blocksBeacons ? BEACON_TYPES : [])];
-  session.webRequest.onBeforeRequest({ urls: ["*://*/*"], types }, (details, callback) => {
+  const filter: WebRequestFilter = appOrigin
+    ? { urls: ["*://*/*", ...APP_SCHEME_PATTERNS] }
+    : { urls: ["*://*/*"], types: ["script", ...(blocksBeacons ? BEACON_TYPES : [])] };
+  session.webRequest.onBeforeRequest(filter, (details, callback) => {
+    const appScheme = Boolean(appOrigin) && isAppSchemeUrl(details.url);
     const script = details.resourceType === "script";
-    if (!script && !(blocksBeacons && BEACON_TYPES.includes(details.resourceType as RequestType))) {
+    const beacon = blocksBeacons && BEACON_TYPES.includes(details.resourceType as RequestType);
+    if (!appScheme && !script && !beacon) {
       callback({});
       return;
     }
@@ -130,6 +139,10 @@ export function installPlayerScriptFilter(
       frame = details.frame;
     } catch {
       frame = undefined;
+    }
+    if (appScheme) {
+      callback(isForeignSchemeFrame(frame, appOrigin!) ? { cancel: true } : {});
+      return;
     }
     const policy = policyForFrame(frame, policies);
     const blocked =

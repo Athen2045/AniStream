@@ -1,11 +1,31 @@
-import type { PicturePalette } from "../shared/contracts";
+import type { PicturePalette } from "./contracts";
 
 /**
- * Three hero colours from a small BGRA bitmap (Electron `nativeImage.toBitmap()` order): the
- * average of the left, middle and right thirds, pushed toward a vivid mid-lightness so a dull or
- * dark picture still gives a readable gradient behind white text.
+ * Profile pictures come only from AniList's CDN or Simkl's avatar host. Both answer with CORS
+ * headers, so the renderer can read a picture's pixels on a canvas (audit finding 10, 2026-10-28:
+ * the colours are no longer decoded in the main process).
  */
-export function paletteFromBitmap(bgra: Uint8Array, width: number, height: number): PicturePalette {
+export function isPicturePaletteUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return false;
+    if (url.hostname === "simkl.in") return url.pathname.startsWith("/avatars/");
+    return url.hostname === "s4.anilist.co" || url.hostname === "img.anili.st";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Three hero colours from a small RGBA bitmap (canvas `ImageData` order): the average of the left,
+ * middle and right thirds, pushed toward a vivid mid-lightness so a dull or dark picture still
+ * gives a readable gradient behind white text.
+ */
+export function paletteFromPixels(
+  rgba: Uint8Array | Uint8ClampedArray,
+  width: number,
+  height: number,
+): PicturePalette {
   const thirds = [0, 1, 2].map((band) => {
     let r = 0;
     let g = 0;
@@ -16,10 +36,10 @@ export function paletteFromBitmap(bgra: Uint8Array, width: number, height: numbe
     for (let y = 0; y < height; y += 1)
       for (let x = from; x < Math.min(to, width); x += 1) {
         const i = (y * width + x) * 4;
-        if (i + 3 >= bgra.length || bgra[i + 3] < 128) continue;
-        b += bgra[i];
-        g += bgra[i + 1];
-        r += bgra[i + 2];
+        if (i + 3 >= rgba.length || rgba[i + 3]! < 128) continue;
+        r += rgba[i]!;
+        g += rgba[i + 1]!;
+        b += rgba[i + 2]!;
         n += 1;
       }
     return n ? vivid(r / n, g / n, b / n) : "#369d73";

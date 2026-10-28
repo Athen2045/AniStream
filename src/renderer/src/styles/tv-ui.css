@@ -404,6 +404,32 @@ textarea,
   outline-offset: 3px;
 }
 
+/* ---------------------------------------------------------------- sticky title tabs */
+/* The tabs stick just below Back and the window controls (10px + 38px + 10px). Once stuck, the
+   strip above them is filled with the page colour, so content no longer scrolls by behind Back. */
+.title-page .title-tabs {
+  --tabs-stick-top: 58px;
+  top: var(--tabs-stick-top);
+  container-type: scroll-state;
+}
+.title-tabs-cover {
+  position: absolute;
+  z-index: -1;
+  right: calc(-1 * var(--page-gutter));
+  bottom: 100%;
+  left: calc(-1 * var(--page-gutter));
+  height: var(--tabs-stick-top);
+  background: var(--ink);
+  /* Hidden (and click-through) until the tabs stick; then it also stops clicks reaching the
+     rows scrolled out of sight behind it. */
+  visibility: hidden;
+}
+@container scroll-state(stuck: top) {
+  .title-tabs-cover {
+    visibility: visible;
+  }
+}
+
 /* ---------------------------------------------------------------- the title's colour */
 .home-hero,
 .title-page,

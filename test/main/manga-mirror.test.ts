@@ -8,7 +8,12 @@ import {
   safeImageUrl,
   type MirrorChapter,
 } from "../../src/main/manga-mirror";
-import { parseMalSyncMapping, pickMalSyncPage } from "../../src/main/malsync";
+import {
+  MalSyncClient,
+  MalSyncRefusedError,
+  parseMalSyncMapping,
+  pickMalSyncPage,
+} from "../../src/main/malsync";
 import { MangaTitleModule } from "../../src/main/manga-title";
 import {
   parseProviderConfig,
@@ -158,6 +163,23 @@ describe("MAL-Sync mapping", () => {
     ).toBeUndefined();
     expect(parseMalSyncMapping(payload, 30013, "Unknown").pages).toEqual([]);
     expect(parseMalSyncMapping("nope", 30013, "MirrorSite").pages).toEqual([]);
+  });
+
+  it("asks once per title for every site, and fails at once while MAL-Sync is refusing", async () => {
+    const fetcher = vi.fn(async () => Response.json(payload));
+    const client = new MalSyncClient(fetcher as unknown as typeof fetch);
+    expect((await client.getSitePages(30013, "MirrorSite")).pages).toHaveLength(2);
+    expect((await client.getSitePages(30013, "Mangadex")).pages).toEqual([]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    const refusing = vi.fn(async () => new Response("", { status: 429 }));
+    const paused = new MalSyncClient(refusing as unknown as typeof fetch);
+    await expect(paused.getSitePages(1, "MirrorSite")).rejects.toBeInstanceOf(MalSyncRefusedError);
+    // During the pause nothing is sent, and the caller learns it straight away.
+    const started = Date.now();
+    await expect(paused.getSitePages(2, "MirrorSite")).rejects.toBeInstanceOf(MalSyncRefusedError);
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(refusing).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -343,6 +365,9 @@ describe("chapter mirror wiring", () => {
     const snapshot = await broken.load({ aniListId: 1, title: "Sample" });
     expect(snapshot.reader?.chapters).toHaveLength(1);
     expect(snapshot.issues).toEqual([{ source: "chapter-mirror", message: "down" }]);
+    // The page then offers "Try again" instead of "no English chapters".
+    expect(snapshot.reader?.mirrorUnavailable).toBe("Mirror");
+    expect(merged.reader?.mirrorUnavailable).toBeUndefined();
 
     const japanese = vi.fn();
     await new MangaTitleModule({

@@ -9,6 +9,8 @@ import type Database from "better-sqlite3";
 export interface TitleCopies {
   read(key: string): unknown;
   write(key: string, mediaId: number, value: unknown): void;
+  /** The saved copies of titles with downloads whose key starts with `prefix`. */
+  pinned(prefix: string): unknown[];
 }
 
 /** Copies kept for titles without downloads (a conservative local policy). */
@@ -43,8 +45,16 @@ export function createTitleCopies(
     database
       .prepare<[], { at: number | null }>("SELECT MAX(saved_at) AS at FROM title_copy_v1")
       .get()?.at ?? 0;
+  const pinnedIds = (): number[] => [...new Set(pinnedMediaIds())].filter(Number.isInteger);
+  const parse = (payload: string): unknown => {
+    try {
+      return JSON.parse(payload) as unknown;
+    } catch {
+      return undefined;
+    }
+  };
   const trim = (): void => {
-    const pinned = [...new Set(pinnedMediaIds())].filter(Number.isInteger);
+    const pinned = pinnedIds();
     database
       .prepare(
         `DELETE FROM title_copy_v1
@@ -56,12 +66,19 @@ export function createTitleCopies(
   return {
     read(key) {
       const row = read.get(key);
-      if (!row) return undefined;
-      try {
-        return JSON.parse(row.payload) as unknown;
-      } catch {
-        return undefined;
-      }
+      return row ? parse(row.payload) : undefined;
+    },
+    pinned(prefix) {
+      const ids = pinnedIds();
+      if (!ids.length) return [];
+      return database
+        .prepare<unknown[], { payload: string }>(
+          `SELECT payload FROM title_copy_v1
+           WHERE media_id IN (${ids.map(() => "?").join(",")}) AND substr(key, 1, ?) = ?`,
+        )
+        .all(...ids, prefix.length, prefix)
+        .map((row) => parse(row.payload))
+        .filter((value) => value !== undefined);
     },
     write(key, mediaId, value) {
       lastSavedAt = Math.max(Date.now(), lastSavedAt + 1);

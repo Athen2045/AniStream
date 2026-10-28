@@ -31,6 +31,24 @@ describe("renderer content security policy", () => {
     expect(buildContentSecurityPolicy([])).toContain("frame-src 'none';");
     expect(buildContentSecurityPolicy([])).toContain("frame-ancestors 'none'");
   });
+
+  it("lets the page reach only listed image hosts, and no web host for data or media", () => {
+    const policy = buildContentSecurityPolicy([]);
+    const directive = (name: string) =>
+      policy.split("; ").find((part) => part.startsWith(`${name} `)) ?? "";
+    for (const name of ["connect-src", "media-src", "img-src"])
+      expect(directive(name).split(" ")).not.toContain("https:");
+    expect(directive("connect-src")).toBe("connect-src 'self' blob: anistream-media:");
+    expect(directive("img-src")).toContain("https://s4.anilist.co");
+    expect(directive("img-src")).toContain("anistream-art:");
+  });
+
+  it("adds the reserved test hosts only when asked (development UI tests)", () => {
+    expect(buildContentSecurityPolicy([])).not.toContain(".example");
+    expect(buildContentSecurityPolicy([], { testHosts: true })).toContain(
+      "connect-src 'self' blob: anistream-media: https://*.example",
+    );
+  });
 });
 
 describe("renderer loopback port", () => {

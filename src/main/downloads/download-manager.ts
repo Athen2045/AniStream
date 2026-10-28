@@ -3,18 +3,19 @@ import { mkdir, readFile, rename, rm, rmdir, stat, statfs, writeFile } from "nod
 import path from "node:path";
 import type { AnimeDirectSubtitle } from "../../shared/contracts";
 import {
-  AUDIO_BITS_PER_SECOND,
   downloadKey,
   estimateDownloadBytes,
   formatBytes,
+  projectDownloadBytes,
   type AnimeDownload,
   type DownloadAddResult,
   type DownloadChange,
   type DownloadEpisodeRequest,
   type DownloadsState,
+  type MangaChapterDownload,
 } from "../../shared/downloads";
-import { requireHttpsUrl } from "../hls-manifest";
 import { PROVIDER_USER_AGENT } from "../provider-transport";
+import { createPublicFetch, UnsafeUrlError, type HostLookup } from "../public-fetch";
 import type { DownloadStore, StoredDownload } from "./download-store";
 import {
   chooseAudio,
@@ -42,8 +43,22 @@ export interface DownloadManagerDeps {
   /** Resolves an episode in the direct source (same exact-match rules as playback). */
   resolve(aniListId: number, episode: number): Promise<DownloadSource>;
   fetcher?: typeof fetch;
+  /** Resolves a host's addresses so private-network hosts are refused (default: system DNS). */
+  lookup?: HostLookup;
+  /**
+   * Whether the device has a connection (Electron's `net.isOnline()`). A download cut off while
+   * offline waits in the queue and continues by itself once back online. Default: always online.
+   */
+  isOnline?: () => boolean;
+  /** How often to look for the connection again while waiting (ms). */
+  onlinePollMs?: number;
   /** Called (throttled) whenever the state the renderer shows changes. */
   onChange(): void;
+  /**
+   * Manga chapter downloads, which share the folder and storage limit: their rows for the state,
+   * bytes on disk, and bytes held or still expected.
+   */
+  manga?: () => { chapters: MangaChapterDownload[]; held: number; committed: number };
 }
 
 /** What the player needs to play a finished download. */
@@ -71,8 +86,13 @@ interface EpisodeManifest extends Omit<OfflineEpisode, "id"> {
 }
 
 const MANIFEST_FILE = "episode.json";
-/** Segments fetched at once: about what a player prefetches. */
-const SEGMENT_CONCURRENCY = 4;
+export const WAITING_FOR_CONNECTION = "Waiting for a connection";
+/**
+ * Segments fetched at once. Measured 2026-10-27 (720p, same connection): 4 at a time gave
+ * 1.6 MiB/s, 8 gave 2.0 MiB/s, the video host's apparent ceiling. 6 is Chromium's connection cap
+ * per host, so it keeps that gain without queueing more requests on the host.
+ */
+const SEGMENT_CONCURRENCY = 6;
 const FILE_ATTEMPTS = 3;
 const REQUEST_TIMEOUT_MS = 30_000;
 /** Free disk kept beyond a download's size, so the system never runs dry. */
@@ -89,13 +109,14 @@ class CancelledError extends Error {}
  * resume: finished files are kept and skipped. 403/429 stops the episode instead of retrying.
  */
 export class DownloadManager {
-  private readonly fetcher: typeof fetch;
+  private readonly fetchPublic: ReturnType<typeof createPublicFetch>;
   private active?: { id: string; controller: AbortController };
   private running = false;
+  private disposed = false;
   private lastSave = 0;
 
   public constructor(private readonly deps: DownloadManagerDeps) {
-    this.fetcher = deps.fetcher ?? fetch;
+    this.fetchPublic = createPublicFetch({ fetcher: deps.fetcher ?? fetch, lookup: deps.lookup });
   }
 
   /** Picks up downloads interrupted by a quit or crash. */
@@ -106,13 +127,26 @@ export class DownloadManager {
     void this.run();
   }
 
+  /** Downloads queued or in progress (what running in the background would keep going). */
+  public activeCount(): number {
+    return this.deps.store
+      .list()
+      .filter((item) => item.status === "queued" || item.status === "downloading").length;
+  }
+
+  public failedCount(): number {
+    return this.deps.store.list().filter((item) => item.status === "failed").length;
+  }
+
   public async state(): Promise<DownloadsState> {
     const settings = this.deps.store.getSettings(this.deps.defaultFolder);
     const items = this.deps.store.list();
+    const manga = this.deps.manga?.();
     return {
       items: items.map(publicItem),
+      chapters: manga?.chapters ?? [],
       settings,
-      usedBytes: items.reduce((sum, item) => sum + item.bytesDone, 0),
+      usedBytes: items.reduce((sum, item) => sum + item.bytesDone, 0) + (manga?.held ?? 0),
       ...(await freeBytes(settings.folder)),
     };
   }
@@ -121,11 +155,12 @@ export class DownloadManager {
     const settings = this.deps.store.getSettings(this.deps.defaultFolder);
     const items = this.deps.store.list();
     // What downloads already hold plus what queued ones still expect to need.
-    let committed = items.reduce(
-      (sum, item) =>
-        sum + Math.max(item.bytesDone, item.status === "done" ? 0 : item.bytesExpected),
-      0,
-    );
+    let committed =
+      items.reduce(
+        (sum, item) =>
+          sum + Math.max(item.bytesDone, item.status === "done" ? 0 : item.bytesExpected),
+        0,
+      ) + (this.deps.manga?.().committed ?? 0);
     const known = new Set(items.map((item) => downloadKey(item.aniListId, item.episode)));
     let added = 0;
     let skipped = 0;
@@ -248,6 +283,7 @@ export class DownloadManager {
   }
 
   public dispose(): void {
+    this.disposed = true;
     this.active?.controller.abort();
   }
 
@@ -262,6 +298,7 @@ export class DownloadManager {
       for (;;) {
         const next = this.deps.store.list().find((item) => item.status === "queued");
         if (!next) return;
+        if (!(await this.waitForConnection())) return;
         const controller = new AbortController();
         this.active = { id: next.id, controller };
         await this.download(next, controller.signal);
@@ -271,6 +308,16 @@ export class DownloadManager {
       this.running = false;
       this.active = undefined;
     }
+  }
+
+  /** Waits while the device is offline; false when the manager was disposed meanwhile. */
+  private async waitForConnection(): Promise<boolean> {
+    const online = this.deps.isOnline ?? (() => true);
+    while (!online()) {
+      if (this.disposed) return false;
+      await new Promise((resolve) => setTimeout(resolve, this.deps.onlinePollMs ?? 5_000));
+    }
+    return !this.disposed;
   }
 
   private async download(item: StoredDownload, signal: AbortSignal): Promise<void> {
@@ -316,16 +363,20 @@ export class DownloadManager {
         playlists.push(planMediaPlaylist(masterText, source.src, "video"));
       }
 
-      const files = playlists.flatMap((playlist) => playlist.files);
+      // Video and audio interleaved, so the size projected from the first files covers both.
+      const longest = Math.max(...playlists.map((playlist) => playlist.files.length));
+      const files = Array.from({ length: longest }, (_, index) =>
+        playlists.flatMap((playlist) => playlist.files[index] ?? []),
+      ).flat();
       const duration = playlists[0]!.durationSeconds;
-      const expected =
-        Math.round(
-          (duration *
-            ((videoAttributes?.variant.bandwidth ?? 0) +
-              audioFolders.length * AUDIO_BITS_PER_SECOND)) /
-            8,
-        ) || item.bytesExpected;
-      await this.ensureRoom(item, expected);
+      // The variant's BANDWIDTH (a peak, audio included) keeps the room check on the safe side;
+      // shown is the lower of it and the queued estimate, until the episode's own files give its
+      // real size (the peak overstated measured sizes by 20-100%).
+      const peak =
+        Math.round((duration * (videoAttributes?.variant.bandwidth ?? 0)) / 8) ||
+        item.bytesExpected;
+      await this.ensureRoom(item, peak);
+      const expected = Math.min(peak, item.bytesExpected) || peak;
       update(
         {
           bytesExpected: expected,
@@ -346,7 +397,11 @@ export class DownloadManager {
           const size = await this.file(item.folder, file, source.headers, signal);
           bytesDone += size;
           segmentsDone += 1;
-          update({ bytesDone, segmentsDone });
+          update({
+            bytesDone,
+            segmentsDone,
+            bytesExpected: projectDownloadBytes(bytesDone, segmentsDone, files.length, expected),
+          });
         }
       };
       await Promise.all(Array.from({ length: SEGMENT_CONCURRENCY }, worker));
@@ -423,6 +478,11 @@ export class DownloadManager {
       );
     } catch (reason) {
       if (reason instanceof CancelledError || signal.aborted) return;
+      // Cut off by a lost connection: back in the queue, keeping the files already saved.
+      if (!(reason instanceof RefusedError) && this.deps.isOnline && !this.deps.isOnline()) {
+        update({ status: "queued", error: WAITING_FOR_CONNECTION }, true);
+        return;
+      }
       const message =
         reason instanceof RefusedError
           ? reason.message
@@ -435,10 +495,11 @@ export class DownloadManager {
 
   private async ensureRoom(item: StoredDownload, expected: number): Promise<void> {
     const settings = this.deps.store.getSettings(this.deps.defaultFolder);
-    const others = this.deps.store
-      .list()
-      .filter((other) => other.id !== item.id)
-      .reduce((sum, other) => sum + other.bytesDone, 0);
+    const others =
+      this.deps.store
+        .list()
+        .filter((other) => other.id !== item.id)
+        .reduce((sum, other) => sum + other.bytesDone, 0) + (this.deps.manga?.().held ?? 0);
     if (others + expected > settings.limitBytes)
       throw new Error(
         `This episode (${formatBytes(expected)}) would pass your ${formatBytes(settings.limitBytes)} download limit.`,
@@ -486,7 +547,8 @@ export class DownloadManager {
       } catch (reason) {
         if (reason instanceof RefusedError || reason instanceof CancelledError || signal.aborted)
           throw signal.aborted ? new CancelledError() : reason;
-        if (attempt >= FILE_ATTEMPTS) throw reason;
+        // Offline: no use retrying now; the episode waits for the connection instead.
+        if (attempt >= FILE_ATTEMPTS || this.deps.isOnline?.() === false) throw reason;
         await delay(attempt * 2_000, signal);
       }
     }
@@ -498,16 +560,17 @@ export class DownloadManager {
     signal: AbortSignal,
   ): Promise<Response> {
     if (signal.aborted) throw new CancelledError();
-    const upstream = requireHttpsUrl(url);
     let response: Response;
     try {
-      response = await this.fetcher(upstream.toString(), {
+      // Every hop HTTPS to a public host, no cookies (public-fetch.ts).
+      ({ response } = await this.fetchPublic(url, {
         headers: { "User-Agent": PROVIDER_USER_AGENT, ...headers },
         signal: AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
-        redirect: "follow",
-      });
+      }));
     } catch (reason) {
       if (signal.aborted) throw new CancelledError();
+      // A redirect off HTTPS or into a private network fails the episode without retries.
+      if (reason instanceof UnsafeUrlError) throw new RefusedError(reason.message);
       throw reason instanceof Error ? reason : new Error("The download request failed.");
     }
     if (response.status === 403 || response.status === 429)
@@ -515,7 +578,6 @@ export class DownloadManager {
         `The video host refused the download (${response.status}). Try again later.`,
       );
     if (!response.ok) throw new Error(`The video host returned ${response.status}.`);
-    requireHttpsUrl(response.url || upstream.toString());
     return response;
   }
 }
@@ -531,20 +593,24 @@ function now(): string {
 
 /** `<root>/<Title> (<AniList ID>)/Episode 001`, with characters Windows forbids removed. */
 export function episodeFolder(root: string, request: DownloadEpisodeRequest): string {
+  return path.join(
+    titleFolder(root, request.title, request.aniListId),
+    `Episode ${String(request.episode).padStart(3, "0")}`,
+  );
+}
+
+/** `<root>/<Title> (<AniList ID>)`, shared by a title's episodes and chapters. */
+export function titleFolder(root: string, title: string, aniListId: number): string {
   const safeTitle =
-    [...request.title]
+    [...title]
       // Characters Windows forbids in names, and control characters, become spaces.
       .map((char) => (char.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(char) ? " " : char))
       .join("")
       .replace(/\s+/g, " ")
       .replace(/[. ]+$/, "")
       .trim()
-      .slice(0, 80) || "Anime";
-  return path.join(
-    root,
-    `${safeTitle} (${request.aniListId})`,
-    `Episode ${String(request.episode).padStart(3, "0")}`,
-  );
+      .slice(0, 80) || "Title";
+  return path.join(root, `${safeTitle} (${aniListId})`);
 }
 
 /** Deletes an episode folder and, when it was the last one, the title folder. */
@@ -555,7 +621,7 @@ async function removeEpisodeFolder(folder: string): Promise<void> {
   await rmdir(path.dirname(folder)).catch(() => undefined);
 }
 
-async function freeBytes(folder: string): Promise<{ freeBytes?: number }> {
+export async function freeBytes(folder: string): Promise<{ freeBytes?: number }> {
   let probe = path.resolve(folder);
   // statfs needs an existing path; walk up to the nearest one.
   for (let depth = 0; depth < 32; depth += 1) {

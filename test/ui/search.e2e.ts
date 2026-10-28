@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { launchApp, openSection, waitForShell, watchPainted, type TestApp } from "./app";
 
-const field = (window: Page) => window.getByRole("combobox", { name: "Search anime" });
+const field = (window: Page) => window.getByRole("searchbox", { name: "Search anime" });
 const results = (window: Page) => window.locator(".section-search-results");
 
 test.describe("Anime search", () => {
@@ -26,6 +26,8 @@ test.describe("Anime search", () => {
     await field(window).fill("Fixture Quest");
     await expect(results(window).getByText("Fixture Quest Returns").first()).toBeVisible();
     await expect(results(window).getByText("2+ anime")).toBeVisible();
+    // Results update under the field; no suggestion list covers the top result (2026-10-28).
+    await expect(window.getByRole("listbox")).toHaveCount(0);
 
     await window.getByRole("button", { name: "Show more results" }).click();
     await expect(results(window).getByText("Fixture Quest Finale").first()).toBeVisible();

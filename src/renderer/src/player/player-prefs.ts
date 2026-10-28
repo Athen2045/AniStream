@@ -1,12 +1,15 @@
 /**
  * Own-player conveniences kept in this device's local storage (ported from the user's own player,
- * 2026-10-18): volume and mute, autoplay, the last subtitle and audio language. Losing them only
- * resets the player to its defaults.
+ * 2026-10-18): volume and mute, autoplay, the last subtitle and audio language, and the last
+ * measured connection speed. Losing them only resets the player to its defaults.
  */
 const VOLUME_KEY = "anistream.player.volume";
 const AUTOPLAY_KEY = "anistream.player.autoplay";
 const SUBTITLE_KEY = "anistream.player.subtitles";
 const AUDIO_KEY = "anistream.player.audio";
+const BANDWIDTH_KEY = "anistream.player.bandwidth";
+/** Bits per second; outside this range a saved estimate is ignored. */
+const BANDWIDTH_RANGE = [250_000, 200_000_000] as const;
 
 function read(key: string): string | null {
   try {
@@ -82,4 +85,25 @@ export function writeAudioLanguage(language: string): void {
 /** The base language of a tag: `pt-BR` → `pt`, `eng` → `eng` (lower-cased). */
 export function baseLanguage(tag: string | undefined): string {
   return (tag ?? "").split(/[-_]/)[0].toLowerCase();
+}
+
+/**
+ * The connection speed the stream library measured last time, so the next episode starts at the
+ * quality the connection can carry instead of the library's 500 kbit/s guess (lowest quality,
+ * then climbing). It keeps adjusting from there.
+ */
+export function readBandwidthEstimate(): number | undefined {
+  const saved = Number(read(BANDWIDTH_KEY));
+  return Number.isFinite(saved) && saved >= BANDWIDTH_RANGE[0] && saved <= BANDWIDTH_RANGE[1]
+    ? saved
+    : undefined;
+}
+
+export function writeBandwidthEstimate(bitsPerSecond: number): void {
+  if (
+    Number.isFinite(bitsPerSecond) &&
+    bitsPerSecond >= BANDWIDTH_RANGE[0] &&
+    bitsPerSecond <= BANDWIDTH_RANGE[1]
+  )
+    write(BANDWIDTH_KEY, String(Math.round(bitsPerSecond)));
 }

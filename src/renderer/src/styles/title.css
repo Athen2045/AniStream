@@ -648,36 +648,20 @@
   background: none;
 }
 
-/* Manga reading ledger */
-.reading-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 24px;
-  align-items: center;
-  margin-bottom: 18px;
-  padding: 20px 24px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-panel);
-}
-.reading-panel strong {
-  display: block;
-  font-size: 16px;
-}
-.reading-panel span {
-  display: block;
-  margin-top: 4px;
+/* Offline manga: why only downloaded chapters are listed. */
+.reading-offline-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  margin: 0 0 16px;
   color: var(--muted);
   font-size: 13px;
 }
-.reading-meter {
-  height: 6px;
-  margin-top: 14px !important;
-  overflow: hidden;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 0.1);
+.reading-offline-note strong {
+  color: var(--text);
+  font-size: 15px;
 }
-.reading-meter span,
 .chapter-volume-meter span,
 .continue-progress span {
   display: block;
@@ -722,11 +706,12 @@
   border-radius: 4px;
   background: rgb(255 255 255 / 0.1);
 }
-.chapter-ledger > .chapter-row {
+.chapter-ledger .chapter-row {
   position: relative;
   display: grid;
-  grid-template-columns: 22px 84px minmax(0, 1fr) minmax(0, 200px) 34px 70px 18px;
+  grid-template-columns: 22px 84px minmax(0, 1fr) minmax(0, 200px) 34px 70px 18px 30px;
   gap: 14px;
+  width: 100%;
   align-items: center;
   min-height: 54px;
   margin: 0;
@@ -742,10 +727,11 @@
   text-decoration: none;
   cursor: pointer;
 }
-.chapter-ledger > .chapter-row:last-child {
+.chapter-ledger > .chapter-row:last-child,
+.chapter-ledger > .chapter-row-wrap:last-child > .chapter-row {
   border-bottom: 0;
 }
-.chapter-ledger > .chapter-row:hover {
+.chapter-ledger .chapter-row:hover {
   background: rgb(255 255 255 / 0.04);
 }
 .chapter-dot {
@@ -1138,8 +1124,8 @@
   .episode-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .chapter-ledger > .chapter-row {
-    grid-template-columns: 22px 78px minmax(0, 1fr) minmax(0, 140px) 30px 64px 18px;
+  .chapter-ledger .chapter-row {
+    grid-template-columns: 22px 78px minmax(0, 1fr) minmax(0, 140px) 30px 64px 18px 30px;
   }
 }
 

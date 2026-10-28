@@ -27,12 +27,16 @@ export type SearchResults =
       page: number;
       hasNext: boolean;
       extras?: AniListSearchExtras;
+      /** The search these results answer (search results only, not Trending). */
+      query?: string;
     }
   | {
       kind: "more";
       items: MoreCatalogItem[];
       /** Next page per type while filtered browsing has more. */
       next?: Partial<Record<MoreMediaType, number>>;
+      /** The search these results answer (search results only, not Trending). */
+      query?: string;
     };
 
 type SearchApi = Pick<
@@ -111,14 +115,9 @@ export interface SearchRequest {
  */
 export function searchResultsQuery(request: SearchRequest, api: SearchApi = window.anistream) {
   const { scope, query, filters, moreFilters, moreFiltered } = request;
+  const filtersKey = scope === "MORE" ? JSON.stringify(moreFilters) : filterKey(filters);
   return infiniteQueryOptions({
-    queryKey: [
-      "search",
-      "results",
-      scope,
-      query,
-      scope === "MORE" ? JSON.stringify(moreFilters) : filterKey(filters),
-    ] as const,
+    queryKey: ["search", "results", scope, query, filtersKey] as const,
     initialPageParam: (moreFiltered
       ? Object.fromEntries(moreTypesFor(moreFilters).map((type) => [type, 1]))
       : 1) as ResultsPageParam,
@@ -126,14 +125,26 @@ export function searchResultsQuery(request: SearchRequest, api: SearchApi = wind
       if (moreFiltered) {
         const pages = typeof pageParam === "number" ? {} : pageParam;
         const { items, next } = await browseMoreBatch(api, query, moreFilters, pages);
-        return { kind: "more", items, next };
+        return { kind: "more", items, next, query };
       }
-      if (scope === "MORE") return searchMoreBoth(api, query);
+      if (scope === "MORE") return { ...(await searchMoreBoth(api, query)), query };
       const page = typeof pageParam === "number" ? pageParam : 1;
-      return toAniListResults(
-        await api.browseAniList(browseInput(scope, page, PAGE_SIZE, query, filters)),
-      );
+      return {
+        ...toAniListResults(
+          await api.browseAniList(browseInput(scope, page, PAGE_SIZE, query, filters)),
+        ),
+        query,
+      };
     },
+    // While the next search loads, the one being edited stays on screen (dimmed), so results
+    // change in place as you type instead of blinking out. Only the same section and filters, and
+    // only while editing that search (same first letters): a fresh search never shows old titles.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === scope &&
+      previousQuery.queryKey[4] === filtersKey &&
+      sameSearchEdited(String(previousQuery.queryKey[3]), query)
+        ? previous
+        : undefined,
     getNextPageParam: (last): ResultsPageParam | undefined =>
       last.kind === "anilist"
         ? last.hasNext
@@ -145,6 +156,12 @@ export function searchResultsQuery(request: SearchRequest, api: SearchApi = wind
     select: mergeSearchPages,
     staleTime: RESULTS_STALE_MS,
   });
+}
+
+/** Whether `next` is an edit of `previous` (both start with the same two letters). */
+export function sameSearchEdited(previous: string, next: string): boolean {
+  const head = (value: string) => value.trim().toLocaleLowerCase().slice(0, 2);
+  return head(previous).length === 2 && head(previous) === head(next);
 }
 
 /** Every loaded page as one list; More titles never repeat. */

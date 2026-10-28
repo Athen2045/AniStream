@@ -128,6 +128,23 @@ export function ScheduleView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, attempt]);
 
+  // Failed (e.g. offline): try again by itself once the connection returns.
+  const failedNow = result.key === requestKey && Boolean(result.error);
+  useEffect(() => {
+    if (!failedNow) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // A moment after "online": the connection can be reported before it carries traffic.
+    const retry = (): void => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setAttempt((value) => value + 1), 1_000);
+    };
+    window.addEventListener("online", retry);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("online", retry);
+    };
+  }, [failedNow]);
+
   // A new span or view shows its last remembered answer until the fresh one arrives.
   const current =
     result.key === requestKey
@@ -258,7 +275,8 @@ export function ScheduleView({
         </p>
       ) : null}
 
-      {monthly ? (
+      {/* Failed with nothing remembered: no grid of empty days that would read "nothing airs". */}
+      {current.error && !schedule ? null : monthly ? (
         <MonthGrid
           days={days}
           month={month.month}

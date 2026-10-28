@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { takePlayerFocus } from "./player-focus";
 import { PlayerStarting } from "./PlayerStarting";
 import { OwnAnimePlayer } from "./player/OwnAnimePlayer";
-import { ArrowLeft, Check, ChevronDown, Clock3, LoaderCircle, Play } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Clock3, LoaderCircle, Play, Search } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useMediaFullscreen } from "./useMediaFullscreen";
 import { getAppPreferences, preferredAudioSource } from "./app-preferences";
@@ -58,6 +58,7 @@ import {
   inferMediaDisplayedPartNumber,
   inferMediaDisplayedSeasonNumber,
   isSeasonEntry,
+  seasonSubtitle,
   type AnimeSeasonChoice,
   type AnimeSeries,
 } from "./anime-season-chain";
@@ -474,6 +475,12 @@ export function AnimeWatchExperience({
       });
   }, [exitFullscreen, onLeave, transitionTo]);
 
+  // Closed to the tray (background mode): stop playing, as Back would.
+  useEffect(() => {
+    if (view !== "player") return;
+    return window.anistream.onWindowHidden(returnToEpisodes);
+  }, [returnToEpisodes, view]);
+
   useEffect(() => {
     if (view !== "player") return;
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -757,14 +764,20 @@ function EpisodeBrowser({
       )
     : [];
   const lastRange = ranges?.ranges.at(-1);
+  // Offline, a title with downloads lists just those: the episodes that can play now.
+  const isDownloaded = (episode: AnimeProviderEpisode): boolean =>
+    downloads?.byEpisode.get(downloadKey(media.id, episode.number))?.status === "done";
+  const downloadedOnly = !online && seasonEpisodes.some(isDownloaded);
   // The last range also holds the locked next-airing tile past the aired count.
-  const episodes = shownRange
-    ? seasonEpisodes.filter(
-        (episode) =>
-          episode.number >= shownRange.start &&
-          (shownRange === lastRange || episode.number <= shownRange.end),
-      )
-    : seasonEpisodes;
+  const episodes = downloadedOnly
+    ? seasonEpisodes.filter(isDownloaded)
+    : shownRange
+      ? seasonEpisodes.filter(
+          (episode) =>
+            episode.number >= shownRange.start &&
+            (shownRange === lastRange || episode.number <= shownRange.end),
+        )
+      : seasonEpisodes;
   // Collapsed, show the page of episodes holding the current one (episode 112 of 366 opens on
   // 109–120), not always the first page.
   const currentIndex = Math.max(
@@ -782,9 +795,11 @@ function EpisodeBrowser({
         <h2>
           Episodes
           <small>
-            {shownRange
-              ? `${shownRange.title} · Episodes ${shownRange.start}–${shownRange.end}`
-              : `${isSeasonEntry(media) ? `Season ${displayedSeasonNumber}` : mediaFormatLabel(media.format)}${missing.length && aired ? ` · ${aired - missing.length} of ${aired} aired` : episodes.length > 1 ? ` · ${episodes.length} episodes` : ""}`}
+            {downloadedOnly
+              ? `Downloaded · ${episodes.length} ${episodes.length === 1 ? "episode" : "episodes"}`
+              : shownRange
+                ? `${shownRange.title} · Episodes ${shownRange.start}–${shownRange.end}`
+                : `${isSeasonEntry(media) ? `Season ${displayedSeasonNumber}` : mediaFormatLabel(media.format)}${missing.length && aired ? ` · ${aired - missing.length} of ${aired} aired` : episodes.length > 1 ? ` · ${episodes.length} episodes` : ""}`}
           </small>
         </h2>
         <SeasonPicker
@@ -799,14 +814,15 @@ function EpisodeBrowser({
       </header>
 
       {loading ? <p className="catalog-loading">Loading episode details…</p> : null}
-      {!loading && missing.length ? (
+      {online && !loading && missing.length ? (
         <p className="provider-note" role="status">
           {missing.length > 1
             ? `Episodes ${episodeRangesLabel(missing)} have aired, but the source hasn't added them yet.`
             : `Episode ${missing[0]} has aired, but the source hasn't added it yet.`}
         </p>
       ) : null}
-      {providerMessage ? (
+      {/* Offline, the page's own offline note says it; a source error would only confuse. */}
+      {online && providerMessage ? (
         <div className="provider-note provider-note--action" role="status">
           <span>{providerMessage}</span>
           <button type="button" onClick={onRetry} disabled={loading}>
@@ -955,6 +971,9 @@ function EpisodeBrowser({
 }
 
 /** One renderer-session loader for every season box: two-hop series graphs, cached. */
+/** Long arc lists (One Piece) get a search field in the season menu. */
+const ARC_SEARCH_MIN = 8;
+
 const loadSeriesDetail = createSeriesLoader((id) => window.anistream.getAnimeSeriesGraph(id));
 
 function SeasonPicker({
@@ -993,6 +1012,9 @@ function SeasonPicker({
     [inferredNumber, media],
   );
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  // Episodes watched per title, from this device's history (no network): the menu's progress bars.
+  const [watchedById, setWatchedById] = useState<ReadonlyMap<number, number>>(() => new Map());
   const [attempt, setAttempt] = useState(0);
   // Keyed by title and attempt: a result for anything else is simply not shown.
   const loadKey = `${media.id}:${attempt}`;
@@ -1054,7 +1076,34 @@ function SeasonPicker({
 
   useEffect(() => {
     if (!open) return;
-    // Long arc lists open on the current entry.
+    let active = true;
+    window.anistream
+      .getLocalActivity()
+      .then((activity) => {
+        if (!active) return;
+        const next = new Map<number, number>();
+        for (const entry of activity)
+          if (entry.media.type === "ANIME")
+            next.set(
+              entry.media.id,
+              Math.max(next.get(entry.media.id) ?? 0, entry.completedProgress),
+            );
+        setWatchedById(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  const listProgress = "listEntry" in media ? (media.listEntry?.progress ?? 0) : 0;
+  const watchedOf = (id: number, current: boolean): number =>
+    Math.max(watchedById.get(id) ?? 0, current ? listProgress : 0);
+
+  useEffect(() => {
+    if (!open) return;
+    fitMenuBelowTrigger(triggerRef.current, menuRef.current);
+    // Long lists open on the current entry.
     menuRef.current
       ?.querySelector<HTMLElement>("[aria-checked='true']")
       ?.scrollIntoView({ block: "nearest" });
@@ -1078,6 +1127,7 @@ function SeasonPicker({
   function openAndFocusFirst(event: React.KeyboardEvent<HTMLButtonElement>): void {
     if (event.key !== "ArrowDown") return;
     event.preventDefault();
+    if (!open) setQuery("");
     setOpen(true);
     window.requestAnimationFrame(() => {
       const options =
@@ -1091,6 +1141,9 @@ function SeasonPicker({
 
   function moveOptionFocus(event: React.KeyboardEvent<HTMLDivElement>): void {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    // Home and End move the caret inside the arc search field.
+    if (event.target instanceof HTMLInputElement && (event.key === "Home" || event.key === "End"))
+      return;
     const options = [
       ...event.currentTarget.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']"),
     ];
@@ -1112,8 +1165,10 @@ function SeasonPicker({
 
   function choose(action: () => void, current: boolean): void {
     setOpen(false);
-    if (current) triggerRef.current?.focus();
-    else action();
+    setQuery("");
+    // An arc changes the list in place, so focus returns to the pill; a season opens its page.
+    if (current || arcMode) triggerRef.current?.focus();
+    if (!current) action();
   }
 
   const triggerTitle = arcMode
@@ -1142,32 +1197,60 @@ function SeasonPicker({
   if (!arcMode && (loaded ? seasons.length <= 1 && extras.length === 0 : standalone && !ranges))
     return null;
 
+  const badge = arcMode
+    ? ranges && activeRange
+      ? String(ranges.ranges.findIndex((range) => range.start === activeRange.start) + 1)
+      : undefined
+    : currentIsSeason && !awaitingSeasonNumber
+      ? `S${selected.number}`
+      : undefined;
+  const arcQuery = query.trim().toLocaleLowerCase();
+  const shownRanges =
+    arcMode && ranges
+      ? ranges.ranges.filter((range) => {
+          if (!arcQuery) return true;
+          const episode = Number(arcQuery);
+          return Number.isInteger(episode) && episode > 0
+            ? episode >= range.start && episode <= range.end
+            : range.title.toLocaleLowerCase().includes(arcQuery);
+        })
+      : [];
+
   return (
     <div className="season-picker" ref={pickerRef}>
       <button
         ref={triggerRef}
         type="button"
-        className="season-picker-trigger"
+        className={`season-picker-trigger${badge ? "" : " season-picker-trigger--plain"}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          // Each opening starts with the full list.
+          if (!open) setQuery("");
+          setOpen(!open);
+        }}
         onKeyDown={openAndFocusFirst}
       >
-        <span>
+        {badge ? (
+          <span className="season-picker-badge" aria-hidden="true">
+            {badge}
+          </span>
+        ) : null}
+        <span className="season-picker-trigger-copy">
           <strong>{triggerTitle}</strong>
           <small>{triggerDetail}</small>
         </span>
-        <ChevronDown aria-hidden="true" size={18} className={open ? "is-open" : undefined} />
+        <ChevronDown aria-hidden="true" size={16} className={open ? "is-open" : undefined} />
       </button>
       <AnimatePresence>
         {open ? (
           <motion.div
             ref={menuRef}
             id={menuId}
-            className="season-picker-menu"
+            className={`season-picker-menu${arcMode ? " season-picker-menu--arcs" : ""}`}
             role="menu"
-            aria-label="Series seasons"
+            aria-label={arcMode ? "Arcs" : "Series seasons"}
             initial={{ opacity: 0, y: -6, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.99 }}
@@ -1176,11 +1259,23 @@ function SeasonPicker({
           >
             {arcMode && ranges && activeRange ? (
               <>
+                {ranges.ranges.length > ARC_SEARCH_MIN ? (
+                  <label className="season-picker-search">
+                    <Search aria-hidden="true" size={15} />
+                    <input
+                      type="search"
+                      value={query}
+                      placeholder="Find an arc or episode number…"
+                      aria-label="Find an arc or episode number"
+                      onChange={(event) => setQuery(event.target.value)}
+                    />
+                  </label>
+                ) : null}
                 <div className="season-picker-menu-heading">
-                  <span>Seasons</span>
+                  <span>Arcs</span>
                   <small>{ranges.kind === "arc" ? "From TMDB" : "From TheTVDB"}</small>
                 </div>
-                {ranges.ranges.map((range) => {
+                {shownRanges.map((range) => {
                   const current = range.start === activeRange.start;
                   return (
                     <button
@@ -1188,20 +1283,23 @@ function SeasonPicker({
                       type="button"
                       role="menuitemradio"
                       aria-checked={current}
-                      className={current ? "is-current" : undefined}
+                      className={`season-picker-arc${current ? " is-current" : ""}`}
                       onClick={() => choose(() => onSelectRange(range), current)}
                     >
-                      <span className="season-picker-option-copy">
-                        <strong>{range.title}</strong>
-                        <small>
-                          {rangeEpisodesLabel(range)}
-                          {range.filler ? " · Filler" : ""}
-                        </small>
-                      </span>
-                      {current ? <Check aria-hidden="true" size={17} /> : null}
+                      <strong>
+                        {range.title}
+                        {range.filler ? <span className="season-picker-filler">Filler</span> : null}
+                      </strong>
+                      <small>{rangeShortLabel(range)}</small>
+                      {current ? <Check aria-hidden="true" size={16} /> : <i aria-hidden="true" />}
                     </button>
                   );
                 })}
+                {!shownRanges.length ? (
+                  <p className="season-picker-status" role="status">
+                    No arc matches “{query.trim()}”.
+                  </p>
+                ) : null}
               </>
             ) : (
               <>
@@ -1211,6 +1309,8 @@ function SeasonPicker({
                 </div>
                 {seasons.map((choice) => {
                   const current = choice.current && currentIsSeason;
+                  const total = choice.episodeCount ?? choice.media.totalProgress;
+                  const progress = watchedOf(choice.media.id, current);
                   return (
                     <button
                       key={choice.media.id}
@@ -1220,14 +1320,29 @@ function SeasonPicker({
                       className={current ? "is-current" : undefined}
                       onClick={() => choose(() => onNavigate?.(choice.media), current)}
                     >
+                      <SeasonThumb media={choice.media} />
                       <span className="season-picker-option-copy">
-                        <strong>
-                          {seasonChoiceLabel(choice)}{" "}
-                          <span>({episodeCountLabel(choice.episodeCount)})</span>
-                        </strong>
-                        <small>{choice.media.title}</small>
+                        <strong>{seasonChoiceLabel(choice)}</strong>
+                        <small>
+                          {[
+                            choice.media.seasonYear,
+                            choice.episodeCount ? `${choice.episodeCount} eps` : undefined,
+                            seasonSubtitle(choice.media.title, seasons[0]?.media.title),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
+                        {progress > 0 && total ? (
+                          <span className="season-picker-progress" aria-hidden="true">
+                            <i style={{ width: `${Math.min(100, (progress / total) * 100)}%` }} />
+                          </span>
+                        ) : null}
                       </span>
-                      {current ? <Check aria-hidden="true" size={17} /> : null}
+                      {current ? (
+                        <span className="season-picker-tag">Watching</span>
+                      ) : total && progress >= total ? (
+                        <span className="season-picker-tag season-picker-tag--done">Watched</span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -1247,6 +1362,7 @@ function SeasonPicker({
                     className={extra.current ? "is-current" : undefined}
                     onClick={() => choose(() => onNavigate?.(extra.media), extra.current)}
                   >
+                    <SeasonThumb media={extra.media} />
                     <span className="season-picker-option-copy">
                       <strong>{extra.media.title}</strong>
                       <small>
@@ -1254,7 +1370,7 @@ function SeasonPicker({
                         {extra.media.seasonYear ? ` · ${extra.media.seasonYear}` : ""}
                       </small>
                     </span>
-                    {extra.current ? <Check aria-hidden="true" size={17} /> : null}
+                    {extra.current ? <span className="season-picker-tag">Watching</span> : null}
                   </button>
                 ))}
               </>
@@ -1277,6 +1393,43 @@ function SeasonPicker({
       </AnimatePresence>
     </div>
   );
+}
+
+const MENU_MAX_HEIGHT = 540;
+const MENU_MIN_HEIGHT = 260;
+/** Space kept clear above the trigger after scrolling: the window controls and Back sit there. */
+const MENU_TOP_CLEARANCE = 72;
+const MENU_BOTTOM_GAP = 34;
+
+/**
+ * Opens the season menu fully on screen: the page scrolls only as far as the menu needs (never
+ * pushing the trigger under the window controls), and the menu is capped to the room left below.
+ */
+function fitMenuBelowTrigger(trigger: HTMLElement | null, menu: HTMLElement | null): void {
+  if (!trigger || !menu) return;
+  const wanted = Math.min(menu.scrollHeight, MENU_MAX_HEIGHT);
+  const box = trigger.getBoundingClientRect();
+  const room = window.innerHeight - box.bottom - MENU_BOTTOM_GAP;
+  if (room < wanted) {
+    const shift = Math.max(0, Math.min(wanted - room, box.top - MENU_TOP_CLEARANCE));
+    if (shift > 0) trigger.closest(".title-page")?.scrollBy({ top: shift });
+  }
+  const roomAfter = window.innerHeight - trigger.getBoundingClientRect().bottom - MENU_BOTTOM_GAP;
+  menu.style.maxHeight = `${Math.max(MENU_MIN_HEIGHT, Math.min(MENU_MAX_HEIGHT, roomAfter))}px`;
+}
+
+/** A season's banner (else its cover) as a small 16:9 thumbnail. */
+function SeasonThumb({ media }: { media: AniListCatalogMedia }): React.JSX.Element {
+  const art = media.bannerUrl ?? media.coverUrl;
+  return (
+    <span className="season-picker-thumb" aria-hidden="true">
+      {art ? <img src={art} alt="" loading="lazy" decoding="async" /> : null}
+    </span>
+  );
+}
+
+function rangeShortLabel(range: AnimeEpisodeRange): string {
+  return range.start === range.end ? `Ep ${range.start}` : `Eps ${range.start}–${range.end}`;
 }
 
 function rangeEpisodesLabel(range: AnimeEpisodeRange): string {
@@ -1316,7 +1469,7 @@ function rangeContaining(
 
 function episodeCountLabel(count: number | undefined): string {
   if (!count) return "Episodes TBA";
-  return `${count} ${count === 1 ? "Episode" : "Episodes"}`;
+  return `${count} ${count === 1 ? "episode" : "episodes"}`;
 }
 
 function seasonChoiceLabel(choice: AnimeSeasonChoice): string {

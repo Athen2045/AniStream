@@ -18,14 +18,26 @@ interface FixtureRoute {
  * is constructed. ANISTREAM_TEST_USER_DATA keeps a run out of the real profile (also for paced
  * live checks against real providers). ANISTREAM_TEST_FIXTURES=<routes.json> answers every
  * main-process `fetch` from that file and refuses anything else, so a test never reaches a real
- * provider.
+ * provider. Either way `globalThis.anistreamTestOffline = true` (set by UI tests) makes every
+ * main-process `fetch` fail like a dropped connection; clients keep the `fetch` they were built
+ * with, so the check is installed here, before any of them exists.
  */
 export function installTestMode(): boolean {
   const fixtureFile = process.env.ANISTREAM_TEST_FIXTURES;
   const userData = process.env.ANISTREAM_TEST_USER_DATA;
   if (app.isPackaged || (!fixtureFile && !userData)) return false;
   if (userData) app.setPath("userData", userData);
-  if (!fixtureFile) return true;
+  if (fixtureFile) installFixtures(fixtureFile);
+  const inner = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    if ((globalThis as { anistreamTestOffline?: boolean }).anistreamTestOffline)
+      throw new TypeError("fetch failed");
+    return inner(input, init);
+  };
+  return true;
+}
+
+function installFixtures(fixtureFile: string): void {
   const routes = parseRoutes(JSON.parse(readFileSync(fixtureFile, "utf8")) as unknown);
   globalThis.fetch = async (input, init) => {
     const request = input instanceof Request ? input : undefined;
@@ -46,7 +58,6 @@ export function installTestMode(): boolean {
       headers: { "Content-Type": "application/json" },
     });
   };
-  return true;
 }
 
 function parseRoutes(value: unknown): FixtureRoute[] {

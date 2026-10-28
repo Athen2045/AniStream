@@ -46,6 +46,8 @@ import { useAutoHideMediaControls } from "./useAutoHideMediaControls";
 import { useCaptionControlsVisibility } from "./useCaptionControlsVisibility";
 import { MangaDexSourceIcon } from "./MangaDexSourceIcon";
 import { playStarted } from "./play-timer";
+import { useOptionalDownloads } from "./DownloadsProvider";
+import { chapterDownloadKey } from "../../shared/downloads";
 
 const READ_COMPLETE_THRESHOLD = 0.9;
 const PAGE_PREFETCH_MARGIN = "1800px 0px";
@@ -214,6 +216,11 @@ function ReaderContent({
     };
   }, [preferences.settings.width, preferences.settings.fit]);
   const reducedMotion = useAppReducedMotion();
+  // A downloaded chapter reads from disk (offline too), never from its source.
+  const saved = useOptionalDownloads()?.byChapter.get(
+    chapterDownloadKey(chapter.source === "mirror" ? "mirror" : "mangadex", chapter.id),
+  );
+  const downloadedId = saved?.status === "done" ? saved.id : undefined;
   const readerSession = useMemo(
     () =>
       createMangaReaderSession({
@@ -222,16 +229,18 @@ function ReaderContent({
         chapterNumber: chapter.number,
         pageCount: chapter.pages,
         loadPage: (page) =>
-          chapter.source === "mirror"
-            ? window.anistream.getMangaMirrorPage({ chapterId: chapter.id, page })
-            : window.anistream.getMangaDexPage({ chapterId: chapter.id, page, quality }),
+          downloadedId
+            ? window.anistream.getDownloadedChapterPage({ id: downloadedId, page })
+            : chapter.source === "mirror"
+              ? window.anistream.getMangaMirrorPage({ chapterId: chapter.id, page })
+              : window.anistream.getMangaDexPage({ chapterId: chapter.id, page, quality }),
         createObjectUrl: (page) =>
           URL.createObjectURL(new Blob([page.imageBytes], { type: page.mimeType })),
         revokeObjectUrl: (url) => URL.revokeObjectURL(url),
         saveResume: (input) => saveMangaActivity(media, input),
         onChapterRead: () => onChapterRead(chapter),
       }),
-    [aniListId, chapter, media, onChapterRead, quality],
+    [aniListId, chapter, downloadedId, media, onChapterRead, quality],
   );
   const readerSnapshot = useSyncExternalStore(
     readerSession.subscribe,

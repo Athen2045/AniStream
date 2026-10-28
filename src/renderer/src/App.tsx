@@ -94,6 +94,9 @@ const SettingsView = lazy(() =>
 const ScheduleView = lazy(() =>
   import("./ScheduleView").then((m) => ({ default: m.ScheduleView })),
 );
+const DownloadedChapterReader = lazy(() =>
+  import("./DownloadedChapterReader").then((m) => ({ default: m.DownloadedChapterReader })),
+);
 const UpNextView = lazy(() => import("./UpNextView").then((m) => ({ default: m.UpNextView })));
 /** Once launch settles, the title page's code loads quietly so opening a title never waits on it. */
 const MEDIA_DETAIL_PREFETCH_DELAY_MS = 1_500;
@@ -257,6 +260,8 @@ function AppContent(): React.JSX.Element {
     () => getAppPreferences().startSection,
   );
   const [selectedMedia, setSelectedMedia] = useState<AniListCatalogMedia>();
+  // A downloaded chapter opened from Downloads (read from disk, so offline too).
+  const [offlineChapter, setOfflineChapter] = useState<{ aniListId: number; chapterId: string }>();
   const [selectedMore, setSelectedMore] = useState<MoreCatalogItem>();
   const [selectedMoreAction, setSelectedMoreAction] = useState<"details" | "play">("details");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>();
@@ -665,8 +670,21 @@ function AppContent(): React.JSX.Element {
                   >
                     <DownloadsView
                       onPlay={(media, episode) => openMedia(media, "play", episode)}
+                      onRead={(item) =>
+                        setOfflineChapter({ aniListId: item.aniListId, chapterId: item.chapter.id })
+                      }
                       onOpenSettings={() => openSettings("playback")}
                     />
+                    {offlineChapter ? (
+                      <Suspense fallback={null}>
+                        <DownloadedChapterReader
+                          key={`${offlineChapter.aniListId}:${offlineChapter.chapterId}`}
+                          aniListId={offlineChapter.aniListId}
+                          chapterId={offlineChapter.chapterId}
+                          onClose={() => setOfflineChapter(undefined)}
+                        />
+                      </Suspense>
+                    ) : null}
                   </motion.div>
                 ) : view === "UPNEXT" ? (
                   <motion.div

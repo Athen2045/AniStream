@@ -48,9 +48,10 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
     else waiters.splice(at, 0, waiter);
   }
 
-  function acquireSlot(signal?: AbortSignal, priority = false, key?: string): Promise<void> {
+  /** Resolves with the slot's start time, so a request that never left can give it back. */
+  function acquireSlot(signal?: AbortSignal, priority = false, key?: string): Promise<number> {
     if (signal?.aborted) return Promise.reject(abortReason(signal));
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<number>((resolve, reject) => {
       const waiter: Waiter = { priority, key, resolve, reject, signal };
       if (signal) {
         waiter.onAbort = () => {
@@ -100,7 +101,7 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
           waiter.signal.removeEventListener("abort", waiter.onAbort);
         startTimestamps.push(now);
         lastStartAt = now;
-        waiter.resolve();
+        waiter.resolve(now);
       }
     } finally {
       pumping = false;
@@ -129,9 +130,19 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
     }
 
     const execution = (async () => {
-      await acquireSlot(signal, options.priority === true, dedupeKey);
+      const startedAt = await acquireSlot(signal, options.priority === true, dedupeKey);
       throwIfAborted(signal);
-      return fn();
+      try {
+        return await fn();
+      } catch (error) {
+        // No connection (or DNS/refused): the server never saw it, so it uses none of its limit.
+        // Offline browsing would otherwise fill the window and delay what loads on reconnect.
+        if (neverReachedServer(error)) {
+          const at = startTimestamps.indexOf(startedAt);
+          if (at !== -1) startTimestamps.splice(at, 1);
+        }
+        throw error;
+      }
     })();
 
     if (dedupeKey) {
@@ -157,10 +168,19 @@ export function createRequestGate(options: RequestGateOptions): RequestGate {
   };
 }
 
+/**
+ * Node's `fetch` rejects with `TypeError("fetch failed")` when no connection was made (offline,
+ * DNS, refused, reset before a response). Timeouts and HTTP answers are not this: the server may
+ * have seen those requests.
+ */
+function neverReachedServer(error: unknown): boolean {
+  return error instanceof TypeError && /fetch failed/i.test(error.message);
+}
+
 interface Waiter {
   priority: boolean;
   key?: string;
-  resolve: () => void;
+  resolve: (startedAt: number) => void;
   reject: (reason: unknown) => void;
   signal?: AbortSignal;
   onAbort?: () => void;

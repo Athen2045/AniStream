@@ -86,13 +86,21 @@ function providerApology(provider: string): string {
   return `Sorry, AniStream can't reach ${provider} right now. We're working on the issue. Please try again later.`;
 }
 
+/**
+ * The device itself reports no connection. Service clients word a lost connection their own way
+ * ("AniList is unreachable"), so the error text alone cannot tell it from the service being down.
+ */
+function deviceOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
 function safeFailureMessage(
   outcome: Exclude<ReadinessOutcome, "checking" | "ready">,
   provider: string | undefined,
   reason?: unknown,
 ): string {
   const raw = reason instanceof Error ? `${reason.name} ${reason.message}` : String(reason ?? "");
-  if (outcome === "offline" || OFFLINE_PATTERN.test(raw)) {
+  if (outcome === "offline" || OFFLINE_PATTERN.test(raw) || deviceOffline()) {
     return "AniStream could not reach the internet. Check your connection, then try again.";
   }
   if (RATE_LIMIT_PATTERN.test(raw)) {
@@ -215,7 +223,8 @@ export function createReadinessSession({
       return;
     }
     step.state = "failed";
-    step.failureOutcome = result.status;
+    step.failureOutcome =
+      result.status === "provider-error" && deviceOffline() ? "offline" : result.status;
     step.canContinue = result.canContinue;
     step.message =
       result.message ??
@@ -224,7 +233,8 @@ export function createReadinessSession({
 
   function normalizeError(step: MutableStep, reason: unknown): void {
     const raw = reason instanceof Error ? `${reason.name} ${reason.message}` : String(reason ?? "");
-    const outcome = OFFLINE_PATTERN.test(raw) ? "offline" : step.definition.failureOutcome;
+    const outcome =
+      OFFLINE_PATTERN.test(raw) || deviceOffline() ? "offline" : step.definition.failureOutcome;
     step.state = "failed";
     step.failureOutcome = outcome;
     step.canContinue = !step.definition.required;
@@ -259,13 +269,18 @@ export function createReadinessSession({
       }),
     ).then(() => {
       if (generation !== runGeneration) return;
-      if (!disposed) publish();
       activeRun = undefined;
+      if (disposed) return;
+      publish();
+      // Starting without a connection: open the app on what works offline (saved pages,
+      // downloads) instead of an error to click past. A local-data failure still stops here.
+      if (mode === "launch" && snapshot.outcome === "offline" && snapshot.canContinue)
+        session.continueDegraded();
     });
     return activeRun;
   }
 
-  return {
+  const session: ReadinessSession = {
     start: runPending,
     retry: runPending,
     continueDegraded() {
@@ -287,4 +302,5 @@ export function createReadinessSession({
       listeners.clear();
     },
   };
+  return session;
 }

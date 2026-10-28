@@ -70,7 +70,7 @@ export class MangaTitleModule {
     const mangaDexReader = valueOrIssue(readerResult, "mangadex-reader", issues);
     // A mirror failure only means "no extra chapters"; MangaDex is never affected.
     const mirrorChapters = valueOrIssue(mirrorResult, "chapter-mirror", issues) ?? [];
-    const reader =
+    const merged =
       mirror && mirrorChapters.length
         ? mergeMirrorChapters({
             aniListId: input.aniListId,
@@ -79,6 +79,12 @@ export class MangaTitleModule {
             label: mirror.label,
           })
         : mangaDexReader;
+    // Say when the mirror could not be asked, so an empty English list offers "Try again"
+    // instead of claiming there are no English chapters.
+    const reader =
+      wantsMirror && mirrorResult.status === "rejected" && merged
+        ? { ...merged, mirrorUnavailable: mirror.label }
+        : merged;
     const resume = valueOrIssue(resumeResult, "resume", issues);
     const chapterFallback = this.deps.chapterFallback
       ? buildMangaChapterFallback({

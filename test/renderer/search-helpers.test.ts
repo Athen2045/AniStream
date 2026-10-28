@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   closestTitle,
   editDistance,
-  highlightMatch,
   isConfidentMatch,
   searchNormalize,
 } from "../../src/renderer/src/search-helpers";
@@ -26,11 +25,6 @@ describe("search helpers", () => {
     expect(closestTitle("one peice", ["ONE PIECE", "One Punch Man"])).toBe("ONE PIECE");
     expect(closestTitle("one peice", ["Cheating Craft", "001"])).toBeUndefined();
     expect(closestTitle("frirn", ["Sousou no Frieren"])).toBeUndefined();
-  });
-
-  it("splits a label around the typed part", () => {
-    expect(highlightMatch("Sousou no Frieren", "frie")).toEqual(["Sousou no ", "Frie", "ren"]);
-    expect(highlightMatch("ONE PIECE", "bleach")).toEqual(["ONE PIECE", "", ""]);
   });
 });
 

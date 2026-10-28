@@ -8,6 +8,7 @@ import {
   inferDisplayedPartNumber,
   inferDisplayedSeasonNumber,
   inferMediaDisplayedSeasonNumber,
+  seasonSubtitle,
 } from "../../src/renderer/src/anime-season-chain";
 
 function anime(
@@ -233,5 +234,23 @@ describe("createSeriesLoader", () => {
     expect(calls).toEqual([51]);
     await expect(loader(53)).rejects.toThrow();
     expect(calls).toEqual([51, 53]);
+  });
+});
+
+describe("season menu subtitles", () => {
+  it("drops the series name each season repeats", () => {
+    expect(seasonSubtitle("BLEACH: Thousand-Year Blood War - The Calamity", "Bleach")).toBe(
+      "Thousand-Year Blood War - The Calamity",
+    );
+    expect(seasonSubtitle("Bleach", "Bleach")).toBe("Bleach");
+    expect(seasonSubtitle("Jujutsu Kaisen Season 2", "JUJUTSU KAISEN")).toBe("Season 2");
+  });
+
+  it("keeps titles that do not start with the series name", () => {
+    expect(seasonSubtitle("Frieren: Beyond Journey's End", "Sousou no Frieren")).toBe(
+      "Frieren: Beyond Journey's End",
+    );
+    expect(seasonSubtitle("Bleach:", "Bleach")).toBe("Bleach:");
+    expect(seasonSubtitle("Bleach", undefined)).toBe("Bleach");
   });
 });

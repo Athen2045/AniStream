@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   friendlyPlaybackError,
   friendlyRemoteError,
@@ -83,5 +83,28 @@ describe("friendly remote errors", () => {
     expect(friendlyMorePlayerStatus(429)).toMatch(/busy/i);
     expect(friendlyMorePlayerStatus(404)).toMatch(/No playable source/i);
     expect(friendlyMorePlayerStatus(200)).toBeUndefined();
+  });
+
+  it("says the device is offline instead of blaming the service", () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    try {
+      expect(
+        friendlyRemoteError(new Error("AniList is unreachable right now."), {
+          provider: "AniList",
+          operation: "search results",
+          fallback: "Search is unavailable right now.",
+        }),
+      ).toBe("You're offline. Reconnect to load search results.");
+      expect(
+        friendlyRemoteError(new Error("x"), {
+          provider: "AniList",
+          operation: "library changes",
+          fallback: "f",
+        }),
+      ).toBe("You're offline. Reconnect and try again.");
+      expect(friendlyPlaybackError(new Error("x"))).toMatch(/^You're offline\. Downloaded/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

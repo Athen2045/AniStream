@@ -14,6 +14,8 @@ const BLANK_PNG = Buffer.from(
 export interface TestApp {
   app: ElectronApplication;
   window: Page;
+  /** Quits and starts again on the same profile (e.g. "used yesterday, offline today"). */
+  restart(options?: { offline?: boolean }): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -29,6 +31,8 @@ export async function launchApp(
     tmdb?: boolean;
     seed?: (database: string) => void;
     setup?: (app: ElectronApplication) => Promise<void>;
+    /** Start with no connection at all (see `setOffline`). */
+    offline?: boolean;
   } = {},
 ): Promise<TestApp> {
   const workDir = mkdtempSync(join(tmpdir(), "anistream-ui-"));
@@ -49,21 +53,29 @@ export async function launchApp(
     await first.app.close();
     options.seed(join(workDir, "profile", "anistream.sqlite"));
   }
-  const { app, window } = await start(workDir, env, options.setup);
-  return {
-    app,
-    window,
+  const launch = (offline: boolean | undefined) =>
+    start(workDir, env, async (started, page) => {
+      await options.setup?.(started);
+      if (offline) await setOffline(started, page, true);
+    });
+  const session: TestApp = {
+    ...(await launch(options.offline)),
+    async restart(next = {}) {
+      await session.app.close();
+      Object.assign(session, await launch(next.offline));
+    },
     async close() {
-      await app.close();
+      await session.app.close();
       rmSync(workDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     },
   };
+  return session;
 }
 
 async function start(
   workDir: string,
   env: Record<string, string>,
-  setup?: (app: ElectronApplication) => Promise<void>,
+  setup?: (app: ElectronApplication, window: Page) => Promise<void>,
 ): Promise<{ app: ElectronApplication; window: Page }> {
   const app = await electron.launch({ args: [ROOT], cwd: workDir, env });
   app.process().stderr?.on("data", (chunk: Buffer) => {
@@ -71,18 +83,77 @@ async function start(
     if (text.includes("[AniStream test]")) process.stderr.write(text);
   });
   const window = await app.firstWindow();
-  await setup?.(app);
+  // The window's own internet requests: images get a blank PNG, the rest fail (offline: all fail).
+  await window.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) =>
+    !offlineWindows.has(window) && route.request().resourceType() === "image"
+      ? route.fulfill({ status: 200, contentType: "image/png", body: BLANK_PNG })
+      : route.abort(offlineWindows.has(window) ? "internetdisconnected" : "failed"),
+  );
+  // `navigator.onLine` follows `setOffline` (Chromium's own offline mode would also cut the
+  // window's loopback server, which a real disconnect never does).
+  await window.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, "onLine", {
+      configurable: true,
+      get: () => localStorage.getItem("anistream.test.offline") !== "1",
+    });
+  });
+  await window.evaluate(() => localStorage.removeItem("anistream.test.offline"));
+  await setup?.(app, window);
   // Settings > Reduce motion (Windows ignores the system setting): no animation left half-run.
   await window.evaluate(() =>
     localStorage.setItem("anistream.preferences", JSON.stringify({ reduceMotion: true })),
   );
   await window.reload();
-  await window.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) =>
-    route.request().resourceType() === "image"
-      ? route.fulfill({ status: 200, contentType: "image/png", body: BLANK_PNG })
-      : route.abort(),
-  );
   return { app, window };
+}
+
+const offlineWindows = new WeakSet<Page>();
+
+/**
+ * Cuts (or restores) the internet the way a dropped connection does: the window's internet
+ * requests fail and `navigator.onLine` turns false (with the offline/online event), and the main
+ * process's `fetch` (data services) and `net.fetch` (downloads, stream proxy) fail. The window's
+ * own loopback server keeps working, as it does on a real disconnect. Works at launch and
+ * mid-session.
+ */
+export async function setOffline(
+  app: ElectronApplication,
+  window: Page,
+  offline: boolean,
+): Promise<void> {
+  if (offline) offlineWindows.add(window);
+  else offlineWindows.delete(window);
+  await app.evaluate(({ net }, cut) => {
+    // Data-service clients: the test-mode `fetch` they were built with checks this flag.
+    (globalThis as { anistreamTestOffline?: boolean }).anistreamTestOffline = cut;
+    // Downloads and the stream proxy call `net.fetch` or `net.request` (net-request-fetch.ts)
+    // each time; the device check follows too.
+    const saved = globalThis as {
+      onlineNetFetch?: typeof net.fetch;
+      onlineNetRequest?: typeof net.request;
+      onlineCheck?: typeof net.isOnline;
+    };
+    saved.onlineNetFetch ??= net.fetch.bind(net);
+    saved.onlineNetRequest ??= net.request.bind(net);
+    saved.onlineCheck ??= net.isOnline.bind(net);
+    net.fetch = cut
+      ? ((async () => {
+          throw new TypeError("fetch failed");
+        }) as typeof net.fetch)
+      : saved.onlineNetFetch;
+    net.request = cut
+      ? ((() => {
+          throw new TypeError("fetch failed");
+        }) as typeof net.request)
+      : saved.onlineNetRequest;
+    net.isOnline = cut ? () => false : saved.onlineCheck;
+  }, offline);
+  // The page hears about it last, as on a real reconnect (the network works before "online").
+  await window.evaluate((cut) => {
+    if (cut) localStorage.setItem("anistream.test.offline", "1");
+    else localStorage.removeItem("anistream.test.offline");
+    window.dispatchEvent(new Event(cut ? "offline" : "online"));
+  }, offline);
 }
 
 /** Saves `value` as a home field's saved copy (`field_snapshot_v1`), for both title languages. */

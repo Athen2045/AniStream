@@ -1,3 +1,4 @@
+import type { BackgroundPreferences } from "./background";
 import type { AniListFilterOptions } from "./anilist-filters";
 import type {
   AiringSchedule,
@@ -47,7 +48,6 @@ import type {
   SimklProfile,
   SimklStats,
   SimklTitleRatings,
-  PicturePalette,
   MoreTitleStatusAction,
   MoreTitleStatusResult,
   MoreTitleRating,
@@ -86,7 +86,9 @@ import type { BingeChange, BingeState } from "./binge";
 import type {
   DownloadAddResult,
   DownloadChange,
+  DownloadChapterRequest,
   DownloadEpisodeRequest,
+  DownloadedChapterPageInput,
   DownloadsState,
 } from "./downloads";
 import type { LocalActivity, RecordActivityInput } from "./activity";
@@ -129,10 +131,23 @@ export interface IpcInvokeChannelMap {
     result: DownloadsState;
   };
   "downloads:choose-folder": { args: []; result: DownloadsState | null };
+  "downloads:add-chapters": {
+    args: [chapters: DownloadChapterRequest[]];
+    result: DownloadAddResult;
+  };
+  "downloads:chapter-page": {
+    args: [input: DownloadedChapterPageInput];
+    result: MangaDexReaderPage;
+  };
   "binge:apply": { args: [change: BingeChange]; result: BingeState };
   "activity:retry": { args: []; result: LocalActivity[] };
   "app:get-info": { args: []; result: AppInfo };
   "app:open-link": { args: [url: string]; result: void };
+  "app:background-preferences": { args: []; result: BackgroundPreferences };
+  "app:set-background-preferences": {
+    args: [preferences: BackgroundPreferences];
+    result: BackgroundPreferences;
+  };
   "window:caption-controls": { args: [visible: boolean]; result: void };
   "window:control": { args: [action: WindowControlAction]; result: void };
   "window:state": { args: []; result: WindowState };
@@ -295,7 +310,6 @@ export interface IpcInvokeChannelMap {
   "simkl:profile": { args: []; result: SimklProfile | undefined };
   "simkl:stats": { args: []; result: SimklStats | undefined };
   "simkl:title-ratings": { args: [ref: MoreTitleRef]; result: SimklTitleRatings | undefined };
-  "profile:palette": { args: [url: string]; result: PicturePalette | undefined };
   "profile:hero": { args: []; result: string | undefined };
   "profile:hero-set": { args: [jpeg: Uint8Array]; result: string };
   "profile:hero-clear": { args: []; result: void };
@@ -305,6 +319,7 @@ export interface IpcEventChannelMap {
   "app:update-status-changed": UpdateStatus;
   "activity:changed": undefined;
   "downloads:changed": undefined;
+  "app:window-hidden": undefined;
   "anilist:auth-changed": AniListAuthState;
   "simkl:status-changed": SimklStatus;
 }

@@ -287,3 +287,14 @@ function mediaTitleVariants(media: AniListCatalogMedia | AniListMediaDetail): st
       ].filter((title): title is string => typeof title === "string" && title.length > 0)
     : [media.title];
 }
+
+/**
+ * A season's own name without the series name every season repeats ("BLEACH: Thousand-Year Blood
+ * War - The Calamity" → "Thousand-Year Blood War - The Calamity"), so the row stays readable.
+ */
+export function seasonSubtitle(title: string, seriesTitle: string | undefined): string {
+  if (!seriesTitle || title === seriesTitle) return title;
+  if (!title.toLocaleLowerCase().startsWith(seriesTitle.toLocaleLowerCase())) return title;
+  const rest = title.slice(seriesTitle.length).replace(/^[\s:\-–—]+/u, "");
+  return rest || title;
+}

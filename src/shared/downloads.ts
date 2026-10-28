@@ -2,7 +2,8 @@
  * Offline anime downloads (user decision 2026-10-18): episodes from the own-player source are saved
  * to the user's Downloads folder as the stream's own HLS segments, still encrypted, with their keys
  * and a local playlist. AniStream's player decrypts them at playback exactly as when streaming;
- * AniStream never writes decrypted video. Anime only for now.
+ * AniStream never writes decrypted video. Manga chapters (2026-10-28) are saved as their page
+ * images; both share the folder and storage limit.
  */
 export type DownloadQuality = "1080p" | "720p" | "360p";
 export type DownloadStatus = "queued" | "downloading" | "paused" | "done" | "failed";
@@ -36,8 +37,62 @@ export interface DownloadSettings {
   quality: DownloadQuality;
 }
 
+/**
+ * An offline manga chapter (user decision 2026-10-28): page images saved exactly as served, at
+ * original quality, read back by the same reader. MangaDex chapters and chapter-mirror chapters.
+ */
+export interface MangaChapterDownload {
+  id: string;
+  aniListId: number;
+  /** Series title snapshot, for the Downloads page offline. */
+  title: string;
+  coverUrl?: string;
+  chapter: DownloadedChapterInfo;
+  status: DownloadStatus;
+  pagesDone: number;
+  /** 0 until the first page tells how many there are. */
+  pagesTotal: number;
+  bytesDone: number;
+  /** Estimate until pages arrive, then projected from them. */
+  bytesExpected: number;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What the reader and Downloads page need about a downloaded chapter. */
+export interface DownloadedChapterInfo {
+  source: MangaChapterSource;
+  /** The chapter's id in its source (MangaDex chapter UUID or mirror chapter id). */
+  id: string;
+  number?: number;
+  volume?: string;
+  chapterTitle?: string;
+  translatedLanguage: string;
+  /** Scanlation groups, kept for the credit line MangaDex requires. */
+  groups: { id: string; name: string }[];
+  /** Display credit for a mirror chapter. */
+  sourceLabel?: string;
+}
+
+export type MangaChapterSource = "mangadex" | "mirror";
+
+export interface DownloadChapterRequest {
+  aniListId: number;
+  title: string;
+  coverUrl?: string;
+  chapter: DownloadedChapterInfo;
+}
+
+export interface DownloadedChapterPageInput {
+  id: string;
+  page: number;
+}
+
 export interface DownloadsState {
   items: AnimeDownload[];
+  /** Manga chapters, in the order they were added. */
+  chapters: MangaChapterDownload[];
   settings: DownloadSettings;
   /** Bytes held by downloads (finished and partial). */
   usedBytes: number;
@@ -78,26 +133,41 @@ export const DOWNLOAD_QUALITIES: readonly DownloadQuality[] = ["1080p", "720p", 
 export const MAX_DOWNLOAD_BATCH = 200;
 
 /**
- * Measured on the source 2026-10-18 (BANDWIDTH of the 360p/720p/1080p variants) plus kept audio;
- * used to estimate a download's size before its stream is resolved.
+ * Size per minute of finished downloads, the highest measured on 2026-10-27 (Frieren, Cyberpunk:
+ * Edgerunners, Jujutsu Kaisen; Japanese and English audio kept). Shows differ a lot at 720p and
+ * 1080p (Frieren's 1080p was 1.5x the others), so this is an upper estimate for before a download
+ * starts; its own segments then give the real size. The stream's advertised BANDWIDTH is a peak
+ * and overstated real sizes by 20-100%.
  */
-export const QUALITY_BITS_PER_SECOND: Record<DownloadQuality, number> = {
-  "1080p": 3_476_000,
-  "720p": 2_376_000,
-  "360p": 946_000,
+export const QUALITY_BYTES_PER_MINUTE: Record<DownloadQuality, number> = {
+  "1080p": 20.5 * 1024 ** 2,
+  "720p": 12.1 * 1024 ** 2,
+  "360p": 5.8 * 1024 ** 2,
 };
-export const AUDIO_BITS_PER_SECOND = 128_000;
+/** Episodes often run past AniList's length (Frieren lists 24 minutes and runs 26). */
+const LENGTH_MARGIN = 1.1;
 
-/** Estimated bytes for an episode of `minutes` at `quality` with `audioTracks` audio renditions. */
-export function estimateDownloadBytes(
-  minutes: number,
-  quality: DownloadQuality,
-  audioTracks = 2,
+/** Estimated bytes (an upper estimate) for an episode of `minutes` at `quality`. */
+export function estimateDownloadBytes(minutes: number, quality: DownloadQuality): number {
+  return Math.round(Math.max(1, minutes) * QUALITY_BYTES_PER_MINUTE[quality] * LENGTH_MARGIN);
+}
+
+/** Segments of an episode to fetch before its own average size replaces the estimate. */
+export const SIZE_SAMPLE_SEGMENTS = 8;
+
+/**
+ * The episode's size from what has been fetched: the average file so far times the number of
+ * files, once enough are in (files are fetched with video and audio interleaved, so the average
+ * covers both). Before that, `fallback`.
+ */
+export function projectDownloadBytes(
+  bytesDone: number,
+  filesDone: number,
+  filesTotal: number,
+  fallback: number,
 ): number {
-  const seconds = Math.max(1, minutes) * 60;
-  return Math.round(
-    (seconds * (QUALITY_BITS_PER_SECOND[quality] + audioTracks * AUDIO_BITS_PER_SECOND)) / 8,
-  );
+  if (filesDone < Math.min(SIZE_SAMPLE_SEGMENTS, filesTotal) || filesDone === 0) return fallback;
+  return Math.max(bytesDone, Math.round((bytesDone / filesDone) * filesTotal));
 }
 
 /** "1.4 GB", "620 MB". */
@@ -109,6 +179,87 @@ export function formatBytes(bytes: number): string {
 
 export function downloadKey(aniListId: number, episode: number): string {
   return `${aniListId}:${episode}`;
+}
+
+export function chapterDownloadKey(source: MangaChapterSource, chapterId: string): string {
+  return `${source}:${chapterId}`;
+}
+
+/**
+ * Rough size of a chapter before its pages arrive: about 20 pages of original-quality scans at
+ * ~400 KB. An application estimate for the storage limit, replaced by the real size as pages land.
+ */
+export const CHAPTER_ESTIMATE_BYTES = 8 * 1024 ** 2;
+export const MAX_CHAPTER_BATCH = 500;
+const CHAPTER_ID = /^[A-Za-z0-9_-]{1,80}$/;
+
+function text(value: unknown, max: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= max ? trimmed : undefined;
+}
+
+/** Validates chapters to download from the renderer; undefined when anything is malformed. */
+export function parseChapterRequests(value: unknown): DownloadChapterRequest[] | undefined {
+  if (!Array.isArray(value) || !value.length || value.length > MAX_CHAPTER_BATCH) return undefined;
+  const requests: DownloadChapterRequest[] = [];
+  for (const item of value) {
+    const row = record(item);
+    const chapter = record(row?.chapter);
+    const aniListId = positiveInt(row?.aniListId, 2_147_483_647);
+    const title = text(row?.title, 300);
+    const source =
+      chapter?.source === "mangadex" || chapter?.source === "mirror" ? chapter.source : undefined;
+    const id =
+      typeof chapter?.id === "string" && CHAPTER_ID.test(chapter.id) ? chapter.id : undefined;
+    const language = text(chapter?.translatedLanguage, 16);
+    if (!aniListId || !title || !source || !id || !language || !Array.isArray(chapter?.groups))
+      return undefined;
+    const number =
+      typeof chapter.number === "number" && Number.isFinite(chapter.number) && chapter.number >= 0
+        ? chapter.number
+        : undefined;
+    const groups: { id: string; name: string }[] = [];
+    for (const group of chapter.groups.slice(0, 10)) {
+      const entry = record(group);
+      const groupId = text(entry?.id, 80);
+      const name = text(entry?.name, 200);
+      if (!groupId || !name) return undefined;
+      groups.push({ id: groupId, name });
+    }
+    const coverUrl =
+      typeof row?.coverUrl === "string" && /^https:\/\//.test(row.coverUrl)
+        ? row.coverUrl.slice(0, 1_000)
+        : undefined;
+    const volume = text(chapter.volume, 20);
+    const chapterTitle = text(chapter.chapterTitle, 300);
+    const sourceLabel = text(chapter.sourceLabel, 80);
+    requests.push({
+      aniListId,
+      title,
+      ...(coverUrl ? { coverUrl } : {}),
+      chapter: {
+        source,
+        id,
+        ...(number !== undefined ? { number } : {}),
+        ...(volume ? { volume } : {}),
+        ...(chapterTitle ? { chapterTitle } : {}),
+        translatedLanguage: language,
+        groups,
+        ...(sourceLabel ? { sourceLabel } : {}),
+      },
+    });
+  }
+  return requests;
+}
+
+export function parseDownloadedChapterPage(value: unknown): DownloadedChapterPageInput | undefined {
+  const raw = record(value);
+  const id = typeof raw?.id === "string" && /^[A-Za-z0-9-]{1,64}$/.test(raw.id) ? raw.id : "";
+  const page = raw?.page;
+  return id && typeof page === "number" && Number.isInteger(page) && page >= 0 && page < 1_000
+    ? { id, page }
+    : undefined;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {

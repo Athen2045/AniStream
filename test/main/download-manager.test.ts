@@ -13,7 +13,11 @@ import {
   planMediaPlaylist,
 } from "../../src/main/downloads/hls-download-plan";
 import { ipcArgValidators } from "../../src/main/ipc-validation";
-import { estimateDownloadBytes, parseDownloadChange } from "../../src/shared/downloads";
+import {
+  estimateDownloadBytes,
+  parseDownloadChange,
+  projectDownloadBytes,
+} from "../../src/shared/downloads";
 
 const BASE = "https://cdn.example/show/ep1/";
 const MASTER = `#EXTM3U
@@ -115,13 +119,48 @@ describe("download requests", () => {
   });
 });
 
+describe("download sizes", () => {
+  // Bytes of finished episodes measured 2026-10-27 (Japanese and English audio kept); AniList lists
+  // all three titles at 24 minutes (Frieren runs 26).
+  const measured = {
+    "360p": [141_376_656, 140_050_560, 142_489_558],
+    "720p": [329_095_392, 247_594_176, 229_413_408],
+    "1080p": [558_387_712, 379_759_760, 355_803_688],
+  } as const;
+
+  it("estimates at or just above the largest measured episode, not double it", () => {
+    for (const [quality, sizes] of Object.entries(measured)) {
+      const estimate = estimateDownloadBytes(24, quality as keyof typeof measured);
+      expect(estimate).toBeGreaterThanOrEqual(Math.max(...sizes));
+      expect(estimate).toBeLessThan(Math.max(...sizes) * 1.2);
+    }
+  });
+
+  it("projects the real size from the files fetched so far, once there are enough", () => {
+    expect(projectDownloadBytes(700, 7, 100, 50_000)).toBe(50_000);
+    expect(projectDownloadBytes(800, 8, 100, 50_000)).toBe(10_000);
+    // A short episode with fewer files than the sample projects once all are in.
+    expect(projectDownloadBytes(500, 5, 5, 50_000)).toBe(500);
+    expect(projectDownloadBytes(0, 0, 0, 123)).toBe(123);
+  });
+});
+
 const directories: string[] = [];
 afterEach(() => {
   for (const directory of directories.splice(0))
     rmSync(directory, { recursive: true, force: true });
 });
 
-function setup(options: { limitBytes?: number; fail?: (url: string) => number | undefined } = {}) {
+function setup(
+  options: {
+    limitBytes?: number;
+    fail?: (url: string) => number | undefined;
+    /** Redirect target for a URL, answered as a 302. */
+    redirect?: (url: string) => string | undefined;
+    /** The device's connection, flipped by the test; requests throw while it is false. */
+    network?: { online: boolean };
+  } = {},
+) {
   const root = mkdtempSync(path.join(tmpdir(), "anistream-downloads-"));
   directories.push(root);
   const store = createDownloadStore(
@@ -136,9 +175,12 @@ function setup(options: { limitBytes?: number; fail?: (url: string) => number | 
   const requests: string[] = [];
   const fetcher = vi.fn(async (input: string | URL | Request) => {
     const url = String(input);
+    if (options.network && !options.network.online) throw new TypeError("fetch failed");
     requests.push(url);
     const status = options.fail?.(url);
     if (status) return new Response("no", { status });
+    const location = options.redirect?.(url);
+    if (location) return new Response(null, { status: 302, headers: { Location: location } });
     const files: Record<string, string> = {
       [`${BASE}master.m3u8`]: MASTER,
       [`${BASE}v720.m3u8`]: media("v"),
@@ -163,6 +205,8 @@ function setup(options: { limitBytes?: number; fail?: (url: string) => number | 
       subtitle: async () => ({ format: "ass", text: "[Script Info]\n[Events]\n", vtt: "WEBVTT" }),
     }),
     fetcher: fetcher as unknown as typeof fetch,
+    lookup: async () => ["93.184.216.34"],
+    ...(options.network ? { isOnline: () => options.network!.online, onlinePollMs: 10 } : {}),
     onChange: changed,
   });
   return { root, store, manager, fetcher, requests, changed };
@@ -214,6 +258,28 @@ describe("download manager", () => {
     expect(item!.bytesDone).toBe(onDisk);
   });
 
+  it("fetches without cookies and follows redirects itself", async () => {
+    const { manager, fetcher } = setup();
+    await manager.add([{ aniListId: 5, episode: 1, title: "Show", minutes: 24 }]);
+    await settle(manager);
+    expect(fetcher.mock.calls.length).toBeGreaterThan(0);
+    for (const call of fetcher.mock.calls) {
+      const init = (call as unknown[])[1] as RequestInit | undefined;
+      expect(init).toMatchObject({ redirect: "manual", credentials: "omit" });
+    }
+  });
+
+  it("fails an episode whose segments redirect into the local network", async () => {
+    const { manager, requests } = setup({
+      redirect: (url) => (url === `${BASE}v-a` ? "https://192.168.1.1/admin" : undefined),
+    });
+    await manager.add([{ aniListId: 5, episode: 1, title: "Show", minutes: 24 }]);
+    await settle(manager);
+    const [item] = (await manager.state()).items;
+    expect(item?.status).toBe("failed");
+    expect(requests.some((url) => url.includes("192.168."))).toBe(false);
+  });
+
   it("skips files already on disk when an episode resumes", async () => {
     const { manager, requests } = setup();
     await manager.add([{ aniListId: 5, episode: 1, title: "Show" }]);
@@ -230,6 +296,19 @@ describe("download manager", () => {
     expect(requests.filter((url) => /-[abc]$/.test(url))).toEqual([]);
   });
 
+  it("fetches video and audio interleaved and ends with the size actually written", async () => {
+    const { manager, requests } = setup();
+    await manager.add([{ aniListId: 5, episode: 1, title: "Show", minutes: 24 }]);
+    await settle(manager);
+    const segments = requests
+      .map((url) => url.match(/\/(v|en|ja)-[abc]$/)?.[1])
+      .filter((kind): kind is string => kind !== undefined);
+    // The first video segment is followed by the audio ones, not by the rest of the video.
+    expect(new Set(segments.slice(0, 3))).toEqual(new Set(["v", "en", "ja"]));
+    const [item] = (await manager.state()).items;
+    expect(item?.bytesExpected).toBe(item?.bytesDone);
+  });
+
   it("stops at the storage limit and never deletes anything to make room", async () => {
     const tiny = 1024 ** 3;
     const { manager } = setup({ limitBytes: tiny });
@@ -241,11 +320,34 @@ describe("download manager", () => {
         minutes: 24,
       })),
     );
-    // 720p is ~430 MB per 24 minutes: only two fit in 1 GB.
-    expect(result.added).toBe(2);
+    // 720p is estimated at ~320 MB per 24 minutes: only three fit in 1 GB.
+    expect(result.added).toBe(3);
     expect(result.message).toMatch(/do not fit in your 1\.0 GB download limit/);
     const again = await manager.add([{ aniListId: 7, episode: 1, title: "Long" }]);
     expect(again).toMatchObject({ added: 0, skipped: 1 });
+  });
+
+  it("waits for the connection instead of failing, then continues by itself", async () => {
+    const network = { online: true };
+    const { manager, requests } = setup({ network });
+    // The connection drops once the first video segment is in.
+    const original = requests.push.bind(requests);
+    requests.push = (url: string) => {
+      if (url.endsWith("v-a")) network.online = false;
+      return original(url);
+    };
+    await manager.add([{ aniListId: 5, episode: 3, title: "Show", minutes: 24 }]);
+    await vi.waitFor(async () => {
+      const [item] = (await manager.state()).items;
+      expect(item).toMatchObject({ status: "queued", error: "Waiting for a connection" });
+    });
+    network.online = true;
+    await settle(manager);
+    const [item] = (await manager.state()).items;
+    expect(item).toMatchObject({ status: "done" });
+    expect(item?.error).toBeUndefined();
+    // The segment saved before the drop is not fetched again.
+    expect(requests.filter((url) => url.endsWith("v-a"))).toHaveLength(1);
   });
 
   it("stops an episode on 403/429 without retrying and lets it resume later", async () => {
