@@ -2,3 +2,6 @@ dist
 out
 node_modules
 *.tsbuildinfo
+dist-website
+# Third-party file shipped exactly as published.
+website/vendor

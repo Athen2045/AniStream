@@ -6,13 +6,13 @@
     <title>AniStream</title>
     <meta
       name="description"
-      content="AniStream is a free desktop app for anime and manga. Watch, read, download and track, with no ads and your data kept on your computer."
+      content="AniStream is a free desktop app for anime, manga, movies and shows. No ads, no telemetry, and your progress stays on your computer."
     />
-    <meta name="theme-color" content="#09080a" />
+    <meta name="theme-color" content="#070807" />
     <meta property="og:title" content="AniStream" />
     <meta
       property="og:description"
-      content="Anime and manga in one desktop app. No ads, no telemetry."
+      content="Anime, manga, movies and shows in one desktop app. No ads, no telemetry."
     />
     <meta property="og:image" content="https://athen2045.github.io/AniStream/img/home.jpg" />
     <link rel="icon" type="image/png" sizes="32x32" href="img/icon-32.png" />
@@ -25,18 +25,50 @@
       crossorigin
     />
     <link rel="stylesheet" href="styles.css" />
+    <script>
+      // Decide before first paint whether the welcome plays, so the hero waits for it.
+      (() => {
+        const root = document.documentElement;
+        root.classList.add("js");
+        let seen = false;
+        try {
+          seen = sessionStorage.getItem("anistream-welcome") === "1";
+          sessionStorage.setItem("anistream-welcome", "1");
+        } catch {}
+        const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (!seen && !still) root.classList.add("welcoming");
+      })();
+    </script>
   </head>
   <body>
-    <header class="nav" data-nav>
-      <a class="brand" href="#top" aria-label="AniStream home">
+    <div class="welcome" aria-hidden="true">
+      <div class="welcome-mark" data-welcome-mark>
+        <div class="mark-body"></div>
+        <div class="mark-sheen"></div>
+        <span class="mark-blade"></span>
+        <svg class="mark-star" viewBox="0 0 100 100">
+          <path
+            d="M50 0C55 31 69 45 100 50 69 55 55 69 50 100 45 69 31 55 0 50 31 45 45 31 50 0Z"
+          />
+        </svg>
+      </div>
+    </div>
+
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="topbar" data-topbar>
+      <a class="brand" href="#home" aria-label="AniStream home" data-brand>
         <img src="img/icon-128.png" alt="" width="28" height="28" />
         <span>AniStream</span>
       </a>
-      <nav class="nav-links" aria-label="Main">
-        <a href="#features">Features</a>
-        <a href="#privacy">Privacy</a>
+      <nav class="topbar-links" aria-label="Sections" data-nav>
+        <a href="#tour" data-nav-link="tour">Tour</a>
+        <a href="#features" data-nav-link="features">Features</a>
+        <a href="#privacy" data-nav-link="privacy">Privacy</a>
+      </nav>
+      <div class="topbar-actions">
         <a
-          class="nav-icon"
+          class="icon-link"
           href="https://github.com/Athen2045/AniStream"
           aria-label="GitHub"
           title="GitHub"
@@ -48,169 +80,35 @@
             />
           </svg>
         </a>
-        <a class="nav-cta" href="#download">Download</a>
-      </nav>
+        <a class="topbar-cta" href="#download">Download</a>
+      </div>
     </header>
 
-    <main id="top">
-      <section class="hero">
-        <div class="wall" aria-hidden="true">
-          <div class="wall-tilt">
-            <div class="wall-col">
-              <img src="img/wall/1.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/4.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/7.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/2.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/9.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/1.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/4.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/7.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/2.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/9.jpg"
-                alt=""
-                width="150"
-                height="214"
-              />
-            </div>
-            <div class="wall-col">
-              <img src="img/wall/3.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/8.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/5.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/6.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/1.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/3.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/8.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/5.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/6.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/1.jpg"
-                alt=""
-                width="150"
-                height="214"
-              />
-            </div>
-            <div class="wall-col">
-              <img src="img/wall/9.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/2.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/6.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/4.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/7.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/9.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/2.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/6.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/4.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/7.jpg"
-                alt=""
-                width="150"
-                height="214"
-              />
-            </div>
-            <div class="wall-col">
-              <img src="img/wall/5.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/1.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/8.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/3.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/2.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/5.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/1.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/8.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/3.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/2.jpg"
-                alt=""
-                width="150"
-                height="214"
-              />
-            </div>
-            <div class="wall-col">
-              <img src="img/wall/7.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/6.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/3.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/9.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/4.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/7.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/6.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/3.jpg"
-                alt=""
-                width="150"
-                height="214"
-              /><img src="img/wall/9.jpg" alt="" width="150" height="214" /><img
-                src="img/wall/4.jpg"
-                alt=""
-                width="150"
-                height="214"
-              />
-            </div>
-          </div>
+    <main id="main">
+      <section class="hero" id="home" data-section="home">
+        <div class="wall" aria-hidden="true" data-wall>
+          <div class="wall-tilt" data-wall-tilt></div>
         </div>
-        <div class="hero-copy">
-          <img class="hero-icon rise" src="img/icon-256.png" alt="" width="72" height="72" />
-          <p class="eyebrow rise">Anime · Manga · Movies &amp; TV</p>
-          <h1 class="rise">
-            <span class="h1-main">Watch anime. Read manga.</span>
-            <em>Keep it yours.</em>
-          </h1>
-          <p class="lede rise">
-            AniStream is a free desktop app for anime, manga, movies and shows. Find something new,
-            pick up where you left off, and keep your progress on your own computer.
+        <div class="hero-copy" data-hero-copy>
+          <p class="eyebrow rise" style="--i: 0">
+            <svg class="spark" viewBox="0 0 100 100" aria-hidden="true">
+              <path
+                d="M50 0C55 31 69 45 100 50 69 55 55 69 50 100 45 69 31 55 0 50 31 45 45 31 50 0Z"
+              />
+            </svg>
+            Anime · Manga · Movies &amp; TV
           </p>
-          <div class="hero-actions rise">
-            <a class="btn btn-primary" href="{{WIN_URL}}" data-download>
+          <h1>
+            <span class="rise" style="--i: 1">Watch anime.</span>
+            <span class="rise" style="--i: 2">Read manga.</span>
+            <em class="rise" style="--i: 3">Keep it yours.</em>
+          </h1>
+          <p class="lede rise" style="--i: 4">
+            A free desktop app for anime, manga, movies and shows. Find something new, pick up where
+            you left off, and keep your progress on your own computer.
+          </p>
+          <div class="hero-actions rise" style="--i: 5">
+            <a class="btn btn-primary" href="{{WIN_URL}}" data-download data-magnet>
               <svg class="os-icon" data-os-icon viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   d="M3 5.5 10.5 4.4v7.1H3zm8.5-1.2L21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zm8.5 0H21V21l-9.5-1.3z"
@@ -220,198 +118,187 @@
             </a>
             <a class="btn btn-ghost" href="#download" data-other>Other platforms</a>
           </div>
-          <p class="meta rise" data-meta>{{VERSION}} · Windows 10 or 11, x64</p>
+          <p class="meta rise" style="--i: 6" data-meta data-version="{{VERSION}}">
+            {{VERSION}} · Windows 10 or 11, x64
+          </p>
         </div>
+        <a class="scroll-cue rise" style="--i: 7" href="#tour" aria-label="Take the tour">
+          <span></span>
+        </a>
       </section>
 
-      <section class="stage-wrap">
-        <div class="stage reveal" data-stage>
-          <div class="window crop">
-            <img
-              src="img/home.jpg"
-              alt="AniStream's Anime home with a featured title, Continue watching and For You"
-              width="1160"
-              height="763"
-            />
+      <section class="tour" id="tour" data-section="tour" data-tour aria-label="A tour of the app">
+        <div class="tour-sticky">
+          <header class="tour-head reveal">
+            <p class="eyebrow">The tour</p>
+            <h2>Five places you'll spend your time</h2>
+          </header>
+          <ol class="scenes" data-scenes>
+            <li class="scene is-active" style="--tint: #e0894a">
+              <div class="scene-copy">
+                <span class="scene-num">01</span>
+                <h3>Home</h3>
+                <p>
+                  Continue watching sits at the top, For You right below it, and the featured title
+                  changes as you browse.
+                </p>
+              </div>
+              <figure class="scene-shot">
+                <img
+                  src="img/home.jpg"
+                  alt="AniStream's Anime home with a featured title, Continue watching and For You"
+                  width="1160"
+                  height="763"
+                />
+              </figure>
+            </li>
+            <li class="scene" style="--tint: #a98cf0">
+              <div class="scene-copy">
+                <span class="scene-num">02</span>
+                <h3>Title pages</h3>
+                <p>
+                  Episodes, downloads and ratings together, and the Watch button takes the title's
+                  own colour.
+                </p>
+              </div>
+              <figure class="scene-shot">
+                <img
+                  src="img/anime-detail.jpg"
+                  alt="Anime title page with episodes, Watch and Download"
+                  width="1160"
+                  height="762"
+                  loading="lazy"
+                />
+              </figure>
+            </li>
+            <li class="scene" style="--tint: #2fd889">
+              <div class="scene-copy">
+                <span class="scene-num">03</span>
+                <h3>The player</h3>
+                <p>
+                  Skip the opening and ending, pick audio and subtitles, and a backup player takes
+                  over if one can't play.
+                </p>
+              </div>
+              <figure class="scene-shot">
+                <img
+                  src="img/player.jpg"
+                  alt="AniStream's own video player with subtitles"
+                  width="1160"
+                  height="761"
+                  loading="lazy"
+                />
+              </figure>
+            </li>
+            <li class="scene" style="--tint: #e7a04e">
+              <div class="scene-copy">
+                <span class="scene-num">04</span>
+                <h3>Manga</h3>
+                <p>
+                  Continue Reading keeps your place in every series, and For You suggests what to
+                  read next.
+                </p>
+              </div>
+              <figure class="scene-shot">
+                <img
+                  src="img/manga.jpg"
+                  alt="Manga home with Continue Reading"
+                  width="1160"
+                  height="762"
+                  loading="lazy"
+                />
+              </figure>
+            </li>
+            <li class="scene" style="--tint: #5fd19a">
+              <div class="scene-copy">
+                <span class="scene-num">05</span>
+                <h3>Manga title pages</h3>
+                <p>
+                  Scores from AniList, MyAnimeList, MangaUpdates and MangaDex side by side, chapters
+                  one click away.
+                </p>
+              </div>
+              <figure class="scene-shot">
+                <img
+                  src="img/manga-detail.jpg"
+                  alt="Manga title page with scores from AniList, MyAnimeList and MangaUpdates"
+                  width="1160"
+                  height="762"
+                  loading="lazy"
+                />
+              </figure>
+            </li>
+          </ol>
+          <div class="tour-meter" aria-hidden="true">
+            <span class="tour-dots" data-tour-dots><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="tour-bar"><i data-tour-bar></i></span>
           </div>
         </div>
       </section>
 
-      <section class="section" id="features">
+      <section class="section features" id="features" data-section="features">
         <header class="section-head reveal">
           <p class="eyebrow">Features</p>
           <h2>Everything in one place</h2>
           <p>From the next episode to the next chapter, without juggling tabs or dodging ads.</p>
         </header>
-        <div class="grid">
-          <article class="card reveal">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z" /></svg>
+        <ol class="index">
+          <li class="reveal">
+            <span class="index-num">01</span>
             <h3>A player made for anime</h3>
             <p>
               Skip opening and ending, sub or dub, seek previews, and the next episode lined up.
             </p>
-          </article>
-          <article class="card reveal">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" />
-            </svg>
+          </li>
+          <li class="reveal">
+            <span class="index-num">02</span>
             <h3>Watch offline</h3>
             <p>Download one episode or a whole season, within a storage limit you set.</p>
-          </article>
-          <article class="card reveal">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M4 5.5c3-1 5.5-.5 8 1.5 2.5-2 5-2.5 8-1.5v13c-3-1-5.5-.5-8 1.5-2.5-2-5-2.5-8-1.5zM12 7v13"
-              />
-            </svg>
+          </li>
+          <li class="reveal">
+            <span class="index-num">03</span>
             <h3>Read manga</h3>
             <p>A fullscreen reader that remembers your page, with chapters grouped by volume.</p>
-          </article>
-          <article class="card reveal">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
-              <path d="M8 3.5 12 5.5l4-2" />
-            </svg>
+          </li>
+          <li class="reveal">
+            <span class="index-num">04</span>
             <h3>Movies and shows</h3>
             <p>Trending films and series, season grids and your own watch list.</p>
-          </article>
-          <article class="card reveal">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m12 3.5 2.4 5.3 5.6.6-4.2 3.8 1.2 5.6L12 16l-5 2.8 1.2-5.6L4 9.4l5.6-.6z" />
-            </svg>
+          </li>
+          <li class="reveal">
+            <span class="index-num">05</span>
             <h3>For You</h3>
             <p>Recommendations worked out on your computer. No account needed.</p>
-          </article>
-          <article class="card reveal">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="4" y="5" width="16" height="15" rx="2" />
-              <path d="M4 9.5h16M8.5 3v4M15.5 3v4" />
-            </svg>
+          </li>
+          <li class="reveal">
+            <span class="index-num">06</span>
             <h3>Never miss an episode</h3>
             <p>
               An airing schedule, new episodes and chapters ready for you, and an Up Next queue.
             </p>
-          </article>
-          <article class="card reveal">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5 9 17.5 20 6.5" /></svg>
+          </li>
+          <li class="reveal">
+            <span class="index-num">07</span>
             <h3>Your lists, your choice</h3>
             <p>Track locally, or sync with AniList and Simkl. Offline edits sync later.</p>
-          </article>
-          <article class="card reveal">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="11" cy="11" r="6.5" />
-              <path d="m16 16 4 4" />
-            </svg>
+          </li>
+          <li class="reveal">
+            <span class="index-num">08</span>
             <h3>Find anything fast</h3>
             <p>One search for anime, manga, movies and TV, with filters and typo fixes.</p>
-          </article>
-        </div>
+          </li>
+        </ol>
       </section>
 
-      <section class="section showcase">
-        <div class="row">
-          <div class="row-copy reveal">
-            <p class="eyebrow">Title pages</p>
-            <h2>All of a show on one page</h2>
-            <p>
-              Episodes, downloads and ratings together, with a button that takes you straight to the
-              next episode.
-            </p>
-          </div>
-          <figure class="shot crop reveal from-right">
-            <img
-              src="img/anime-detail.jpg"
-              alt="Anime title page with episodes, Watch and Download"
-              width="1160"
-              height="762"
-              loading="lazy"
-            />
-          </figure>
-        </div>
-        <div class="row flip">
-          <div class="row-copy reveal">
-            <p class="eyebrow">Player</p>
-            <h2>A player made for anime</h2>
-            <p>
-              Skip the opening and ending, choose audio and subtitles, and if one player can't play
-              an episode, a backup takes over by itself.
-            </p>
-          </div>
-          <figure class="shot crop reveal from-left">
-            <img
-              src="img/player.jpg"
-              alt="AniStream's own video player with subtitles"
-              width="1160"
-              height="762"
-              loading="lazy"
-            />
-          </figure>
-        </div>
-        <div class="row">
-          <div class="row-copy reveal">
-            <p class="eyebrow">Manga</p>
-            <h2>Pick up the next chapter</h2>
-            <p>
-              Continue Reading keeps your place across every series, and For You suggests what to
-              read next.
-            </p>
-          </div>
-          <figure class="shot crop reveal from-right">
-            <img
-              src="img/manga.jpg"
-              alt="Manga home with Continue Reading"
-              width="1160"
-              height="762"
-              loading="lazy"
-            />
-          </figure>
-        </div>
-        <div class="row flip">
-          <div class="row-copy reveal">
-            <p class="eyebrow">Manga title pages</p>
-            <h2>Scores from every source</h2>
-            <p>
-              AniList, MyAnimeList, MangaUpdates and MangaDex ratings side by side, with chapters
-              one click away.
-            </p>
-          </div>
-          <figure class="shot crop reveal from-left">
-            <img
-              src="img/manga-detail.jpg"
-              alt="Manga title page with scores from AniList, MyAnimeList and MangaUpdates"
-              width="1160"
-              height="762"
-              loading="lazy"
-            />
-          </figure>
-        </div>
+      <section class="section privacy" id="privacy" data-section="privacy">
+        <p class="eyebrow reveal">Privacy</p>
+        <p class="statement" data-words>
+          No ads, not even inside the players. No telemetry. Nothing sold or shared.
+          <span class="statement-end">Your data stays on your computer.</span>
+        </p>
       </section>
 
-      <section class="section privacy" id="privacy">
-        <div class="privacy-inner reveal">
-          <p class="eyebrow">Privacy</p>
-          <h2>Your data stays on your computer</h2>
-          <ul>
-            <li>
-              <strong>No ads.</strong>
-              <span>Not in the app, and the players it opens run without their ad scripts.</span>
-            </li>
-            <li>
-              <strong>No telemetry.</strong>
-              <span>AniStream doesn't report what you watch or read to anyone.</span>
-            </li>
-            <li>
-              <strong>Yours to keep.</strong>
-              <span
-                >Progress lives in a local database you can back up, and every account link is
-                optional.</span
-              >
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section class="section" id="download">
+      <section class="section" id="download" data-section="download">
         <header class="section-head reveal">
           <p class="eyebrow">Download</p>
           <h2>Get AniStream</h2>
@@ -419,7 +306,10 @@
         </header>
         <div class="downloads">
           <a class="dl reveal" href="{{WIN_URL}}" data-os="windows">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="dl-trace" aria-hidden="true">
+              <rect x="1" y="1" rx="17" pathLength="1" />
+            </svg>
+            <svg class="dl-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path
                 d="M3 5.5 10.5 4.4v7.1H3zm8.5-1.2L21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zm8.5 0H21V21l-9.5-1.3z"
               />
@@ -430,7 +320,10 @@
             <span class="dl-go">Download .exe</span>
           </a>
           <a class="dl reveal" href="{{MAC_URL}}" data-os="mac">
-            <svg viewBox="0 0 24 24" aria-hidden="true" data-mac-icon>
+            <svg class="dl-trace" aria-hidden="true">
+              <rect x="1" y="1" rx="17" pathLength="1" />
+            </svg>
+            <svg class="dl-icon" viewBox="0 0 24 24" aria-hidden="true" data-mac-icon>
               <path
                 d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.8-3.5.8s-1.8-.8-3-.8C7 7.2 5.5 8.1 4.7 9.6c-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.7 2.4 2.9 2.4 1.2-.1 1.6-.8 3-.8s1.8.8 3 .8c1.3 0 2-1.2 2.8-2.3.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-.9-2.5-4.1zM14.1 5.5c.6-.8 1.1-1.8 1-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2-.5 2.7-1.3z"
               />
@@ -461,102 +354,26 @@
     </main>
 
     <footer class="footer">
-      <div class="brand">
-        <img src="img/icon-32.png" alt="" width="20" height="20" />
-        <span>AniStream</span>
+      <p class="footer-mark reveal" aria-hidden="true">
+        AniStream
+        <svg class="spark" viewBox="0 0 100 100">
+          <path
+            d="M50 0C55 31 69 45 100 50 69 55 55 69 50 100 45 69 31 55 0 50 31 45 45 31 50 0Z"
+          />
+        </svg>
+      </p>
+      <div class="footer-row">
+        <nav aria-label="Footer">
+          <a href="https://github.com/Athen2045/AniStream">GitHub</a>
+          <a href="https://github.com/Athen2045/AniStream/releases">Releases</a>
+          <a href="https://github.com/Athen2045/AniStream/blob/main/CHANGELOG.md">Changelog</a>
+          <a href="https://github.com/Athen2045/AniStream/blob/main/LEGAL.md">Copyright</a>
+        </nav>
+        <p>© 2026 AniStream</p>
       </div>
-      <nav aria-label="Footer">
-        <a href="https://github.com/Athen2045/AniStream">GitHub</a>
-        <a href="https://github.com/Athen2045/AniStream/releases">Releases</a>
-        <a href="https://github.com/Athen2045/AniStream/blob/main/CHANGELOG.md">Changelog</a>
-        <a href="https://github.com/Athen2045/AniStream/blob/main/LEGAL.md">Copyright</a>
-      </nav>
-      <p>© 2026 AniStream</p>
     </footer>
 
-    <script>
-      // Offer the installer for the visitor's system. Phones, tablets and Linux get both choices.
-      function detectOs() {
-        if (/android|iphone|ipad|ipod/i.test(navigator.userAgent)) return "other";
-        const platform = navigator.userAgentData?.platform || navigator.platform || "";
-        if (/^win/i.test(platform)) return "windows";
-        // iPadOS reports a Mac platform; a touch screen gives it away.
-        if (/mac/i.test(platform)) return navigator.maxTouchPoints > 1 ? "other" : "mac";
-        return "other";
-      }
-      const os = detectOs();
-      const button = document.querySelector("[data-download]");
-      const label = button.querySelector("[data-download-label]");
-      const icon = button.querySelector("[data-os-icon]");
-      const other = document.querySelector("[data-other]");
-      const meta = document.querySelector("[data-meta]");
-      if (os === "mac") {
-        button.href = "{{MAC_URL}}";
-        label.textContent = "Download for macOS";
-        icon.innerHTML = document.querySelector("[data-mac-icon]").innerHTML;
-        other.textContent = "Windows version";
-        meta.textContent = "{{VERSION}} · macOS 12 or newer, Apple Silicon";
-      } else if (os === "windows") {
-        other.textContent = "macOS version";
-      } else {
-        button.href = "#download";
-        label.textContent = "See downloads";
-        icon.innerHTML = '<path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" />';
-        icon.classList.add("os-icon-line");
-        other.hidden = true;
-        meta.textContent = "{{VERSION}} · A desktop app for Windows and macOS";
-      }
-      document.querySelector(`.dl[data-os="${os}"]`)?.classList.add("dl-match");
-
-      // Solid nav once the page scrolls.
-      const nav = document.querySelector("[data-nav]");
-      const stage = document.querySelector("[data-stage]");
-      const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      let ticking = false;
-      function onScroll() {
-        nav.classList.toggle("scrolled", scrollY > 8);
-        if (!still) {
-          // The hero window tilts back and straightens as it scrolls into view.
-          const rect = stage.getBoundingClientRect();
-          const progress = Math.min(
-            1,
-            Math.max(0, 1 - (rect.top - innerHeight * 0.2) / (innerHeight * 0.6)),
-          );
-          stage.style.setProperty("--tilt", progress.toFixed(3));
-        }
-        ticking = false;
-      }
-      addEventListener(
-        "scroll",
-        () => {
-          if (!ticking) (requestAnimationFrame(onScroll), (ticking = true));
-        },
-        { passive: true },
-      );
-      onScroll();
-
-      // Fade sections in as they arrive.
-      const observer = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (entry.isIntersecting) {
-              entry.target.classList.add("in");
-              observer.unobserve(entry.target);
-            }
-          }
-        },
-        { rootMargin: "0px 0px -10% 0px" },
-      );
-      document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
-
-      // Cards light up where the pointer is.
-      document.querySelectorAll(".card, .dl").forEach((card) => {
-        card.addEventListener("pointermove", (event) => {
-          const box = card.getBoundingClientRect();
-          card.style.setProperty("--x", `${event.clientX - box.left}px`);
-          card.style.setProperty("--y", `${event.clientY - box.top}px`);
-        });
-      });
-    </script>
+    <script src="vendor/lenis.min.js" defer></script>
+    <script src="main.js" defer></script>
   </body>
 </html>
