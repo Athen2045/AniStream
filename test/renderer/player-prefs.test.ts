@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  anime4kExperimentEnabled,
   readBandwidthEstimate,
+  readEnhanceMode,
   writeBandwidthEstimate,
+  writeEnhanceMode,
 } from "../../src/renderer/src/player/player-prefs";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -23,5 +26,18 @@ describe("player preferences", () => {
     expect(readBandwidthEstimate()).toBe(12_345_679);
     store.set("anistream.player.bandwidth", "garbage");
     expect(readBandwidthEstimate()).toBeUndefined();
+  });
+
+  it("keeps Anime4K hidden and off unless the experiment is switched on", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+    });
+    writeEnhanceMode("strong");
+    expect(anime4kExperimentEnabled()).toBe(false);
+    expect(readEnhanceMode()).toBe("off");
+    store.set("anistream.experimental.anime4k", "on");
+    expect(readEnhanceMode()).toBe("strong");
   });
 });

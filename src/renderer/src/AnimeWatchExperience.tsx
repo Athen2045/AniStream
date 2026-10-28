@@ -104,6 +104,9 @@ export function AnimeWatchExperience({
   const handledAutoPlayRequest = useRef(0);
   const leaveOnBack = useRef(false);
   const pendingEpisodeRef = useRef<AnimeProviderEpisode | null>(null);
+  // An episode the viewer played: the episode list arriving later must not swap it for the
+  // resume pick (pressing Play on E2 while the list loaded used to jump to E1's saved spot).
+  const chosenEpisodeRef = useRef<number | null>(null);
   const [catalog, setCatalog] = useState<AnimeEpisodeCatalog>();
   const [activeEpisode, setActiveEpisode] = useState<AnimeProviderEpisode>(() =>
     episodePlaceholder(initialEpisode),
@@ -328,6 +331,13 @@ export function AnimeWatchExperience({
         totalEpisodes: catalogMedia.totalProgress,
         exact: catalogExactEpisode,
       });
+      const chosen = chosenEpisodeRef.current;
+      if (chosen !== null) {
+        setCatalog(nextCatalog);
+        setResume((current) => current ?? (saved?.episode === chosen ? saved : undefined));
+        setLoadingCatalog(false);
+        return;
+      }
       const usableResume = saved?.episode === wantedEpisode ? saved : undefined;
       const nextSeasons = nextCatalog.seasons.length ? nextCatalog.seasons : [fallback];
       const providerEpisode =
@@ -440,6 +450,7 @@ export function AnimeWatchExperience({
       if (view !== "player" && document.activeElement instanceof HTMLElement)
         episodeFocus.current = document.activeElement;
       setResume((current) => (current?.episode === episode.number ? current : undefined));
+      chosenEpisodeRef.current = episode.number;
       setLoadingPlayback(true);
       setSource(undefined);
       setError(undefined);

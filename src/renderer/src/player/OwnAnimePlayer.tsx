@@ -13,6 +13,12 @@ import { getAppPreferences } from "../app-preferences";
 import { saveAnimeActivity } from "../local-activity";
 import { PlayerStarting } from "../PlayerStarting";
 import { NextUpButton } from "./NextUpButton";
+import {
+  startEnhancer,
+  webGpuAvailable,
+  type EnhanceMode,
+  type EnhancerStats,
+} from "./anime4k-enhancer";
 import { takePlayerFocus } from "../player-focus";
 import { PlayerControls, returnFocusToPlayer, type PlayerOption } from "./PlayerControls";
 import {
@@ -20,11 +26,14 @@ import {
   readAudioLanguage,
   readAutoplay,
   readBandwidthEstimate,
+  anime4kExperimentEnabled,
+  readEnhanceMode,
   readSubtitleChoice,
   readVideoVolume,
   writeAudioLanguage,
   writeAutoplay,
   writeBandwidthEstimate,
+  writeEnhanceMode,
   writeSubtitleChoice,
   writeVideoVolume,
 } from "./player-prefs";
@@ -210,12 +219,80 @@ export function OwnAnimePlayer({
     [vttUrl],
   );
 
-  // Show the loaded track (an added <track> starts hidden).
+  // Anime4K (prototype, 2026-10-28): the enhanced picture is drawn on a canvas over the video.
+  // Off by default; a GPU that cannot keep up turns it off for this episode with a note.
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [enhanceMode, setEnhanceMode] = useState<EnhanceMode>(() =>
+    webGpuAvailable() ? readEnhanceMode() : "off",
+  );
+  const [enhanceStats, setEnhanceStats] = useState<EnhancerStats>();
+  const [enhanceFailure, setEnhanceFailure] = useState<string>();
+  const [enhancing, setEnhancing] = useState(false);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!video || !canvas || enhanceMode === "off" || enhanceFailure) return;
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    const failed = (reason: string): void => {
+      console.warn("Anime4K stopped:", reason);
+      setEnhancing(false);
+      setEnhanceFailure(reason);
+    };
+    startEnhancer({ video, canvas, mode: enhanceMode, onStats: setEnhanceStats, onFail: failed })
+      .then((stopEnhancer) => {
+        if (cancelled) stopEnhancer();
+        else {
+          stop = stopEnhancer;
+          setEnhancing(true);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) failed(error instanceof Error ? error.message : String(error));
+      });
+    return () => {
+      cancelled = true;
+      stop?.();
+      setEnhancing(false);
+      setEnhanceStats(undefined);
+    };
+  }, [enhanceFailure, enhanceMode, video]);
+  const chooseEnhanceMode = (mode: EnhanceMode): void => {
+    writeEnhanceMode(mode);
+    setEnhanceFailure(undefined);
+    setEnhanceMode(mode);
+  };
+
+  // Show the loaded track (an added <track> starts hidden). While Anime4K draws over the video,
+  // the track stays hidden (it would sit under the canvas) and the cues show in an overlay.
   useEffect(() => {
     const list = video?.textTracks;
     if (!list) return;
-    showTracks(list, Boolean(vttUrl));
-  }, [vttUrl, video]);
+    showTracks(list, vttUrl ? (enhancing ? "hidden" : "showing") : "disabled");
+  }, [enhancing, vttUrl, video]);
+  const [overlayCues, setOverlayCues] = useState<string[]>([]);
+  useEffect(() => {
+    const list = video?.textTracks;
+    if (!list || !enhancing || !vttUrl) return;
+    const read = (): void => {
+      const lines: string[] = [];
+      for (let index = 0; index < list.length; index += 1) {
+        const active = list[index].mode === "hidden" ? list[index].activeCues : null;
+        for (let cue = 0; cue < (active?.length ?? 0); cue += 1) {
+          const item = active?.[cue];
+          if (item instanceof VTTCue) lines.push(item.getCueAsHTML().textContent ?? "");
+        }
+      }
+      setOverlayCues(lines.filter(Boolean));
+    };
+    read();
+    const tracks = Array.from({ length: list.length }, (_, index) => list[index]);
+    for (const track of tracks) track.addEventListener("cuechange", read);
+    list.addEventListener("addtrack", read);
+    return () => {
+      for (const track of tracks) track.removeEventListener("cuechange", read);
+      list.removeEventListener("addtrack", read);
+    };
+  }, [enhancing, vttUrl, video]);
 
   const chooseSubtitle = (id: string | null): void => {
     if (ready) setSubtitlePick({ stream: ready.streamUrl, id });
@@ -482,6 +559,22 @@ export function OwnAnimePlayer({
               />
             ) : null}
           </Video>
+          <canvas
+            ref={canvasRef}
+            className="vplayer-enhanced"
+            hidden={!enhancing}
+            aria-hidden="true"
+            data-pipeline={enhanceStats?.pipeline}
+            data-gpu-ms={enhanceStats ? enhanceStats.gpuMs.toFixed(2) : undefined}
+            data-worst-ms={enhanceStats ? enhanceStats.worstMs.toFixed(2) : undefined}
+          />
+          {enhancing && vttUrl && overlayCues.length ? (
+            <div className="vplayer-cues" aria-live="off">
+              {overlayCues.map((line, index) => (
+                <span key={index}>{line}</span>
+              ))}
+            </div>
+          ) : null}
           {runtimeWarning ? (
             <div className="vplayer-warning" role="alert">
               <div>
@@ -553,6 +646,19 @@ export function OwnAnimePlayer({
             }}
             subtitles={{ options: subtitleOptions, current: subtitleId, choose: chooseSubtitle }}
             audio={{ options: audioTracks, current: audioCurrent, choose: chooseAudio }}
+            enhance={
+              webGpuAvailable() && anime4kExperimentEnabled()
+                ? {
+                    mode: enhanceMode,
+                    choose: chooseEnhanceMode,
+                    detail: enhanceFailure
+                      ? `Turned off: ${enhanceFailure}`
+                      : enhanceStats
+                        ? `${enhanceStats.pipeline} · ${enhanceStats.gpuMs.toFixed(1)} ms a frame`
+                        : undefined,
+                  }
+                : null
+            }
           />
           {nextUp}
         </Container>
@@ -595,7 +701,6 @@ function seekTo(element: HTMLVideoElement | null, seconds: number): void {
   if (element) element.currentTime = seconds;
 }
 
-function showTracks(list: TextTrackList, show: boolean): void {
-  for (let index = 0; index < list.length; index += 1)
-    list[index].mode = show ? "showing" : "disabled";
+function showTracks(list: TextTrackList, mode: TextTrackMode): void {
+  for (let index = 0; index < list.length; index += 1) list[index].mode = mode;
 }

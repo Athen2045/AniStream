@@ -33,10 +33,20 @@ export default [
       "node_modules/**",
       "prototypes/**",
       "test/ui/tmp/**",
+      "dist-website/**",
+      // Third-party file shipped as-is with its licence.
+      "website/vendor/**",
       "**/*.tsbuildinfo",
     ],
   },
   js.configs.recommended,
+  {
+    files: ["website/**/*.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: { ...globals.browser, Lenis: "readonly" },
+    },
+  },
   {
     files: ["scripts/**/*.mjs"],
     languageOptions: {

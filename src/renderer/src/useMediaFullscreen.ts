@@ -7,16 +7,31 @@ export function useMediaFullscreen(target: RefObject<HTMLElement | null>) {
   const exitedAt = useRef(0);
   // Set while the app leaves fullscreen, so the frame showing through is not taken over again.
   const leaving = useRef(false);
+  const previous = useRef<Element | null>(null);
   useEffect(() => {
+    const leaveAll = async (): Promise<void> => {
+      leaving.current = true;
+      try {
+        for (let level = 0; level < 3 && document.fullscreenElement; level += 1)
+          await document.exitFullscreen();
+      } catch {
+        // Already left.
+      } finally {
+        leaving.current = false;
+      }
+    };
     const changed = () => {
       const element = document.fullscreenElement;
       const root = target.current;
+      const before = previous.current;
+      previous.current = element;
       // An embedded player's own fullscreen button makes its frame the fullscreen element, and
       // nothing outside the frame (the autoplay prompt, notices) can show over it. Fullscreen moves
-      // to the whole player instead; the frame stays fullscreen inside it, so the player's own
-      // button and Escape still leave fullscreen.
+      // to the whole player instead (`adoptFrom`). Pressed again while the player is fullscreen,
+      // that button means "leave fullscreen", so it does.
       if (element instanceof HTMLIFrameElement && root?.contains(element) && !leaving.current) {
-        void adoptFrom(element, root);
+        if (before === root) void leaveAll();
+        else void adoptFrom(element, root);
         return;
       }
       const active = Boolean(element && root?.contains(element));
@@ -57,14 +72,20 @@ export function useMediaFullscreen(target: RefObject<HTMLElement | null>) {
 }
 
 /**
- * Moves fullscreen from a player frame to `root`. Chromium refuses while the window is still
- * entering fullscreen for the frame, so this retries for about five seconds, and stops once the
- * frame has left fullscreen.
+ * Moves fullscreen from a player frame to `root`. The frame leaves fullscreen first: left in the
+ * top layer under `root`, it was covered by the player's black background and backdrop (a black
+ * screen with the sound playing, user report 2026-10-28). Chromium refuses while the window is
+ * still changing fullscreen, so entering retries for about five seconds; the click in the frame
+ * still counts as the viewer's gesture.
  */
 async function adoptFrom(frame: HTMLIFrameElement, root: HTMLElement): Promise<void> {
   for (const wait of [0, 150, 250, 400, 600, 800, 1000, 1000, 1000]) {
     if (wait) await new Promise((done) => window.setTimeout(done, wait));
-    if (document.fullscreenElement !== frame) return;
+    if (document.fullscreenElement === frame)
+      await document.exitFullscreen().catch(() => undefined);
+    if (document.fullscreenElement === root) return;
+    // Something else took fullscreen meanwhile (or the viewer left it): leave that alone.
+    if (document.fullscreenElement) return;
     try {
       await root.requestFullscreen();
       return;

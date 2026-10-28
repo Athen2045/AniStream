@@ -31,6 +31,7 @@ Tested on: <!-- Windows x64 / macOS Apple Silicon -->
 ## Checklist
 
 - [ ] The pull request targets `develop`
+- [ ] Release pull requests to `main`: the [release checklist](https://github.com/Athen2045/AniStream/blob/develop/docs/how-to/release-checklist.md) passed
 - [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, …)
 - [ ] Tests were added or updated where behaviour changed
 - [ ] No secrets, tokens, `.env` values, personal data, or playback endpoints are included

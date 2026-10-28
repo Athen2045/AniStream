@@ -157,10 +157,15 @@ cp .env.example .env
 npm run dev
 ```
 
-Discovery, lists, and reading work with the defaults in `.env.example`. Playback endpoints are not
-part of this repository; copy `providers.example.json` to `providers.local.json` to configure them.
+Discovery, lists, and reading work with the defaults in `.env.example`. Add a free TMDB token to
+`.env` for movies and shows. Playback endpoints are not part of this repository; copy
+`providers.example.json` to `providers.local.json` to configure them.
 
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for checks, packaging, and the release workflow. Bug
+**New to the code, or want your own fork?** The
+[contributor guide](.github/CONTRIBUTING.md) walks through setup step by step: keeping development
+data apart from an installed AniStream, which keys unlock what, how the code is organised, making
+and testing a change, building an installer, running a fork as your own app, and fixes for common
+setup problems. Bug
 reports and ideas are welcome through the
 [issue forms](https://github.com/Athen2045/AniStream/issues/new/choose); report security problems
 privately as described in [SECURITY.md](.github/SECURITY.md).

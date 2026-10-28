@@ -10,7 +10,7 @@ export interface TitleCopies {
   read(key: string): unknown;
   write(key: string, mediaId: number, value: unknown): void;
   /** The saved copies of titles with downloads whose key starts with `prefix`. */
-  pinned(prefix: string): unknown[];
+  pinned(prefix: string): { key: string; value: unknown }[];
 }
 
 /** Copies kept for titles without downloads (a conservative local policy). */
@@ -72,13 +72,13 @@ export function createTitleCopies(
       const ids = pinnedIds();
       if (!ids.length) return [];
       return database
-        .prepare<unknown[], { payload: string }>(
-          `SELECT payload FROM title_copy_v1
+        .prepare<unknown[], { key: string; payload: string }>(
+          `SELECT key, payload FROM title_copy_v1
            WHERE media_id IN (${ids.map(() => "?").join(",")}) AND substr(key, 1, ?) = ?`,
         )
         .all(...ids, prefix.length, prefix)
-        .map((row) => parse(row.payload))
-        .filter((value) => value !== undefined);
+        .map((row) => ({ key: row.key, value: parse(row.payload) }))
+        .filter((copy) => copy.value !== undefined);
     },
     write(key, mediaId, value) {
       lastSavedAt = Math.max(Date.now(), lastSavedAt + 1);

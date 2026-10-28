@@ -12,6 +12,7 @@ import {
 } from "@videojs/react";
 import { useEffect, useRef, useState } from "react";
 import type { AnimeSkipSegment } from "../../../shared/contracts";
+import type { EnhanceMode } from "./anime4k-enhancer";
 import { PlayerIcon } from "./PlayerIcon";
 import { THUMB_HEIGHT, THUMB_WIDTH, type SeekThumbnails } from "./seek-thumbnails";
 
@@ -49,9 +50,17 @@ export type PlayerControlsProps = {
    */
   skip?: { segment: AnimeSkipSegment; progress: number; next?: string; go: () => void } | null;
   thumbnails?: SeekThumbnails | null;
+  /** Anime4K (absent without WebGPU); `detail` says what runs and how fast. */
+  enhance?: { mode: EnhanceMode; choose: (mode: EnhanceMode) => void; detail?: string } | null;
 };
 
-type MenuPage = "main" | "subtitles" | "audio" | "speed";
+type MenuPage = "main" | "subtitles" | "audio" | "speed" | "enhance";
+
+const ENHANCE_LABELS: Record<EnhanceMode, string> = {
+  off: "Off",
+  light: "Light",
+  strong: "Strong",
+};
 
 /**
  * For the player's `onPointerUpCapture`: a clicked button or slider keeps keyboard focus, and the
@@ -125,6 +134,7 @@ export function PlayerControls({
   audio,
   skip,
   thumbnails,
+  enhance,
 }: PlayerControlsProps): React.JSX.Element {
   const [menu, setMenu] = useState<MenuPage | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -363,6 +373,15 @@ export function PlayerControls({
                       onClick={() => setMenu("audio")}
                     />
                   ) : null}
+                  {enhance ? (
+                    <MenuRow
+                      icon="sparkle"
+                      label="Anime4K"
+                      hint="Sharper lines, upscaled on your GPU"
+                      value={ENHANCE_LABELS[enhance.mode]}
+                      onClick={() => setMenu("enhance")}
+                    />
+                  ) : null}
                   <MenuRow
                     icon="cc"
                     label="Subtitles"
@@ -395,6 +414,27 @@ export function PlayerControls({
                   ) : (
                     <p className="vmenu-empty">This episode has no subtitles.</p>
                   )}
+                </>
+              ) : menu === "enhance" && enhance ? (
+                <>
+                  <MenuBack label="Anime4K" onClick={() => setMenu("main")} />
+                  <div className="vmenu-list">
+                    {(["off", "light", "strong"] as const).map((mode) => (
+                      <MenuChoice
+                        key={mode}
+                        label={
+                          mode === "off"
+                            ? "Off"
+                            : mode === "light"
+                              ? "Light · one fast pass"
+                              : "Strong · full Anime4K preset"
+                        }
+                        checked={enhance.mode === mode}
+                        onClick={() => enhance.choose(mode)}
+                      />
+                    ))}
+                  </div>
+                  {enhance.detail ? <p className="vmenu-empty">{enhance.detail}</p> : null}
                 </>
               ) : menu === "audio" ? (
                 <>

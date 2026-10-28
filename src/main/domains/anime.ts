@@ -11,7 +11,8 @@ import type { KitsuClient } from "../kitsu";
 import type { SkipTimesClient } from "../skip-times";
 import type { TmdbClient } from "../tmdb";
 import { cachedEpisodeArtUrl } from "../../shared/artwork";
-import type { AnimeEpisodeArt, AnimeEpisodeRanges } from "../../shared/contracts";
+import type { AnimeEpisodeArt, AnimeEpisodeRanges, AnimeSkipSegment } from "../../shared/contracts";
+import { skipTimesCopyKey } from "../downloads/download-extras";
 import type { MalClient } from "../mal";
 import { registerTrustedIpcHandler } from "../ipc";
 
@@ -38,15 +39,24 @@ export function registerAnimeDomain(
   trustedRendererOrigin: string,
   { animeSource, mal, episodeArt, copies, skipTimes }: AnimeDomainDeps,
 ): void {
-  // Saved with the title, so a downloaded episode can still skip its opening offline.
+  // Saved with the title (and for each download, `download-extras.ts`), so a downloaded episode
+  // can still skip its opening offline. The player's length can differ from the length the times
+  // were saved under by a second or two, so a nearby saved cut also counts.
   registerTrustedIpcHandler(trustedRendererOrigin, "anime:skip-times", async (_event, input) => {
     if (!skipTimes) return [];
+    const { aniListId, episode, durationSeconds } = input;
     return withTitleCopy(
       copies,
-      `skip:${input.aniListId}:${input.episode}:${Math.round(input.durationSeconds)}`,
-      input.aniListId,
+      skipTimesCopyKey(aniListId, episode, durationSeconds),
+      aniListId,
       () => skipTimes.getSkipTimes(input),
-    ).catch(() => []);
+    ).catch(() => {
+      for (const offset of [-1, 1, -2, 2]) {
+        const saved = copies?.read(skipTimesCopyKey(aniListId, episode, durationSeconds + offset));
+        if (Array.isArray(saved)) return saved as AnimeSkipSegment[];
+      }
+      return [];
+    });
   });
   const artCache = createBoundedCache<AnimeEpisodeArt[]>({ maxEntries: 40, ttlMs: 6 * 3_600_000 });
   const artSources = episodeArtSources(episodeArt);

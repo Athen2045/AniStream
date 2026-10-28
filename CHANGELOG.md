@@ -6,6 +6,20 @@ All notable changes to AniStream are listed here. Each release has full notes in
 Legend: 🎉 new feature · 💄 design · ⚡️ improvement · 🦺 fix · 🔒 security · 🏗️ internal or
 compatibility · ⬆️ dependency update
 
+## v2.2.3 (2026-10-28)
+
+Full screen in the movie and show players works again, the Next episode prompt waits for the end,
+and downloaded episodes keep their previews and Skip buttons offline.
+[Full notes](.github/releases/v2.2.3.md)
+
+- ⚡️ Downloads save each episode's preview and opening/ending times for offline
+- ⚡️ Movies & TV shows the Next episode prompt when the episode ends, not in the credits
+- 💄 The Movies & TV Next episode prompt no longer covers the player's time display
+- 🦺 A movie or show player's own full-screen button gave a black screen with sound
+- 🦺 The Next episode countdown in Movies & TV could skip ahead before the episode ended
+- 🦺 Offline, most downloaded episodes had no preview and no Skip opening or ending
+- 🦺 Play on an episode while the list loaded could switch to the one you were part-way through
+
 ## v2.2.2 (2026-10-28)
 
 AniStream now keeps working without a connection: watch downloaded episodes, read downloaded

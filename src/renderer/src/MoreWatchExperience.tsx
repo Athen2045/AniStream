@@ -436,8 +436,10 @@ export function MoreWatchExperience({
           />
         )}
 
-        {/* The next episode follows the one opened; once the player moved on by itself, it does. */}
-        {snapshot.ended && nextUp && snapshot.episode === playbackInput.episode ? (
+        {/* The next episode follows the one opened; once the player moved on by itself, it does.
+            Shown when the episode has played out, not during the credits, where the player's own
+            Next button is (and the countdown would cut the episode short). */}
+        {snapshot.finished && nextUp && snapshot.episode === playbackInput.episode ? (
           <AutoplayNext next={nextUp} />
         ) : null}
 
