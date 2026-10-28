@@ -55,12 +55,3 @@ export function closestTitle(query: string, titles: readonly string[]): string |
   }
   return best?.title;
 }
-
-/** Splits a label so the typed part can be bold: [before, match, after] (match may be ""). */
-export function highlightMatch(label: string, query: string): [string, string, string] {
-  const q = query.trim();
-  if (!q) return [label, "", ""];
-  const at = label.toLocaleLowerCase().indexOf(q.toLocaleLowerCase());
-  if (at < 0) return [label, "", ""];
-  return [label.slice(0, at), label.slice(at, at + q.length), label.slice(at + q.length)];
-}

@@ -3,9 +3,9 @@ import { assertTrustedIpcSender } from "../../src/main/ipc";
 
 type TrustedEvent = Parameters<typeof assertTrustedIpcSender>[0];
 
-function eventFrom(url?: string): TrustedEvent {
+function eventFrom(url?: string, parent: object | null = null): TrustedEvent {
   return {
-    senderFrame: url ? { url } : null,
+    senderFrame: url ? { url, parent } : null,
   } as unknown as TrustedEvent;
 }
 
@@ -24,6 +24,8 @@ describe("trusted IPC sender validation", () => {
       eventFrom("https://player.example/a/1/1/sub"),
       eventFrom("http://127.0.0.1:41731.evil.example/"),
       eventFrom(),
+      // A nested frame on the app's own origin is still not the window's page.
+      eventFrom("http://127.0.0.1:41731/index.html", { url: "http://127.0.0.1:41731/index.html" }),
     ]) {
       expect(() => assertTrustedIpcSender(event, "http://127.0.0.1:41731")).toThrow(
         /untrusted frame/,

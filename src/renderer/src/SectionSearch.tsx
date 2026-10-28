@@ -1,6 +1,6 @@
-import { Clock3, Info, Play, Plus, Search, SlidersHorizontal, UserRound, X } from "lucide-react";
+import { Clock3, Info, Play, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListSearchPerson,
@@ -41,7 +41,7 @@ import {
   useRecentSearches,
 } from "./recent-searches";
 import { friendlyRemoteError } from "./remote-error";
-import { highlightMatch, isConfidentMatch, searchNormalize } from "./search-helpers";
+import { isConfidentMatch, searchNormalize } from "./search-helpers";
 import { SearchFiltersPanel } from "./SearchFiltersPanel";
 import {
   didYouMeanQuery,
@@ -58,8 +58,9 @@ import type { ViewerAccess } from "./viewer-access";
 export type { SearchScope } from "./search-queries";
 
 const DEBOUNCE_MS = 300;
+/** Typing has stopped this long before an empty search may say "No matches". */
+const IDLE_MS = 1_000;
 const MIN_QUERY = 2;
-const SUGGESTION_TITLES = 4;
 
 const SCOPES: ReadonlyArray<{ id: SearchScope; label: string }> = [
   { id: "ANIME", label: "Anime" },
@@ -195,8 +196,6 @@ export function SectionSearch({
     (moreFilterCount(moreFilters) > 0 || moreFilters.sort !== DEFAULT_MORE_SORT);
   const filterCount = catalogScope ? activeFilterCount(filters) : moreFilterCount(moreFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [suggestOpen, setSuggestOpen] = useState(false);
-  const [highlight, setHighlight] = useState(-1);
   const [personState, setPerson] = useState<Pick<PersonView, "query" | "person">>();
   // Filters (or a non-default sort) browse the catalog even with an empty search field.
   const browsing = catalogScope ? filterCount > 0 || filters.sort !== DEFAULT_SORT : moreFiltered;
@@ -241,6 +240,14 @@ export function SectionSearch({
     return () => window.clearTimeout(timer);
   }, [query]);
 
+  // Results change as you type, so an empty answer mid-word is not final: "No matches" (and its
+  // "did you mean" lookup) waits until typing stops or Enter is pressed.
+  const [idleQuery, setIdleQuery] = useState(submitted);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setIdleQuery(query.trim()), IDLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
   const trending = useQuery(searchTrendingQuery(scope)).data;
 
   useEffect(() => {
@@ -274,18 +281,20 @@ export function SectionSearch({
           }
         : undefined
     : undefined;
-  const pending = showingResults && !current;
+  // Placeholder data is the previous search, kept on screen while this one loads.
+  const pending = showingResults && (!current || resultsQuery.isPlaceholderData);
+  /** The search the shown results answer: the previous one while the next is loading. */
+  const shownQuery = current?.data?.query ?? submitted;
   const count = current?.data?.items.length ?? 0;
-  const noMatches = Boolean(showingResults && current?.data && !count);
+  const noMatches = Boolean(showingResults && current?.data && !pending && !count);
   // AniList matches whole words only ("Frie" finds nothing, "Frieren" does), so a short single
-  // word is probably still being typed: hint instead of declaring "no matches" (2026-10-20).
+  // word is probably still being typed: hint instead of declaring "no matches" (2026-10-20). The
+  // same while typing continues (2026-10-28, results update under the field).
   const [enteredQuery, setEnteredQuery] = useState("");
+  const shortSingleWord =
+    Boolean(catalogScope) && !filterCount && !submitted.includes(" ") && submitted.length < 6;
   const looksUnfinished =
-    Boolean(catalogScope) &&
-    !filterCount &&
-    !submitted.includes(" ") &&
-    submitted.length < 6 &&
-    enteredQuery !== submitted;
+    enteredQuery !== submitted && (idleQuery !== submitted || shortSingleWord);
 
   // "Did you mean": only for an unfiltered Anime/Manga search that found nothing. One extra
   // AniList lookup on the first word, by popularity; accepted only within two typos.
@@ -326,7 +335,6 @@ export function SectionSearch({
   const openPerson = (next: AniListSearchPerson): void => {
     if (!catalogScope) return;
     remember();
-    setSuggestOpen(false);
     setPerson({ query: submitted, person: next });
   };
 
@@ -347,28 +355,32 @@ export function SectionSearch({
         })
       : undefined,
   };
+  // The start page (recent, genres, Trending) stays, dimmed, until the first search answers.
+  const startShown = !person && (!showingResults || !current);
   const grid: Results | undefined = person
     ? person.items
       ? { kind: "anilist", items: person.items, page: 1, hasNext: false }
       : undefined
-    : showingResults
-      ? current?.data
-      : trending;
+    : startShown
+      ? trending
+      : current?.data;
   const extras = grid?.kind === "anilist" && !person ? grid.extras : undefined;
   const topAniList =
+    !startShown &&
     !person &&
-    submitted &&
+    shownQuery &&
     grid?.kind === "anilist" &&
     grid.items[0] &&
-    isConfidentMatch(submitted, grid.items[0].title)
+    isConfidentMatch(shownQuery, grid.items[0].title)
       ? grid.items[0]
       : undefined;
   const topMore =
+    !startShown &&
     !person &&
-    submitted &&
+    shownQuery &&
     grid?.kind === "more" &&
     grid.items[0] &&
-    isConfidentMatch(submitted, grid.items[0].title)
+    isConfidentMatch(shownQuery, grid.items[0].title)
       ? grid.items[0]
       : undefined;
   const hasMore =
@@ -377,92 +389,14 @@ export function SectionSearch({
       ? grid.hasNext
       : Boolean(grid?.kind === "more" && grid.next && Object.keys(grid.next).length));
 
-  // Suggestions: recent searches that match, the first titles, and matching people.
-  const suggestionRecents = useMemo(
-    () =>
-      query.trim().length >= 1
-        ? recent
-            .filter((entry) => entry.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
-            .filter((entry) => entry.toLocaleLowerCase() !== query.trim().toLocaleLowerCase())
-            .slice(0, 2)
-        : [],
-    [query, recent],
-  );
-  const freshResults = current?.data && submitted === query.trim() ? current.data : undefined;
-  const suggestionTitles: Array<{
-    key: string;
-    title: string;
-    image?: string;
-    meta: string;
-    open: () => void;
-  }> =
-    freshResults?.kind === "anilist"
-      ? freshResults.items.slice(0, SUGGESTION_TITLES).map((media) => ({
-          key: `a${media.id}`,
-          title: media.title,
-          image: media.coverUrl,
-          meta: [
-            formatMediaLabel(media.format, scope === "ANIME" ? "Anime" : "Manga"),
-            media.seasonYear,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-          open: () => {
-            remember();
-            onOpenMedia(media);
-          },
-        }))
-      : freshResults?.kind === "more"
-        ? freshResults.items.slice(0, SUGGESTION_TITLES).map((item) => ({
-            key: moreKey(item),
-            title: item.title,
-            image: item.posterUrl,
-            meta: [item.type === "MOVIE" ? "Movie" : "Series", item.year]
-              .filter(Boolean)
-              .join(" · "),
-            open: () => {
-              remember();
-              onOpenMore(item);
-            },
-          }))
-        : [];
-  const suggestionPeople =
-    freshResults?.kind === "anilist" ? peopleFor(freshResults, query.trim()).slice(0, 2) : [];
-  const suggestionRows = [
-    ...suggestionRecents.map((entry) => ({ key: `r${entry}`, run: () => setQuery(entry) })),
-    ...suggestionTitles.map((row) => ({ key: row.key, run: row.open })),
-    ...suggestionPeople.map((row) => ({
-      key: `p${row.kind}${row.id}`,
-      run: () => openPerson(row),
-    })),
-    { key: "all", run: () => submitAll() },
-  ];
-  const showSuggestions =
-    suggestOpen &&
-    query.trim().length >= MIN_QUERY &&
-    (suggestionRecents.length > 0 || suggestionTitles.length > 0);
-
   function submitAll(): void {
     const normalized = query.trim();
-    setSuggestOpen(false);
-    setHighlight(-1);
     if (normalized.length >= MIN_QUERY) {
       setSubmitted(normalized);
       setEnteredQuery(normalized);
       remember();
     }
   }
-
-  // Close the suggestions on a click outside the field.
-  useEffect(() => {
-    if (!suggestOpen) return;
-    const onPointer = (event: PointerEvent): void => {
-      if (event.target instanceof Node && !fieldRef.current?.contains(event.target))
-        setSuggestOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointer);
-    return () => document.removeEventListener("pointerdown", onPointer);
-  }, [suggestOpen]);
 
   // Applied filters as removable chips under the field.
   const chips: Array<{ key: string; label: string; remove: () => void }> = [];
@@ -678,12 +612,11 @@ export function SectionSearch({
       <div className="section-search-bar">
         <form
           ref={fieldRef}
-          className={`section-search-field${showSuggestions ? " has-suggestions" : ""}`}
+          className="section-search-field"
           role="search"
           onSubmit={(event) => {
             event.preventDefault();
-            if (showSuggestions && highlight >= 0) suggestionRows[highlight]?.run();
-            else if (topAniList) {
+            if (topAniList) {
               remember();
               onOpenMedia(topAniList);
             } else if (topMore) {
@@ -700,41 +633,21 @@ export function SectionSearch({
             maxLength={100}
             placeholder={copy.placeholder}
             aria-label={`Search ${copy.noun}`}
-            aria-expanded={showSuggestions}
-            aria-controls="search-suggestions"
-            aria-activedescendant={
-              showSuggestions && highlight >= 0 ? `search-suggestion-${highlight}` : undefined
-            }
-            role="combobox"
-            aria-autocomplete="list"
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setSuggestOpen(true);
-              setHighlight(-1);
-            }}
+            aria-controls="search-results"
+            onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") {
+                // Results update under the field as you type; Down moves into them (the top
+                // result's Watch first).
                 event.preventDefault();
-                if (showSuggestions)
-                  setHighlight((at) => Math.min(suggestionRows.length - 1, at + 1));
-                else
-                  document
-                    .querySelector<HTMLElement>(
-                      ".section-search-results .more-poster-hit, .section-search-results button",
-                    )
-                    ?.focus();
-              } else if (event.key === "ArrowUp" && showSuggestions) {
+                document
+                  .querySelector<HTMLElement>(
+                    ".section-search-results .more-poster-hit, .section-search-results button",
+                  )
+                  ?.focus();
+              } else if (event.key === "Escape" && query) {
                 event.preventDefault();
-                setHighlight((at) => Math.max(-1, at - 1));
-              } else if (event.key === "Escape") {
-                if (showSuggestions) {
-                  event.preventDefault();
-                  setSuggestOpen(false);
-                  setHighlight(-1);
-                } else if (query) {
-                  event.preventDefault();
-                  setQuery("");
-                }
+                setQuery("");
               }
             }}
           />
@@ -756,73 +669,6 @@ export function SectionSearch({
               Ctrl K
             </kbd>
           )}
-          {showSuggestions ? (
-            <div
-              className="search-suggestions"
-              id="search-suggestions"
-              role="listbox"
-              aria-label="Suggestions"
-            >
-              {suggestionRecents.length ? <p className="search-suggestions-head">Recent</p> : null}
-              {suggestionRecents.map((entry, index) => (
-                <SuggestionRow
-                  key={`r${entry}`}
-                  index={index}
-                  on={highlight === index}
-                  label={entry}
-                  query={query}
-                  meta="Recent"
-                  icon={<Clock3 size={16} aria-hidden="true" />}
-                  onPick={() => setQuery(entry)}
-                />
-              ))}
-              {suggestionTitles.length ? <p className="search-suggestions-head">Titles</p> : null}
-              {suggestionTitles.map((row, at) => {
-                const index = suggestionRecents.length + at;
-                return (
-                  <SuggestionRow
-                    key={row.key}
-                    index={index}
-                    on={highlight === index}
-                    label={row.title}
-                    query={query}
-                    meta={row.meta}
-                    image={row.image}
-                    onPick={row.open}
-                  />
-                );
-              })}
-              {suggestionPeople.length ? (
-                <p className="search-suggestions-head">People &amp; studios</p>
-              ) : null}
-              {suggestionPeople.map((row, at) => {
-                const index = suggestionRecents.length + suggestionTitles.length + at;
-                return (
-                  <SuggestionRow
-                    key={`p${row.kind}${row.id}`}
-                    index={index}
-                    on={highlight === index}
-                    label={row.name}
-                    query={query}
-                    meta={row.kind === "studio" ? "Studio" : `Character · ${row.knownFor ?? ""}`}
-                    image={row.imageUrl}
-                    icon={<UserRound size={16} aria-hidden="true" />}
-                    onPick={() => openPerson(row)}
-                  />
-                );
-              })}
-              <SuggestionRow
-                index={suggestionRows.length - 1}
-                on={highlight === suggestionRows.length - 1}
-                label={`See all results for “${query.trim()}”`}
-                query=""
-                meta="Enter"
-                accent
-                icon={<Search size={16} aria-hidden="true" />}
-                onPick={submitAll}
-              />
-            </div>
-          ) : null}
         </form>
         <div className="section-search-scopes" role="radiogroup" aria-label="Search in">
           {SCOPES.map((entry) => (
@@ -842,10 +688,7 @@ export function SectionSearch({
           type="button"
           className={`section-search-filters-button${filterCount ? " is-on" : ""}`}
           aria-haspopup="dialog"
-          onClick={() => {
-            setSuggestOpen(false);
-            setFiltersOpen(true);
-          }}
+          onClick={() => setFiltersOpen(true)}
         >
           <SlidersHorizontal size={18} aria-hidden="true" />
           Filters
@@ -873,8 +716,12 @@ export function SectionSearch({
         </div>
       ) : null}
 
-      <div className={`section-search-results${pending ? " is-pending" : ""}`}>
-        {!showingResults && !person ? (
+      <div
+        id="search-results"
+        className={`section-search-results${pending ? " is-pending" : ""}`}
+        aria-busy={pending}
+      >
+        {startShown ? (
           <>
             {recent.length ? (
               <section className="section-search-block">
@@ -1089,8 +936,9 @@ export function SectionSearch({
 
             {noMatches && !person && looksUnfinished ? (
               <p className="section-search-keep-typing" role="status">
-                Keep typing: titles match by whole words. Press Enter to search “{submitted}”
-                anyway.
+                {catalogScope
+                  ? `Keep typing: titles match by whole words. Press Enter to search “${submitted}” anyway.`
+                  : `Keep typing, or press Enter to search “${submitted}”.`}
               </p>
             ) : null}
             {noMatches && !person && !looksUnfinished ? (
@@ -1244,55 +1092,6 @@ function peopleFor(
   if (!titled) return people;
   const wanted = searchNormalize(query);
   return people.filter((row) => searchNormalize(row.name) === wanted);
-}
-
-function SuggestionRow({
-  index,
-  on,
-  label,
-  query,
-  meta,
-  image,
-  icon,
-  accent,
-  onPick,
-}: {
-  index: number;
-  on: boolean;
-  label: string;
-  query: string;
-  meta: string;
-  image?: string;
-  icon?: React.ReactNode;
-  accent?: boolean;
-  onPick: () => void;
-}): React.JSX.Element {
-  const [before, match, after] = highlightMatch(label, query);
-  return (
-    <div
-      id={`search-suggestion-${index}`}
-      role="option"
-      aria-selected={on}
-      className={`search-suggestion${on ? " is-on" : ""}${accent ? " is-accent" : ""}`}
-      // Keep the field focused; pick on pointer down so blur never cancels the choice.
-      onPointerDown={(event) => {
-        event.preventDefault();
-        onPick();
-      }}
-    >
-      {image ? (
-        <img src={cachedArtworkUrl(image)} alt="" aria-hidden="true" />
-      ) : (
-        <span className="search-suggestion-icon">{icon}</span>
-      )}
-      <span className="search-suggestion-label">
-        {before}
-        {match ? <strong>{match}</strong> : null}
-        {after}
-      </span>
-      <small>{meta}</small>
-    </div>
-  );
 }
 
 function TopResult({

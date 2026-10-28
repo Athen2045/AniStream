@@ -109,7 +109,7 @@ export function EpisodeDownloadToggle({
   );
 }
 
-function ProgressRing({ value }: { value: number }): React.JSX.Element {
+export function ProgressRing({ value }: { value: number }): React.JSX.Element {
   const radius = 13;
   const circumference = 2 * Math.PI * radius;
   return (

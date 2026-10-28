@@ -19,10 +19,12 @@ import {
   baseLanguage,
   readAudioLanguage,
   readAutoplay,
+  readBandwidthEstimate,
   readSubtitleChoice,
   readVideoVolume,
   writeAudioLanguage,
   writeAutoplay,
+  writeBandwidthEstimate,
   writeSubtitleChoice,
   writeVideoVolume,
 } from "./player-prefs";
@@ -78,6 +80,7 @@ export function OwnAnimePlayer({
   const [audioCurrent, setAudioCurrent] = useState<string | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [waitingForConnection, setWaitingForConnection] = useState(false);
   const [subtitlePick, setSubtitlePick] = useState<{ stream: string; id: string | null }>();
   const [subtitleData, setSubtitleData] = useState<{ id: string; data: AnimeDirectSubtitle }>();
   // A track the ASS renderer could not show falls back to text-only WebVTT.
@@ -230,7 +233,11 @@ export function OwnAnimePlayer({
       );
       return;
     }
-    const hls = new Hls({ enableWorker: true });
+    const bandwidth = readBandwidthEstimate();
+    const hls = new Hls({
+      enableWorker: true,
+      ...(bandwidth ? { abrEwmaDefaultEstimate: bandwidth } : {}),
+    });
     hlsRef.current = hls;
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (_event, data) => {
       const options = data.audioTracks.map((track, index) => ({
@@ -250,15 +257,29 @@ export function OwnAnimePlayer({
       setAudioCurrent(String(index ?? hls.audioTrack));
     });
     hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_event, data) => setAudioCurrent(String(data.id)));
+    // Cut off by a lost connection: say so and continue from here once it is back, instead of
+    // retrying in a loop against no network.
+    let resumeOnline: (() => void) | undefined;
     hls.on(Hls.Events.ERROR, (_event, data) => {
       if (!data.fatal) return;
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && navigator.onLine === false) {
+        if (resumeOnline) return;
+        setWaitingForConnection(true);
+        resumeOnline = () => {
+          resumeOnline = undefined;
+          setWaitingForConnection(false);
+          window.setTimeout(() => hls.startLoad(), 1_000);
+        };
+        window.addEventListener("online", resumeOnline, { once: true });
+      } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
       else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
       else setFailure({ stream, message: "The backup stream stopped. Try again." });
     });
     hls.loadSource(ready.streamUrl);
     hls.attachMedia(video);
     return () => {
+      if (resumeOnline) window.removeEventListener("online", resumeOnline);
+      writeBandwidthEstimate(hls.bandwidthEstimate);
       hls.destroy();
       hlsRef.current = null;
     };
@@ -386,21 +407,22 @@ export function OwnAnimePlayer({
         onCancel={() => setUpNext(null)}
       />
     ) : null;
-  const note =
-    resumedAt !== null ? (
-      <span role="status">
-        Resumed at {clock(resumedAt)}
-        <button
-          type="button"
-          onClick={() => {
-            seekTo(video, 0);
-            setResumedAt(null);
-          }}
-        >
-          Start over
-        </button>
-      </span>
-    ) : null;
+  const note = waitingForConnection ? (
+    <span role="status">You’re offline. The episode continues when you’re back online.</span>
+  ) : resumedAt !== null ? (
+    <span role="status">
+      Resumed at {clock(resumedAt)}
+      <button
+        type="button"
+        onClick={() => {
+          seekTo(video, 0);
+          setResumedAt(null);
+        }}
+      >
+        Start over
+      </button>
+    </span>
+  ) : null;
 
   if (!playback) {
     return (

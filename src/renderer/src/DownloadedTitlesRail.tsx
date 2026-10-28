@@ -1,35 +1,40 @@
 import { cachedArtworkUrl } from "../../shared/artwork";
-import type { AniListCatalogMedia } from "../../shared/contracts";
+import type { AniListCatalogMedia, AniListMediaType } from "../../shared/contracts";
 import { ContentCarousel } from "./ContentCarousel";
 import { CoverImage } from "./CoverImage";
 import { useOptionalDownloads } from "./DownloadsProvider";
 
 /**
- * Offline Anime home (user decision 2026-10-18): only the hero and this row of titles with
- * downloaded episodes, the things that can play without a connection. Opening one shows its
- * saved title page, where the downloaded episodes play.
+ * Offline Anime and Manga homes (user decisions 2026-10-18, 2026-10-28): only the hero and this
+ * row of titles with downloaded episodes or chapters, the things that work without a connection.
+ * Opening one shows its saved title page, where the downloaded episodes play and chapters read.
  */
 export function DownloadedTitlesRail({
+  type,
   onSelect,
 }: {
+  type: AniListMediaType;
   onSelect: (media: AniListCatalogMedia) => void;
 }): React.JSX.Element {
   const downloads = useOptionalDownloads();
-  const titles = new Map<number, { media: AniListCatalogMedia; episodes: number }>();
-  for (const item of downloads?.state?.items ?? []) {
+  const anime = type === "ANIME";
+  const unit = anime ? "episode" : "chapter";
+  const titles = new Map<number, { media: AniListCatalogMedia; count: number }>();
+  const done = anime ? (downloads?.state?.items ?? []) : (downloads?.state?.chapters ?? []);
+  for (const item of done) {
     if (item.status !== "done") continue;
     const entry = titles.get(item.aniListId) ?? {
       media: {
         id: item.aniListId,
-        type: "ANIME",
+        type,
         title: item.title,
         coverUrl: item.coverUrl ?? "",
         genres: [],
-        siteUrl: `https://anilist.co/anime/${item.aniListId}`,
+        siteUrl: `https://anilist.co/${anime ? "anime" : "manga"}/${item.aniListId}`,
       },
-      episodes: 0,
+      count: 0,
     };
-    entry.episodes += 1;
+    entry.count += 1;
     titles.set(item.aniListId, entry);
   }
   const rows = [...titles.values()];
@@ -43,14 +48,14 @@ export function DownloadedTitlesRail({
       </div>
       {rows.length ? (
         <ContentCarousel label="Downloaded">
-          {rows.map(({ media, episodes }) => (
+          {rows.map(({ media, count }) => (
             <article className="rail-card" key={media.id}>
               <span className="rail-art">
                 <button
                   type="button"
                   className="rail-art-hit"
                   onClick={() => onSelect(media)}
-                  aria-label={`${media.title}, ${episodes} downloaded`}
+                  aria-label={`${media.title}, ${count} downloaded`}
                 />
                 <CoverImage src={cachedArtworkUrl(media.coverUrl)} title={media.title} />
               </span>
@@ -63,14 +68,16 @@ export function DownloadedTitlesRail({
                 {media.title}
               </button>
               <span>
-                {episodes} {episodes === 1 ? "episode" : "episodes"} downloaded
+                {count} {count === 1 ? unit : `${unit}s`} downloaded
               </span>
             </article>
           ))}
         </ContentCarousel>
       ) : (
         <p className="downloaded-titles-empty">
-          Nothing is downloaded yet. Downloaded episodes play here without a connection.
+          {anime
+            ? "Nothing is downloaded yet. Downloaded episodes play here without a connection."
+            : "Nothing is downloaded yet. Downloaded chapters read here without a connection."}
         </p>
       )}
     </section>

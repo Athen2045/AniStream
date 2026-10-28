@@ -9,12 +9,13 @@ vi.mock("../../src/main/ipc", () => ({
 const { registerMoreDomain } = await import("../../src/main/domains/more");
 const { parseProviderConfig } = await import("../../src/main/provider-config");
 
-const player = (id: string, host: string, strip = false) => ({
+const player = (id: string, host: string, strip = false, sandboxed?: boolean) => ({
   id,
   kind: "tmdb-embed",
   movieUrl: `https://${host}/m/{tmdbId}`,
   tvUrl: `https://${host}/t/{tmdbId}/{season}/{episode}`,
   stripElectronUserAgent: strip,
+  ...(sandboxed === undefined ? {} : { sandboxed }),
 });
 
 describe("More player selection", () => {
@@ -24,7 +25,9 @@ describe("More player selection", () => {
     frameUa.arm.mockClear();
     frameUa.disarm.mockClear();
     const { more } = parseProviderConfig({
-      more: { media: [player("primary", "a.example", true), player("backup", "b.example")] },
+      more: {
+        media: [player("primary", "a.example", true, true), player("backup", "b.example")],
+      },
     });
     registerMoreDomain("app://x", {
       tmdb: {} as never,
@@ -40,6 +43,7 @@ describe("More player selection", () => {
       url: "https://a.example/m/5",
       providerIndex: 0,
       providerCount: 2,
+      sandboxed: true,
     });
     expect(frameUa.arm).toHaveBeenCalledWith("https://a.example");
   });
@@ -47,9 +51,22 @@ describe("More player selection", () => {
   it("serves a fallback player by index with the truthful UA", async () => {
     await expect(
       prepare({ tmdbId: 5, type: "TV", season: 1, episode: 2, providerIndex: 1 }),
-    ).resolves.toEqual({ url: "https://b.example/t/5/1/2", providerIndex: 1, providerCount: 2 });
+    ).resolves.toEqual({
+      url: "https://b.example/t/5/1/2",
+      providerIndex: 1,
+      providerCount: 2,
+      // Not opted in: no sandbox.
+      sandboxed: false,
+    });
     expect(frameUa.arm).not.toHaveBeenCalled();
     expect(frameUa.disarm).toHaveBeenCalled();
+  });
+
+  it("drops a player whose sandboxed value is not true or false", () => {
+    const { more } = parseProviderConfig({
+      more: { media: [{ ...player("p", "a.example"), sandboxed: "yes" }] },
+    });
+    expect(more.media).toHaveLength(0);
   });
 
   it("rejects an index past the configured players", async () => {

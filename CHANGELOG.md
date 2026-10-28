@@ -6,6 +6,20 @@ All notable changes to AniStream are listed here. Each release has full notes in
 Legend: 🎉 new feature · 💄 design · ⚡️ improvement · 🦺 fix · 🔒 security · 🏗️ internal or
 compatibility · ⬆️ dependency update
 
+## v2.2.2 (2026-10-28)
+
+AniStream now keeps working without a connection: watch downloaded episodes, read downloaded
+chapters, and let downloads finish after you close the window. [Full notes](.github/releases/v2.2.2.md)
+
+- 🎉 Read manga offline: download chapters at original quality and read them anywhere
+- 🎉 Keep running in the tray (Windows, opt-in): instant reopen, and downloads finish after closing
+- ⚡️ Every section says when you're offline, shows what it saved, and refills on reconnect
+- ⚡️ Downloads survive a lost connection, run about 20% faster, and show real sizes
+- ⚡️ Search results appear right on the page as you type
+- 💄 New season picker with artwork, and cleaner manga title pages
+- 🦺 Offline start, search, schedule and Movies & TV no longer show misleading errors
+- 🔒 Players and downloads can't reach your sign-ins or the app's internals
+
 ## v2.1.2 (2026-10-26)
 
 No more ad pop-ups from the new movie and show players, keyboard controls that keep working, and a

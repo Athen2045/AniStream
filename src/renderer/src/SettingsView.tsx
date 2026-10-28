@@ -1,3 +1,4 @@
+import type { BackgroundPreferences } from "../../shared/background";
 import {
   BookOpen,
   Database,
@@ -327,6 +328,82 @@ function GeneralPane(): React.JSX.Element {
             onChange={(on) => setAppPreference("reduceMotion", on)}
           />
         </Row>
+      </div>
+      <BackgroundCard />
+    </>
+  );
+}
+
+/**
+ * Opt-in background mode (user decision 2026-10-27), Windows only: macOS already keeps the app
+ * running when its window closes.
+ */
+function BackgroundCard(): React.JSX.Element | null {
+  const [preferences, setPreferences] = useState<BackgroundPreferences>();
+  const [error, setError] = useState<string>();
+  const windows =
+    typeof document !== "undefined" && document.documentElement.dataset.platform === "win32";
+  useEffect(() => {
+    if (!windows) return;
+    let active = true;
+    window.anistream
+      .getBackgroundPreferences()
+      .then((loaded) => {
+        if (active) setPreferences(loaded);
+      })
+      .catch(() => {
+        if (active) setError("These settings could not be loaded.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [windows]);
+  if (!windows) return null;
+  const save = (patch: Partial<BackgroundPreferences>): void => {
+    if (!preferences) return;
+    const next = { ...preferences, ...patch };
+    setPreferences(next);
+    window.anistream
+      .setBackgroundPreferences(next)
+      .then(setPreferences, () => setError("The change could not be saved."));
+  };
+  return (
+    <>
+      <Label>When you close AniStream</Label>
+      <div className="set-card">
+        <Row
+          title="Keep running in the background"
+          hint={
+            error ??
+            "Closing the window keeps AniStream in the system tray, so it opens instantly and downloads continue. Quit from the tray icon."
+          }
+        >
+          <Toggle
+            label="Keep running in the background"
+            checked={preferences?.keepRunning ?? false}
+            disabled={!preferences}
+            onChange={(on) => save({ keepRunning: on })}
+          />
+        </Row>
+        {preferences && !preferences.keepRunning ? (
+          <Row
+            title="If downloads are still running"
+            hint="Downloads that do not finish continue the next time you open AniStream."
+          >
+            <Select
+              ariaLabel="If downloads are still running"
+              value={preferences.whileDownloading}
+              onChange={(next) =>
+                save({ whileDownloading: next as BackgroundPreferences["whileDownloading"] })
+              }
+              options={[
+                { value: "ask", label: "Ask me" },
+                { value: "background", label: "Keep downloading in the tray" },
+                { value: "quit", label: "Quit" },
+              ]}
+            />
+          </Row>
+        ) : null}
       </div>
     </>
   );

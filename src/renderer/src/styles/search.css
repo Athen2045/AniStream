@@ -167,86 +167,6 @@
   outline-offset: 2px;
 }
 
-/* ---------- Suggestions while typing ---------- */
-.search-suggestions {
-  position: absolute;
-  z-index: 10;
-  top: calc(100% + 8px);
-  left: -1px;
-  right: -1px;
-  max-width: 720px;
-  padding: 8px;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 18px;
-  background: rgb(14 16 15 / 0.98);
-  box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
-  animation: search-suggestions-in 140ms var(--motion-ease) both;
-}
-@keyframes search-suggestions-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-.search-suggestions-head {
-  margin: 0;
-  padding: 8px 12px 4px;
-  color: #a1aaa5;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.search-suggestion {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 52px;
-  padding: 0 12px;
-  border-radius: 12px;
-  color: #dedede;
-  font-size: 15px;
-  cursor: pointer;
-}
-.search-suggestion:hover,
-.search-suggestion.is-on {
-  background: rgb(255 255 255 / 0.08);
-  color: #fff;
-}
-.search-suggestion img {
-  flex: none;
-  width: 30px;
-  height: 42px;
-  border-radius: 6px;
-  object-fit: cover;
-}
-.search-suggestion-icon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 30px;
-  color: rgb(255 255 255 / 0.45);
-}
-.search-suggestion-label {
-  overflow: hidden;
-  min-width: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.search-suggestion-label strong {
-  color: #fff;
-  font-weight: 800;
-}
-.search-suggestion small {
-  flex: none;
-  margin-left: auto;
-  color: #a1aaa5;
-  font-size: 12.5px;
-}
-.search-suggestion.is-accent {
-  color: #5fd3a0;
-}
-
 /* ---------- Filter chips ---------- */
 .section-search-chips {
   display: flex;
@@ -835,12 +755,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html:not([data-platform="win32"])
-    :is(.search-suggestions, .search-filters, .search-filters-scrim) {
+  html:not([data-platform="win32"]) :is(.search-filters, .search-filters-scrim) {
     animation: none;
   }
 }
-html[data-motion="reduce"] :is(.search-suggestions, .search-filters, .search-filters-scrim) {
+html[data-motion="reduce"] :is(.search-filters, .search-filters-scrim) {
   animation: none;
 }
 

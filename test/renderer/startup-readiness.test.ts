@@ -204,4 +204,47 @@ describe("readiness session", () => {
       }),
     ).toThrow(/unique/i);
   });
+
+  it("opens the app on what works offline when it starts without a connection", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    try {
+      const session = createReadinessSession({
+        mode: "launch",
+        stages: [
+          stage("local", 60, async () => undefined),
+          // The service client words a lost connection its own way.
+          createLaunchCatalogReadinessStage(async () => {
+            throw new Error("AniList is unreachable right now.");
+          }),
+        ],
+      });
+      await session.start();
+      expect(session.getSnapshot().outcome).toBe("ready");
+      session.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("still stops on a local-data failure while offline", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    try {
+      const session = createReadinessSession({
+        mode: "launch",
+        stages: [
+          stage("local", 60, async () => ({ status: "local-error" }), {
+            failureOutcome: "local-error",
+          }),
+          createLaunchCatalogReadinessStage(async () => {
+            throw new Error("AniList is unreachable right now.");
+          }),
+        ],
+      });
+      await session.start();
+      expect(session.getSnapshot().outcome).not.toBe("ready");
+      session.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

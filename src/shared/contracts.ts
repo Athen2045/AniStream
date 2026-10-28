@@ -475,6 +475,8 @@ export interface MorePlayerSource {
   /** Which configured player this URL came from, and how many are configured. */
   providerIndex: number;
   providerCount: number;
+  /** Frame it with the HTML sandbox (only players whose entry opts in; see provider-config). */
+  sandboxed: boolean;
 }
 
 export interface MorePlaybackResume extends MorePlaybackInput {
@@ -585,11 +587,13 @@ export interface MangaDexReaderSession {
   chapters: MangaDexReaderChapter[];
   /** Publisher-hosted chapters in the chosen language; never part of in-app reading order. */
   externalChapters?: MangaExternalChapter[];
-  /** MangaDex community statistics; absent when the optional statistics request failed. */
-  statistics?: MangaDexStatistics;
+  /** The chapter mirror (its label) could not be checked this time, so its English chapters may
+   * be missing; trying again can fill them. */
+  mirrorUnavailable?: string;
   message?: string;
 }
 
+/** MangaDex community statistics (follows settle ties between exact mappings). */
 export interface MangaDexStatistics {
   /** Bayesian rating on MangaDex's 1–10 scale. */
   rating?: number;
@@ -1052,12 +1056,25 @@ export interface AniStreamBridge {
   ): Promise<import("./downloads").DownloadsState>;
   /** Opens the folder picker; null when cancelled. */
   chooseDownloadFolder(): Promise<import("./downloads").DownloadsState | null>;
+  addChapterDownloads(
+    chapters: import("./downloads").DownloadChapterRequest[],
+  ): Promise<import("./downloads").DownloadAddResult>;
+  /** A page of a downloaded chapter, read from disk (works offline). */
+  getDownloadedChapterPage(
+    input: import("./downloads").DownloadedChapterPageInput,
+  ): Promise<MangaDexReaderPage>;
   onDownloadsChanged(callback: () => void): () => void;
   applyBingeChange(change: import("./binge").BingeChange): Promise<import("./binge").BingeState>;
   retryActivitySync(): Promise<LocalActivity[]>;
   getAppInfo(): Promise<AppInfo>;
   /** Opens an https link in the default browser (the only way AniStream opens one). */
   openLink(url: string): Promise<void>;
+  getBackgroundPreferences(): Promise<import("./background").BackgroundPreferences>;
+  setBackgroundPreferences(
+    preferences: import("./background").BackgroundPreferences,
+  ): Promise<import("./background").BackgroundPreferences>;
+  /** The window went to the tray (background mode): players stop. */
+  onWindowHidden(callback: () => void): () => void;
   /** Full-window media surfaces hide the native window controls along with their own. */
   setCaptionControlsVisible(visible: boolean): Promise<void>;
   /** The app's own minimise / maximise / close buttons (Windows; macOS keeps its native ones). */
@@ -1159,7 +1176,6 @@ export interface AniStreamBridge {
   getSimklProfile(): Promise<SimklProfile | undefined>;
   getSimklStats(): Promise<SimklStats | undefined>;
   getSimklTitleRatings(ref: MoreTitleRef): Promise<SimklTitleRatings | undefined>;
-  getPicturePalette(url: string): Promise<PicturePalette | undefined>;
   /** The viewer's own profile hero as a `data:` URL, or undefined. */
   getProfileHero(): Promise<string | undefined>;
   /** Saves an already cropped JPEG (at most 4 MB); returns it as a `data:` URL. */

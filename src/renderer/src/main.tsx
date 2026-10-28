@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { installExternalLinks } from "./external-links";
-import { appQueryClient } from "./query-client";
+import { appQueryClient, refetchFailedOnReconnect } from "./query-client";
 import "./styles.css";
 import "./styles/controls.css";
 import "./styles/redesign.css";
@@ -33,6 +33,7 @@ document.documentElement.dataset.platform = navigator.userAgent.includes("Window
   : "darwin";
 
 installExternalLinks();
+refetchFailedOnReconnect(appQueryClient);
 
 const root = document.getElementById("root");
 if (!root) throw new Error("AniStream renderer root was not found");

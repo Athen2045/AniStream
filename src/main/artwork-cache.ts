@@ -25,6 +25,8 @@ export interface ArtworkCacheOptions {
   maxFiles?: number;
   maxImageBytes?: number;
   timeoutMs?: number;
+  /** Source URLs never evicted, e.g. covers of downloaded titles that must show offline. */
+  keep?: () => Iterable<string>;
   now?: () => Date;
 }
 
@@ -32,6 +34,10 @@ export interface CachedArtwork {
   /** Backed by its own ArrayBuffer, so a Response can serve it without another copy. */
   body: Buffer<ArrayBuffer>;
   contentType: string;
+}
+
+function artworkKey(url: string): string {
+  return createHash("sha256").update(url).digest("hex");
 }
 
 /**
@@ -61,7 +67,7 @@ export class ArtworkCache {
   /** The local copy when present, otherwise a fresh download; undefined when neither works. */
   get(url: string): Promise<CachedArtwork | undefined> {
     if (!(this.options.allows ?? isCacheableArtworkUrl)(url)) return Promise.resolve(undefined);
-    const key = createHash("sha256").update(url).digest("hex");
+    const key = artworkKey(url);
     const pending = this.inFlight.get(key);
     if (pending) return pending;
     const request = this.load(key, url).finally(() => this.inFlight.delete(key));
@@ -117,10 +123,11 @@ export class ArtworkCache {
 
   async evict(): Promise<void> {
     const names = await readdir(this.options.directory);
+    const kept = new Set([...(this.options.keep?.() ?? [])].map(artworkKey));
     const files = (
       await Promise.all(
         names
-          .filter((name) => /^[0-9a-f]{64}\.[a-z]+$/.test(name))
+          .filter((name) => /^[0-9a-f]{64}\.[a-z]+$/.test(name) && !kept.has(name.slice(0, 64)))
           .map(async (name) => {
             const path = join(this.options.directory, name);
             const info = await stat(path).catch(() => undefined);

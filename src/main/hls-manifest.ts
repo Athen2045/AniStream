@@ -1,3 +1,5 @@
+import { isPrivateAddress } from "./private-address";
+
 /**
  * Rewrites every URI in an HLS playlist (segments, child playlists, keys, audio/subtitle renditions)
  * through `wrap`, resolved against the playlist's own URL, so the player only ever talks to the
@@ -31,21 +33,9 @@ export function requireHttpsUrl(value: string): URL {
   return url;
 }
 
+/** Local names and private address literals; names that resolve privately are caught at fetch. */
 function isPrivateHost(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return true;
-  if (host === "::1" || host.startsWith("fe80:") || host.startsWith("fc") || host.startsWith("fd"))
-    return true;
-  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (!v4) return false;
-  const [a, b] = [Number(v4[1]), Number(v4[2])];
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127)
-  );
+  return isPrivateAddress(host);
 }

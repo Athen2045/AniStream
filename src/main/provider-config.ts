@@ -69,6 +69,12 @@ export interface MorePlayerConfig {
    */
   stripElectronUserAgent: boolean;
   /**
+   * Frame this player with the HTML `sandbox` (scripts and its own storage only: no pop-ups, top
+   * navigation, forms or modals). Opt-in (audit finding 6, 2026-10-28): every player configured
+   * then refused playback when sandboxed, most saying so on screen, so none sets it today.
+   */
+  sandboxed?: true;
+  /**
    * When set, scripts inside this player's frame load only from the player's own host (exactly)
    * and these hosts (or their subdomains). AniStream's principles are no ads and no third-party
    * trackers (user decision 2026-10-03); players' ad scripts also broke their controls.
@@ -416,6 +422,8 @@ function parseMoreMedia(value: Record<string, unknown>, id: string): MoreTmdbEmb
     typeof value.stripElectronUserAgent !== "boolean"
   )
     throw new Error("stripElectronUserAgent must be true or false");
+  if (value.sandboxed !== undefined && typeof value.sandboxed !== "boolean")
+    throw new Error("sandboxed must be true or false");
   return {
     id,
     kind: "tmdb-embed",
@@ -423,6 +431,7 @@ function parseMoreMedia(value: Record<string, unknown>, id: string): MoreTmdbEmb
     tvUrl,
     startAtParam,
     stripElectronUserAgent: value.stripElectronUserAgent === true,
+    ...(value.sandboxed === true ? { sandboxed: true as const } : {}),
     ...scriptRules(value),
     origin: sameOrigin([movieUrl, tvUrl]),
   };

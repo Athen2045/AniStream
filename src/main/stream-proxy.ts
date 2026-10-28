@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { net, protocol } from "electron";
+import { protocol } from "electron";
 import { requireHttpsUrl, rewriteHlsManifest } from "./hls-manifest";
+import { netRequestFetch } from "./net-request-fetch";
 import { PROVIDER_USER_AGENT } from "./provider-transport";
+import { createPublicFetch, type HostLookup } from "./public-fetch";
 
 /**
  * Main-process stream proxy for AniStream's own player (user decision 2026-10-18; restores the
@@ -11,7 +13,8 @@ import { PROVIDER_USER_AGENT } from "./provider-transport";
  * The renderer gets opaque `anistream-media://stream/<token>` URLs; this process fetches the HTTPS
  * upstream with the app's truthful User-Agent plus only allowlisted headers a source's config asks
  * for (e.g. `Referer`), and rewrites HLS playlists so segments, keys and renditions come through
- * here too. Never cookies, never the user's credentials. Tokens expire.
+ * here too. Never cookies, never the user's credentials. Every redirect hop is checked to be HTTPS
+ * on a public host before it is requested (`public-fetch.ts`). Tokens expire.
  */
 export const STREAM_SCHEME = "anistream-media";
 const TOKEN_TTL_MS = 6 * 60 * 60_000;
@@ -46,10 +49,12 @@ export class StreamProxy implements StreamUrlBroker {
   private readonly targets = new Map<string, ProxyTarget>();
   private registered = false;
   private offlineFiles?: (id: string, relative: string) => string | undefined;
+  private appOrigin?: string;
+  private readonly fetchPublic: ReturnType<typeof createPublicFetch>;
 
-  public constructor(
-    private readonly fetcher: typeof net.fetch = (url, init) => net.fetch(url, init),
-  ) {}
+  public constructor(fetcher: typeof fetch = netRequestFetch, lookup?: HostLookup) {
+    this.fetchPublic = createPublicFetch({ fetcher, lookup });
+  }
 
   public register(): void {
     if (this.registered) return;
@@ -82,7 +87,24 @@ export class StreamProxy implements StreamUrlBroker {
     return `${STREAM_SCHEME}://stream/${token}`;
   }
 
+  /**
+   * The app page's origin, named as the only CORS origin instead of `*`. Which frames may load
+   * these URLs is enforced in the session's request filter (scheme-access.ts, audit finding 5).
+   */
+  public setAppOrigin(origin: string): void {
+    this.appOrigin = origin;
+  }
+
   public async handle(request: Request): Promise<Response> {
+    const response = await this.route(request);
+    if (this.appOrigin) {
+      response.headers.set("Access-Control-Allow-Origin", this.appOrigin);
+      response.headers.set("Vary", "Origin");
+    }
+    return response;
+  }
+
+  private async route(request: Request): Promise<Response> {
     try {
       const requestUrl = new URL(request.url);
       if (requestUrl.hostname === "offline") return await this.offline(requestUrl);
@@ -95,21 +117,17 @@ export class StreamProxy implements StreamUrlBroker {
       }
 
       const range = request.headers.get("range");
-      const upstreamResponse = await this.fetcher(target.url, {
+      const { response: upstreamResponse, url: finalUrl } = await this.fetchPublic(target.url, {
         headers: {
           "User-Agent": PROVIDER_USER_AGENT,
           ...target.headers,
           ...(range ? { Range: range } : {}),
         },
-        redirect: "follow",
       });
       if (!upstreamResponse.ok && upstreamResponse.status !== 206) {
         return errorResponse(upstreamResponse.status, "The video host rejected this request.");
       }
 
-      const finalUrl = upstreamResponse.url || target.url;
-      // A redirect may not leave HTTPS or reach a private host.
-      requireHttpsUrl(finalUrl);
       if (isHlsManifest(upstreamResponse, finalUrl)) {
         const manifest = await upstreamResponse.text();
         const rewritten = rewriteHlsManifest(manifest, finalUrl, (childUrl) =>
@@ -118,7 +136,6 @@ export class StreamProxy implements StreamUrlBroker {
         return new Response(rewritten, {
           status: upstreamResponse.status,
           headers: {
-            "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-store",
             "Content-Type": "application/vnd.apple.mpegurl",
           },
@@ -150,7 +167,6 @@ export class StreamProxy implements StreamUrlBroker {
       return new Response(body, {
         status: 200,
         headers: {
-          "Access-Control-Allow-Origin": "*",
           "Cache-Control": "no-store",
           "Content-Type": offlineContentType(relative),
           "Content-Length": String(body.length),
@@ -210,7 +226,6 @@ function sanitizeRequestHeaders(headers: Record<string, string>): Record<string,
 
 function copyResponseHeaders(headers: Headers): Headers {
   const copied = new Headers({
-    "Access-Control-Allow-Origin": "*",
     "Cache-Control": headers.get("cache-control") ?? "no-store",
   });
   for (const name of ["content-type", "content-length", "accept-ranges", "content-range"]) {
@@ -224,7 +239,6 @@ function errorResponse(status: number, message: string): Response {
   return new Response(message, {
     status,
     headers: {
-      "Access-Control-Allow-Origin": "*",
       "Content-Type": "text/plain; charset=utf-8",
     },
   });

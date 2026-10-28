@@ -283,4 +283,38 @@ describe("createRequestGate", () => {
       vi.useRealTimers();
     }
   });
+
+  it("gives back the slot of a request that never reached the server, but not of others", async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createRequestGate({ requestsPerMinute: 2 });
+      const offline = async (): Promise<never> => {
+        throw new TypeError("fetch failed");
+      };
+      // Two requests while offline use no slots: two more start right away.
+      await expect(gate.run(undefined, offline)).rejects.toThrow("fetch failed");
+      await expect(gate.run(undefined, offline)).rejects.toThrow("fetch failed");
+      let started = 0;
+      const ok = async (): Promise<number> => (started += 1);
+      await Promise.all([gate.run(undefined, ok), gate.run(undefined, ok)]);
+      expect(started).toBe(2);
+
+      // A request the server answered (even with an error) keeps its slot.
+      const gate2 = createRequestGate({ requestsPerMinute: 1 });
+      await expect(
+        gate2.run(undefined, async () => {
+          throw new Error("AniList returned 500");
+        }),
+      ).rejects.toThrow("500");
+      let third = false;
+      const next = gate2.run(undefined, async () => (third = true));
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(third).toBe(false);
+      await vi.advanceTimersByTimeAsync(60_000);
+      await next;
+      expect(third).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

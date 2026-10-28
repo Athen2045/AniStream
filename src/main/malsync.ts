@@ -19,6 +19,9 @@ export interface MalSyncSitePage {
   url: string;
 }
 
+/** MAL-Sync refused requests (403/429); lookups fail at once until its pause ends. */
+export class MalSyncRefusedError extends Error {}
+
 export interface MalSyncMapping {
   /** MAL-Sync's canonical title for the AniList ID; used only to break ties between exact-ID entries. */
   title?: string;
@@ -34,10 +37,13 @@ export class MalSyncClient {
     requestsPerMinute: REQUESTS_PER_MINUTE,
     windowMs: 60_000,
   });
-  private readonly cache = createBoundedCache<MalSyncMapping>({
+  /** MAL-Sync's whole answer per AniList ID: the MangaDex hint and the chapter mirror both read
+   * their site from one request. */
+  private readonly cache = createBoundedCache<unknown>({
     maxEntries: 200,
     ttlMs: CACHE_TTL_MS,
   });
+  private refusedUntil = 0;
   private readonly transport: ProviderTransport;
 
   public constructor(private readonly fetcher: Fetcher = fetch) {
@@ -55,30 +61,38 @@ export class MalSyncClient {
     signal?: AbortSignal,
   ): Promise<MalSyncMapping> {
     if (!Number.isInteger(aniListId) || aniListId <= 0) throw new Error("Invalid AniList ID.");
-    const cacheKey = `${aniListId}:${site}`;
-    const cached = this.cache.get(cacheKey);
-    if (cached) return cached;
-    const url = new URL(`/mal/manga/anilist:${aniListId}`, BASE_URL);
-    const mapping = await this.transport.requestParsed(
-      url,
-      {
-        signal,
-        onResponse: (response, gate) => {
-          if (response.status === 429 || response.status === 403) {
-            gate.reportRateLimited(REFUSED_PAUSE_MS);
-            throw new Error(`MAL-Sync temporarily refused requests (${response.status}).`);
-          }
+    const cacheKey = String(aniListId);
+    // A 404 is kept as null: "not mapped" is an answer too.
+    let payload = this.cache.get(cacheKey);
+    if (payload === undefined) {
+      // While MAL-Sync is pausing us, say so at once rather than queueing until a timeout.
+      if (Date.now() < this.refusedUntil)
+        throw new MalSyncRefusedError("MAL-Sync temporarily refused requests; try again shortly.");
+      const url = new URL(`/mal/manga/anilist:${aniListId}`, BASE_URL);
+      payload = await this.transport.requestParsed(
+        url,
+        {
+          signal,
+          onResponse: (response, gate) => {
+            if (response.status === 429 || response.status === 403) {
+              gate.reportRateLimited(REFUSED_PAUSE_MS);
+              this.refusedUntil = Math.max(this.refusedUntil, Date.now() + REFUSED_PAUSE_MS);
+              throw new MalSyncRefusedError(
+                `MAL-Sync temporarily refused requests (${response.status}).`,
+              );
+            }
+          },
         },
-      },
-      async (response): Promise<MalSyncMapping> => {
-        // MAL-Sync answers 404 for titles it has not mapped.
-        if (response.status === 404) return { pages: [] };
-        if (!response.ok) throw new Error(`MAL-Sync request failed (${response.status}).`);
-        return parseMalSyncMapping(await response.json(), aniListId, site);
-      },
-    );
-    this.cache.set(cacheKey, mapping);
-    return mapping;
+        async (response): Promise<unknown> => {
+          // MAL-Sync answers 404 for titles it has not mapped.
+          if (response.status === 404) return null;
+          if (!response.ok) throw new Error(`MAL-Sync request failed (${response.status}).`);
+          return (await response.json()) as unknown;
+        },
+      );
+      this.cache.set(cacheKey, payload);
+    }
+    return parseMalSyncMapping(payload, aniListId, site);
   }
 }
 

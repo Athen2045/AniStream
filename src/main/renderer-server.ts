@@ -4,17 +4,42 @@ import { createServer, type ServerResponse } from "node:http";
 import { extname, relative, resolve, sep } from "node:path";
 
 /**
- * Renderer CSP. Only the configured anime embed origin may be framed; the origins come from the
- * gitignored provider config, so none are hardcoded here.
+ * Image hosts the page loads directly (audit finding 9, 2026-10-28). Everything else the renderer
+ * needs comes through the preload bridge or AniStream's own schemes, so the page has no reason to
+ * reach any other host: a live tour loaded only images, from AniList, TMDB, Simkl and MangaDex; the
+ * rest are the image hosts the adapters accept (MAL covers, Kitsu, TheTVDB). An image from a host
+ * missing here shows its placeholder; add the host rather than widening to `https:`.
  */
-export function buildContentSecurityPolicy(frameOrigins: readonly string[]): string {
+export const RENDERER_IMAGE_HOSTS = [
+  "https://s4.anilist.co",
+  "https://img.anili.st",
+  "https://image.tmdb.org",
+  "https://simkl.in",
+  "https://uploads.mangadex.org",
+  "https://cdn.myanimelist.net",
+  "https://media.kitsu.app",
+  "https://media.kitsu.io",
+  "https://artworks.thetvdb.com",
+] as const;
+
+/**
+ * Renderer CSP. Only the configured anime embed origin may be framed; the origins come from the
+ * gitignored provider config, so none are hardcoded here. The page talks to no web host itself
+ * (streams come through `anistream-media:`), so `connect-src` and `media-src` allow none.
+ */
+export function buildContentSecurityPolicy(
+  frameOrigins: readonly string[],
+  /** Development UI-test runs only: fixtures use the reserved `.example` hosts directly. */
+  options: { testHosts?: boolean } = {},
+): string {
+  const test = options.testHosts ? " https://*.example" : "";
   return [
     "default-src 'self'",
     "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' https: data: blob: anistream-art:",
-    "media-src 'self' https: blob: anistream-media:",
-    "connect-src 'self' https: blob: anistream-media:",
+    `img-src 'self' data: blob: anistream-art: ${RENDERER_IMAGE_HOSTS.join(" ")}${test}`,
+    `media-src 'self' blob: anistream-media:${test}`,
+    `connect-src 'self' blob: anistream-media:${test}`,
     `frame-src ${frameOrigins.length ? frameOrigins.join(" ") : "'none'"}`,
     "worker-src 'self' blob:",
     "font-src 'self' data:",
@@ -40,10 +65,14 @@ export interface RendererServer {
 
 export async function startRendererServer(
   rendererRoot: string,
-  options: { frameOrigins: readonly string[]; port?: number } = { frameOrigins: [] },
+  options: { frameOrigins: readonly string[]; port?: number; testHosts?: boolean } = {
+    frameOrigins: [],
+  },
 ): Promise<RendererServer> {
   const root = resolve(rendererRoot);
-  const contentSecurityPolicy = buildContentSecurityPolicy(options.frameOrigins);
+  const contentSecurityPolicy = buildContentSecurityPolicy(options.frameOrigins, {
+    testHosts: options.testHosts,
+  });
   let expectedHost = "";
 
   const server = createServer((request, response) => {

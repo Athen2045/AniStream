@@ -48,6 +48,8 @@ const bridge: AniStreamBridge = {
   addDownloads: (episodes) => invoke("downloads:add", episodes),
   applyDownloadChange: (change) => invoke("downloads:apply", change),
   chooseDownloadFolder: () => invoke("downloads:choose-folder"),
+  addChapterDownloads: (chapters) => invoke("downloads:add-chapters", chapters),
+  getDownloadedChapterPage: (input) => invoke("downloads:chapter-page", input),
   onDownloadsChanged: (callback) => {
     const listener = (): void => callback();
     ipcRenderer.on("downloads:changed", listener);
@@ -57,6 +59,13 @@ const bridge: AniStreamBridge = {
   retryActivitySync: () => invoke("activity:retry"),
   getAppInfo: () => invoke("app:get-info"),
   openLink: (url) => invoke("app:open-link", url),
+  getBackgroundPreferences: () => invoke("app:background-preferences"),
+  setBackgroundPreferences: (preferences) => invoke("app:set-background-preferences", preferences),
+  onWindowHidden: (callback) => {
+    const listener = (): void => callback();
+    ipcRenderer.on("app:window-hidden", listener);
+    return () => ipcRenderer.removeListener("app:window-hidden", listener);
+  },
   setCaptionControlsVisible: (visible) => invoke("window:caption-controls", visible),
   controlWindow: (action) => invoke("window:control", action),
   getWindowState: () => invoke("window:state"),
@@ -150,7 +159,6 @@ const bridge: AniStreamBridge = {
   getSimklProfile: () => invoke("simkl:profile"),
   getSimklStats: () => invoke("simkl:stats"),
   getSimklTitleRatings: (ref) => invoke("simkl:title-ratings", ref),
-  getPicturePalette: (url) => invoke("profile:palette", url),
   getProfileHero: () => invoke("profile:hero"),
   setProfileHero: (jpeg) => invoke("profile:hero-set", jpeg),
   clearProfileHero: () => invoke("profile:hero-clear"),

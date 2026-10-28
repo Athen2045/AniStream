@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { shell } from "electron";
 import { AniListUnavailableError, asUnavailable } from "./errors";
 import type {
@@ -194,6 +195,8 @@ export class AniListClient {
     return value;
   }
   private token?: string;
+  /** Random value sent with the sign-in and required back in its callback (audit finding 12). */
+  private pendingState?: string;
   private profile?: AniListProfile;
   private readonly authorization: AuthorizationTransaction;
   private readonly requestGate: RequestGate = createRequestGate({
@@ -233,11 +236,13 @@ export class AniListClient {
   ) {
     this.authorization = new AuthorizationTransaction({
       timeoutMs: AUTHORIZATION_TIMEOUT_MS,
-      onTimeout: () =>
+      onTimeout: () => {
+        this.pendingState = undefined;
         this.emitState({
           status: "error",
           message: "AniList sign-in timed out. Start it again when you are ready.",
-        }),
+        });
+      },
     });
   }
 
@@ -279,6 +284,11 @@ export class AniListClient {
     // AniList's implicit-grant example intentionally sends no redirect_uri. The
     // callback is selected from the redirect URL registered for this client.
     authorizeUrl.searchParams.set("response_type", "token");
+    // Only a callback carrying this sign-in's own state is accepted, so a page that opens an
+    // `anistream://` link with someone else's token cannot sign the app into their account.
+    const state = randomBytes(16).toString("base64url");
+    authorizeUrl.searchParams.set("state", state);
+    this.pendingState = state;
 
     this.authorization.begin();
     this.emitState({ status: "authorizing" });
@@ -296,6 +306,14 @@ export class AniListClient {
   }
 
   public async handleCallback(callbackUrl: string): Promise<void> {
+    // A callback without this sign-in's state did not come from it: ignore it entirely, so it can
+    // neither sign the app in nor end the sign-in the viewer is really doing (audit finding 12).
+    if (!this.pendingState || callbackState(callbackUrl) !== this.pendingState) {
+      if (this.authorization.active)
+        console.warn("AniStream ignored an AniList callback that did not match this sign-in.");
+      return;
+    }
+    this.pendingState = undefined;
     try {
       const result = await this.authorization.handleCallback(async (signal) => {
         const url = new URL(callbackUrl);
@@ -337,6 +355,7 @@ export class AniListClient {
   }
 
   public cancelLogin(): void {
+    this.pendingState = undefined;
     if (!this.authorization.cancel()) return;
     this.emitState(
       this.profile ? { status: "signed-in", profile: this.profile } : { status: "signed-out" },
@@ -824,4 +843,15 @@ export function parseAniListMinIntervalMs(value: string | undefined): number {
     return DEFAULT_REQUEST_MIN_INTERVAL_MS;
   }
   return Math.floor(parsed);
+}
+
+/** The `state` an OAuth callback carries (fragment for the implicit grant, query for errors). */
+function callbackState(callbackUrl: string): string | undefined {
+  try {
+    const url = new URL(callbackUrl);
+    const fragment = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+    return fragment.get("state") ?? url.searchParams.get("state") ?? undefined;
+  } catch {
+    return undefined;
+  }
 }

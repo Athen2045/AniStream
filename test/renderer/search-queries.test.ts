@@ -77,6 +77,38 @@ describe("search queries", () => {
     expect(vi.mocked(bridge.browseAniList).mock.calls.map(([input]) => input.page)).toEqual([1, 2]);
   });
 
+  it("labels results with their search and keeps them on screen while the next one loads", async () => {
+    const bridge = api();
+    const client = createAppQueryClient();
+    const first = searchResultsQuery(request("One Pi"), bridge);
+    const data = await client.fetchInfiniteQuery(first);
+    expect(mergeSearchPages(data).query).toBe("One Pi");
+
+    const keep = (next: ReturnType<typeof searchResultsQuery>) => {
+      const placeholder = next.placeholderData as unknown as (
+        previous: unknown,
+        previousQuery: { queryKey: readonly unknown[] },
+      ) => unknown;
+      return placeholder(data, { queryKey: first.queryKey });
+    };
+    // Same section and filters: the previous search stays (dimmed) until "One Piece" answers.
+    expect(keep(searchResultsQuery(request("One Piece"), bridge))).toBe(data);
+    // A fresh search (other first letters) never shows the old titles.
+    expect(keep(searchResultsQuery(request("Bl"), bridge))).toBe(undefined);
+    // Another section or other filters never show the old results.
+    expect(keep(searchResultsQuery({ ...request("One Piece"), scope: "MANGA" }, bridge))).toBe(
+      undefined,
+    );
+    expect(
+      keep(
+        searchResultsQuery(
+          { ...request("One Piece"), filters: { ...emptyFilters(), genre: "Action" } },
+          bridge,
+        ),
+      ),
+    ).toBe(undefined);
+  });
+
   it("never repeats a movie or show across Show more batches", () => {
     const pages: SearchResults[] = [
       { kind: "more", items: [more(1), more(2)], next: { MOVIE: 2 } },

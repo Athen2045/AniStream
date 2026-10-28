@@ -6,6 +6,9 @@ for (const requiredFragment of [
   'searchParams.set("response_type", "token")',
   'url.hash.startsWith("#")',
   'params.get("access_token")',
+  // Sign-in CSRF guard (audit finding 12): the callback must return this sign-in's state.
+  'searchParams.set("state", state)',
+  "callbackState(callbackUrl) !== this.pendingState",
 ]) {
   if (!mainBundle.includes(requiredFragment)) {
     throw new Error(`Built AniList OAuth flow is missing: ${requiredFragment}`);

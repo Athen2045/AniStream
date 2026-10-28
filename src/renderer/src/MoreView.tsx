@@ -101,7 +101,7 @@ export function MoreView({
   const error = trendingFailure
     ? friendlyRemoteError(trendingFailure, {
         provider: "TMDB",
-        operation: "More catalog",
+        operation: "movies and shows",
         fallback: "Movies and shows are unavailable right now. Configure TMDB, then try again.",
       })
     : undefined;
@@ -328,7 +328,7 @@ export function MoreView({
     gridPage > 1 && gridQuery.error
       ? friendlyRemoteError(gridQuery.error, {
           provider: "TMDB",
-          operation: "More catalog",
+          operation: "movies and shows",
           fallback: "This page could not be loaded.",
         })
       : undefined;

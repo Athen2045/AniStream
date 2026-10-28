@@ -1,10 +1,15 @@
+import { parseBackgroundPreferences } from "../shared/background";
 import type { IpcInvokeArgs, IpcInvokeChannel } from "../shared/ipc";
 import { parseReaderSettings } from "../shared/reader-settings";
 import { isMangaLanguage, type MangaLanguage } from "../shared/manga-languages";
 import { parseMoreTitleSnapshot } from "./more-library";
 import { normalizeActivityInput } from "../shared/activity";
 import { parseBingeChange } from "../shared/binge";
-import { parseDownloadChange } from "../shared/downloads";
+import {
+  parseChapterRequests,
+  parseDownloadChange,
+  parseDownloadedChapterPage,
+} from "../shared/downloads";
 import { parseBrowseFilters, type AniListBrowseFilters } from "../shared/anilist-filters";
 import {
   MORE_GENRES,
@@ -303,18 +308,6 @@ function mangaDexPageInput(value: unknown): MangaDexPageInput {
   };
 }
 
-/** Profile pictures come only from AniList's CDN or Simkl's avatar host. */
-export function isPicturePaletteUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" || url.username || url.password) return false;
-    if (url.hostname === "simkl.in") return url.pathname.startsWith("/avatars/");
-    return url.hostname === "s4.anilist.co" || url.hostname === "img.anili.st";
-  } catch {
-    return false;
-  }
-}
-
 function titleFeedbackRef(value: unknown): {
   type: "ANIME" | "MANGA" | "MOVIE" | "TV";
   id: number;
@@ -399,6 +392,18 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     return [change];
   },
   "downloads:choose-folder": noArgs,
+  "downloads:add-chapters": (value) => {
+    const [raw] = argsOfLength(value, 1);
+    const chapters = parseChapterRequests(raw);
+    if (!chapters) fail();
+    return [chapters];
+  },
+  "downloads:chapter-page": (value) => {
+    const [raw] = argsOfLength(value, 1);
+    const input = parseDownloadedChapterPage(raw);
+    if (!input) fail();
+    return [input];
+  },
   "binge:apply": (value) => {
     const [raw] = argsOfLength(value, 1);
     const change = parseBingeChange(raw);
@@ -414,6 +419,13 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     return [];
   },
   "app:get-info": noArgs,
+  "app:background-preferences": noArgs,
+  "app:set-background-preferences": (value) => {
+    const [input] = argsOfLength(value, 1);
+    const preferences = parseBackgroundPreferences(input);
+    if (!preferences) fail();
+    return [preferences];
+  },
   "app:open-link": (value) => {
     const [url] = argsOfLength(value, 1);
     if (typeof url !== "string" || !isExternalLinkUrl(url)) fail();
@@ -458,12 +470,6 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     const [raw] = argsOfLength(value, 1);
     const input = asRecord(raw);
     return [{ tmdbId: asPositiveInt(input.tmdbId), type: asMoreMediaType(input.type) }];
-  },
-  "profile:palette": (value) => {
-    const [raw] = argsOfLength(value, 1);
-    const url = asString(raw);
-    if (url.length > 600 || !isPicturePaletteUrl(url)) fail();
-    return [url];
   },
   "profile:hero": noArgs,
   "profile:hero-set": (value) => {

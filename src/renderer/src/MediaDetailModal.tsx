@@ -49,6 +49,10 @@ import { friendlyRemoteError } from "./remote-error";
 import { formatAiringTime, titleReleaseNotice, unairedEpisode } from "./airing";
 import { UpNextButton } from "./UpNextButton";
 import { TitleDownloadButton } from "./DownloadButtons";
+import { ChapterDownloadToggle, MangaDownloadButton } from "./ChapterDownloadButtons";
+import { useOptionalDownloads } from "./DownloadsProvider";
+import { selectChapterToRead } from "../../shared/chapter-selection";
+import { chapterDownloadKey, type MangaChapterDownload } from "../../shared/downloads";
 import { useOnline } from "./useOnline";
 import { animeBingeItem } from "./binge-session";
 import { Select } from "./Select";
@@ -117,17 +121,26 @@ export function MediaDetailModal({
     ReadonlyMap<string, MangaDexReaderChapter>
   >(() => new Map());
   const loadedReaderSession = detailSnapshot.readerSession;
+  const online = useOnline();
+  const downloads = useOptionalDownloads();
+  // Offline, a manga with downloaded chapters lists just those, read from disk (like Anime's
+  // downloaded episodes). Built from the downloads, so it needs no saved chapter list.
+  const offlineSession = useMemo(
+    () => (online ? undefined : downloadedChapterSession(media.id, downloads?.state?.chapters)),
+    [downloads?.state?.chapters, media.id, online],
+  );
   const readerSession = useMemo(
     () =>
-      loadedReaderSession && swappedChapters.size
+      offlineSession ??
+      (loadedReaderSession && swappedChapters.size
         ? {
             ...loadedReaderSession,
             chapters: loadedReaderSession.chapters.map(
               (chapter) => swappedChapters.get(chapter.id) ?? chapter,
             ),
           }
-        : loadedReaderSession,
-    [loadedReaderSession, swappedChapters],
+        : loadedReaderSession),
+    [loadedReaderSession, offlineSession, swappedChapters],
   );
   const [activeChapter, setActiveChapter] = useState<MangaDexReaderChapter>();
   const [chapterOpenError, setChapterOpenError] = useState<string>();
@@ -137,11 +150,23 @@ export function MediaDetailModal({
    * resolved first. A MangaDex chapter with a mirror copy is checked first and swapped for the
    * mirror copy when MangaDex cannot serve its images.
    */
+  const downloadsRef = useRef(downloads);
+  useEffect(() => {
+    downloadsRef.current = downloads;
+  }, [downloads]);
   const openChapter = useCallback((chapter: MangaDexReaderChapter | undefined): void => {
     const generation = ++chapterOpenGeneration.current;
     const current = (): boolean => generation === chapterOpenGeneration.current;
     setChapterOpenError(undefined);
     if (!chapter) return;
+    // Downloaded: opens straight from disk, with no source checks (works offline).
+    const saved = downloadsRef.current?.byChapter.get(
+      chapterDownloadKey(chapter.source === "mirror" ? "mirror" : "mangadex", chapter.id),
+    );
+    if (saved?.status === "done") {
+      setActiveChapter({ ...chapter, pages: saved.pagesTotal });
+      return;
+    }
     const openMirror = (mirror: MangaDexReaderChapter): void => {
       void window.anistream.getMangaMirrorChapter({ chapterId: mirror.id }).then(
         (info) => {
@@ -280,8 +305,25 @@ export function MediaDetailModal({
   );
 
   const openPreferredChapter = useCallback(async (): Promise<void> => {
+    // Offline, Read picks among the downloaded chapters (the live list cannot load).
+    if (offlineSession) {
+      openChapter(
+        selectChapterToRead(
+          offlineSession.chapters,
+          detailSnapshot.detail?.listEntry?.progress ?? 0,
+          detailSnapshot.mangaResume,
+        ),
+      );
+      return;
+    }
     openChapter(await detailSession.openReader());
-  }, [detailSession, openChapter]);
+  }, [
+    detailSession,
+    detailSnapshot.detail?.listEntry?.progress,
+    detailSnapshot.mangaResume,
+    offlineSession,
+    openChapter,
+  ]);
 
   const changeMangaPreferences = useCallback(
     (translatedLanguage: string, preferredGroupId?: string): void => {
@@ -338,7 +380,6 @@ export function MediaDetailModal({
 
   const isAnime = resolved.type === "ANIME";
   const animeLayout: "series" | "movie" = resolved.format === "MOVIE" ? "movie" : "series";
-  const online = useOnline();
   const libraryEntry = personalized ? access.libraryEntries.get(media.id) : undefined;
   const accentStyle = {
     ...(isAnime ? undefined : titleAccentStyle(resolved.coverColor)),
@@ -375,10 +416,11 @@ export function MediaDetailModal({
       return !entry || entry.status === "PLANNING";
     })
     .slice(0, 6);
+  // Offline, a title page keeps to what plays or reads without a connection: no About or More
+  // like this. Neither anime (2026-10-18) nor manga (2026-10-28) pages have a Links section.
   const sections = [
     { id: "units", label: isAnime ? "Episodes" : "Chapters" },
-    ...(recommendations.length ? [{ id: "similar", label: "More like this" }] : []),
-    ...(detail?.externalLinks.length ? [{ id: "links", label: "Links" }] : []),
+    ...(recommendations.length && online ? [{ id: "similar", label: "More like this" }] : []),
   ];
   const [activeSection, setActiveSection] = useState("units");
   const [synopsisOpen, setSynopsisOpen] = useState(false);
@@ -819,35 +861,8 @@ export function MediaDetailModal({
                   : undefined,
               ]}
             />
-            <div className="title-stats">
-              {readerSession?.statistics?.rating && readerSession.mangaDexId ? (
-                <a
-                  href={`https://mangadex.org/title/${readerSession.mangaDexId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={`${readerSession.statistics.rating}/10 on MangaDex`}
-                >
-                  {readerSession.statistics.rating.toFixed(2)}
-                  <small>MangaDex</small>
-                </a>
-              ) : null}
-              {readerSession?.statistics?.follows !== undefined ? (
-                <span>
-                  {compactNumber(readerSession.statistics.follows)}
-                  <small>follows</small>
-                </span>
-              ) : resolved.popularity ? (
-                <span>
-                  {compactNumber(resolved.popularity)}
-                  <small>members</small>
-                </span>
-              ) : null}
-              {detail?.duration ? (
-                <span>
-                  {detail.duration}m<small>per episode</small>
-                </span>
-              ) : null}
-            </div>
+            {/* No MangaDex score or follows row: the chips above carry the ratings, and MangaDex is
+                credited under the chapters (user decision 2026-10-28). */}
             {loading && !aniListSummary && !malSummary ? (
               // While details load, the summary is shaped, never "no summary".
               <div className="title-synopsis-loading" aria-hidden="true">
@@ -906,6 +921,8 @@ export function MediaDetailModal({
 
       {isAnime ? null : (
         <nav className="title-tabs" aria-label="Title sections">
+          {/* Fills the strip above the stuck tabs so the page never shows through there. */}
+          <span className="title-tabs-cover" aria-hidden="true" />
           {sections.map((section) => (
             <button
               key={section.id}
@@ -956,13 +973,21 @@ export function MediaDetailModal({
             </Suspense>
           ) : (
             <MangaChapterBrowser
+              media={resolved}
               session={readerSession}
+              downloadedOnly={Boolean(offlineSession)}
               fallback={mangaChapterFallback}
+              officialLinks={
+                online
+                  ? distinctExternalLinks(detail?.externalLinks ?? [])
+                      .filter((link) => link.type !== "SOCIAL")
+                      .slice(0, 6)
+                  : []
+              }
               currentProgress={mangaProgress}
-              totalChapters={resolved.totalProgress}
               resume={mangaResume}
               loading={loadingReader}
-              loadError={detailSnapshot.error}
+              loadError={offlineSession ? undefined : detailSnapshot.error}
               onPreferenceChange={changeMangaPreferences}
               onRetry={() => void detailSession.retryReader()}
               openError={chapterOpenError}
@@ -970,21 +995,11 @@ export function MediaDetailModal({
                 setBackToOrigin(false);
                 openChapter(chapter);
               }}
-              onContinue={
-                mangaUnreadable
-                  ? undefined
-                  : () => {
-                      setBackToOrigin(false);
-                      void openPreferredChapter();
-                    }
-              }
-              continueLabel={primaryLabel}
-              releaseNotice={releaseNotice}
             />
           )}
         </section>
 
-        {recommendations.length ? (
+        {recommendations.length && online ? (
           <section className="title-section" data-title-section="similar">
             <h2>More like this</h2>
             <SimilarTitles
@@ -1009,7 +1024,7 @@ export function MediaDetailModal({
           </section>
         ) : null}
 
-        {isAnime && animeLayout === "series" && detail ? (
+        {isAnime && animeLayout === "series" && detail && online ? (
           <AnimeAbout
             facts={titleFacts(detail)
               .filter(([name]) => ["Status", "Aired", "Studio", "Original Creator"].includes(name))
@@ -1018,28 +1033,6 @@ export function MediaDetailModal({
                 value,
               ])}
           />
-        ) : null}
-
-        {/* Anime pages drop the Links row (user decision 2026-10-18). */}
-        {!isAnime && detail?.externalLinks.length ? (
-          <section className="title-section" data-title-section="links">
-            <h2>Links</h2>
-            <div className="external-links">
-              {distinctExternalLinks(detail.externalLinks)
-                .slice(0, 10)
-                .map((link) => (
-                  <a
-                    key={`${link.site}-${link.url}`}
-                    href={link.url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {link.site}
-                    <ExternalLink size={13} />
-                  </a>
-                ))}
-            </div>
-          </section>
         ) : null}
       </div>
       <Suspense
@@ -1209,12 +1202,6 @@ function entryStatusLabel(status: string, anime: boolean): string {
   }
 }
 
-function compactNumber(value: number): string {
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(
-    value,
-  );
-}
-
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
@@ -1277,10 +1264,12 @@ type ChapterEmptyState = {
 };
 
 function MangaChapterBrowser({
+  media,
   session,
+  downloadedOnly,
   fallback,
+  officialLinks,
   currentProgress,
-  totalChapters,
   resume,
   loading,
   loadError,
@@ -1288,14 +1277,16 @@ function MangaChapterBrowser({
   onPreferenceChange,
   onRetry,
   onRead,
-  onContinue,
-  continueLabel,
-  releaseNotice,
 }: {
+  /** The title, for chapter downloads. */
+  media: AniListCatalogMedia;
   session?: MangaDexReaderSession;
+  /** Offline: `session` holds only the downloaded chapters. */
+  downloadedOnly?: boolean;
   fallback?: MangaChapterFallback;
+  /** AniList's official sites for the title: offered when MangaDex does not have it. */
+  officialLinks: AniListMediaDetail["externalLinks"];
   currentProgress: number;
-  totalChapters?: number;
   resume?: MangaReadingResume;
   loading: boolean;
   loadError?: string;
@@ -1304,11 +1295,6 @@ function MangaChapterBrowser({
   onPreferenceChange: (translatedLanguage: string, preferredGroupId?: string) => void;
   onRetry: () => void;
   onRead: (chapter: MangaDexReaderChapter) => void;
-  /** Absent when nothing here is readable: the progress panel then shows no Continue. */
-  onContinue?: () => void;
-  continueLabel: string;
-  /** Set while the title is not yet released: reading is blocked with this message. */
-  releaseNotice?: string;
 }): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [descending, setDescending] = useState(true);
@@ -1326,12 +1312,11 @@ function MangaChapterBrowser({
     fallback && (fallback.externalChapters.length || fallback.missingRanges.length),
   );
   const readingLinks = fallback?.readingLinks ?? [];
+  // Not on MangaDex: the official reading sites, else AniList's links for the title.
+  const unmappedLinks: Array<{ site: string; url: string }> = readingLinks.length
+    ? readingLinks
+    : officialLinks;
   const mirrorLabel = session?.chapters.find((chapter) => chapter.source === "mirror")?.sourceLabel;
-  const latestChapter = Math.max(
-    0,
-    ...(session?.chapters ?? []).map((chapter) => Math.floor(chapter.number ?? 0)),
-  );
-  const knownTotal = totalChapters ?? (latestChapter || undefined);
   const languageName =
     MANGA_LANGUAGE_LABELS[(session?.translatedLanguage ?? "en") as MangaLanguage] ??
     (session?.translatedLanguage ?? "en").toUpperCase();
@@ -1347,30 +1332,45 @@ function MangaChapterBrowser({
             body: loadError ?? "MangaDex didn’t respond. This is usually temporary.",
             action: "Try again",
           }
-        : session.status === "unmapped"
+        : session.mirrorUnavailable &&
+            (session.status === "unmapped" || session.chapters.length === 0)
           ? {
-              tone: "info",
-              title: "Not available to read here yet",
-              body: "AniStream reads manga from MangaDex, and this title isn’t there yet. The Links section has official places to read it.",
-              action: "Check again",
+              // The chapter mirror may well have this title; it just did not answer this time.
+              tone: "retry",
+              title: "English chapters couldn’t be checked",
+              body: `${
+                session.status === "unmapped"
+                  ? "This title isn’t on MangaDex"
+                  : "MangaDex has no English chapters for this title"
+              }, and ${session.mirrorUnavailable} didn’t respond. This is usually temporary; try again in a few minutes.`,
+              action: "Try again",
             }
-          : session.status === "unavailable"
+          : session.status === "unmapped"
             ? {
-                tone: "retry",
-                title: "Chapters didn’t load",
-                body: "MangaDex didn’t respond. This is usually temporary.",
-                action: "Try again",
+                tone: "info",
+                title: "Not available to read here yet",
+                body: unmappedLinks.length
+                  ? "AniStream reads manga from MangaDex, and this title isn’t there yet. You can read it on these official sites:"
+                  : "AniStream reads manga from MangaDex, and this title isn’t there yet.",
+                action: "Check again",
               }
-            : session.chapters.length === 0
+            : session.status === "unavailable"
               ? {
-                  tone: "info",
-                  title: `No ${languageName} chapters yet`,
-                  body: otherLanguages.length
-                    ? `There are no ${languageName} translations on MangaDex yet. Try another language above.`
-                    : `There are no ${languageName} translations on MangaDex yet. Check back later.`,
-                  action: "Check again",
+                  tone: "retry",
+                  title: "Chapters didn’t load",
+                  body: "MangaDex didn’t respond. This is usually temporary.",
+                  action: "Try again",
                 }
-              : undefined;
+              : session.chapters.length === 0
+                ? {
+                    tone: "info",
+                    title: `No ${languageName} chapters yet`,
+                    body: otherLanguages.length
+                      ? `There are no ${languageName} translations on MangaDex yet. Try another language above.`
+                      : `There are no ${languageName} translations on MangaDex yet. Check back later.`,
+                    action: "Check again",
+                  }
+                : undefined;
   // Search and filters only help when there is something to filter (or another language to try).
   const showToolbar = !emptyState || (session?.status === "available" && otherLanguages.length > 0);
   const nextNumber =
@@ -1400,38 +1400,17 @@ function MangaChapterBrowser({
 
   return (
     <section className="manga-chapter-browser">
-      <div className="reading-panel">
-        <div>
+      {/* The title header's Read button and the list's current row already show where the reader
+          is (user decision 2026-10-28); offline, one line says why only downloads are listed. */}
+      {downloadedOnly && session ? (
+        <p className="reading-offline-note" role="status">
           <strong>
-            {currentProgress > 0 || resume
-              ? `You're on chapter ${formatNumber(nextNumber)}${knownTotal ? ` of ${knownTotal}` : ""}`
-              : `${knownTotal ? `${knownTotal} chapters` : "Chapters"} to read`}
+            {session.chapters.length} downloaded{" "}
+            {session.chapters.length === 1 ? "chapter" : "chapters"}
           </strong>
-          <span>
-            {knownTotal && currentProgress > 0
-              ? `${Math.max(0, knownTotal - currentProgress)} chapters left`
-              : currentProgress > 0
-                ? `${currentProgress} read`
-                : "Start from chapter 1"}
-          </span>
-          {knownTotal ? (
-            <span className="reading-meter" aria-hidden="true">
-              <span style={{ transform: `scaleX(${Math.min(1, currentProgress / knownTotal)})` }} />
-            </span>
-          ) : null}
-        </div>
-        {onContinue ? (
-          <button
-            className={`title-primary${releaseNotice ? " is-upcoming" : ""}`}
-            type="button"
-            disabled={Boolean(releaseNotice)}
-            onClick={onContinue}
-          >
-            {releaseNotice ? <Clock3 size={17} /> : <BookOpen size={17} />}
-            {releaseNotice ?? continueLabel}
-          </button>
-        ) : null}
-      </div>
+          <span>Read without a connection</span>
+        </p>
+      ) : null}
       {showToolbar ? (
         <div className="chapter-browser-toolbar">
           <label className="chapter-search">
@@ -1490,6 +1469,9 @@ function MangaChapterBrowser({
             )}
             {descending ? "Newest" : "Oldest"}
           </button>
+          {session ? (
+            <MangaDownloadButton media={media} session={session} readThrough={currentProgress} />
+          ) : null}
         </div>
       ) : null}
       {!emptyState && (session?.status === "unavailable" || session?.status === "unmapped") ? (
@@ -1538,6 +1520,16 @@ function MangaChapterBrowser({
           <div>
             <strong>{emptyState.title}</strong>
             <p>{emptyState.body}</p>
+            {session?.status === "unmapped" && unmappedLinks.length ? (
+              <span className="chapter-range-links chapter-empty-links">
+                {unmappedLinks.map((link) => (
+                  <a key={link.url} href={link.url} target="_blank" rel="noreferrer">
+                    {link.site}
+                    <ExternalLink size={12} />
+                  </a>
+                ))}
+              </span>
+            ) : null}
           </div>
           <button
             type="button"
@@ -1641,37 +1633,40 @@ function MangaChapterBrowser({
               const readingProgress = resume?.chapterId === chapter.id ? resume.progress : 0;
               return [
                 heading,
-                <button
-                  type="button"
-                  key={chapter.id}
-                  className={`chapter-row${completed ? " is-read" : ""}${isNext ? " is-next" : ""}`}
-                  onClick={() => onRead(chapter)}
-                  aria-label={`Read chapter ${chapter.number ?? "?"}${chapter.title ? `: ${chapter.title}` : ""}${completed ? " (read)" : ""}`}
-                >
-                  <span className="chapter-dot" aria-hidden="true">
-                    {completed ? <Check size={11} /> : null}
-                  </span>
-                  <span className="chapter-number">Ch. {chapter.number ?? "?"}</span>
-                  <span className="chapter-title">
-                    {chapter.title ?? `Chapter ${chapter.number ?? "?"}`}
-                    {isNext ? <span className="chapter-next">Up next</span> : null}
-                  </span>
-                  <span className="chapter-group">
-                    {chapter.source === "mirror"
-                      ? chapter.sourceLabel
-                      : chapter.groups.map((group) => group.name).join(" + ") || "—"}
-                  </span>
-                  <span className="chapter-language">
-                    {chapter.translatedLanguage.toLocaleUpperCase()}
-                  </span>
-                  <span className="chapter-date">{relativeDate(chapter.publishedAt)}</span>
-                  <BookOpen size={16} />
-                  {readingProgress > 0 && readingProgress < 1 ? (
-                    <span className="chapter-reading-progress" aria-hidden="true">
-                      <span style={{ transform: `scaleX(${readingProgress})` }} />
+                <div className="chapter-row-wrap" key={chapter.id}>
+                  <button
+                    type="button"
+                    className={`chapter-row${completed ? " is-read" : ""}${isNext ? " is-next" : ""}`}
+                    onClick={() => onRead(chapter)}
+                    aria-label={`Read chapter ${chapter.number ?? "?"}${chapter.title ? `: ${chapter.title}` : ""}${completed ? " (read)" : ""}`}
+                  >
+                    <span className="chapter-dot" aria-hidden="true">
+                      {completed ? <Check size={11} /> : null}
                     </span>
-                  ) : null}
-                </button>,
+                    <span className="chapter-number">Ch. {chapter.number ?? "?"}</span>
+                    <span className="chapter-title">
+                      {chapter.title ?? `Chapter ${chapter.number ?? "?"}`}
+                      {isNext ? <span className="chapter-next">Up next</span> : null}
+                    </span>
+                    <span className="chapter-group">
+                      {chapter.source === "mirror"
+                        ? chapter.sourceLabel
+                        : chapter.groups.map((group) => group.name).join(" + ") || "—"}
+                    </span>
+                    <span className="chapter-language">
+                      {chapter.translatedLanguage.toLocaleUpperCase()}
+                    </span>
+                    <span className="chapter-date">{relativeDate(chapter.publishedAt)}</span>
+                    <BookOpen size={16} />
+                    <span className="chapter-download-slot" aria-hidden="true" />
+                    {readingProgress > 0 && readingProgress < 1 ? (
+                      <span className="chapter-reading-progress" aria-hidden="true">
+                        <span style={{ transform: `scaleX(${readingProgress})` }} />
+                      </span>
+                    ) : null}
+                  </button>
+                  <ChapterDownloadToggle media={media} chapter={chapter} />
+                </div>,
               ];
             })}
           </div>
@@ -1824,4 +1819,45 @@ function relativeDate(value?: string): string {
   if (days < 35) return `${Math.floor(days / 7)}w ago`;
   if (days < 365) return `${Math.floor(days / 30)}mo ago`;
   return `${Math.floor(days / 365)}y ago`;
+}
+
+/** The downloaded chapters of one title as a reader session, for reading offline. */
+function downloadedChapterSession(
+  aniListId: number,
+  items: readonly MangaChapterDownload[] | undefined,
+): MangaDexReaderSession | undefined {
+  const done = (items ?? []).filter(
+    (item) => item.aniListId === aniListId && item.status === "done",
+  );
+  if (!done.length) return undefined;
+  const chapters = done
+    .map(({ chapter, pagesTotal }): MangaDexReaderChapter => ({
+      id: chapter.id,
+      ...(chapter.number !== undefined ? { number: chapter.number } : {}),
+      ...(chapter.volume ? { volume: chapter.volume } : {}),
+      ...(chapter.chapterTitle ? { title: chapter.chapterTitle } : {}),
+      translatedLanguage: chapter.translatedLanguage,
+      groups: chapter.groups,
+      ...(chapter.groups.length
+        ? { groupName: chapter.groups.map((group) => group.name).join(", ") }
+        : {}),
+      pages: pagesTotal,
+      ...(chapter.source === "mirror"
+        ? {
+            source: "mirror" as const,
+            ...(chapter.sourceLabel ? { sourceLabel: chapter.sourceLabel } : {}),
+          }
+        : {}),
+    }))
+    .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+  const languages = [...new Set(chapters.map((chapter) => chapter.translatedLanguage))];
+  return {
+    status: "available",
+    aniListId,
+    translatedLanguage: languages[0] ?? "en",
+    availableLanguages: languages,
+    availableGroups: [],
+    archiveStatus: "complete",
+    chapters,
+  };
 }

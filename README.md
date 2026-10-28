@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/Athen2045/AniStream/releases/latest">Download</a> |
-  <a href=".github/releases/v2.1.0.md">Release notes</a> |
+  <a href=".github/releases/v2.2.2.md">Release notes</a> |
   <a href="CHANGELOG.md">Changelog</a> |
   <a href="LEGAL.md">Copyright</a>
 </p>
@@ -55,9 +55,11 @@ computer, and you can connect AniList or Simkl to sync your lists if you want to
   episode**. Sub or dub, your choice of audio and subtitles, previews when you seek, and keyboard
   shortcuts. If one player can't play an episode, a backup takes over by itself.
 - **Watch offline.** Download one episode or a whole season and watch it without a connection,
-  within a storage limit you set.
+  within a storage limit you set. Downloads wait out a lost connection, and can finish in the
+  background after you close the window.
 - **Read manga without the clutter.** A fullscreen reader that remembers your page, chapters
-  grouped by volume, and quick shortcuts for chapters, fit and fullscreen.
+  grouped by volume, and quick shortcuts for chapters, fit and fullscreen. Download chapters at
+  original quality to read offline, sharing the same storage limit as episodes.
 - **Movies and shows too.** The More section brings trending films and series, season grids and
   your own watch list.
 - **Recommendations that get you.** For You learns from what you watch and read, right on your
@@ -106,12 +108,14 @@ Download the installer for your platform from the
 
 | Platform | File                        | Requires                           |
 | -------- | --------------------------- | ---------------------------------- |
-| Windows  | `AniStream.Setup.2.1.0.exe` | Windows 10 or 11, x64              |
-| macOS    | `AniStream-2.1.0-arm64.dmg` | macOS 12 or newer on Apple Silicon |
+| Windows  | `AniStream.Setup.2.2.2.exe` | Windows 10 or 11, x64              |
+| macOS    | `AniStream-2.2.2-arm64.dmg` | macOS 12 or newer on Apple Silicon |
 
 Both installers are unsigned. On Windows, select **More info → Run anyway** if SmartScreen warns
 you. On macOS, open **System Settings → Privacy & Security** and choose **Open Anyway** after the
-first launch. Each release includes a `SHA256SUMS.txt` file to verify your download.
+first launch. Each release includes a `SHA256SUMS.txt` file to verify your download, and from
+2.2.2 each installer is attested to the release workflow that built it:
+`gh attestation verify AniStream.Setup.<version>.exe --repo Athen2045/AniStream`.
 
 > [!TIP]
 > Already have AniStream? Install the new version over your existing copy; your progress,
