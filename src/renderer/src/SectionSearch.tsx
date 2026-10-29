@@ -1,4 +1,4 @@
-import { Clock3, Info, Play, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -6,43 +6,37 @@ import type {
   AniListSearchPerson,
   MoreCatalogItem,
 } from "../../shared/contracts";
-import {
-  COUNTRY_LABELS,
-  FORMAT_LABELS,
-  SEASON_LABELS,
-  STATUS_LABELS,
-} from "../../shared/anilist-filters";
-import { cachedArtworkUrl } from "../../shared/artwork";
-import {
-  MORE_LANGUAGES,
-  MORE_SORT_LABELS,
-  moreFilterCount,
-  type MoreBrowseFilters,
-  type MoreSort,
-} from "../../shared/more-filters";
+import { moreFilterCount, type MoreBrowseFilters } from "../../shared/more-filters";
 import { useAppPreferences } from "./app-preferences";
 import {
   DEFAULT_SORT,
-  SORT_LABELS,
   activeFilterCount,
   emptyFilters,
   filterKey,
   type CatalogFilterState,
 } from "./catalog-filters";
-import { CoverImage } from "./CoverImage";
 import { formatMediaLabel } from "./format-label";
-import { HoverPoster } from "./HoverPoster";
 import { DEFAULT_MORE_SORT, emptyMoreFilters } from "./more-filter-state";
-import { formatScore, moreKey, moreSnapshot, releaseState } from "./more-format";
-import {
-  addRecentSearch,
-  clearRecentSearches,
-  removeRecentSearch,
-  useRecentSearches,
-} from "./recent-searches";
+import { formatScore, moreKey, moreSnapshot } from "./more-format";
+import { addRecentSearch, useRecentSearches } from "./recent-searches";
 import { friendlyRemoteError } from "./remote-error";
-import { isConfidentMatch, searchNormalize } from "./search-helpers";
+import { isConfidentMatch } from "./search-helpers";
 import { SearchFiltersPanel } from "./SearchFiltersPanel";
+import { AniListSearchCard, MoreSearchCard } from "./SearchCards";
+import { SearchNoMatches } from "./SearchNoMatches";
+import { peopleFor, SearchPeople } from "./SearchPeople";
+import { SearchStartPage } from "./SearchStartPage";
+import { SearchTopResult } from "./SearchTopResult";
+import { catalogFilterChips, moreFilterChips } from "./search-filter-chips";
+import { genreArtwork } from "./search-genres";
+import {
+  keepFilters,
+  keepMoreFilters,
+  keepQuery,
+  rememberedFilters,
+  rememberedMoreFilters,
+  rememberedQuery,
+} from "./search-memory";
 import {
   didYouMeanQuery,
   filterOptionsQuery,
@@ -52,7 +46,6 @@ import {
   type SearchResults as Results,
   type SearchScope,
 } from "./search-queries";
-import { titleTintStyle } from "./title-accent";
 import type { ViewerAccess } from "./viewer-access";
 
 export type { SearchScope } from "./search-queries";
@@ -74,64 +67,7 @@ const COPY: Record<SearchScope, { placeholder: string; noun: string }> = {
   MORE: { placeholder: "Search movies and shows", noun: "movies and shows" },
 };
 
-/** Genre tiles before typing: the tint behind each, and the AniList / TMDB genre it filters. */
-const GENRE_TILES: Record<SearchScope, ReadonlyArray<{ genre: string; color: string }>> = {
-  ANIME: [
-    { genre: "Action", color: "#c2410c" },
-    { genre: "Romance", color: "#be185d" },
-    { genre: "Fantasy", color: "#6d28d9" },
-    { genre: "Comedy", color: "#ca8a04" },
-    { genre: "Sci-Fi", color: "#0369a1" },
-    { genre: "Slice of Life", color: "#15803d" },
-    { genre: "Horror", color: "#7f1d1d" },
-    { genre: "Sports", color: "#0f766e" },
-  ],
-  MANGA: [
-    { genre: "Action", color: "#c2410c" },
-    { genre: "Romance", color: "#be185d" },
-    { genre: "Fantasy", color: "#6d28d9" },
-    { genre: "Comedy", color: "#ca8a04" },
-    { genre: "Drama", color: "#0369a1" },
-    { genre: "Slice of Life", color: "#15803d" },
-    { genre: "Mystery", color: "#4c1d95" },
-    { genre: "Horror", color: "#7f1d1d" },
-  ],
-  MORE: [
-    { genre: "Action", color: "#c2410c" },
-    { genre: "Comedy", color: "#ca8a04" },
-    { genre: "Drama", color: "#0369a1" },
-    { genre: "Sci-Fi", color: "#6d28d9" },
-    { genre: "Crime", color: "#7f1d1d" },
-    { genre: "Romance", color: "#be185d" },
-    { genre: "Documentary", color: "#15803d" },
-    { genre: "Family", color: "#0f766e" },
-  ],
-};
-
-/** The query in each section's field, so returning from a title shows the same search. */
-const queryByScope: Record<SearchScope, string> = { ANIME: "", MANGA: "", MORE: "" };
-/** Filters are remembered per section for this app session. */
-const filtersByScope: Record<"ANIME" | "MANGA", CatalogFilterState> = {
-  ANIME: emptyFilters(),
-  MANGA: emptyFilters(),
-};
-let moreFiltersState: MoreBrowseFilters = emptyMoreFilters();
-function keepQuery(scope: SearchScope, query: string): void {
-  queryByScope[scope] = query;
-}
-function keepFilters(scope: "ANIME" | "MANGA", filters: CatalogFilterState): void {
-  filtersByScope[scope] = filters;
-}
-function keepMoreFilters(filters: MoreBrowseFilters): void {
-  moreFiltersState = filters;
-}
-
-/** Makes the next Search page in `scope` open on one genre (a Genre row's View all). */
-export function presetSearchGenre(scope: SearchScope, genre: string): void {
-  keepQuery(scope, "");
-  if (scope === "MORE") keepMoreFilters({ ...emptyMoreFilters(), genre });
-  else keepFilters(scope, { ...emptyFilters(), genre });
-}
+export { presetSearchGenre } from "./search-memory";
 
 /** Keeps the person-titles query's shape while no studio or character is open (it stays off). */
 const PLACEHOLDER_PERSON: AniListSearchPerson = { kind: "studio", id: 0, name: "" };
@@ -176,21 +112,22 @@ export function SectionSearch({
   const { rememberSearches } = useAppPreferences();
   const inputRef = useRef<HTMLInputElement>(null);
   const fieldRef = useRef<HTMLFormElement>(null);
-  const [query, setQueryState] = useState(() => queryByScope[scope]);
+  const [query, setQueryState] = useState(() => rememberedQuery(scope));
   const setQuery = (next: string): void => {
     keepQuery(scope, next);
     setQueryState(next);
   };
-  const [submitted, setSubmitted] = useState(() =>
-    queryByScope[scope].trim().length >= MIN_QUERY ? queryByScope[scope].trim() : "",
-  );
+  const [submitted, setSubmitted] = useState(() => {
+    const kept = rememberedQuery(scope).trim();
+    return kept.length >= MIN_QUERY ? kept : "";
+  });
   const recent = useRecentSearches(scope);
   const [savedMore, setSavedMore] = useState<Set<string>>(new Set());
   const catalogScope = scope === "MORE" ? undefined : scope;
   const [filters, setFilters] = useState<CatalogFilterState>(() =>
-    catalogScope ? filtersByScope[catalogScope] : emptyFilters(),
+    catalogScope ? rememberedFilters(catalogScope) : emptyFilters(),
   );
-  const [moreFilters, setMoreFilters] = useState<MoreBrowseFilters>(() => moreFiltersState);
+  const [moreFilters, setMoreFilters] = useState<MoreBrowseFilters>(rememberedMoreFilters);
   const moreFiltered =
     scope === "MORE" &&
     (moreFilterCount(moreFilters) > 0 || moreFilters.sort !== DEFAULT_MORE_SORT);
@@ -399,90 +336,9 @@ export function SectionSearch({
   }
 
   // Applied filters as removable chips under the field.
-  const chips: Array<{ key: string; label: string; remove: () => void }> = [];
-  if (catalogScope) {
-    const without = (key: keyof CatalogFilterState) => () => {
-      const next = { ...filters };
-      delete next[key];
-      updateFilters(next);
-    };
-    if (filters.genre) chips.push({ key: "genre", label: filters.genre, remove: without("genre") });
-    if (filters.format)
-      chips.push({
-        key: "format",
-        label: FORMAT_LABELS[filters.format],
-        remove: without("format"),
-      });
-    if (filters.status)
-      chips.push({
-        key: "status",
-        label: STATUS_LABELS[filters.status],
-        remove: without("status"),
-      });
-    if (filters.season)
-      chips.push({
-        key: "season",
-        label: SEASON_LABELS[filters.season],
-        remove: without("season"),
-      });
-    if (filters.year !== undefined)
-      chips.push({ key: "year", label: String(filters.year), remove: without("year") });
-    if (filters.country)
-      chips.push({
-        key: "country",
-        label: COUNTRY_LABELS[filters.country],
-        remove: without("country"),
-      });
-    if (filters.tag) chips.push({ key: "tag", label: filters.tag, remove: without("tag") });
-    if (filters.minScore !== undefined)
-      chips.push({
-        key: "score",
-        label: `Score ${filters.minScore / 10}+`,
-        remove: without("minScore"),
-      });
-    if (filters.sort !== DEFAULT_SORT)
-      chips.push({
-        key: "sort",
-        label: SORT_LABELS[filters.sort],
-        remove: () => updateFilters({ ...filters, sort: DEFAULT_SORT }),
-      });
-  } else {
-    const without = (key: keyof MoreBrowseFilters) => () => {
-      const next = { ...moreFilters };
-      delete next[key];
-      updateMoreFilters(next);
-    };
-    if (moreFilters.type)
-      chips.push({
-        key: "type",
-        label: moreFilters.type === "MOVIE" ? "Movies" : "Shows",
-        remove: without("type"),
-      });
-    if (moreFilters.genre)
-      chips.push({ key: "genre", label: moreFilters.genre, remove: without("genre") });
-    if (moreFilters.language)
-      chips.push({
-        key: "language",
-        label:
-          MORE_LANGUAGES.find((row) => row.code === moreFilters.language)?.label ??
-          moreFilters.language,
-        remove: without("language"),
-      });
-    if (moreFilters.year !== undefined)
-      chips.push({ key: "year", label: String(moreFilters.year), remove: without("year") });
-    if (moreFilters.minScore !== undefined)
-      chips.push({
-        key: "score",
-        label: `Score ${moreFilters.minScore}+`,
-        remove: without("minScore"),
-      });
-    if (moreFilters.sort !== DEFAULT_MORE_SORT)
-      chips.push({
-        key: "sort",
-        label: MORE_SORT_LABELS[moreFilters.sort as MoreSort],
-        remove: () => updateMoreFilters({ ...moreFilters, sort: DEFAULT_MORE_SORT }),
-      });
-  }
+  const chips = catalogScope
+    ? catalogFilterChips(filters, updateFilters)
+    : moreFilterChips(moreFilters, updateMoreFilters);
   const clearFilters = (): void =>
     catalogScope ? updateFilters(emptyFilters()) : updateMoreFilters(emptyMoreFilters());
 
@@ -490,33 +346,7 @@ export function SectionSearch({
     if (catalogScope) updateFilters({ ...emptyFilters(), genre });
     else updateMoreFilters({ ...emptyMoreFilters(), genre });
   };
-  // Each genre tile gets a different trending title's artwork (none rather than a repeat).
-  const genreArt = new Map<string, string>();
-  {
-    const used = new Set<string>();
-    for (const tile of GENRE_TILES[scope]) {
-      const art =
-        trending?.kind === "anilist"
-          ? trending.items.find(
-              (item) =>
-                item.genres.includes(tile.genre) && item.bannerUrl && !used.has(item.bannerUrl),
-            )?.bannerUrl
-          : trending?.kind === "more"
-            ? trending.items.find(
-                (item) =>
-                  // TMDB names the genre "Science Fiction"; the filter calls it "Sci-Fi".
-                  (item.genres.includes(tile.genre) ||
-                    (tile.genre === "Sci-Fi" && item.genres.includes("Science Fiction"))) &&
-                  item.backdropUrl &&
-                  !used.has(item.backdropUrl),
-              )?.backdropUrl
-            : undefined;
-      if (art) {
-        used.add(art);
-        genreArt.set(tile.genre, art);
-      }
-    }
-  }
+  const genreArt = genreArtwork(scope, trending);
 
   const member = access.kind === "member";
   const renderPoster = (
@@ -527,68 +357,43 @@ export function SectionSearch({
     if (grid?.kind === "more") {
       const more = item as MoreCatalogItem;
       return (
-        <div className="search-card" key={moreKey(more)} data-search-card={index}>
-          <HoverPoster
-            title={more.title}
-            imageUrl={more.posterUrl}
-            score={formatScore(more.score)}
-            meta={[more.year, more.type === "MOVIE" ? "Movie" : "Series"]}
-            releaseLabel={releaseState(more.releaseDate).label}
-            saved={savedMore.has(moreKey(more))}
-            onOpen={() => {
-              remember();
-              onOpenMore(more);
-            }}
-            onPrimary={() => {
-              remember();
-              onPrimaryMore(more);
-            }}
-            onToggleSaved={() => toggleMore(more)}
-          />
-          <b title={more.title}>{more.title}</b>
-          <small>
-            {[more.type === "MOVIE" ? "Movie" : "Series", more.year, formatScore(more.score)]
-              .filter(Boolean)
-              .join(" · ")}
-          </small>
-        </div>
+        <MoreSearchCard
+          key={moreKey(more)}
+          item={more}
+          index={index}
+          detailed
+          saved={savedMore.has(moreKey(more))}
+          onToggleSaved={() => toggleMore(more)}
+          onOpen={() => {
+            remember();
+            onOpenMore(more);
+          }}
+          onPrimary={() => {
+            remember();
+            onPrimaryMore(more);
+          }}
+        />
       );
     }
     const media = item as AniListCatalogMedia;
     return (
-      <div className="search-card" key={media.id} data-search-card={index}>
-        <HoverPoster
-          title={media.title}
-          imageUrl={media.coverUrl}
-          score={media.averageScore ? (media.averageScore / 10).toFixed(1) : undefined}
-          meta={[
-            media.seasonYear,
-            formatMediaLabel(media.format, scope === "ANIME" ? "Anime" : "Manga"),
-          ]}
-          tag={formatTag(media.format)}
-          primaryLabel={scope === "MANGA" ? "Read" : "Play"}
-          saved={member ? access.libraryEntries.has(media.id) : undefined}
-          onOpen={() => {
-            remember();
-            onOpenMedia(media);
-          }}
-          onPrimary={() => {
-            remember();
-            onPrimaryMedia(media);
-          }}
-          onToggleSaved={member ? () => void onLibrary(media) : undefined}
-        />
-        <b title={media.title}>{media.title}</b>
-        <small>
-          {[
-            formatMediaLabel(media.format, scope === "ANIME" ? "Anime" : "Manga"),
-            media.seasonYear,
-            media.averageScore ? `${media.averageScore}%` : undefined,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </small>
-      </div>
+      <AniListSearchCard
+        key={media.id}
+        media={media}
+        scope={scope === "MANGA" ? "MANGA" : "ANIME"}
+        index={index}
+        detailed
+        saved={member ? access.libraryEntries.has(media.id) : undefined}
+        onToggleSaved={member ? () => void onLibrary(media) : undefined}
+        onOpen={() => {
+          remember();
+          onOpenMedia(media);
+        }}
+        onPrimary={() => {
+          remember();
+          onPrimaryMedia(media);
+        }}
+      />
     );
   };
 
@@ -722,71 +527,16 @@ export function SectionSearch({
         aria-busy={pending}
       >
         {startShown ? (
-          <>
-            {recent.length ? (
-              <section className="section-search-block">
-                <div className="section-search-head">
-                  <h2>Recent</h2>
-                  <small>{rememberSearches ? "On this device" : "This session"}</small>
-                  <button
-                    type="button"
-                    className="section-search-link"
-                    onClick={() => clearRecentSearches(scope)}
-                  >
-                    Clear
-                  </button>
-                </div>
-                <div className="section-search-chips is-recent" aria-label="Recent searches">
-                  {recent.map((entry) => (
-                    <span key={entry} className="section-search-recent">
-                      <button type="button" onClick={() => setQuery(entry)}>
-                        <Clock3 size={14} aria-hidden="true" />
-                        {entry}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${entry} from recent searches`}
-                        onClick={() => removeRecentSearch(scope, entry)}
-                      >
-                        <X size={13} aria-hidden="true" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-            <section className="section-search-block">
-              <div className="section-search-head">
-                <h2>Browse by genre</h2>
-                <small>One click shows every title in it</small>
-              </div>
-              <div className="section-search-genres">
-                {GENRE_TILES[scope].map((tile) => {
-                  const art = genreArt.get(tile.genre);
-                  return (
-                    <button
-                      key={tile.genre}
-                      type="button"
-                      className="section-search-genre"
-                      style={{ "--genre": tile.color } as React.CSSProperties}
-                      onClick={() => pickGenre(tile.genre)}
-                    >
-                      {art ? (
-                        <img src={cachedArtworkUrl(art)} alt="" aria-hidden="true" loading="lazy" />
-                      ) : null}
-                      <span>{tile.genre}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-            <section className="section-search-block">
-              <div className="section-search-head">
-                <h2>Trending now</h2>
-              </div>
-              <div className="section-search-grid">{gridItems.map(renderPoster)}</div>
-            </section>
-          </>
+          <SearchStartPage
+            scope={scope}
+            recent={recent}
+            rememberSearches={rememberSearches}
+            genreArt={genreArt}
+            onSearch={setQuery}
+            onPickGenre={pickGenre}
+          >
+            {gridItems.map(renderPoster)}
+          </SearchStartPage>
         ) : (
           <>
             {person ? (
@@ -808,7 +558,7 @@ export function SectionSearch({
             ) : null}
 
             {topAniList ? (
-              <TopResult
+              <SearchTopResult
                 image={topAniList.bannerUrl ?? topAniList.coverUrl}
                 cover={topAniList.coverUrl}
                 tint={topAniList.coverColor}
@@ -841,7 +591,7 @@ export function SectionSearch({
                 onAdd={member ? () => void onLibrary(topAniList) : undefined}
               />
             ) : topMore ? (
-              <TopResult
+              <SearchTopResult
                 image={topMore.backdropUrl ?? topMore.posterUrl}
                 cover={topMore.posterUrl}
                 tint={undefined}
@@ -900,38 +650,7 @@ export function SectionSearch({
             !person &&
             submitted &&
             peopleFor(grid, submitted).length ? (
-              <section className="section-search-block">
-                <div className="section-search-head">
-                  <h2>People &amp; studios</h2>
-                </div>
-                <div className="section-search-people">
-                  {peopleFor(grid, submitted).map((row) => (
-                    <button
-                      key={`${row.kind}${row.id}`}
-                      type="button"
-                      onClick={() => openPerson(row)}
-                    >
-                      {row.imageUrl ? (
-                        <CoverImage src={cachedArtworkUrl(row.imageUrl)} title={row.name} />
-                      ) : (
-                        <span className="section-search-initials" aria-hidden="true">
-                          {row.name
-                            .split(/\s+/)
-                            .slice(0, 2)
-                            .map((word) => word[0])
-                            .join("")}
-                        </span>
-                      )}
-                      <span>
-                        <b>{row.name}</b>
-                        <small>
-                          {row.kind === "studio" ? "Studio" : `Character · ${row.knownFor ?? ""}`}
-                        </small>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </section>
+              <SearchPeople people={peopleFor(grid, submitted)} onOpen={openPerson} />
             ) : null}
 
             {noMatches && !person && looksUnfinished ? (
@@ -942,43 +661,23 @@ export function SectionSearch({
               </p>
             ) : null}
             {noMatches && !person && !looksUnfinished ? (
-              <section className="section-search-none">
-                <h2>
-                  {submitted ? `No matches for “${submitted}”` : "No titles match these filters"}
-                </h2>
-                <p>
-                  {filterCount
-                    ? "The filters may be too narrow. Remove one, or clear them all."
-                    : `Nothing in ${copy.noun} by that name. Check the spelling, or try fewer words.`}
-                </p>
-                <div className="section-search-none-actions">
-                  {didYouMean?.query === submitted ? (
-                    <button
-                      type="button"
-                      className="is-primary"
-                      onClick={() => setQuery(didYouMean.title)}
-                    >
-                      <Search size={17} aria-hidden="true" />
-                      Search “{didYouMean.title}” instead
-                    </button>
-                  ) : null}
-                  {filterCount ? (
-                    <button type="button" onClick={clearFilters}>
-                      Remove filters
-                    </button>
-                  ) : null}
-                  {catalogScope && submitted ? (
-                    <button type="button" onClick={() => switchScope("MORE", submitted)}>
-                      Search Movies &amp; TV
-                    </button>
-                  ) : null}
-                  {extras && extras.otherCount > 0 ? (
-                    <button type="button" onClick={() => switchScope(extras.otherType, submitted)}>
-                      Show {extras.otherCount} in {otherLabel}
-                    </button>
-                  ) : null}
-                </div>
-              </section>
+              <SearchNoMatches
+                query={submitted}
+                noun={copy.noun}
+                filtered={filterCount > 0}
+                didYouMean={didYouMean?.query === submitted ? didYouMean.title : undefined}
+                otherSection={
+                  extras && extras.otherCount > 0
+                    ? { label: otherLabel, count: extras.otherCount }
+                    : undefined
+                }
+                onSearch={setQuery}
+                onClearFilters={clearFilters}
+                onSearchMore={
+                  catalogScope && submitted ? () => switchScope("MORE", submitted) : undefined
+                }
+                onOtherSection={() => extras && switchScope(extras.otherType, submitted)}
+              />
             ) : null}
             {noMatches && !person && !looksUnfinished && trending ? (
               <section className="section-search-block">
@@ -1035,158 +734,26 @@ export function SectionSearch({
 
   function renderTrendingAniList(media: AniListCatalogMedia, index: number): React.ReactNode {
     return (
-      <div className="search-card" key={`t${media.id}`} data-search-card={index}>
-        <HoverPoster
-          title={media.title}
-          imageUrl={media.coverUrl}
-          score={media.averageScore ? (media.averageScore / 10).toFixed(1) : undefined}
-          meta={[
-            media.seasonYear,
-            formatMediaLabel(media.format, scope === "ANIME" ? "Anime" : "Manga"),
-          ]}
-          tag={formatTag(media.format)}
-          primaryLabel={scope === "MANGA" ? "Read" : "Play"}
-          onOpen={() => onOpenMedia(media)}
-          onPrimary={() => onPrimaryMedia(media)}
-        />
-        <b title={media.title}>{media.title}</b>
-        <small>
-          {[formatMediaLabel(media.format, scope === "ANIME" ? "Anime" : "Manga"), media.seasonYear]
-            .filter(Boolean)
-            .join(" · ")}
-        </small>
-      </div>
+      <AniListSearchCard
+        key={`t${media.id}`}
+        media={media}
+        scope={scope === "MANGA" ? "MANGA" : "ANIME"}
+        index={index}
+        onOpen={() => onOpenMedia(media)}
+        onPrimary={() => onPrimaryMedia(media)}
+      />
     );
   }
 
   function renderTrendingMore(item: MoreCatalogItem, index: number): React.ReactNode {
     return (
-      <div className="search-card" key={`t${moreKey(item)}`} data-search-card={index}>
-        <HoverPoster
-          title={item.title}
-          imageUrl={item.posterUrl}
-          score={formatScore(item.score)}
-          meta={[item.year, item.type === "MOVIE" ? "Movie" : "Series"]}
-          onOpen={() => onOpenMore(item)}
-          onPrimary={() => onPrimaryMore(item)}
-        />
-        <b title={item.title}>{item.title}</b>
-        <small>
-          {[item.type === "MOVIE" ? "Movie" : "Series", item.year].filter(Boolean).join(" · ")}
-        </small>
-      </div>
+      <MoreSearchCard
+        key={`t${moreKey(item)}`}
+        item={item}
+        index={index}
+        onOpen={() => onOpenMore(item)}
+        onPrimary={() => onPrimaryMore(item)}
+      />
     );
-  }
-}
-
-/**
- * Characters and studios worth showing: when the query clearly names a title, only people whose
- * name is exactly the query (searching "ONE PIECE" should not list a side character).
- */
-function peopleFor(
-  results: Extract<Results, { kind: "anilist" }>,
-  query: string,
-): AniListSearchPerson[] {
-  const people = results.extras?.people ?? [];
-  const titled = results.items[0] && isConfidentMatch(query, results.items[0].title);
-  if (!titled) return people;
-  const wanted = searchNormalize(query);
-  return people.filter((row) => searchNormalize(row.name) === wanted);
-}
-
-function TopResult({
-  image,
-  cover,
-  tint,
-  kicker,
-  title,
-  meta,
-  progress,
-  description,
-  primaryLabel,
-  onPrimary,
-  onDetails,
-  onAdd,
-}: {
-  image?: string;
-  cover?: string;
-  tint?: string;
-  kicker: string;
-  title: string;
-  meta: ReadonlyArray<string | number | undefined>;
-  progress?: string;
-  description?: string;
-  primaryLabel: string;
-  onPrimary: () => void;
-  onDetails: () => void;
-  onAdd?: () => void;
-}): React.JSX.Element {
-  return (
-    <article className="section-search-top" style={titleTintStyle(tint)}>
-      {image ? (
-        <img
-          className="section-search-top-art"
-          src={cachedArtworkUrl(image)}
-          alt=""
-          aria-hidden="true"
-        />
-      ) : null}
-      <div className="section-search-top-body">
-        {cover ? (
-          <CoverImage
-            src={cachedArtworkUrl(cover)}
-            title={title}
-            className="section-search-top-cover"
-          />
-        ) : null}
-        <div>
-          <span className="section-search-kicker">{kicker}</span>
-          <h2>{title}</h2>
-          <p className="section-search-top-meta">
-            {meta.filter((part) => part !== undefined && part !== "").join(" · ")}
-            {progress ? <span className="is-progress"> · {progress}</span> : null}
-          </p>
-          {description ? <p className="section-search-top-desc">{description}</p> : null}
-          <div className="section-search-top-actions">
-            <button type="button" className="title-primary" onClick={onPrimary}>
-              <Play size={18} fill="currentColor" aria-hidden="true" />
-              {primaryLabel}
-            </button>
-            <button type="button" className="title-library" onClick={onDetails}>
-              <Info size={18} aria-hidden="true" />
-              Details
-            </button>
-            {onAdd ? (
-              <button
-                type="button"
-                className="title-library title-round"
-                aria-label="Add to list"
-                onClick={onAdd}
-              >
-                <Plus size={18} aria-hidden="true" />
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function formatTag(format: string | undefined): string | undefined {
-  switch (format) {
-    case "MOVIE":
-      return "Movie";
-    case "SPECIAL":
-      return "Special";
-    case "OVA":
-    case "ONA":
-      return format;
-    case "ONE_SHOT":
-      return "One shot";
-    case "NOVEL":
-      return "Novel";
-    default:
-      return undefined;
   }
 }
