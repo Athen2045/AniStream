@@ -5,17 +5,12 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 import { useAppReducedMotion } from "./useAppReducedMotion";
-import type {
-  AniListCatalogMedia,
-  MangaDexReaderChapter,
-  MangaDexReaderSession,
-} from "../../shared/contracts";
+import type { AniListCatalogMedia, MangaDexReaderChapter } from "../../shared/contracts";
 import { CoverImage } from "./CoverImage";
 import { SimilarTitles } from "./SimilarTitles";
 import { titleAccentStyle, titleTintStyle } from "./title-accent";
@@ -28,9 +23,6 @@ import { friendlyRemoteError } from "./remote-error";
 import { formatAiringTime, titleReleaseNotice, unairedEpisode } from "./airing";
 import { UpNextButton } from "./UpNextButton";
 import { TitleDownloadButton } from "./DownloadButtons";
-import { useOptionalDownloads } from "./DownloadsProvider";
-import { selectChapterToRead } from "../../shared/chapter-selection";
-import { chapterDownloadKey, type MangaChapterDownload } from "../../shared/downloads";
 import { useOnline } from "./useOnline";
 import { animeBingeItem } from "./binge-session";
 import { MalSourceIcon } from "./MalSourceIcon";
@@ -38,6 +30,7 @@ import { RatingChips, compactVotes } from "./RatingChips";
 import { TitleFeedback } from "./TitleFeedback";
 import { AnimeAbout, AnimeTitleHeader } from "./AnimeTitleHeader";
 import { MangaChapterBrowser } from "./MangaChapterBrowser";
+import { useTitleReader } from "./useTitleReader";
 import {
   cleanDescription,
   distinctExternalLinks,
@@ -99,112 +92,23 @@ export function MediaDetailModal({
   // Opened by a Play/Read shortcut: Back from that player or reader returns to where it was
   // clicked. Watching or reading from this page itself returns here instead.
   const [backToOrigin, setBackToOrigin] = useState(initialAction !== "details");
-  // MangaDex chapters found unreadable this session, mapped to the mirror copy that replaced them.
-  const [swappedChapters, setSwappedChapters] = useState<
-    ReadonlyMap<string, MangaDexReaderChapter>
-  >(() => new Map());
-  const loadedReaderSession = detailSnapshot.readerSession;
   const online = useOnline();
-  const downloads = useOptionalDownloads();
-  // Offline, a manga with downloaded chapters lists just those, read from disk (like Anime's
-  // downloaded episodes). Built from the downloads, so it needs no saved chapter list.
-  const offlineSession = useMemo(
-    () => (online ? undefined : downloadedChapterSession(media.id, downloads?.state?.chapters)),
-    [downloads?.state?.chapters, media.id, online],
-  );
-  const readerSession = useMemo(
-    () =>
-      offlineSession ??
-      (loadedReaderSession && swappedChapters.size
-        ? {
-            ...loadedReaderSession,
-            chapters: loadedReaderSession.chapters.map(
-              (chapter) => swappedChapters.get(chapter.id) ?? chapter,
-            ),
-          }
-        : loadedReaderSession),
-    [loadedReaderSession, offlineSession, swappedChapters],
-  );
-  const [activeChapter, setActiveChapter] = useState<MangaDexReaderChapter>();
-  const [chapterOpenError, setChapterOpenError] = useState<string>();
-  const chapterOpenGeneration = useRef(0);
-  /**
-   * Opens a chapter in the reader. Mirror chapters list no page count until opened, so it is
-   * resolved first. A MangaDex chapter with a mirror copy is checked first and swapped for the
-   * mirror copy when MangaDex cannot serve its images.
-   */
-  const downloadsRef = useRef(downloads);
-  useEffect(() => {
-    downloadsRef.current = downloads;
-  }, [downloads]);
-  const openChapter = useCallback((chapter: MangaDexReaderChapter | undefined): void => {
-    const generation = ++chapterOpenGeneration.current;
-    const current = (): boolean => generation === chapterOpenGeneration.current;
-    setChapterOpenError(undefined);
-    if (!chapter) return;
-    // Downloaded: opens straight from disk, with no source checks (works offline).
-    const saved = downloadsRef.current?.byChapter.get(
-      chapterDownloadKey(chapter.source === "mirror" ? "mirror" : "mangadex", chapter.id),
-    );
-    if (saved?.status === "done") {
-      setActiveChapter({ ...chapter, pages: saved.pagesTotal });
-      return;
-    }
-    const openMirror = (mirror: MangaDexReaderChapter): void => {
-      void window.anistream.getMangaMirrorChapter({ chapterId: mirror.id }).then(
-        (info) => {
-          if (current()) setActiveChapter({ ...mirror, pages: info.pageCount });
-        },
-        (error: unknown) => {
-          if (!current()) return;
-          setChapterOpenError(
-            friendlyRemoteError(error, {
-              provider: mirror.sourceLabel ?? "The chapter mirror",
-              operation: "chapters",
-              fallback: `Chapter ${mirror.number ?? ""} could not be opened. Try again shortly.`,
-            }),
-          );
-        },
-      );
-    };
-    if (chapter.source === "mirror") {
-      if (chapter.pages > 0) setActiveChapter(chapter);
-      else openMirror(chapter);
-      return;
-    }
-    const fallback = chapter.mirrorFallback;
-    if (!fallback) {
-      setActiveChapter(chapter);
-      return;
-    }
-    void window.anistream.isMangaDexChapterReadable({ chapterId: chapter.id }).then(
-      (readable) => {
-        if (!current()) return;
-        if (readable) {
-          setActiveChapter(chapter);
-          return;
-        }
-        const mirror: MangaDexReaderChapter = {
-          ...chapter,
-          id: fallback.id,
-          title: undefined,
-          groups: [],
-          groupName: undefined,
-          pages: 0,
-          source: "mirror",
-          sourceLabel: fallback.sourceLabel,
-          mirrorFallback: undefined,
-        };
-        // Keep the swap in the chapter list so reader navigation and the list both use the copy.
-        setSwappedChapters((previous) => new Map(previous).set(chapter.id, mirror));
-        openMirror(mirror);
-      },
-      // The check itself failed; let the normal MangaDex path show its own error.
-      () => {
-        if (current()) setActiveChapter(chapter);
-      },
-    );
-  }, []);
+  const {
+    readerSession,
+    downloadedOnly,
+    activeChapter,
+    chapterOpenError,
+    openChapter,
+    openPreferredChapter,
+    closeChapter,
+  } = useTitleReader({
+    aniListId: media.id,
+    online,
+    session: detailSession,
+    loadedSession: detailSnapshot.readerSession,
+    progress: detailSnapshot.detail?.listEntry?.progress ?? 0,
+    resume: detailSnapshot.mangaResume,
+  });
   const mangaResume = detailSnapshot.mangaResume;
   const mangaChapterFallback = detailSnapshot.mangaChapterFallback;
   const mangaEnrichment = detailSnapshot.mangaEnrichment;
@@ -287,27 +191,6 @@ export function MediaDetailModal({
     [detailSession],
   );
 
-  const openPreferredChapter = useCallback(async (): Promise<void> => {
-    // Offline, Read picks among the downloaded chapters (the live list cannot load).
-    if (offlineSession) {
-      openChapter(
-        selectChapterToRead(
-          offlineSession.chapters,
-          detailSnapshot.detail?.listEntry?.progress ?? 0,
-          detailSnapshot.mangaResume,
-        ),
-      );
-      return;
-    }
-    openChapter(await detailSession.openReader());
-  }, [
-    detailSession,
-    detailSnapshot.detail?.listEntry?.progress,
-    detailSnapshot.mangaResume,
-    offlineSession,
-    openChapter,
-  ]);
-
   const changeMangaPreferences = useCallback(
     (translatedLanguage: string, preferredGroupId?: string): void => {
       void detailSession
@@ -326,9 +209,9 @@ export function MediaDetailModal({
       onClose();
       return;
     }
-    setActiveChapter(undefined);
+    closeChapter();
     void detailSession.refreshResume();
-  }, [backToOrigin, detailSession, onClose]);
+  }, [backToOrigin, closeChapter, detailSession, onClose]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent): void => {
@@ -958,7 +841,7 @@ export function MediaDetailModal({
             <MangaChapterBrowser
               media={resolved}
               session={readerSession}
-              downloadedOnly={Boolean(offlineSession)}
+              downloadedOnly={downloadedOnly}
               fallback={mangaChapterFallback}
               officialLinks={
                 online
@@ -970,7 +853,7 @@ export function MediaDetailModal({
               currentProgress={mangaProgress}
               resume={mangaResume}
               loading={loadingReader}
-              loadError={offlineSession ? undefined : detailSnapshot.error}
+              loadError={downloadedOnly ? undefined : detailSnapshot.error}
               onPreferenceChange={changeMangaPreferences}
               onRetry={() => void detailSession.retryReader()}
               openError={chapterOpenError}
@@ -1071,45 +954,4 @@ function TitleBand({ media }: { media: AniListCatalogMedia }): React.JSX.Element
       ) : null}
     </header>
   );
-}
-
-/** The downloaded chapters of one title as a reader session, for reading offline. */
-function downloadedChapterSession(
-  aniListId: number,
-  items: readonly MangaChapterDownload[] | undefined,
-): MangaDexReaderSession | undefined {
-  const done = (items ?? []).filter(
-    (item) => item.aniListId === aniListId && item.status === "done",
-  );
-  if (!done.length) return undefined;
-  const chapters = done
-    .map(({ chapter, pagesTotal }): MangaDexReaderChapter => ({
-      id: chapter.id,
-      ...(chapter.number !== undefined ? { number: chapter.number } : {}),
-      ...(chapter.volume ? { volume: chapter.volume } : {}),
-      ...(chapter.chapterTitle ? { title: chapter.chapterTitle } : {}),
-      translatedLanguage: chapter.translatedLanguage,
-      groups: chapter.groups,
-      ...(chapter.groups.length
-        ? { groupName: chapter.groups.map((group) => group.name).join(", ") }
-        : {}),
-      pages: pagesTotal,
-      ...(chapter.source === "mirror"
-        ? {
-            source: "mirror" as const,
-            ...(chapter.sourceLabel ? { sourceLabel: chapter.sourceLabel } : {}),
-          }
-        : {}),
-    }))
-    .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
-  const languages = [...new Set(chapters.map((chapter) => chapter.translatedLanguage))];
-  return {
-    status: "available",
-    aniListId,
-    translatedLanguage: languages[0] ?? "en",
-    availableLanguages: languages,
-    availableGroups: [],
-    archiveStatus: "complete",
-    chapters,
-  };
 }

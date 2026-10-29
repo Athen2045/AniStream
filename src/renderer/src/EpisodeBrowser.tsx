@@ -1,3 +1,4 @@
+import { sameEpisode } from "./anime-episode-list";
 import { Check, ChevronDown, Clock3, Play } from "lucide-react";
 import { useState } from "react";
 import type {
@@ -286,10 +287,6 @@ export function EpisodeBrowser({
       ) : null}
     </div>
   );
-}
-
-export function sameEpisode(left: AnimeProviderEpisode, right: AnimeProviderEpisode): boolean {
-  return left.id && right.id ? left.id === right.id : left.number === right.number;
 }
 
 /** An image that cannot load (e.g. offline and never cached) disappears instead of showing broken. */

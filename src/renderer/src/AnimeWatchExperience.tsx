@@ -5,40 +5,29 @@ import { createPortal } from "react-dom";
 import { useMediaFullscreen } from "./useMediaFullscreen";
 import { getAppPreferences, preferredAudioSource } from "./app-preferences";
 import { useAppReducedMotion } from "./useAppReducedMotion";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListMediaDetail,
-  AnimeEpisodeArt,
-  AnimeEpisodeCatalog,
-  AnimeEpisodeRanges,
   AnimePlaybackCandidate,
   AnimeProviderEpisode,
-  AnimeProviderSeason,
   PlaybackResume,
 } from "../../shared/contracts";
-import { chooseInitialAnimeEpisode } from "./anime-playback-session";
 import { unairedEpisode } from "./airing";
 import { useOptionalDownloads } from "./DownloadsProvider";
 import { downloadKey } from "../../shared/downloads";
-import { formatMediaLabel } from "./format-label";
 import { motionTransition } from "./motion";
 import { useAutoHideMediaControls } from "./useAutoHideMediaControls";
 import { useCaptionControlsVisibility } from "./useCaptionControlsVisibility";
-import { friendlyPlaybackError, friendlyRemoteError } from "./remote-error";
+import { friendlyPlaybackError } from "./remote-error";
 import { inferMediaDisplayedSeasonNumber } from "./anime-season-chain";
 import { playStarted } from "./play-timer";
-import { EpisodeBrowser, sameEpisode } from "./EpisodeBrowser";
+import { EpisodeBrowser } from "./EpisodeBrowser";
+import { episodePlaceholder, seasonContainingEpisode } from "./anime-episode-list";
+import { useEpisodeList } from "./useEpisodeList";
 import { AnimeEmbedPlayer } from "./AnimeEmbedPlayer";
-import { rangeContaining } from "./SeasonPicker";
-
-/** Matches the main process: shorter entries are never split into arcs or seasons. */
-const MIN_RANGE_EPISODES = 50;
 
 type WatchView = "episodes" | "player";
-
-/** How long a recommendation card waits for AniList's details before loading episodes anyway. */
-const THIN_MEDIA_WAIT_MS = 4_000;
 
 export function AnimeWatchExperience({
   media,
@@ -74,7 +63,6 @@ export function AnimeWatchExperience({
   // An episode the viewer played: the episode list arriving later must not swap it for the
   // resume pick (pressing Play on E2 while the list loaded used to jump to E1's saved spot).
   const chosenEpisodeRef = useRef<number | null>(null);
-  const [catalog, setCatalog] = useState<AnimeEpisodeCatalog>();
   const [activeEpisode, setActiveEpisode] = useState<AnimeProviderEpisode>(() =>
     episodePlaceholder(initialEpisode),
   );
@@ -82,26 +70,30 @@ export function AnimeWatchExperience({
   const [view, setView] = useState<WatchView>("episodes");
   const [source, setSource] = useState<AnimePlaybackCandidate>();
   const [resume, setResume] = useState<PlaybackResume>();
-  const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [loadingPlayback, setLoadingPlayback] = useState(false);
   const [error, setError] = useState<string>();
   const [transitionTarget, setTransitionTarget] = useState<WatchView>();
   const [retryCount, setRetryCount] = useState(0);
-  const [catalogAttempt, setCatalogAttempt] = useState(0);
   const [playbackAttempt, setPlaybackAttempt] = useState(0);
-  const [catalogMedia, setCatalogMedia] = useState(media);
-  // A recommendation card (For You, "Because you…") opens the page before AniList's details arrive
-  // and carries no episode count, status or airing schedule. Once they arrive, reload the episode
-  // list with them; other updates (e.g. list progress) keep the loaded list.
-  if (
-    media.id === catalogMedia.id &&
-    (media.totalProgress !== catalogMedia.totalProgress ||
-      media.status !== catalogMedia.status ||
-      media.nextAiringEpisode?.episode !== catalogMedia.nextAiringEpisode?.episode)
-  )
-    setCatalogMedia(media);
-  const [catalogInitialEpisode] = useState(initialEpisode);
-  const [catalogExactEpisode] = useState(exactEpisode);
+  const episodeList = useEpisodeList({
+    media,
+    initialEpisode,
+    exactEpisode,
+    activeEpisode,
+    selectedSeasonId,
+    onLoaded: ({ episode, season, saved }) => {
+      const chosen = chosenEpisodeRef.current;
+      if (chosen !== null) {
+        setResume((current) => current ?? (saved?.episode === chosen ? saved : undefined));
+        return;
+      }
+      setResume(saved?.episode === episode.number ? saved : undefined);
+      setActiveEpisode(episode);
+      setSelectedSeasonId(season?.id ?? "");
+    },
+  });
+  const { catalogMedia, seasons, activeSeason, previousEpisode, nextEpisode } = episodeList;
+  const loadingCatalog = episodeList.loading;
   const [resolvedSeasonNumber, setResolvedSeasonNumber] = useState<number>();
   const displayedSeasonNumber = resolvedSeasonNumber ?? inferMediaDisplayedSeasonNumber(media) ?? 1;
   const {
@@ -114,112 +106,6 @@ export function AnimeWatchExperience({
   const playerChromeShown = playerControlsVisible || !source || !fullscreen;
   useCaptionControlsVisibility(view === "player", playerChromeShown);
 
-  const titles = useMemo(() => {
-    const detailTitles =
-      "synonyms" in catalogMedia
-        ? [
-            catalogMedia.title,
-            catalogMedia.titleEnglish,
-            catalogMedia.titleRomaji,
-            catalogMedia.titleNative,
-            ...catalogMedia.synonyms,
-          ]
-        : [catalogMedia.title];
-    return [...new Set(detailTitles.filter(isNonEmptyString))].slice(0, 8);
-  }, [catalogMedia]);
-
-  const fallback = useMemo(() => fallbackSeason(catalogMedia), [catalogMedia]);
-  // Episode-art sources (exact links): a still replaces the tile artwork, and a real title and
-  // synopsis fill in where the episode list has only "Episode N".
-  const [episodeArt, setEpisodeArt] = useState<ReadonlyMap<number, AnimeEpisodeArt>>(new Map());
-  const listedSeasons = catalog?.seasons.length ? catalog.seasons : [fallback];
-  const lastEpisode = Math.max(
-    0,
-    ...listedSeasons.flatMap((season) => season.episodes.map((episode) => episode.number)),
-  );
-  const seasons = useMemo(() => {
-    const listed = catalog?.seasons.length ? catalog.seasons : [fallback];
-    const withArt = episodeArt.size
-      ? listed.map((season) => ({
-          ...season,
-          episodes: season.episodes.map((episode) => {
-            const extra = episodeArt.get(episode.number);
-            return extra ? withEpisodeArt(episode, extra) : episode;
-          }),
-        }))
-      : listed;
-    return withNextAiringTile(withArt, media);
-  }, [catalog, episodeArt, fallback, media]);
-  const activeSeason =
-    seasons.find((season) => season.id === selectedSeasonId) ??
-    seasonContainingEpisode(seasons, activeEpisode) ??
-    seasons[0];
-  const allEpisodes = useMemo(() => seasons.flatMap((season) => season.episodes), [seasons]);
-  // Long runners listed as one season are browsed by story arc (or TheTVDB season).
-  // Both are keyed, so a different title or a newly played episode simply stops matching.
-  const rangesKey = `${catalogMedia.id}:${lastEpisode}`;
-  const [loadedRanges, setLoadedRanges] = useState<{ key: string; ranges?: AnimeEpisodeRanges }>();
-  const [rangeChoice, setRangeChoice] = useState<{ episode: number; start: number }>();
-  const singleListedSeason = listedSeasons.length === 1;
-  useEffect(() => {
-    if (loadingCatalog || !singleListedSeason || lastEpisode < MIN_RANGE_EPISODES) return;
-    let active = true;
-    window.anistream
-      .getAnimeEpisodeRanges({ aniListId: catalogMedia.id, episodes: lastEpisode })
-      .then((ranges) => {
-        if (active) setLoadedRanges({ key: `${catalogMedia.id}:${lastEpisode}`, ranges });
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [catalogMedia.id, lastEpisode, loadingCatalog, singleListedSeason]);
-  const episodeRanges =
-    singleListedSeason && loadedRanges?.key === rangesKey ? loadedRanges.ranges : undefined;
-  // Playing another episode brings the list back to the range that holds it.
-  const selectedRangeStart =
-    rangeChoice?.episode === activeEpisode.number ? rangeChoice.start : undefined;
-  const setSelectedRangeStart = (start: number): void =>
-    setRangeChoice({ episode: activeEpisode.number, start });
-  const activeRange = episodeRanges
-    ? (episodeRanges.ranges.find((range) => range.start === selectedRangeStart) ??
-      rangeContaining(episodeRanges.ranges, activeEpisode.number))
-    : undefined;
-  // Stills follow the episodes on screen: long series load the art around this tab or range.
-  const artFocus = activeRange?.start ?? activeSeason?.episodes[0]?.number ?? catalogInitialEpisode;
-  useEffect(() => {
-    if (loadingCatalog || lastEpisode < 1) return;
-    let active = true;
-    window.anistream
-      .getAnimeEpisodeArt({
-        aniListId: catalogMedia.id,
-        episodes: lastEpisode,
-        focus: Math.min(lastEpisode, Math.max(1, artFocus)),
-      })
-      .then((art) => {
-        if (active && art.length)
-          setEpisodeArt(
-            (known) => new Map([...known, ...art.map((row) => [row.number, row] as const)]),
-          );
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [artFocus, catalogMedia.id, lastEpisode, loadingCatalog]);
-  const activeIndex = useMemo(
-    () => allEpisodes.findIndex((episode) => sameEpisode(episode, activeEpisode)),
-    [allEpisodes, activeEpisode],
-  );
-  const nextEpisode = useMemo(() => {
-    const next =
-      activeIndex >= 0 && activeIndex + 1 < allEpisodes.length
-        ? allEpisodes[activeIndex + 1]
-        : undefined;
-    // The end-of-episode prompt never offers an episode that has not aired yet.
-    return next && !unairedEpisode(media, next.number) ? next : undefined;
-  }, [activeIndex, allEpisodes, media]);
-  const previousEpisode = activeIndex > 0 ? allEpisodes[activeIndex - 1] : undefined;
   // The own player (backup, trial 2026-10-18) takes over for an episode when the main player has
   // no source or reports an error; there is no manual switch in the player (user decision
   // 2026-10-20: audio comes from Settings, the backup is automatic).
@@ -232,107 +118,6 @@ export function AnimeWatchExperience({
   const watchedEpisodes = "listEntry" in media ? (media.listEntry?.progress ?? 0) : 0;
 
   useEffect(() => playStarted("ANIME"), []);
-
-  // A thin card waits briefly for AniList's details before asking for episodes, so the list does
-  // not first appear with a single episode; without details (e.g. offline) it goes ahead anyway.
-  const thinMedia = catalogMedia.status === undefined && catalogMedia.totalProgress === undefined;
-  const [thinWaitOver, setThinWaitOver] = useState(false);
-  useEffect(() => {
-    if (!thinMedia) return;
-    const timer = window.setTimeout(() => setThinWaitOver(true), THIN_MEDIA_WAIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [thinMedia]);
-  const waitForDetails = thinMedia && !thinWaitOver;
-
-  useEffect(() => {
-    if (waitForDetails) return;
-    let active = true;
-    void Promise.allSettled([
-      window.anistream.getAnimeEpisodeCatalog({
-        aniListId: catalogMedia.id,
-        titles,
-        seasonLabel:
-          catalogMedia.season && catalogMedia.seasonYear
-            ? `${formatLabel(catalogMedia.season)} ${catalogMedia.seasonYear}`
-            : "Season 1",
-        totalEpisodes: Math.max(
-          catalogMedia.totalProgress ?? 0,
-          catalogMedia.nextAiringEpisode ? catalogMedia.nextAiringEpisode.episode - 1 : 0,
-          catalogInitialEpisode,
-        ),
-      }),
-      window.anistream.getPlaybackResume(catalogMedia.id),
-      window.anistream.getLocalActivity(),
-    ]).then(([catalogResult, resumeResult, activityResult]) => {
-      if (!active) return;
-
-      const nextCatalog =
-        catalogResult.status === "fulfilled"
-          ? catalogResult.value
-          : {
-              status: "unavailable" as const,
-              provider: "anime-source" as const,
-              seasons: [],
-              message: friendlyRemoteError(catalogResult.reason, {
-                provider: "The anime player",
-                operation: "episode details",
-                fallback:
-                  "Episode details could not be loaded. You can still try an episode, or retry the list.",
-              }),
-              checkedAt: new Date().toISOString(),
-            };
-      const saved = resumeResult.status === "fulfilled" ? resumeResult.value : undefined;
-      const completed =
-        activityResult.status === "fulfilled"
-          ? Math.max(
-              0,
-              ...activityResult.value
-                .filter((item) => item.media.id === catalogMedia.id)
-                .map((item) => item.completedProgress),
-            )
-          : 0;
-      const wantedEpisode = chooseInitialAnimeEpisode({
-        requestedEpisode: catalogInitialEpisode,
-        savedEpisode: saved?.episode,
-        completedProgress: completed,
-        totalEpisodes: catalogMedia.totalProgress,
-        exact: catalogExactEpisode,
-      });
-      const chosen = chosenEpisodeRef.current;
-      if (chosen !== null) {
-        setCatalog(nextCatalog);
-        setResume((current) => current ?? (saved?.episode === chosen ? saved : undefined));
-        setLoadingCatalog(false);
-        return;
-      }
-      const usableResume = saved?.episode === wantedEpisode ? saved : undefined;
-      const nextSeasons = nextCatalog.seasons.length ? nextCatalog.seasons : [fallback];
-      const providerEpisode =
-        nextSeasons
-          .flatMap((season) => season.episodes)
-          .find((episode) => episode.number === wantedEpisode) ?? episodePlaceholder(wantedEpisode);
-      const providerSeason =
-        seasonContainingEpisode(nextSeasons, providerEpisode) ?? nextSeasons[0];
-
-      setCatalog(nextCatalog);
-      setResume(usableResume);
-      setActiveEpisode(providerEpisode);
-      setSelectedSeasonId(providerSeason?.id ?? "");
-      setLoadingCatalog(false);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [
-    catalogAttempt,
-    fallback,
-    catalogExactEpisode,
-    catalogInitialEpisode,
-    catalogMedia,
-    titles,
-    waitForDetails,
-  ]);
 
   useEffect(() => {
     if (view !== "player") return;
@@ -515,19 +300,16 @@ export function AnimeWatchExperience({
             key={activeSeason?.id ?? media.id}
             media={media}
             activeSeason={activeSeason}
-            ranges={episodeRanges}
-            activeRange={activeRange}
-            onSelectRange={(range) => setSelectedRangeStart(range.start)}
+            ranges={episodeList.ranges}
+            activeRange={episodeList.activeRange}
+            onSelectRange={episodeList.selectRange}
             displayedSeasonNumber={displayedSeasonNumber}
             activeEpisode={activeEpisode}
             resume={resume}
             watchedEpisodes={watchedEpisodes}
             loading={loadingCatalog}
-            providerMessage={catalog?.message}
-            onRetry={() => {
-              setLoadingCatalog(true);
-              setCatalogAttempt((attempt) => attempt + 1);
-            }}
+            providerMessage={episodeList.catalog?.message}
+            onRetry={episodeList.retry}
             onNavigate={onNavigate}
             onSeasonNumberResolved={setResolvedSeasonNumber}
             onPlay={(episode) => {
@@ -685,79 +467,4 @@ export function AnimeWatchExperience({
     </section>
   );
   return view === "player" ? createPortal(content, document.body) : content;
-}
-
-/** Applies episode-art details without replacing a genuine provider title or description. */
-function withEpisodeArt(episode: AnimeProviderEpisode, art: AnimeEpisodeArt): AnimeProviderEpisode {
-  const ownTitle = episode.title?.trim();
-  const placeholder = !ownTitle || /^(episode|ep\.?)\s*\d+$/i.test(ownTitle);
-  return {
-    ...episode,
-    ...(art.stillUrl ? { thumbnailUrl: art.stillUrl } : {}),
-    ...(placeholder && art.title ? { title: art.title } : {}),
-    ...(!episode.description?.trim() && art.synopsis ? { description: art.synopsis } : {}),
-  };
-}
-
-function fallbackSeason(media: AniListCatalogMedia | AniListMediaDetail): AnimeProviderSeason {
-  const count = Math.min(
-    Math.max(
-      media.totalProgress ?? 0,
-      media.nextAiringEpisode ? media.nextAiringEpisode.episode - 1 : 0,
-      1,
-    ),
-    2_000,
-  );
-  return {
-    id: `anilist:${media.id}`,
-    number: 1,
-    title: "Season 1",
-    episodes: Array.from({ length: count }, (_, index) => ({
-      id: "",
-      number: index + 1,
-    })),
-  };
-}
-
-/**
- * Provider lists stop at the last aired episode. When the list ends right before AniList's next
- * scheduled episode, show that episode too, as a locked tile with its airing time.
- */
-function withNextAiringTile(
-  seasons: AnimeProviderSeason[],
-  media: AniListCatalogMedia | AniListMediaDetail,
-): AnimeProviderSeason[] {
-  const next = media.nextAiringEpisode;
-  const last = seasons.at(-1);
-  if (!next || !last || !unairedEpisode(media, next.episode)) return seasons;
-  const highest = Math.max(0, ...last.episodes.map((episode) => episode.number));
-  if (highest !== next.episode - 1) return seasons;
-  return [
-    ...seasons.slice(0, -1),
-    { ...last, episodes: [...last.episodes, { id: "", number: next.episode }] },
-  ];
-}
-
-function episodePlaceholder(number: number): AnimeProviderEpisode {
-  const normalized = Math.max(1, number);
-  return {
-    id: "",
-    number: normalized,
-    title: `Episode ${normalized}`,
-  };
-}
-
-function seasonContainingEpisode(
-  seasons: AnimeProviderSeason[],
-  wanted: AnimeProviderEpisode,
-): AnimeProviderSeason | undefined {
-  return seasons.find((season) => season.episodes.some((episode) => sameEpisode(episode, wanted)));
-}
-
-function formatLabel(value: string): string {
-  return formatMediaLabel(value, "Anime");
-}
-
-function isNonEmptyString(value: string | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
 }
