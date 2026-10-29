@@ -255,6 +255,12 @@ export interface AnimeEpisodeRanges {
   ranges: AnimeEpisodeRange[];
 }
 
+/** An anime title page's wide artwork: a film's backdrop for a movie, else its show's. */
+export interface AnimeHeroBackdropInput {
+  aniListId: number;
+  movie: boolean;
+}
+
 export interface AnimeEpisodeRangesInput {
   aniListId: number;
   /** Episodes in the AniList entry (or aired so far). */
@@ -1111,6 +1117,7 @@ export interface AniStreamBridge {
   getAnimeEpisodeArt(input: AnimeEpisodeArtInput): Promise<AnimeEpisodeArt[]>;
   getAnimeSkipTimes(input: AnimeSkipTimesInput): Promise<AnimeSkipSegment[]>;
   getAnimeEpisodeRanges(input: AnimeEpisodeRangesInput): Promise<AnimeEpisodeRanges | undefined>;
+  getAnimeHeroBackdrop(input: AnimeHeroBackdropInput): Promise<string | undefined>;
   getAnimeDirectPlayback(input: AnimeDirectPlaybackInput): Promise<AnimeDirectPlayback>;
   /** One subtitle track as WebVTT. */
   getAnimeDirectSubtitle(id: string): Promise<AnimeDirectSubtitle>;

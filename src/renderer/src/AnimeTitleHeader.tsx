@@ -1,4 +1,5 @@
 import { Clapperboard, Clock3, Play } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { cachedArtworkUrl } from "../../shared/artwork";
 import type { AniListCatalogMedia, PlaybackResume } from "../../shared/contracts";
@@ -64,6 +65,17 @@ export function AnimeTitleHeader({
   const resume = useMovieResume(movie ? media.id : undefined);
   const banner = media.bannerUrl && media.bannerUrl !== failedArt ? media.bannerUrl : undefined;
   const art = banner ?? media.coverUrl;
+  // TMDB's 16:9 backdrop (exact link only) fades in over the banner once it has loaded; AniList's
+  // 1900×400 banner blurs when stretched over this tall header, so it is shown at its own shape.
+  const backdrop = useQuery({
+    queryKey: ["anime", "hero-backdrop", media.id, movie],
+    queryFn: async () =>
+      (await window.anistream.getAnimeHeroBackdrop({ aniListId: media.id, movie })) ?? null,
+    staleTime: Infinity,
+  }).data;
+  const [backdropShown, setBackdropShown] = useState<string>();
+  const [backdropFailed, setBackdropFailed] = useState<string>();
+  const backdropUrl = backdrop && backdrop !== backdropFailed ? backdrop : undefined;
   // Part-way through a film: "Resume movie" and how much is left.
   const partway =
     resume &&
@@ -78,15 +90,36 @@ export function AnimeTitleHeader({
   const label = movie ? (partway ? "Resume movie" : "Play movie") : primaryLabel;
 
   return (
-    <header className={`anime-head anime-head--${layout}${banner ? "" : " anime-head--cover"}`}>
+    <header
+      className={`anime-head anime-head--${layout}${banner ? " anime-head--banner" : " anime-head--cover"}`}
+    >
       <div className="anime-head-art" aria-hidden="true">
         {art ? (
           <img
+            className="anime-head-fill"
             src={cachedArtworkUrl(art)}
             alt=""
             decoding="async"
             fetchPriority="high"
             onError={() => setFailedArt(media.bannerUrl)}
+          />
+        ) : null}
+        {banner ? (
+          <img
+            className="anime-head-strip"
+            src={cachedArtworkUrl(banner)}
+            alt=""
+            decoding="async"
+          />
+        ) : null}
+        {backdropUrl ? (
+          <img
+            className={`anime-head-backdrop${backdropShown === backdropUrl ? " is-shown" : ""}`}
+            src={cachedArtworkUrl(backdropUrl)}
+            alt=""
+            decoding="async"
+            onLoad={() => setBackdropShown(backdropUrl)}
+            onError={() => setBackdropFailed(backdropUrl)}
           />
         ) : null}
       </div>

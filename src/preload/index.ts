@@ -93,6 +93,7 @@ const bridge: AniStreamBridge = {
   getAnimeEpisodeArt: (input) => invoke("anime:episode-art", input),
   getAnimeSkipTimes: (input) => invoke("anime:skip-times", input),
   getAnimeEpisodeRanges: (input) => invoke("anime:episode-ranges", input),
+  getAnimeHeroBackdrop: (input) => invoke("anime:hero-backdrop", input),
   getAnimeDirectPlayback: (input) => invoke("anime:direct-playback", input),
   getAnimeDirectSubtitle: (id) => invoke("anime:direct-subtitle", id),
   getLatestAnimeUpdates: (page) => invoke("anilist:latest-anime", page),

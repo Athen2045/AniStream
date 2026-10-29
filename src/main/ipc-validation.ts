@@ -583,6 +583,13 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     if (aniListId > 2147483647 || episodes > 5_000) fail();
     return [{ aniListId, episodes }];
   },
+  "anime:hero-backdrop": (value) => {
+    const [input] = argsOfLength(value, 1);
+    const record = asRecord(input);
+    const aniListId = asPositiveInt(record.aniListId);
+    if (aniListId > 2147483647 || typeof record.movie !== "boolean") fail();
+    return [{ aniListId, movie: record.movie }];
+  },
   "anime:playback": (value) => {
     const [input] = argsOfLength(value, 1);
     return [animePlaybackInput(input)];

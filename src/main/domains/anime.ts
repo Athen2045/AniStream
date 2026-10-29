@@ -3,6 +3,7 @@ import type { AnimeSourceClient } from "../anime-source";
 import type { AniListClient } from "../anilist";
 import type { AnimeTmdbLinks } from "../anime-tmdb-links";
 import { animeEpisodeArt } from "../anime-episode-art";
+import { animeHeroBackdrop } from "../anime-hero-backdrop";
 import { animeEpisodeRanges } from "../anime-episode-ranges";
 import type { AniZipClient } from "../anizip";
 import { createBoundedCache } from "../anilist/cache";
@@ -135,6 +136,26 @@ export function registerAnimeDomain(
       );
     },
   );
+  // A sharp 16:9 backdrop for the title page from the exactly linked TMDB title, saved with the
+  // title so it shows offline too. Without a link (or TMDB) the page keeps AniList's banner.
+  registerTrustedIpcHandler(trustedRendererOrigin, "anime:hero-backdrop", async (_event, input) => {
+    const tmdb = episodeArt?.tmdb;
+    if (!tmdb) return undefined;
+    return withTitleCopy(
+      copies,
+      `backdrop:${input.aniListId}`,
+      input.aniListId,
+      () =>
+        animeHeroBackdrop(
+          {
+            tmdbKeysFor: (id) => tmdb.links.index().tmdbKeysFor(id),
+            backdrop: async (id, type) => (await tmdb.tmdb.getDetail(id, type)).heroBackdropUrl,
+          },
+          input,
+        ),
+      (url) => url !== undefined,
+    ).catch(() => undefined);
+  });
   registerTrustedIpcHandler(trustedRendererOrigin, "anime:provider-readiness", async () => {
     if (!animeSource) {
       return {

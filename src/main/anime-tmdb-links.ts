@@ -3,8 +3,9 @@ import type { MoreMediaType } from "../shared/contracts";
 
 /**
  * Exact AniList anime ↔ TMDB links from Wikidata (CC0): properties P8729 (AniList anime ID),
- * P4983 (TMDB TV series ID) and P4947 (TMDB movie ID), directly or via the series item. Used only to keep the same work out of
- * the other section's recommendations; identity never comes from title text.
+ * P4983 (TMDB TV series ID) and P4947 (TMDB movie ID), directly or via the series item. Used to
+ * keep the same work out of the other section's recommendations, and for TMDB episode stills, arc
+ * seasons and anime title-page backdrops; identity never comes from title text.
  */
 export interface AnimeTmdbLink {
   anilistId: number;

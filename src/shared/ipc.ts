@@ -22,6 +22,7 @@ import type {
   AnimeSeriesNode,
   TitlePreferences,
   AnimeEpisodeRangesInput,
+  AnimeHeroBackdropInput,
   AnimeEpisodeCatalogInput,
   AnimePlaybackInput,
   AnimePlaybackResult,
@@ -206,6 +207,7 @@ export interface IpcInvokeChannelMap {
     args: [input: AnimeEpisodeRangesInput];
     result: AnimeEpisodeRanges | undefined;
   };
+  "anime:hero-backdrop": { args: [input: AnimeHeroBackdropInput]; result: string | undefined };
   "anime:playback": { args: [input: AnimePlaybackInput]; result: AnimePlaybackResult };
   "mal:score": {
     args: [type: AniListMediaType, malId: number];

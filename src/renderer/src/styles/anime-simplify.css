@@ -22,14 +22,40 @@
   background: var(--surface-panel);
 }
 .anime-head-art img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center 22%;
 }
-.anime-head--cover .anime-head-art img {
+.anime-head--cover .anime-head-fill {
   filter: blur(26px) saturate(1.2) brightness(0.7);
   transform: scale(1.15);
+}
+/* AniList banners are 1900×400: stretched over this tall header they blur, so the banner keeps
+   its own shape across the top and a blurred copy fills the rest (2026-10-29). */
+.anime-head--banner .anime-head-fill {
+  filter: blur(30px) saturate(1.15) brightness(0.55);
+  transform: scale(1.12);
+}
+.anime-head-art .anime-head-strip {
+  bottom: auto;
+  height: auto;
+  aspect-ratio: 1900 / 400;
+  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent);
+  mask-image: linear-gradient(180deg, #000 55%, transparent);
+}
+/* TMDB's 16:9 backdrop (exact link) covers both once it has loaded. */
+.anime-head-art .anime-head-backdrop {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.anime-head-art .anime-head-backdrop.is-shown {
+  opacity: 1;
+}
+html[data-motion="reduce"] .anime-head-art .anime-head-backdrop {
+  transition: none;
 }
 .anime-head-art::after {
   content: "";
