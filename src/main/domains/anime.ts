@@ -156,6 +156,16 @@ export function registerAnimeDomain(
       (url) => url !== undefined,
     ).catch(() => undefined);
   });
+  // Search's "did you mean" for a word AniList cannot match (it matches whole words only): Kitsu's
+  // typo-tolerant search supplies title names, sent only after an Anime/Manga search found nothing.
+  registerTrustedIpcHandler(
+    trustedRendererOrigin,
+    "search:title-suggestions",
+    async (_event, type, query) => {
+      const kitsu = episodeArt?.kitsu;
+      return kitsu ? kitsu.searchTitles(type, query).catch(() => []) : [];
+    },
+  );
   registerTrustedIpcHandler(trustedRendererOrigin, "anime:provider-readiness", async () => {
     if (!animeSource) {
       return {

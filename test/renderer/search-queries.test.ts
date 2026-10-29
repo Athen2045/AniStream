@@ -43,6 +43,7 @@ function api(overrides: Partial<AniStreamBridge> = {}): Api {
       catalogPage(input.page, [input.page * 10], input.page < 2),
     ),
     browseMore: vi.fn(),
+    getTitleSuggestions: vi.fn(async () => []),
     searchMore: vi.fn(),
     getMoreTrending: vi.fn(),
     getLatestAnimeUpdates: vi.fn(),
@@ -156,6 +157,56 @@ describe("search queries", () => {
       query: "Freiren",
       sort: "POPULARITY_DESC",
     });
+  });
+
+  it("asks the typo-tolerant search only when AniList has no close title", async () => {
+    // AniList matches whole words: a misspelled first word finds nothing, a real title does.
+    const found = new Set(["Frieren: Beyond Journey's End", "Naruto"]);
+    const bridge = api({
+      browseAniList: vi.fn(async (input) => ({
+        ...catalogPage(1, [], false),
+        items: found.has(input.query ?? "") ? [media(1, input.query ?? "")] : [],
+      })),
+      getTitleSuggestions: vi.fn(async (_type, query) =>
+        query === "Narto"
+          ? ["Naruto: Shippuuden", "Naruto: Shippuden", "Naruto", "Boruto"]
+          : ["Sousou no Frieren", "Frieren: Beyond Journey's End", "Haru"],
+      ),
+    });
+    const client = createAppQueryClient();
+
+    await expect(client.fetchQuery(didYouMeanQuery("ANIME", "Frierne", bridge))).resolves.toBe(
+      "Frieren: Beyond Journey's End",
+    );
+    expect(bridge.getTitleSuggestions).toHaveBeenCalledWith("ANIME", "Frierne");
+    // Equally close names prefer the nearest whole title, and only names AniList finds count.
+    await expect(client.fetchQuery(didYouMeanQuery("ANIME", "Narto", bridge))).resolves.toBe(
+      "Naruto",
+    );
+    // A far-off name from that search is still not offered.
+    await expect(client.fetchQuery(didYouMeanQuery("ANIME", "Zzqx", bridge))).resolves.toBeNull();
+  });
+
+  it("offers nothing AniList cannot find", async () => {
+    const bridge = api({
+      browseAniList: vi.fn(async () => catalogPage(1, [], false)),
+      getTitleSuggestions: vi.fn(async () => ["Naruto: Shippuuden"]),
+    });
+    await expect(
+      createAppQueryClient().fetchQuery(didYouMeanQuery("ANIME", "Narto", bridge)),
+    ).resolves.toBeNull();
+  });
+
+  it("keeps quiet when the typo-tolerant search fails", async () => {
+    const bridge = api({
+      browseAniList: vi.fn(async () => catalogPage(1, [], false)),
+      getTitleSuggestions: vi.fn(async () => {
+        throw new Error("offline");
+      }),
+    });
+    await expect(
+      createAppQueryClient().fetchQuery(didYouMeanQuery("ANIME", "Frierne", bridge)),
+    ).resolves.toBeNull();
   });
 });
 

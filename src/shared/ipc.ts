@@ -161,6 +161,7 @@ export interface IpcInvokeChannelMap {
   "anilist:cached-dashboard": { args: []; result: AniListDashboard | undefined };
   "anilist:dashboard": { args: []; result: AniListDashboard };
   "anilist:browse": { args: [input: BrowseAniListInput]; result: AniListCatalogPage };
+  "search:title-suggestions": { args: [type: AniListMediaType, query: string]; result: string[] };
   "anilist:person-titles": {
     args: [kind: "character" | "studio", id: number, type: AniListMediaType];
     result: AniListCatalogMedia[];

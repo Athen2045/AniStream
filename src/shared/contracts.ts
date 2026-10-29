@@ -1094,6 +1094,8 @@ export interface AniStreamBridge {
   getCachedAniListDashboard(): Promise<AniListDashboard | undefined>;
   getAniListDashboard(): Promise<AniListDashboard>;
   browseAniList(input: BrowseAniListInput): Promise<AniListCatalogPage>;
+  /** Typo-tolerant title names for Search's "did you mean" (empty when unavailable). */
+  getTitleSuggestions(type: AniListMediaType, query: string): Promise<string[]>;
   /** Titles of one type a search's character appears in, or its studio made. */
   getAniListPersonTitles(
     kind: "character" | "studio",

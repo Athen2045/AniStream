@@ -1,4 +1,4 @@
-import type { AnimeEpisodeArt, AnimeEpisodeArtInput } from "../shared/contracts";
+import type { AniListMediaType, AnimeEpisodeArt, AnimeEpisodeArtInput } from "../shared/contracts";
 import { createBoundedCache } from "./anilist/cache";
 import { createRequestGate, type RequestGate } from "./anilist/request-queue";
 import {
@@ -14,6 +14,8 @@ const KITSU_API_URL = "https://kitsu.io/api/edge";
 const REQUEST_TIMEOUT_MS = 12_000;
 const MAPPING_CACHE_TTL_MS = 24 * 3_600_000;
 const EPISODE_PAGE_CACHE_TTL_MS = 6 * 3_600_000;
+const TITLE_SEARCH_CACHE_TTL_MS = 3_600_000;
+const TITLE_SEARCH_LIMIT = 10;
 
 export interface KitsuEpisodeArtResult {
   art: AnimeEpisodeArt[];
@@ -42,6 +44,10 @@ export class KitsuClient {
     maxEntries: 200,
     ttlMs: EPISODE_PAGE_CACHE_TTL_MS,
   });
+  private readonly titleSearchCache = createBoundedCache<string[]>({
+    maxEntries: 100,
+    ttlMs: TITLE_SEARCH_CACHE_TTL_MS,
+  });
   private readonly transport: ProviderTransport;
 
   public constructor(
@@ -57,6 +63,27 @@ export class KitsuClient {
         "User-Agent": PROVIDER_USER_AGENT,
       },
     });
+  }
+
+  /**
+   * Title names for a search, from Kitsu's typo-tolerant text search: candidates for Search's
+   * "did you mean" when AniList (whole-word matching) finds nothing. Only names come back; no
+   * Kitsu entry ever stands in for an AniList title.
+   */
+  public async searchTitles(type: AniListMediaType, query: string): Promise<string[]> {
+    const text = query.trim().slice(0, 100);
+    if (text.length < 3) return [];
+    const key = `${type}:${text.toLocaleLowerCase()}`;
+    const cached = this.titleSearchCache.get(key);
+    if (cached) return cached;
+    const kind = type === "MANGA" ? "manga" : "anime";
+    const url = new URL(`${this.apiBaseUrl}/${kind}`);
+    url.searchParams.set("filter[text]", text);
+    url.searchParams.set("page[limit]", String(TITLE_SEARCH_LIMIT));
+    url.searchParams.set(`fields[${kind}]`, "canonicalTitle,titles");
+    const titles = parseKitsuTitles(await this.get(url, `kitsu-titles:${key}`));
+    this.titleSearchCache.set(key, titles);
+    return titles;
   }
 
   /** Episode thumbnails for one AniList anime entry, through Kitsu's exact AniList mapping. */
@@ -142,4 +169,23 @@ export class KitsuClient {
       },
     );
   }
+}
+
+/** Distinct English and romaji names from a Kitsu anime/manga search page. */
+export function parseKitsuTitles(payload: unknown): string[] {
+  const rows = isRecord(payload) && Array.isArray(payload.data) ? payload.data : [];
+  const names = new Set<string>();
+  for (const row of rows) {
+    const attributes = isRecord(row) && isRecord(row.attributes) ? row.attributes : undefined;
+    if (!attributes) continue;
+    const titles = isRecord(attributes.titles) ? attributes.titles : {};
+    for (const value of [attributes.canonicalTitle, titles.en, titles.en_us, titles.en_jp]) {
+      if (typeof value === "string" && value.trim() && value.length <= 200) names.add(value.trim());
+    }
+  }
+  return [...names];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
