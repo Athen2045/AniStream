@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpen, Check, Clock3, Play, Plus, Star } from "lucide-react";
+import { ArrowLeft, Check, Plus } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   lazy,
@@ -11,10 +11,8 @@ import {
 } from "react";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import type { AniListCatalogMedia, MangaDexReaderChapter } from "../../shared/contracts";
-import { CoverImage } from "./CoverImage";
 import { SimilarTitles } from "./SimilarTitles";
 import { titleAccentStyle, titleTintStyle } from "./title-accent";
-import { cachedArtworkUrl } from "../../shared/artwork";
 import { formatMediaLabel } from "./format-label";
 import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
 import { createMediaDetailSession } from "./media-detail-session";
@@ -25,21 +23,22 @@ import { UpNextButton } from "./UpNextButton";
 import { TitleDownloadButton } from "./DownloadButtons";
 import { useOnline } from "./useOnline";
 import { animeBingeItem } from "./binge-session";
-import { MalSourceIcon } from "./MalSourceIcon";
-import { RatingChips, compactVotes } from "./RatingChips";
 import { TitleFeedback } from "./TitleFeedback";
 import { AnimeAbout, AnimeTitleHeader } from "./AnimeTitleHeader";
 import { MangaChapterBrowser } from "./MangaChapterBrowser";
-import { useTitleReader } from "./useTitleReader";
+import { MangaTitleHeader, TitleBand } from "./MangaTitleHeader";
+import { MalFillCredit, RateButton, TitleTracker } from "./TitleTracker";
 import {
-  cleanDescription,
-  distinctExternalLinks,
-  entryStatusLabel,
-  formatNumber,
-  joinWords,
-  titleFacts,
-  titleKicker,
-} from "./title-facts";
+  airedEpisodes,
+  animeAboutFacts,
+  animeMovieFacts,
+  animeScores,
+  primaryActionLabel,
+  titleCopy,
+  unseenRecommendations,
+} from "./title-page-model";
+import { useTitleReader } from "./useTitleReader";
+import { distinctExternalLinks, entryStatusLabel, titleKicker } from "./title-facts";
 
 const AnimeWatchExperience = lazy(() =>
   import("./AnimeWatchExperience").then((module) => ({
@@ -265,23 +264,15 @@ export function MediaDetailModal({
     (readerSession
       ? readerSession.status !== "available" || readerSession.chapters.length === 0
       : Boolean(detailSnapshot.error));
-  const primaryLabel = isAnime
-    ? watchedEpisodes > 0 && watchedEpisodes < (resolved.totalProgress ?? Infinity)
-      ? `Continue E${initialEpisode}`
-      : "Watch"
-    : mangaResume?.chapterNumber !== undefined && mangaResume.progress < 1
-      ? `Resume Ch. ${formatNumber(mangaResume.chapterNumber)}`
-      : mangaProgress > 0
-        ? `Continue Ch. ${mangaProgress + 1}`
-        : "Read";
-  // The best 6 AniList picks (already ranked by community votes), skipping titles the viewer
-  // already watched or read: anything on their list except Planning (user decision 2026-10-06).
-  const recommendations = (detail?.recommendations ?? [])
-    .filter((item) => {
-      const entry = personalized ? access.libraryEntries.get(item.id) : undefined;
-      return !entry || entry.status === "PLANNING";
-    })
-    .slice(0, 6);
+  const primaryLabel = primaryActionLabel({
+    anime: isAnime,
+    watchedEpisodes,
+    totalProgress: resolved.totalProgress,
+    nextEpisode: initialEpisode,
+    mangaProgress,
+    mangaResume,
+  });
+  const recommendations = unseenRecommendations(detail, access, personalized);
   // Offline, a title page keeps to what plays or reads without a connection: no About or More
   // like this. Neither anime (2026-10-18) nor manga (2026-10-28) pages have a Links section.
   const sections = [
@@ -289,35 +280,33 @@ export function MediaDetailModal({
     ...(recommendations.length && online ? [{ id: "similar", label: "More like this" }] : []),
   ];
   const [activeSection, setActiveSection] = useState("units");
-  const [synopsisOpen, setSynopsisOpen] = useState(false);
   const [ratingOpen, setRatingOpen] = useState(false);
-  // MyAnimeList fills what AniList leaves empty (joined only by AniList's own idMal), credited below.
-  const aniListSummary = cleanDescription(resolved.description);
-  const malSummary = aniListSummary ? undefined : cleanDescription(malScore?.synopsis);
-  const description =
-    aniListSummary ?? malSummary ?? "AniList does not currently provide a summary for this title.";
-  const malEnglishTitle = detail && !detail.titleEnglish ? malScore?.englishTitle : undefined;
-  const malGenres = resolved.genres.length ? undefined : malScore?.genres;
-  const genres = malGenres ?? resolved.genres;
-  const malFilled = [
-    malSummary ? "Summary" : undefined,
-    malEnglishTitle ? "English title" : undefined,
-    malGenres?.length ? "genres" : undefined,
-  ].filter((part): part is string => Boolean(part));
-  const altTitles = [malEnglishTitle, detail?.titleRomaji, detail?.titleNative].filter(
-    (value, index, all): value is string =>
-      Boolean(value) &&
-      value?.toLocaleLowerCase() !== resolved.title.toLocaleLowerCase() &&
-      all.indexOf(value) === index,
-  );
-  const credits =
-    !isAnime && mangaEnrichment?.status === "available" && mangaEnrichment.authors.length
-      ? mangaEnrichment.authors
-      : (detail?.staff ?? [])
-          .filter((person) => /story|art|original creator/i.test(person.role ?? ""))
-          .map((person) => person.name)
-          .filter((name, index, all) => all.indexOf(name) === index)
-          .slice(0, 3);
+  const copy = titleCopy(resolved, detail, malScore, mangaEnrichment);
+  const tracker =
+    personalized && detail
+      ? {
+          open: ratingOpen,
+          rated: Boolean(detail.listEntry?.score),
+          onToggle: () => setRatingOpen((open) => !open),
+          panel: (
+            <TitleTracker
+              value={rating ?? detail.listEntry?.score ?? 0}
+              saving={savingTracker}
+              onChange={setRating}
+              onSave={() =>
+                void detailSession
+                  .saveRating(rating ?? detail.listEntry?.score ?? 0)
+                  .catch(() => undefined)
+              }
+              onComplete={() => void markMediaCompleted()}
+            />
+          ),
+        }
+      : undefined;
+  const malCredit =
+    copy.malFilled.length && malScore ? (
+      <MalFillCredit parts={copy.malFilled} url={malScore.malUrl} />
+    ) : null;
 
   const handleScroll = (event: React.UIEvent<HTMLDivElement>): void => {
     const page = event.currentTarget;
@@ -384,32 +373,9 @@ export function MediaDetailModal({
           media={resolved}
           layout={animeLayout}
           kicker={titleKicker(resolved, detail)}
-          scores={[
-            ...(malScore?.score
-              ? [
-                  {
-                    score: `★ ${malScore.score}`,
-                    source: "mal" as const,
-                    href: malScore.malUrl,
-                    title: malScore.scoredBy
-                      ? `${malScore.score}/10 from ${malScore.scoredBy.toLocaleString()} MAL users`
-                      : `${malScore.score}/10 on MyAnimeList`,
-                  },
-                ]
-              : []),
-            ...(resolved.averageScore
-              ? [
-                  {
-                    score: `${resolved.averageScore}%`,
-                    source: "anilist" as const,
-                    href: media.siteUrl,
-                    title: `${resolved.averageScore}% on AniList`,
-                  },
-                ]
-              : []),
-          ]}
-          genres={genres}
-          description={aniListSummary ?? malSummary}
+          scores={animeScores(resolved, malScore, media.siteUrl)}
+          genres={copy.genres}
+          description={copy.aniListSummary ?? copy.malSummary}
           loading={loading}
           primaryLabel={primaryLabel}
           blockedLabel={blockedLabel}
@@ -419,31 +385,12 @@ export function MediaDetailModal({
           }}
           minutes={detail?.duration}
           studio={detail?.studios[0]}
-          facts={
-            detail
-              ? titleFacts(detail)
-                  .filter(([name]) => ["Aired", "Original Creator", "Country"].includes(name))
-                  .map(([name, value]): [string, string] => [
-                    name === "Aired"
-                      ? "Released"
-                      : name === "Original Creator"
-                        ? "Original creator"
-                        : name,
-                    value,
-                  ])
-              : undefined
-          }
+          facts={detail ? animeMovieFacts(detail) : undefined}
           actions={
             <>
               <TitleDownloadButton
                 media={resolved}
-                airedEpisodes={
-                  resolved.status === "NOT_YET_RELEASED"
-                    ? 0
-                    : resolved.nextAiringEpisode
-                      ? resolved.nextAiringEpisode.episode - 1
-                      : (resolved.totalProgress ?? 0)
-                }
+                airedEpisodes={airedEpisodes(resolved)}
                 minutes={detail?.duration}
                 className="title-library"
               />
@@ -468,21 +415,8 @@ export function MediaDetailModal({
                   {libraryEntry ? <Check size={17} /> : <Plus size={18} />}
                 </button>
               ) : null}
-              {personalized && detail ? (
-                <button
-                  className="title-round"
-                  type="button"
-                  aria-label="Rate or complete"
-                  aria-expanded={ratingOpen}
-                  title="Rate or mark completed"
-                  onClick={() => setRatingOpen((open) => !open)}
-                >
-                  <Star
-                    size={18}
-                    fill={detail.listEntry?.score ? "currentColor" : "none"}
-                    aria-hidden="true"
-                  />
-                </button>
+              {tracker ? (
+                <RateButton open={tracker.open} rated={tracker.rated} onToggle={tracker.onToggle} />
               ) : null}
               <TitleFeedback
                 title={resolved.title}
@@ -493,296 +427,41 @@ export function MediaDetailModal({
           }
           extra={
             <>
-              {ratingOpen && personalized && detail ? (
-                <div className="detail-tracker-compact title-tracker">
-                  <label>
-                    <Star size={15} />
-                    <span className="sr-only">AniList rating out of 10</span>
-                    <input
-                      aria-label="AniList rating out of 10"
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.5"
-                      value={rating ?? detail.listEntry?.score ?? 0}
-                      onChange={(event) => setRating(Number(event.target.value))}
-                    />
-                    <span>/ 10</span>
-                  </label>
-                  <button
-                    type="button"
-                    disabled={savingTracker}
-                    onClick={() =>
-                      void detailSession
-                        .saveRating(rating ?? detail.listEntry?.score ?? 0)
-                        .catch(() => undefined)
-                    }
-                  >
-                    Save rating
-                  </button>
-                  <button
-                    type="button"
-                    disabled={savingTracker}
-                    onClick={() => void markMediaCompleted()}
-                  >
-                    Mark completed
-                  </button>
-                </div>
-              ) : null}
-              {malFilled.length && malScore ? (
-                <p className="title-source-credit">
-                  <MalSourceIcon label="" />
-                  <span>
-                    {joinWords(malFilled)} from{" "}
-                    <a href={malScore.malUrl} target="_blank" rel="noreferrer">
-                      MyAnimeList
-                    </a>
-                  </span>
-                </p>
-              ) : null}
+              {tracker?.open ? tracker.panel : null}
+              {malCredit}
             </>
           }
         />
       ) : null}
 
       {isAnime ? null : (
-        <section className="title-main">
-          <div className={`title-cover${isAnime ? "" : " title-cover--book"}`}>
-            <CoverImage src={cachedArtworkUrl(resolved.coverUrl)} title={resolved.title} />
-          </div>
-          <div className="title-info">
-            <p className="title-kicker">
-              {titleKicker(resolved, detail).map((part) => (
-                <span key={part}>{part}</span>
-              ))}
-            </p>
-            <h1>{resolved.title}</h1>
-            {altTitles.length ? <p className="title-alt">{altTitles.join(" · ")}</p> : null}
-            {!isAnime && credits.length ? (
-              <p className="title-byline">
-                By <strong>{credits.join(", ")}</strong>
-              </p>
-            ) : null}
-            {genres.length ? (
-              <ul className="title-genres" aria-label="Genres">
-                {genres.slice(0, 6).map((genre) => (
-                  <li key={genre}>{genre}</li>
-                ))}
-              </ul>
-            ) : loading ? (
-              <ul className="title-genres title-genres--loading" aria-hidden="true">
-                {[78, 92, 70].map((width) => (
-                  <li key={width} className="sk-pill" style={{ width }} />
-                ))}
-              </ul>
-            ) : null}
-            <div className="title-actions">
-              {mangaUnreadable ? null : (
-                <button
-                  className={`title-primary${blockedLabel ? " is-upcoming" : ""}`}
-                  type="button"
-                  disabled={Boolean(blockedLabel)}
-                  onClick={() => {
+        <MangaTitleHeader
+          media={resolved}
+          detail={detail}
+          siteUrl={media.siteUrl}
+          loading={loading}
+          copy={copy}
+          malScore={malScore}
+          enrichment={mangaEnrichment}
+          primary={
+            mangaUnreadable
+              ? undefined
+              : {
+                  label: primaryLabel,
+                  blockedLabel,
+                  onPress: () => {
                     setBackToOrigin(false);
-                    if (isAnime) setAutoPlayRequest((request) => request + 1);
-                    else void openPreferredChapter();
-                  }}
-                >
-                  {blockedLabel ? (
-                    <Clock3 size={18} />
-                  ) : isAnime ? (
-                    <Play size={18} fill="currentColor" />
-                  ) : (
-                    <BookOpen size={18} />
-                  )}
-                  {blockedLabel ?? primaryLabel}
-                </button>
-              )}
-              {isAnime ? (
-                <UpNextButton item={animeBingeItem(resolved)} className="title-library" />
-              ) : null}
-              {isAnime ? (
-                <TitleDownloadButton
-                  media={resolved}
-                  // Aired so far: everything before the next airing, else the full count.
-                  airedEpisodes={
-                    resolved.status === "NOT_YET_RELEASED"
-                      ? 0
-                      : resolved.nextAiringEpisode
-                        ? resolved.nextAiringEpisode.episode - 1
-                        : (resolved.totalProgress ?? 0)
-                  }
-                  minutes={detail?.duration}
-                  className="title-library"
-                />
-              ) : null}
-              {personalized || onLibrary ? (
-                <button
-                  className="title-library"
-                  type="button"
-                  disabled={adding}
-                  aria-label={libraryEntry ? "Edit library entry" : "Add to AniList planning"}
-                  title={libraryEntry ? "Edit library entry" : "Add to Planning"}
-                  onClick={manageLibrary}
-                >
-                  {libraryEntry ? <Check size={16} /> : <Plus size={17} />}
-                  {libraryEntry
-                    ? `${entryStatusLabel(libraryEntry.status, isAnime)} · ${libraryEntry.progress}${
-                        resolved.totalProgress ? `/${resolved.totalProgress}` : ""
-                      }`
-                    : "Add to list"}
-                </button>
-              ) : null}
-              {personalized && detail ? (
-                <button
-                  className="title-round"
-                  type="button"
-                  aria-label="Rate or complete"
-                  aria-expanded={ratingOpen}
-                  title="Rate or mark completed"
-                  onClick={() => setRatingOpen((open) => !open)}
-                >
-                  <Star
-                    size={18}
-                    fill={detail.listEntry?.score ? "currentColor" : "none"}
-                    aria-hidden="true"
-                  />
-                </button>
-              ) : null}
-              <TitleFeedback
-                title={resolved.title}
-                target={{ type: resolved.type, id: resolved.id }}
-                className="title-round"
-              />
-            </div>
-            {ratingOpen && personalized && detail ? (
-              <div className="detail-tracker-compact title-tracker">
-                <label>
-                  <Star size={15} />
-                  <span className="sr-only">AniList rating out of 10</span>
-                  <input
-                    aria-label="AniList rating out of 10"
-                    type="number"
-                    min="0"
-                    max="10"
-                    step="0.5"
-                    value={rating ?? detail.listEntry?.score ?? 0}
-                    onChange={(event) => setRating(Number(event.target.value))}
-                  />
-                  <span>/ 10</span>
-                </label>
-                <button
-                  type="button"
-                  disabled={savingTracker}
-                  onClick={() =>
-                    void detailSession
-                      .saveRating(rating ?? detail.listEntry?.score ?? 0)
-                      .catch(() => undefined)
-                  }
-                >
-                  Save rating
-                </button>
-                <button
-                  type="button"
-                  disabled={savingTracker}
-                  onClick={() => void markMediaCompleted()}
-                >
-                  Mark completed
-                </button>
-              </div>
-            ) : null}
-            <RatingChips
-              chips={[
-                resolved.averageScore
-                  ? {
-                      source: "anilist",
-                      score: `${resolved.averageScore}%`,
-                      detail: "AniList",
-                      href: media.siteUrl,
-                      title: `${resolved.averageScore}% on AniList`,
-                    }
-                  : undefined,
-                malScore?.score
-                  ? {
-                      source: "mal",
-                      score: String(malScore.score),
-                      detail: malScore.scoredBy
-                        ? `${compactVotes(malScore.scoredBy)} users`
-                        : "MyAnimeList",
-                      href: malScore.malUrl,
-                      title: malScore.scoredBy
-                        ? `${malScore.score}/10 from ${malScore.scoredBy.toLocaleString()} MAL users`
-                        : `${malScore.score}/10 on MyAnimeList`,
-                    }
-                  : undefined,
-                !isAnime &&
-                mangaEnrichment?.status === "available" &&
-                mangaEnrichment.mangaUpdatesRating !== undefined
-                  ? {
-                      source: "mangaupdates",
-                      score: mangaEnrichment.mangaUpdatesRating.toFixed(2),
-                      detail: "MangaUpdates",
-                      title: `${mangaEnrichment.mangaUpdatesRating.toFixed(2)}/10 on MangaUpdates`,
-                    }
-                  : undefined,
-              ]}
-            />
-            {/* No MangaDex score or follows row: the chips above carry the ratings, and MangaDex is
-                credited under the chapters (user decision 2026-10-28). */}
-            {loading && !aniListSummary && !malSummary ? (
-              // While details load, the summary is shaped, never "no summary".
-              <div className="title-synopsis-loading" aria-hidden="true">
-                <span className="sk-line" style={{ width: "96%" }} />
-                <span className="sk-line" style={{ width: "90%" }} />
-                <span className="sk-line" style={{ width: "62%" }} />
-              </div>
-            ) : description ? (
-              <>
-                <p className={`title-synopsis${synopsisOpen ? " is-open" : ""}`}>{description}</p>
-                {description.length > 260 ? (
-                  <button
-                    className="title-more"
-                    type="button"
-                    aria-expanded={synopsisOpen}
-                    onClick={() => setSynopsisOpen((open) => !open)}
-                  >
-                    {synopsisOpen ? "Show less" : "Read more"}
-                  </button>
-                ) : null}
-              </>
-            ) : null}
-            {malFilled.length && malScore ? (
-              <p className="title-source-credit">
-                <MalSourceIcon label="" />
-                <span>
-                  {joinWords(malFilled)} from{" "}
-                  <a href={malScore.malUrl} target="_blank" rel="noreferrer">
-                    MyAnimeList
-                  </a>
-                </span>
-              </p>
-            ) : null}
-          </div>
-          {detail ? (
-            <dl className="title-facts">
-              {titleFacts(detail, mangaEnrichment).map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <div className="title-facts title-facts--loading" aria-hidden="true">
-              {[70, 110, 90, 60, 80].map((width) => (
-                <div key={width}>
-                  <span className="sk-line" style={{ width }} />
-                  <span className="sk-line" style={{ width: width + 30 }} />
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+                    void openPreferredChapter();
+                  },
+                }
+          }
+          library={
+            personalized || onLibrary
+              ? { entry: libraryEntry, adding, onManage: manageLibrary }
+              : undefined
+          }
+          rating={tracker}
+        />
       )}
 
       {isAnime ? null : (
@@ -891,14 +570,7 @@ export function MediaDetailModal({
         ) : null}
 
         {isAnime && animeLayout === "series" && detail && online ? (
-          <AnimeAbout
-            facts={titleFacts(detail)
-              .filter(([name]) => ["Status", "Aired", "Studio", "Original Creator"].includes(name))
-              .map(([name, value]): [string, string] => [
-                name === "Original Creator" ? "Original creator" : name,
-                value,
-              ])}
-          />
+          <AnimeAbout facts={animeAboutFacts(detail)} />
         ) : null}
       </div>
       <Suspense
@@ -932,26 +604,5 @@ export function MediaDetailModal({
         </AnimatePresence>
       </Suspense>
     </motion.div>
-  );
-}
-
-/** AniList banners are a fixed 1900×400; the band keeps that exact ratio and never crops it taller. */
-function TitleBand({ media }: { media: AniListCatalogMedia }): React.JSX.Element {
-  const [failed, setFailed] = useState<string>();
-  const banner = media.bannerUrl && media.bannerUrl !== failed ? media.bannerUrl : undefined;
-  const art = banner ?? media.coverUrl;
-  return (
-    <header className={`title-band${banner ? "" : " title-band--fallback"}`} aria-hidden="true">
-      {art ? (
-        <img
-          className="title-band-art"
-          src={cachedArtworkUrl(art)}
-          alt=""
-          decoding="async"
-          fetchPriority="high"
-          onError={() => setFailed(media.bannerUrl)}
-        />
-      ) : null}
-    </header>
   );
 }
