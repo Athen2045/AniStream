@@ -1,17 +1,4 @@
-import {
-  BookOpen,
-  CalendarDays,
-  Download,
-  Film,
-  ListVideo,
-  RefreshCw,
-  Search,
-  Settings,
-  Tv,
-  Bug,
-  UserRound,
-} from "lucide-react";
-import { DownloadsProvider, useDownloads } from "./DownloadsProvider";
+import { DownloadsProvider } from "./DownloadsProvider";
 import { DownloadsView } from "./DownloadsView";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -26,7 +13,6 @@ import {
 import type {
   AniListCatalogMedia,
   AniListEntry,
-  AniListMediaType,
   MoreCatalogItem,
   UpdateAniListEntryInput,
 } from "../../shared/contracts";
@@ -46,37 +32,31 @@ import { PersonalLibraryProvider } from "./PersonalLibraryProvider";
 import { TitlePageFallback } from "./TitlePageFallback";
 import type { ProfileSyncSource } from "./ProfileSyncChip";
 import { choosePicture, useProfileLook, useSimklProfile, useSimklStatus } from "./profile-look";
-import {
-  buildLibraryShelves,
-  defaultShelfKey,
-  filterLibrary,
-  type LibrarySort,
-} from "./profile-library";
 import { EntryEditor } from "./EntryEditor";
 import { presetSearchGenre, SectionSearch, type SearchScope } from "./SectionSearch";
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import { useSmoothDocumentScroll } from "./useSmoothDocumentScroll";
 import { ReadinessScreen } from "./ReadinessScreen";
 import { ContinueUndoToast } from "./ContinueRemoveButton";
-import { getAppPreferences, useAppPreferences } from "./app-preferences";
-import { BingeProvider, useBinge } from "./BingeProvider";
+import { getAppPreferences } from "./app-preferences";
+import { BingeProvider } from "./BingeProvider";
 import { bingeAnimeMedia, bingeMoreItem } from "./binge-session";
 import type { BingeItem } from "../../shared/binge";
 import type { MorePlayTarget } from "./more-format";
 import type { SettingsTab } from "./SettingsView";
 import { MoreView } from "./MoreView";
-import { SideRail } from "./SideRail";
-
-/** Bug reports go to the project's GitHub issues for now (user request 2026-10-09). */
-const BUG_REPORT_URL = "https://github.com/Athen2045/AniStream/issues";
-import { WindowControls } from "./WindowControls";
+import { AppRail, type AppView } from "./AppRail";
+import { RouteView } from "./RouteView";
+import { useProfileLibrary } from "./useProfileLibrary";
 import {
-  createReadinessSession,
-  createLaunchCatalogReadinessStage,
-  type ReadinessSession,
-  type ReadinessSnapshot,
-  type ReadinessStageResult,
-} from "./startup-readiness";
+  createLaunchReadiness,
+  createProfileReadiness,
+  getInactiveReadinessSnapshot,
+  subscribeToInactiveReadiness,
+} from "./app-readiness";
+import { WindowControls } from "./WindowControls";
+import type { ReadinessSession } from "./startup-readiness";
+
 // Only needed once a title is opened, never on initial launch -- load it as its own
 // chunk instead of paying its parse/compile cost during startup.
 const loadMediaDetailModal = () => import("./MediaDetailModal");
@@ -101,28 +81,7 @@ const UpNextView = lazy(() => import("./UpNextView").then((m) => ({ default: m.U
 /** Once launch settles, the title page's code loads quietly so opening a title never waits on it. */
 const MEDIA_DETAIL_PREFETCH_DELAY_MS = 1_500;
 
-const inactiveReadinessSnapshot: ReadinessSnapshot = {
-  attempt: 0,
-  mode: "launch",
-  progress: 100,
-  activeLabel: "AniStream is ready",
-  steps: [],
-  outcome: "ready",
-  canContinue: false,
-};
-const subscribeToInactiveReadiness = (): (() => void) => () => undefined;
 const SIMKL_PROFILE_SYNC_AFTER_MS = 30 * 60_000;
-const getInactiveReadinessSnapshot = (): ReadinessSnapshot => inactiveReadinessSnapshot;
-type AppView =
-  | "ANIME"
-  | "MANGA"
-  | "MORE"
-  | "PROFILE"
-  | "SEARCH"
-  | "SETTINGS"
-  | "SCHEDULE"
-  | "UPNEXT"
-  | "DOWNLOADS";
 
 export function App(): React.JSX.Element {
   return (
@@ -136,67 +95,7 @@ function AppContent(): React.JSX.Element {
   const reducedMotion = useAppReducedMotion();
   const cancelSmoothDocumentScroll = useSmoothDocumentScroll();
   const viewerSession = useMemo(() => createViewerSession(window.anistream), []);
-  const launchReadiness = useMemo(
-    () =>
-      createReadinessSession({
-        mode: "launch",
-        stages: [
-          {
-            id: "local",
-            label: "Opening local data",
-            shortLabel: "Local data",
-            weight: 15,
-            required: true,
-            failureOutcome: "local-error",
-            run: async () => {
-              const app = await window.anistream.getAppInfo();
-              if (!app.databaseReady) {
-                return { status: "local-error" } satisfies ReadinessStageResult;
-              }
-            },
-          },
-          {
-            id: "session",
-            label: "Restoring your saved session",
-            shortLabel: "Session",
-            weight: 25,
-            required: false,
-            provider: "AniList",
-            failureOutcome: "degraded",
-            run: async () => {
-              await viewerSession.restore();
-              if (viewerSession.getSnapshot().error) {
-                return {
-                  status: "degraded",
-                  provider: "AniList",
-                  canContinue: true,
-                } satisfies ReadinessStageResult;
-              }
-            },
-          },
-          createLaunchCatalogReadinessStage(async () => {
-            await window.anistream.browseAniList({
-              type: "ANIME",
-              page: 1,
-              perPage: 20,
-              sort: "TRENDING_DESC",
-            });
-          }),
-          {
-            id: "playback",
-            label: "Checking anime playback availability",
-            shortLabel: "Anime player",
-            weight: 20,
-            required: false,
-            provider: "The anime player",
-            failureOutcome: "degraded",
-            run: async () =>
-              normalizePlaybackReadiness(await window.anistream.getAnimeProviderReadiness()),
-          },
-        ],
-      }),
-    [viewerSession],
-  );
+  const launchReadiness = useMemo(() => createLaunchReadiness(viewerSession), [viewerSession]);
   const viewerSnapshot = useSyncExternalStore(
     viewerSession.subscribe,
     viewerSession.getSnapshot,
@@ -248,7 +147,6 @@ function AppContent(): React.JSX.Element {
   const [{ view, from: previousView }, setViewPair] = useState<{ view: AppView; from: AppView }>(
     () => ({ view: getAppPreferences().startSection, from: getAppPreferences().startSection }),
   );
-  const preferences = useAppPreferences();
   const setView = useCallback(
     (next: AppView) =>
       setViewPair((current) =>
@@ -292,13 +190,7 @@ function AppContent(): React.JSX.Element {
   }, [moreFromSearch, setView]);
   const [selectedAction, setSelectedAction] = useState<"details" | "play" | "read">("details");
   const [selectedStartUnit, setSelectedStartUnit] = useState<number>();
-  const [mediaType, setMediaType] = useState<AniListMediaType>("ANIME");
-  const [selectedGroup, setSelectedGroup] = useState("");
-  const [listQuery, setListQuery] = useState("");
-  const [librarySort, setLibrarySort] = useState<LibrarySort>("UPDATED_DESC");
-  const [formatFilter, setFormatFilter] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [libraryRefreshSpinning, setLibraryRefreshSpinning] = useState(false);
+  const library = useProfileLibrary(dashboard);
   const [activeReadiness, setActiveReadiness] = useState<ReadinessSession | undefined>(
     launchReadiness,
   );
@@ -363,31 +255,6 @@ function AppContent(): React.JSX.Element {
     return () => window.removeEventListener("keydown", focusSearch);
   });
 
-  const groups = mediaType === "ANIME" ? dashboard?.animeLists : dashboard?.mangaLists;
-  // Profile shelves: one per status (AniList's per-format lists merged) plus custom lists.
-  const shelves = useMemo(
-    () => buildLibraryShelves(groups ?? [], mediaType === "ANIME"),
-    [groups, mediaType],
-  );
-  const activeShelf =
-    shelves.find((shelf) => shelf.key === selectedGroup) ??
-    shelves.find((shelf) => shelf.key === defaultShelfKey(shelves));
-  const visibleEntries = useMemo(
-    () =>
-      filterLibrary(activeShelf?.entries ?? [], {
-        query: listQuery,
-        format: formatFilter,
-        sort: librarySort,
-      }),
-    [activeShelf, formatFilter, librarySort, listQuery],
-  );
-  function switchMediaType(type: AniListMediaType): void {
-    setMediaType(type);
-    setListQuery("");
-    setSelectedGroup("");
-    setFormatFilter("");
-  }
-
   async function connect(): Promise<void> {
     await viewerSession.connect();
   }
@@ -431,137 +298,39 @@ function AppContent(): React.JSX.Element {
             inert={activeReadiness ? true : undefined}
             aria-hidden={activeReadiness ? true : undefined}
           >
-            <RailCounts>
-              {(upNextCount, downloadsPending) => (
-                <SideRail
-                  reducedMotion={reducedMotion}
-                  onHome={() => openCatalog("ANIME")}
-                  sections={[
-                    {
-                      key: "search",
-                      label: "Search",
-                      icon: Search,
-                      active: view === "SEARCH",
-                      ariaLabel: view === "SEARCH" ? "Close search" : "Search",
-                      title: "Search (Ctrl+K)",
-                      onSelect: () => openSearch(true),
-                    },
-                    {
-                      key: "anime",
-                      label: "Anime",
-                      icon: Tv,
-                      active: view === "ANIME",
-                      onSelect: () => openCatalog("ANIME"),
-                    },
-                    {
-                      key: "manga",
-                      label: "Manga",
-                      icon: BookOpen,
-                      active: view === "MANGA",
-                      onSelect: () => openCatalog("MANGA"),
-                    },
-                    {
-                      key: "more",
-                      label: "More",
-                      icon: Film,
-                      active: view === "MORE",
-                      onSelect: () => openMore(),
-                    },
-                  ]}
-                  tools={[
-                    ...(preferences.schedule
-                      ? [
-                          {
-                            key: "schedule",
-                            label: "Schedule",
-                            icon: CalendarDays,
-                            active: view === "SCHEDULE",
-                            title: "Airing schedule",
-                            onSelect: openSchedule,
-                          },
-                        ]
-                      : []),
-                    ...(preferences.upNext
-                      ? [
-                          {
-                            key: "upnext",
-                            label: "Up Next",
-                            icon: ListVideo,
-                            active: view === "UPNEXT",
-                            badge: upNextCount,
-                            ariaLabel: upNextCount ? `Up Next, ${upNextCount} queued` : "Up Next",
-                            title: "Up Next and playlists",
-                            onSelect: openUpNext,
-                          },
-                        ]
-                      : []),
-                    {
-                      key: "downloads",
-                      label: "Downloads",
-                      icon: Download,
-                      active: view === "DOWNLOADS",
-                      badge: downloadsPending,
-                      ariaLabel: downloadsPending
-                        ? `Downloads, ${downloadsPending} in progress`
-                        : "Downloads",
-                      onSelect: openDownloads,
-                    },
-                  ]}
-                  footer={[
-                    ...(viewerAccess.kind === "member"
-                      ? [
-                          {
-                            key: "refresh",
-                            label: "Refresh library",
-                            icon: RefreshCw,
-                            disabled: syncing || libraryRefreshSpinning,
-                            iconClassName: libraryRefreshSpinning ? "refresh-spin-once" : undefined,
-                            onIconAnimationEnd: () => setLibraryRefreshSpinning(false),
-                            onSelect: () => {
-                              if (!reducedMotion) setLibraryRefreshSpinning(true);
-                              void viewerSession.refresh();
-                            },
-                          },
-                        ]
-                      : []),
-                    {
-                      key: "report-bug",
-                      label: "Report a bug",
-                      icon: Bug,
-                      title: "Report a bug on GitHub",
-                      onSelect: () => void window.anistream.openLink(BUG_REPORT_URL),
-                    },
-                    {
-                      key: "profile",
-                      label:
-                        viewerAccess.kind === "member"
-                          ? viewerAccess.dashboard.profile.name
-                          : simklAuth
-                            ? (simklAuth.userName ?? "Simkl")
-                            : "Sign in",
-                      icon: UserRound,
-                      imageUrl:
-                        viewerAccess.kind === "member"
-                          ? accountPicture.url
-                          : simklAuth
-                            ? simklAuth.avatarUrl
-                            : undefined,
-                      active: view === "PROFILE",
-                      ariaLabel:
-                        viewerAccess.kind === "member" || simklAuth ? "Your profile" : "Sign in",
-                      onSelect: openProfile,
-                    },
-                    {
-                      key: "settings",
-                      label: "Settings",
-                      icon: Settings,
-                      active: view === "SETTINGS",
-                      onSelect: () => openSettings(),
-                    },
-                  ]}
-                />
-              )}
-            </RailCounts>
+            <AppRail
+              view={view}
+              reducedMotion={reducedMotion}
+              account={
+                viewerAccess.kind === "member"
+                  ? {
+                      label: viewerAccess.dashboard.profile.name,
+                      imageUrl: accountPicture.url,
+                      signedIn: true,
+                    }
+                  : simklAuth
+                    ? {
+                        label: simklAuth.userName ?? "Simkl",
+                        imageUrl: simklAuth.avatarUrl,
+                        signedIn: true,
+                      }
+                    : { label: "Sign in", signedIn: false }
+              }
+              libraryRefresh={
+                viewerAccess.kind === "member"
+                  ? { busy: syncing, onRefresh: () => void viewerSession.refresh() }
+                  : undefined
+              }
+              onHome={() => openCatalog("ANIME")}
+              onSearch={() => openSearch(true)}
+              onCatalog={openCatalog}
+              onMore={openMore}
+              onSchedule={openSchedule}
+              onUpNext={openUpNext}
+              onDownloads={openDownloads}
+              onProfile={openProfile}
+              onSettings={() => openSettings()}
+            />
             <WindowControls />
             <UpdateNotice />
             <ContinueUndoToast />
@@ -570,15 +339,11 @@ function AppContent(): React.JSX.Element {
             <div className="route-stack" inert={selectedMedia ? true : undefined}>
               <AnimatePresence mode="wait" initial={false} custom={direction}>
                 {view === "ANIME" || view === "MANGA" ? (
-                  <motion.div
-                    className="route-view"
+                  <RouteView
                     key={`catalog-${view}`}
-                    custom={direction}
                     variants={sectionVariants}
-                    initial={reducedMotion ? false : "initial"}
-                    animate="animate"
-                    exit={reducedMotion ? undefined : "exit"}
-                    transition={motionTransition(reducedMotion)}
+                    custom={direction}
+                    reducedMotion={reducedMotion}
                   >
                     <CatalogView
                       type={view}
@@ -590,17 +355,13 @@ function AppContent(): React.JSX.Element {
                       }
                       onBrowseGenre={(genre) => browseGenre(view, genre)}
                     />
-                  </motion.div>
+                  </RouteView>
                 ) : view === "MORE" ? (
-                  <motion.div
-                    className="route-view"
+                  <RouteView
                     key="more"
-                    custom={direction}
                     variants={sectionVariants}
-                    initial={reducedMotion ? false : "initial"}
-                    animate="animate"
-                    exit={reducedMotion ? undefined : "exit"}
-                    transition={motionTransition(reducedMotion)}
+                    custom={direction}
+                    reducedMotion={reducedMotion}
                   >
                     <MoreView
                       onBrowseGenre={(genre) => browseGenre("MORE", genre)}
@@ -624,16 +385,12 @@ function AppContent(): React.JSX.Element {
                       onPrimary={(item) => openMorePlayback(item)}
                       onCloseTitle={closeMoreTitle}
                     />
-                  </motion.div>
+                  </RouteView>
                 ) : view === "SEARCH" ? (
-                  <motion.div
-                    className="route-view"
+                  <RouteView
                     key="search"
                     variants={profileRouteVariants}
-                    initial={reducedMotion ? false : "initial"}
-                    animate="animate"
-                    exit={reducedMotion ? undefined : "exit"}
-                    transition={motionTransition(reducedMotion)}
+                    reducedMotion={reducedMotion}
                   >
                     <SectionSearch
                       // A new section starts its own search state; the query is carried over.
@@ -657,17 +414,9 @@ function AppContent(): React.JSX.Element {
                         openMorePlayback(item);
                       }}
                     />
-                  </motion.div>
+                  </RouteView>
                 ) : view === "DOWNLOADS" ? (
-                  <motion.div
-                    className="route-view"
-                    key="downloads"
-                    variants={routeVariants}
-                    initial={reducedMotion ? false : "initial"}
-                    animate="animate"
-                    exit={reducedMotion ? undefined : "exit"}
-                    transition={motionTransition(reducedMotion)}
-                  >
+                  <RouteView key="downloads" variants={routeVariants} reducedMotion={reducedMotion}>
                     <DownloadsView
                       onPlay={(media, episode) => openMedia(media, "play", episode)}
                       onRead={(item) =>
@@ -685,31 +434,15 @@ function AppContent(): React.JSX.Element {
                         />
                       </Suspense>
                     ) : null}
-                  </motion.div>
+                  </RouteView>
                 ) : view === "UPNEXT" ? (
-                  <motion.div
-                    className="route-view"
-                    key="upnext"
-                    variants={routeVariants}
-                    initial={reducedMotion ? false : "initial"}
-                    animate="animate"
-                    exit={reducedMotion ? undefined : "exit"}
-                    transition={motionTransition(reducedMotion)}
-                  >
+                  <RouteView key="upnext" variants={routeVariants} reducedMotion={reducedMotion}>
                     <Suspense fallback={null}>
                       <UpNextView />
                     </Suspense>
-                  </motion.div>
+                  </RouteView>
                 ) : view === "SCHEDULE" ? (
-                  <motion.div
-                    className="route-view"
-                    key="schedule"
-                    variants={routeVariants}
-                    initial={reducedMotion ? false : "initial"}
-                    animate="animate"
-                    exit={reducedMotion ? undefined : "exit"}
-                    transition={motionTransition(reducedMotion)}
-                  >
+                  <RouteView key="schedule" variants={routeVariants} reducedMotion={reducedMotion}>
                     <Suspense fallback={null}>
                       <ScheduleView
                         access={viewerAccess}
@@ -719,17 +452,9 @@ function AppContent(): React.JSX.Element {
                         }
                       />
                     </Suspense>
-                  </motion.div>
+                  </RouteView>
                 ) : view === "SETTINGS" ? (
-                  <motion.div
-                    className="route-view"
-                    key="settings"
-                    variants={routeVariants}
-                    initial={reducedMotion ? false : "initial"}
-                    animate="animate"
-                    exit={reducedMotion ? undefined : "exit"}
-                    transition={motionTransition(reducedMotion)}
-                  >
+                  <RouteView key="settings" variants={routeVariants} reducedMotion={reducedMotion}>
                     <Suspense fallback={null}>
                       <SettingsView
                         access={viewerAccess}
@@ -739,38 +464,33 @@ function AppContent(): React.JSX.Element {
                         onLogout={() => void viewerSession.logout()}
                       />
                     </Suspense>
-                  </motion.div>
+                  </RouteView>
                 ) : viewerAccess.kind === "member" ? (
-                  <motion.div
-                    className="profile-route-transition"
+                  <RouteView
                     key={`profile-member-${viewerAccess.dashboard.profile.id}`}
+                    className="profile-route-transition"
                     variants={profileRouteVariants}
-                    initial={reducedMotion ? false : "initial"}
-                    animate="animate"
-                    exit={reducedMotion ? undefined : "exit"}
-                    transition={motionTransition(reducedMotion, "emphasis")}
+                    reducedMotion={reducedMotion}
+                    emphasis
                   >
                     <Suspense fallback={null}>
                       <ProfileView
                         dashboard={viewerAccess.dashboard}
-                        mediaType={mediaType}
-                        shelves={shelves}
-                        activeShelfKey={activeShelf?.key ?? ""}
-                        formatFilter={formatFilter}
-                        onFormatFilter={setFormatFilter}
-                        visibleEntries={visibleEntries}
-                        listQuery={listQuery}
-                        librarySort={librarySort}
-                        adding={adding}
+                        mediaType={library.mediaType}
+                        shelves={library.shelves}
+                        activeShelfKey={library.activeShelfKey}
+                        formatFilter={library.formatFilter}
+                        onFormatFilter={library.setFormatFilter}
+                        visibleEntries={library.visibleEntries}
+                        listQuery={library.listQuery}
+                        librarySort={library.librarySort}
+                        adding={library.adding}
                         error={error}
-                        onSwitchType={switchMediaType}
-                        onSelectShelf={(key) => {
-                          setSelectedGroup(key);
-                          setFormatFilter("");
-                        }}
-                        onListQuery={setListQuery}
-                        onLibrarySort={setLibrarySort}
-                        onToggleAdding={() => setAdding((value) => !value)}
+                        onSwitchType={library.switchMediaType}
+                        onSelectShelf={library.selectShelf}
+                        onListQuery={library.setListQuery}
+                        onLibrarySort={library.setLibrarySort}
+                        onToggleAdding={library.toggleAdding}
                         onEdit={(entry) =>
                           setEditingEntry({ entry, viewerId: viewerAccess.dashboard.profile.id })
                         }
@@ -784,16 +504,14 @@ function AppContent(): React.JSX.Element {
                         onOpenMore={openMoreFromProfile}
                       />
                     </Suspense>
-                  </motion.div>
+                  </RouteView>
                 ) : simklStatus && simklAuth ? (
-                  <motion.div
-                    className="profile-route-transition"
+                  <RouteView
                     key="profile-simkl"
+                    className="profile-route-transition"
                     variants={profileRouteVariants}
-                    initial={reducedMotion ? false : "initial"}
-                    animate="animate"
-                    exit={reducedMotion ? undefined : "exit"}
-                    transition={motionTransition(reducedMotion, "emphasis")}
+                    reducedMotion={reducedMotion}
+                    emphasis
                   >
                     <Suspense fallback={null}>
                       <SimklProfileView
@@ -804,7 +522,7 @@ function AppContent(): React.JSX.Element {
                         onOpenMore={openMoreFromProfile}
                       />
                     </Suspense>
-                  </motion.div>
+                  </RouteView>
                 ) : (
                   <motion.div
                     className="profile-route-transition"
@@ -965,69 +683,7 @@ function AppContent(): React.JSX.Element {
       return;
     }
     refreshSimklIfStale();
-    const profileReadiness = createReadinessSession({
-      mode: "profile",
-      stages: [
-        {
-          id: "account",
-          label: "Checking your AniList account",
-          shortLabel: "Account",
-          weight: 30,
-          required: true,
-          provider: "AniList",
-          failureOutcome: "provider-error",
-          run: async () => {
-            const current = viewerSession.getSnapshot();
-            if (current.auth.status === "error") {
-              return {
-                status: "provider-error",
-                provider: "AniList",
-                canContinue: true,
-              } satisfies ReadinessStageResult;
-            }
-          },
-        },
-        {
-          id: "saved-profile",
-          label: "Preparing your saved profile",
-          shortLabel: "Saved profile",
-          weight: 30,
-          required: false,
-          provider: "AniList",
-          failureOutcome: "degraded",
-          run: async () => {
-            const current = viewerSession.getSnapshot();
-            if (current.access.kind === "guest" || current.hasVerifiedDashboard) return;
-            return {
-              status: "disabled",
-              message: "No saved profile data is available yet.",
-            } satisfies ReadinessStageResult;
-          },
-        },
-        {
-          id: "library",
-          label: "Updating your AniList library",
-          shortLabel: "Library",
-          weight: 40,
-          required: true,
-          provider: "AniList",
-          failureOutcome: "provider-error",
-          run: async () => {
-            if (viewerSession.getSnapshot().access.kind === "guest") return;
-            await viewerSession.refresh();
-            const current = viewerSession.getSnapshot();
-            if (!current.error) return;
-            return {
-              status: /connection|internet|could not reach/i.test(current.error)
-                ? "offline"
-                : "provider-error",
-              provider: "AniList",
-              canContinue: current.hasVerifiedDashboard,
-            } satisfies ReadinessStageResult;
-          },
-        },
-      ],
-    });
+    const profileReadiness = createProfileReadiness(viewerSession);
     setActiveReadiness(profileReadiness);
     void profileReadiness.start();
   }
@@ -1075,35 +731,4 @@ function AppContent(): React.JSX.Element {
       document.querySelector<HTMLElement>("[data-settings-heading]")?.focus();
     });
   }
-}
-
-function normalizePlaybackReadiness(
-  result: Awaited<ReturnType<typeof window.anistream.getAnimeProviderReadiness>>,
-): void | ReadinessStageResult {
-  if (result.status === "ready") return;
-  if (result.status === "disabled") return { status: "disabled", message: result.message };
-  if (result.status === "offline") return { status: "offline", provider: "The anime player" };
-  if (result.status === "rate-limited") {
-    return {
-      status: "degraded",
-      provider: "The anime player",
-      message: "The anime player is busy right now. Please wait a few minutes, then try again.",
-      canContinue: true,
-    };
-  }
-  return { status: "degraded", provider: "The anime player", canContinue: true };
-}
-
-/** The rail's badge counts: Up Next queue length, and episodes still downloading or waiting. */
-function RailCounts({
-  children,
-}: {
-  children: (upNextCount: number, downloadsPending: number) => React.ReactNode;
-}): React.ReactNode {
-  const { state: binge } = useBinge();
-  const { state: downloads } = useDownloads();
-  const pending =
-    downloads?.items.filter((item) => item.status === "downloading" || item.status === "queued")
-      .length ?? 0;
-  return children(binge.queue.length, pending);
 }
