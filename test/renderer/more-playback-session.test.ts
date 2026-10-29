@@ -20,6 +20,35 @@ const progress = (
 });
 
 describe("MorePlaybackSession", () => {
+  it("never saves progress from a video of the wrong length for what was opened", () => {
+    const saveResume = vi.fn().mockResolvedValue(undefined);
+    const session = createMorePlaybackSession({
+      tmdbId: 37854,
+      type: "TV",
+      season: 1,
+      episode: 1,
+      attempt: 0,
+      saveResume,
+      isWrongDuration: (seconds) => seconds > 3000,
+    });
+    const wrong = (currentTime: number): MorePlayerMessage => ({
+      ...progress("37854", "tv", { season: 1, episode: 1 }),
+      currentTime,
+      duration: 3867,
+    });
+    session.handleEvent(wrong(10));
+    session.handleEvent(wrong(3600));
+    session.handleEvent({ kind: "ended", id: "37854", mediaType: "tv" });
+    expect(saveResume).not.toHaveBeenCalled();
+    expect(session.getSnapshot()).toMatchObject({ durationSeconds: 3867, ended: false });
+    // The right length saves as usual.
+    session.handleEvent({ ...wrong(30), duration: 1500 });
+    expect(saveResume).toHaveBeenCalledWith(
+      expect.objectContaining({ positionSeconds: 30, durationSeconds: 1500 }),
+    );
+    session.dispose();
+  });
+
   it("counts playback as started only once the reported position advances", () => {
     const session = createMorePlaybackSession({
       tmdbId: 27205,

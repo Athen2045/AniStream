@@ -18,6 +18,7 @@ import { useCaptionControlsVisibility } from "./useCaptionControlsVisibility";
 import { useMediaFullscreen } from "./useMediaFullscreen";
 import { AutoplayNext, useNextUp, type NextUp } from "./AutoplayNext";
 import { playStarted } from "./play-timer";
+import { isWrongMoreVideo } from "../../shared/more-player-runtime";
 
 /**
  * How long one server gets to start playing before the next is tried. The slowest successful start
@@ -25,7 +26,12 @@ import { playStarted } from "./play-timer";
  */
 const PLAYER_START_TIMEOUT_MS = 20_000;
 const LOAD_FAILED_MESSAGE = "This server could not play the title.";
+const WRONG_VIDEO_MESSAGE = "This server played a different video.";
 const NOT_AVAILABLE_TITLE = "Oops! Media not available to play";
+/** When every server failed and at least one of them played a different title. */
+const WRONG_TITLE_HEADING = "Oops! The servers played a different title";
+const WRONG_TITLE_MESSAGE =
+  "Some servers played another show or film for this one, and none of the others could play it. Try again later.";
 const NOT_AVAILABLE_MESSAGE =
   "None of the servers could play this title right now. Try again in a moment.";
 /** Rotating verbs for the availability check, one per server tried. */
@@ -40,6 +46,10 @@ interface PlayerAttempt {
   startedAt: number;
   /** Set when the app moved here automatically because the previous player failed. */
   automatic: boolean;
+  /** Servers this round skipped for playing a different title (wrong length for this one). */
+  wrongVideos: number;
+  /** The server just before this one played a different title. */
+  afterWrongVideo: boolean;
 }
 
 /**
@@ -56,6 +66,7 @@ export function MoreWatchExperience({
   episode,
   next,
   currentKeys = [],
+  expectedMinutes,
   onClose,
 }: {
   item: MoreCatalogItem;
@@ -65,6 +76,8 @@ export function MoreWatchExperience({
   next?: NextUp;
   /** Up Next keys for what is playing, so the queue never offers it again. */
   currentKeys?: readonly string[];
+  /** TMDB runtime of this episode or movie, to catch a server playing another title. */
+  expectedMinutes?: number;
   onClose: () => void;
 }): React.JSX.Element {
   const rootRef = useRef<HTMLElement>(null);
@@ -77,13 +90,25 @@ export function MoreWatchExperience({
     reveal: revealControls,
     setPinned: setControlsPinned,
   } = useAutoHideMediaControls();
+  // Read by callbacks without reloading the player when TMDB's runtime arrives late.
+  const expectedMinutesRef = useRef(expectedMinutes);
+  useEffect(() => {
+    expectedMinutesRef.current = expectedMinutes;
+  }, [expectedMinutes]);
   const [source, setSource] = useState<MorePlayerSource>();
   const src = source?.url;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [attempt, setAttempt] = useState<PlayerAttempt>(() => {
     const providerIndex = morePlayerFallbacks.initial(item.id, item.type);
-    return { id: 0, providerIndex, startedAt: providerIndex, automatic: false };
+    return {
+      id: 0,
+      providerIndex,
+      startedAt: providerIndex,
+      automatic: false,
+      wrongVideos: 0,
+      afterWrongVideo: false,
+    };
   });
   const playbackInput = useMemo(
     () =>
@@ -104,13 +129,22 @@ export function MoreWatchExperience({
       }),
     [item.id, item.type, playbackInput, attempt.id],
   );
+  useEffect(
+    () => session.setWrongDurationCheck((seconds) => isWrongMoreVideo(seconds, expectedMinutes)),
+    [expectedMinutes, session],
+  );
   const snapshot = useSyncExternalStore(
     session.subscribe,
     session.getSnapshot,
     session.getSnapshot,
   );
   const nextUp = useNextUp(next, currentKeys);
-  const failed = Boolean(error) || snapshot.hasError;
+  // A server that maps the id to another title (a different length than TMDB's runtime) counts as
+  // failed, so the next server is tried. Only for what was opened, not an episode it moved on to.
+  const onOpenedEpisode =
+    (snapshot.season ?? season) === season && (snapshot.episode ?? episode) === episode;
+  const wrongVideo = onOpenedEpisode && isWrongMoreVideo(snapshot.durationSeconds, expectedMinutes);
+  const failed = Boolean(error) || snapshot.hasError || wrongVideo;
   const playerOrigin = useMemo(() => (src ? new URL(src).origin : undefined), [src]);
   const showFrame = Boolean(src && playerOrigin && !failed);
   // Windowed, the controls live in their own strip above the video and stay visible; only
@@ -125,6 +159,13 @@ export function MoreWatchExperience({
     let active = true;
     void window.anistream
       .getMorePlaybackResume(playbackInput)
+      .then((saved) => {
+        // Progress saved from another title's video (before the length check) is dropped.
+        const wrong = saved && isWrongMoreVideo(saved.durationSeconds, expectedMinutesRef.current);
+        if (wrong)
+          void window.anistream.clearMorePlaybackResume(playbackInput).catch(() => undefined);
+        return wrong ? undefined : saved;
+      })
       .then((resume) =>
         window.anistream.prepareMorePlayer({
           ...playbackInput,
@@ -169,14 +210,16 @@ export function MoreWatchExperience({
       providerIndex: next,
       startedAt: current.startedAt,
       automatic: true,
+      wrongVideos: current.wrongVideos + (wrongVideo ? 1 : 0),
+      afterWrongVideo: wrongVideo,
     }));
-  }, [attempt.providerIndex, attempt.startedAt, failed, item.id, item.type, source]);
+  }, [attempt.providerIndex, attempt.startedAt, failed, item.id, item.type, source, wrongVideo]);
 
   // Reopening this title starts with the server that last played it (until the app restarts).
   useEffect(() => {
-    if (snapshot.started && source?.providerIndex === attempt.providerIndex)
+    if (snapshot.started && !wrongVideo && source?.providerIndex === attempt.providerIndex)
       morePlayerFallbacks.remember(item.id, item.type, attempt.providerIndex);
-  }, [attempt.providerIndex, item.id, item.type, snapshot.started, source]);
+  }, [attempt.providerIndex, item.id, item.type, snapshot.started, source, wrongVideo]);
 
   // A server must actually start playing within the window; a page that loads but shows its own
   // "no source" screen never reports an error, so loading alone is not enough.
@@ -257,6 +300,8 @@ export function MoreWatchExperience({
       providerIndex: 0,
       startedAt: 0,
       automatic: false,
+      wrongVideos: 0,
+      afterWrongVideo: false,
     }));
   }
 
@@ -271,10 +316,13 @@ export function MoreWatchExperience({
       providerIndex: next,
       startedAt: next,
       automatic: false,
+      wrongVideos: 0,
+      afterWrongVideo: false,
     }));
   }
 
   const multiplePlayers = (source?.providerCount ?? 0) > 1;
+  const sawWrongVideo = attempt.wrongVideos > 0 || wrongVideo;
   // Show the failure only once no further player will be tried automatically.
   const showFailure = failed && (exhausted || !source);
   const serverCount = source?.providerCount;
@@ -293,7 +341,9 @@ export function MoreWatchExperience({
       : undefined;
   const startingDetail = (busy: boolean): string =>
     fellBack
-      ? "The previous player had nothing for this, so AniStream is trying the next one."
+      ? attempt.afterWrongVideo
+        ? "The previous player played a different title, so AniStream is trying the next one."
+        : "The previous player had nothing for this, so AniStream is trying the next one."
       : busy
         ? checkLabel
         : "Preparing the player…";
@@ -412,11 +462,21 @@ export function MoreWatchExperience({
           <div className="more-availability more-availability--failed" role="alert">
             <MoreAvailabilityBackdrop backdropUrl={item.backdropUrl} />
             <img className="more-availability-logo" src={appIcon} alt="" aria-hidden="true" />
-            <h3>{exhausted && multiplePlayers ? NOT_AVAILABLE_TITLE : "Player unavailable"}</h3>
+            <h3>
+              {exhausted && multiplePlayers
+                ? sawWrongVideo
+                  ? WRONG_TITLE_HEADING
+                  : NOT_AVAILABLE_TITLE
+                : "Player unavailable"}
+            </h3>
             <p>
               {exhausted && multiplePlayers
-                ? NOT_AVAILABLE_MESSAGE
-                : (error ?? snapshot.errorMessage)}
+                ? sawWrongVideo
+                  ? WRONG_TITLE_MESSAGE
+                  : NOT_AVAILABLE_MESSAGE
+                : (error ??
+                  snapshot.errorMessage ??
+                  (wrongVideo ? WRONG_VIDEO_MESSAGE : undefined))}
             </p>
             <div className="more-availability-actions">
               <button type="button" onClick={close}>

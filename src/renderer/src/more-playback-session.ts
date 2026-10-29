@@ -55,6 +55,8 @@ export interface MorePlaybackSessionSnapshot {
    * loaded page alone proves nothing: players show "no source" pages without reporting an error.
    */
   started: boolean;
+  /** The video length the player last reported, in seconds. */
+  durationSeconds?: number;
 }
 
 export function createMorePlaybackSession(options: {
@@ -64,6 +66,11 @@ export function createMorePlaybackSession(options: {
   season?: number;
   episode?: number;
   saveResume: (input: SaveMorePlaybackResumeInput) => Promise<void>;
+  /**
+   * True when a reported length shows the player serves another title for what was opened; that
+   * video's progress is never saved (it would show as this title's, e.g. "1h 4m left").
+   */
+  isWrongDuration?: (durationSeconds: number) => boolean;
 }): {
   activate(): void;
   getSnapshot(): MorePlaybackSessionSnapshot;
@@ -73,6 +80,8 @@ export function createMorePlaybackSession(options: {
   handleEvent(event: MorePlayerMessage): void;
   dispose(): void;
   retryPersistence(): void;
+  /** Replaces the wrong-length check (the expected runtime can arrive after the session). */
+  setWrongDurationCheck(check: ((durationSeconds: number) => boolean) | undefined): void;
 } {
   const listeners = new Set<() => void>();
   let snapshot: MorePlaybackSessionSnapshot = {
@@ -88,6 +97,7 @@ export function createMorePlaybackSession(options: {
   let firstPosition: number | undefined;
   let lastSavedAt = 0;
   let disposed = false;
+  let isWrongDuration = options.isWrongDuration;
   const publish = (changes: Partial<MorePlaybackSessionSnapshot>): void => {
     snapshot = { ...snapshot, ...changes };
     listeners.forEach((listener) => listener());
@@ -110,8 +120,15 @@ export function createMorePlaybackSession(options: {
         }),
     );
   };
+  const wrongVideo = (): boolean =>
+    Boolean(
+      latest &&
+      snapshot.season === options.season &&
+      snapshot.episode === options.episode &&
+      isWrongDuration?.(latest.duration),
+    );
   const save = (force: boolean): void => {
-    if (!latest || snapshot.ended) return;
+    if (!latest || snapshot.ended || wrongVideo()) return;
     const now = Date.now();
     if (!force && now - lastSavedAt < SAVE_INTERVAL_MS) return;
     lastSavedAt = now;
@@ -122,7 +139,7 @@ export function createMorePlaybackSession(options: {
    * episode, and a finished movie leaves it (`more-library.ts`).
    */
   const complete = (): void => {
-    if (snapshot.ended) return;
+    if (snapshot.ended || wrongVideo()) return;
     publish({ ended: true, loaded: true });
     if (latest) write(latest.duration, latest.duration);
   };
@@ -146,6 +163,7 @@ export function createMorePlaybackSession(options: {
       publish({
         loaded: true,
         started,
+        durationSeconds: event.duration,
         hasError: false,
         errorMessage: undefined,
         ...(event.playing === undefined ? {} : { playing: event.playing }),
@@ -160,6 +178,9 @@ export function createMorePlaybackSession(options: {
   return {
     activate() {
       disposed = false;
+    },
+    setWrongDurationCheck(check) {
+      isWrongDuration = check;
     },
     getSnapshot: () => snapshot,
     subscribe(listener) {

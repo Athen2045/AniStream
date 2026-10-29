@@ -43,6 +43,7 @@ import { EpisodeQueueToggle, UpNextButton } from "./UpNextButton";
 import { moreBingeItem } from "./binge-session";
 import type { NextUp } from "./AutoplayNext";
 import { TitleFeedback } from "./TitleFeedback";
+import { isWrongMoreVideo } from "../../shared/more-player-runtime";
 
 type Playing = { kind: "movie" } | ({ kind: "episode" } & MorePlayTarget);
 
@@ -134,6 +135,46 @@ export function MoreTitlePage({
   const seasonDetail = seasonState?.season === season ? seasonState?.detail : undefined;
   const seasonError = seasonState?.season === season ? seasonState?.error : undefined;
 
+  // Progress saved while a player served another title's video (its length far off this episode's
+  // or movie's TMDB runtime) is hidden, and cleared once so the resume target follows.
+  const wrongProgress = useMemo(
+    () =>
+      (progress ?? []).filter((entry) => {
+        const minutes =
+          entry.season && entry.episode
+            ? seasonDetail?.seasonNumber === entry.season
+              ? seasonDetail.episodes.find((candidate) => candidate.number === entry.episode)
+                  ?.runtimeMinutes
+              : undefined
+            : item.type === "MOVIE"
+              ? detail?.runtimeMinutes
+              : undefined;
+        return isWrongMoreVideo(entry.durationSeconds, minutes);
+      }),
+    [detail?.runtimeMinutes, item.type, progress, seasonDetail],
+  );
+  const clearedProgress = useRef(new Set<string>());
+  useEffect(() => {
+    const fresh = wrongProgress.filter(
+      (entry) => !clearedProgress.current.has(`${entry.season}:${entry.episode}`),
+    );
+    if (!fresh.length) return;
+    for (const entry of fresh) clearedProgress.current.add(`${entry.season}:${entry.episode}`);
+    void Promise.all(
+      fresh.map((entry) =>
+        window.anistream
+          .clearMorePlaybackResume({
+            tmdbId: item.id,
+            type: item.type,
+            ...(entry.season && entry.episode
+              ? { season: entry.season, episode: entry.episode }
+              : {}),
+          })
+          .catch(() => undefined),
+      ),
+    ).then(loadProgress);
+  }, [item.id, item.type, loadProgress, wrongProgress]);
+
   useEffect(() => {
     if (season === undefined) return;
     let active = true;
@@ -198,9 +239,10 @@ export function MoreTitlePage({
   const progressByEpisode = useMemo(() => {
     const map = new Map<string, MoreTitleProgress>();
     for (const entry of progress ?? [])
-      if (entry.season && entry.episode) map.set(`${entry.season}:${entry.episode}`, entry);
+      if (entry.season && entry.episode && !wrongProgress.includes(entry))
+        map.set(`${entry.season}:${entry.episode}`, entry);
     return map;
-  }, [progress]);
+  }, [progress, wrongProgress]);
 
   const view = detail ?? item;
   const simklRatings = useSimklTitleRatings(item.id, item.type);
@@ -298,6 +340,14 @@ export function MoreTitlePage({
           item={view}
           season={playing.kind === "episode" ? playing.season : 1}
           episode={playing.kind === "episode" ? playing.episode : 1}
+          expectedMinutes={
+            playing.kind === "episode"
+              ? seasonDetail?.seasonNumber === playing.season
+                ? seasonDetail.episodes.find((candidate) => candidate.number === playing.episode)
+                    ?.runtimeMinutes
+                : undefined
+              : detail?.runtimeMinutes
+          }
           onClose={() => {
             onProgressChanged();
             if (backToOrigin) {
