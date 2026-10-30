@@ -80,6 +80,34 @@
         "sandboxed": true,
         "scriptHosts": ["libs.example"],
         "blockedScriptPaths": ["/lib/ad.js"]
+      },
+      {
+        "id": "prefixed-player",
+        "kind": "tmdb-embed",
+        "movieUrl": "https://prefixed-player.example/embed/movie/{tmdbId}",
+        "tvUrl": "https://prefixed-player.example/embed/tv/{tmdbId}?s={season}&e={episode}",
+        "startAtParam": "t",
+        "eventPrefix": "player:",
+        "startTimeoutSeconds": 45,
+        "stripElectronUserAgent": false,
+        "scriptHosts": [],
+        "blockedScriptPaths": ["/ads.js"],
+        "blockedRequestHosts": ["analytics.example"]
+      },
+      {
+        "id": "redirecting-player",
+        "kind": "tmdb-embed",
+        "movieUrl": "https://embed-link.example/movie/{tmdbId}?autoplay=on",
+        "tvUrl": "https://embed-link.example/tv/{tmdbId}/{season}/{episode}?autoplay=on",
+        "frameOrigin": "https://player-frame.example",
+        "eventSource": "example_player",
+        "commandSource": "example_player_command",
+        "startTimeoutSeconds": 30,
+        "stripElectronUserAgent": false,
+        "scriptHosts": [],
+        "blockedScriptPaths": ["/assets/tracker.js"],
+        "blockedRequestHosts": ["analytics.example"],
+        "stubGlobals": ["adlib"]
       }
     ]
   }

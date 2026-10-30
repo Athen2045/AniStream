@@ -33,7 +33,11 @@ export function secureSession(config: ProviderConfig, trustedRendererOrigin: str
           blockedScriptPaths: player.blockedScriptPaths,
           blockedRequestHosts: player.blockedRequestHosts,
         })),
-      ...config.more.media,
+      // A player that redirects runs (and loads its scripts) on its frame origin.
+      ...config.more.media.map((player) => ({
+        ...player,
+        origin: player.frameOrigin ?? player.origin,
+      })),
       // Only the app's own page may load its stream, offline and artwork addresses (finding 5).
     ],
     trustedRendererOrigin,

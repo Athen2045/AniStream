@@ -153,6 +153,32 @@ describe("MorePlaybackSession", () => {
     session.dispose();
   });
 
+  it("follows an episode switch reported without a position, and play/pause state", () => {
+    const saveResume = vi.fn().mockResolvedValue(undefined);
+    const session = createMorePlaybackSession({
+      tmdbId: 111110,
+      type: "TV",
+      season: 1,
+      episode: 1,
+      attempt: 0,
+      saveResume,
+    });
+
+    session.handleEvent(progress("111110", "tv"));
+    session.handleEvent({ kind: "playing", playing: false });
+    expect(session.getSnapshot().playing).toBe(false);
+    session.handleEvent({ kind: "episode", season: 1, episode: 2 });
+    session.handleEvent(progress("111110", "tv"));
+
+    expect(saveResume.mock.calls.map(([input]) => [input.episode, input.positionSeconds])).toEqual([
+      [1, 20],
+      [1, 20],
+      [2, 20],
+    ]);
+    expect(session.getSnapshot()).toMatchObject({ season: 1, episode: 2 });
+    session.dispose();
+  });
+
   it("keeps a finished episode as watched to the end, so the next one is offered", () => {
     const saveResume = vi.fn().mockResolvedValue(undefined);
     const session = createMorePlaybackSession({

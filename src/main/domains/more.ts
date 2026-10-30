@@ -179,13 +179,23 @@ export function registerMoreDomain(
     const url = buildMorePlayerUrl(player, input);
     // Only a player whose entry opts in gets the approved UA override. Arm before the renderer
     // creates the iframe so its first request already has the right UA.
-    if (player.stripElectronUserAgent) await frameUserAgent()?.arm(player.origin);
+    if (player.stripElectronUserAgent || player.stubGlobals)
+      await frameUserAgent()?.arm({
+        playerOrigin: player.frameOrigin ?? player.origin,
+        stripUserAgent: player.stripElectronUserAgent,
+        stubGlobals: player.stubGlobals ?? [],
+      });
     else frameUserAgent()?.disarm();
     return {
       url,
       providerIndex,
       providerCount: players.length,
       sandboxed: player.sandboxed === true,
+      ...(player.eventPrefix ? { eventPrefix: player.eventPrefix } : {}),
+      ...(player.startTimeoutSeconds ? { startTimeoutMs: player.startTimeoutSeconds * 1000 } : {}),
+      ...(player.eventSource ? { eventSource: player.eventSource } : {}),
+      ...(player.commandSource ? { commandSource: player.commandSource } : {}),
+      ...(player.frameOrigin ? { frameOrigin: player.frameOrigin } : {}),
     };
   });
   registerTrustedIpcHandler(trustedRendererOrigin, "more:player-release", () => {

@@ -64,6 +64,32 @@ export interface MorePlayerConfig {
   /** Query parameter the player reads as a resume position in seconds. */
   startAtParam?: string;
   /**
+   * For players whose postMessage events are `{ type: "<prefix><event>", ...payload }` without a
+   * TMDB id (e.g. `"player:"` for `player:timeupdate`); unset for `PLAYER_EVENT` players.
+   */
+  eventPrefix?: string;
+  /**
+   * Seconds this player may take to start playing before the next is tried, for players that try
+   * several of their own servers first (10-60; the app default is 20).
+   */
+  startTimeoutSeconds?: number;
+  /**
+   * For players whose postMessage events are `{ source: "<eventSource>", event, info }` (the
+   * PlayerJS API) without a TMDB id. `commandSource` marks commands sent back (`seek` to resume).
+   */
+  eventSource?: string;
+  commandSource?: string;
+  /**
+   * The origin the embed URL redirects to, where the player document actually runs. Script rules,
+   * message checks and the frame allowlist apply to it. Unset when the player stays on `origin`.
+   */
+  frameOrigin?: string;
+  /**
+   * Global names (e.g. an inline ad library) replaced by an inert stub in this player's frame
+   * before its own scripts run, for ad code the page inlines and no URL rule can block.
+   */
+  stubGlobals?: string[];
+  /**
    * Present a Chromium UA without Electron's token to this player's frame only. User-approved
    * 2026-10-01 for the original More player, which rejects the Electron token; never a default.
    */
@@ -215,7 +241,9 @@ export function embeddedPlayerOrigins(config: ProviderConfig): string[] {
       ...config.anime.media.flatMap((provider) =>
         provider.kind === "indexed-embed" ? [provider.playerOrigin] : [],
       ),
-      ...config.more.media.map((provider) => provider.origin),
+      ...config.more.media.flatMap((provider) =>
+        provider.frameOrigin ? [provider.origin, provider.frameOrigin] : [provider.origin],
+      ),
     ]),
   ];
 }
@@ -417,6 +445,43 @@ function parseMoreMedia(value: Record<string, unknown>, id: string): MoreTmdbEmb
       throw new Error("startAtParam must be a short query parameter name");
     startAtParam = value.startAtParam;
   }
+  let eventPrefix: string | undefined;
+  if (value.eventPrefix !== undefined) {
+    if (
+      typeof value.eventPrefix !== "string" ||
+      !/^[a-z][a-z0-9_-]{0,31}:$/.test(value.eventPrefix)
+    )
+      throw new Error('eventPrefix must be a short lowercase name ending in ":"');
+    eventPrefix = value.eventPrefix;
+  }
+  const startTimeoutSeconds = value.startTimeoutSeconds;
+  if (
+    startTimeoutSeconds !== undefined &&
+    (typeof startTimeoutSeconds !== "number" ||
+      !Number.isInteger(startTimeoutSeconds) ||
+      startTimeoutSeconds < 10 ||
+      startTimeoutSeconds > 60)
+  )
+    throw new Error("startTimeoutSeconds must be a whole number from 10 to 60");
+  const eventSource = messageSource(value.eventSource, "eventSource");
+  const commandSource = messageSource(value.commandSource, "commandSource");
+  if (commandSource && !eventSource) throw new Error("commandSource needs eventSource");
+  if (eventSource && eventPrefix) throw new Error("use eventPrefix or eventSource, not both");
+  const frameOrigin =
+    value.frameOrigin === undefined ? undefined : exactOrigin(value.frameOrigin, "frameOrigin");
+  let stubGlobals: string[] | undefined;
+  if (value.stubGlobals !== undefined) {
+    if (
+      !Array.isArray(value.stubGlobals) ||
+      value.stubGlobals.length === 0 ||
+      value.stubGlobals.length > 10 ||
+      !value.stubGlobals.every(
+        (name) => typeof name === "string" && /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(name),
+      )
+    )
+      throw new Error("stubGlobals must be a list of JavaScript global names");
+    stubGlobals = value.stubGlobals as string[];
+  }
   if (
     value.stripElectronUserAgent !== undefined &&
     typeof value.stripElectronUserAgent !== "boolean"
@@ -430,6 +495,12 @@ function parseMoreMedia(value: Record<string, unknown>, id: string): MoreTmdbEmb
     movieUrl,
     tvUrl,
     startAtParam,
+    ...(eventPrefix ? { eventPrefix } : {}),
+    ...(typeof startTimeoutSeconds === "number" ? { startTimeoutSeconds } : {}),
+    ...(eventSource ? { eventSource } : {}),
+    ...(commandSource ? { commandSource } : {}),
+    ...(frameOrigin ? { frameOrigin } : {}),
+    ...(stubGlobals ? { stubGlobals } : {}),
     stripElectronUserAgent: value.stripElectronUserAgent === true,
     ...(value.sandboxed === true ? { sandboxed: true as const } : {}),
     ...scriptRules(value),
@@ -443,7 +514,8 @@ function scriptRules(value: Record<string, unknown>): {
   blockedScriptPaths?: string[];
   blockedRequestHosts?: string[];
 } {
-  const scriptHosts = hostList(value.scriptHosts, "scriptHosts");
+  // An empty allowlist is meaningful: scripts load from the player's own host only.
+  const scriptHosts = hostList(value.scriptHosts, "scriptHosts", { allowEmpty: true });
   const blockedScriptPaths = pathList(value.blockedScriptPaths, "blockedScriptPaths");
   const blockedRequestHosts = hostList(value.blockedRequestHosts, "blockedRequestHosts");
   return {
@@ -465,11 +537,15 @@ function pathList(value: unknown, name: string): string[] | undefined {
   return value as string[];
 }
 
-function hostList(value: unknown, name: string): string[] | undefined {
+function hostList(
+  value: unknown,
+  name: string,
+  options: { allowEmpty?: boolean } = {},
+): string[] | undefined {
   if (value === undefined) return undefined;
   if (
     !Array.isArray(value) ||
-    value.length === 0 ||
+    (value.length === 0 && !options.allowEmpty) ||
     value.length > 20 ||
     !value.every(
       (host) => typeof host === "string" && /^(?=.{1,253}$)[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host),
@@ -505,6 +581,20 @@ function httpsUrl(value: unknown, name: string): URL {
   if (url.protocol !== "https:" || url.username || url.password)
     throw new Error(`${name} must be a credential-free https:// URL`);
   return url;
+}
+
+function messageSource(value: unknown, name: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value))
+    throw new Error(`${name} must be a short identifier`);
+  return value;
+}
+
+/** A bare `https://host[:port]` origin, nothing else. */
+function exactOrigin(value: unknown, name: string): string {
+  const url = httpsUrl(value, name);
+  if (`${url.origin}` !== value) throw new Error(`${name} must be a bare https origin`);
+  return url.origin;
 }
 
 function sameOrigin(templates: readonly string[]): string {

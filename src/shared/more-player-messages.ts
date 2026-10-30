@@ -12,14 +12,37 @@ export type MorePlayerMessage =
     }
   | { kind: "ended"; id: string; mediaType: "movie" | "tv"; season?: number; episode?: number }
   | { kind: "error"; message?: string }
-  | { kind: "status"; httpStatus: number };
+  | { kind: "status"; httpStatus: number }
+  /** Play/pause without a position (prefixed events report those separately). */
+  | { kind: "playing"; playing: boolean }
+  /** The player moved to another episode itself (its next button or auto-next). */
+  | { kind: "episode"; season: number; episode: number };
+
+/**
+ * Players whose events are `{ type: "<prefix><event>", ...payload }` and carry no TMDB id. Their
+ * events are attributed to the title opened in that frame (origin and source are checked first).
+ */
+export interface PrefixedPlayerEvents {
+  eventPrefix: string;
+  id: string;
+  mediaType: "movie" | "tv";
+}
 
 /** Players that post JSON text send small objects; anything longer is not a player event. */
 const MAX_MESSAGE_CHARS = 8_192;
 
-export function parseMorePlayerMessage(value: unknown): MorePlayerMessage | undefined {
+export function parseMorePlayerMessage(
+  value: unknown,
+  prefixed?: PrefixedPlayerEvents,
+): MorePlayerMessage | undefined {
   const parsed = typeof value === "string" ? parseJsonText(value) : value;
   const payload = isRecord(parsed) ? parsed : undefined;
+  if (prefixed) {
+    const type = payload?.type;
+    return payload && typeof type === "string" && type.startsWith(prefixed.eventPrefix)
+      ? parsePrefixedEvent(payload, type.slice(prefixed.eventPrefix.length), prefixed)
+      : undefined;
+  }
   // Undocumented but observed 2026-10-01: after loading, the player posts the HTTP status of
   // its own server-list request. A 4xx/5xx here means no source could be loaded.
   if (payload?.event === "status") {
@@ -73,6 +96,63 @@ export function parseMorePlayerMessage(value: unknown): MorePlayerMessage | unde
       ...position,
       ...(playing === undefined ? {} : { playing }),
     };
+  }
+  return undefined;
+}
+
+/**
+ * Reader for players whose events are `{ source: "<eventSource>", event, info }` (the PlayerJS
+ * API) and carry no TMDB id: `time` holds only the position, so the reader keeps the last
+ * `duration` of its frame. Their `error` reports one of the player's own servers failing before it
+ * tries the next, so it is not a failure of the player; the start timeout covers a player that
+ * never plays.
+ */
+export function createSourcedEventReader(opened: {
+  eventSource: string;
+  id: string;
+  mediaType: "movie" | "tv";
+}): (value: unknown) => MorePlayerMessage | undefined {
+  let duration: number | undefined;
+  const title = { id: opened.id, mediaType: opened.mediaType };
+  return (value) => {
+    if (!isRecord(value) || value.source !== opened.eventSource) return undefined;
+    const event = value.event;
+    if (event === "duration") {
+      duration = finitePositive(value.info) ?? duration;
+      return undefined;
+    }
+    if (event === "time" || event === "seek") {
+      const currentTime = finiteNonNegative(value.info);
+      if (currentTime === undefined || duration === undefined) return undefined;
+      return { kind: "progress", currentTime, duration, ...title };
+    }
+    if (event === "play" || event === "pause")
+      return { kind: "playing", playing: event === "play" };
+    if (event === "ended") return { kind: "ended", ...title };
+    return undefined;
+  };
+}
+
+function parsePrefixedEvent(
+  payload: Record<string, unknown>,
+  event: string,
+  opened: PrefixedPlayerEvents,
+): MorePlayerMessage | undefined {
+  const title = { id: opened.id, mediaType: opened.mediaType };
+  if (event === "timeupdate" || event === "seeked") {
+    const currentTime = finiteNonNegative(payload.currentTime);
+    const duration = finitePositive(payload.duration);
+    if (currentTime === undefined || duration === undefined) return undefined;
+    return { kind: "progress", currentTime, duration, ...title };
+  }
+  if (event === "play" || event === "pause") return { kind: "playing", playing: event === "play" };
+  if (event === "ended") return { kind: "ended", ...title };
+  if (event === "error") return { kind: "error", message: cleanMessage(payload.error) };
+  if (event === "nextepisode" && opened.mediaType === "tv") {
+    const position = episodePosition(payload.season, payload.episode);
+    return position.season !== undefined && position.episode !== undefined
+      ? { kind: "episode", season: position.season, episode: position.episode }
+      : undefined;
   }
   return undefined;
 }

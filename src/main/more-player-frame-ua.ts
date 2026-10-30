@@ -24,6 +24,70 @@ export function iframeUserAgent(input: {
   return safeOrigin(input.url) === input.playerOrigin ? input.stripped : input.truthful;
 }
 
+/**
+ * Script run in every iframe the window creates while armed, before that document's own scripts.
+ * It acts only on the configured player's origin: each named global becomes an inert stub that
+ * ignores assignments, so an ad library the page writes inline (no URL to block) never installs
+ * its click handlers and every click reaches the player's controls. Nothing is reported to the ad
+ * network; its code simply does not run. Names are validated identifiers (provider-config).
+ */
+export function frameStubScript(playerOrigin: string, names: readonly string[]): string {
+  return `(() => {
+  if (location.origin !== ${JSON.stringify(playerOrigin)}) return;
+  const noop = () => undefined;
+  const inert = new Proxy(noop, { get: (_t, key) => (key === "then" ? undefined : inert), apply: noop });
+  for (const name of ${JSON.stringify(names)}) {
+    try {
+      Object.defineProperty(window, name, { configurable: false, get: () => inert, set: noop });
+    } catch {}
+  }
+})();`;
+}
+
+/**
+ * Script run in the configured player frames (anime and More) before their own scripts. A frame
+ * that requests fullscreen itself takes Chromium about six seconds to switch (measured 2026-10-30
+ * with a bare cross-origin page, so not the players' doing), and by then the click no longer
+ * counts as a gesture, so AniStream could not move fullscreen to its player view and the viewer
+ * dropped back to a window. The player's fullscreen calls are instead forwarded to AniStream
+ * (`{ anistreamFullscreen: "request" | "exit" }` to the parent), which makes its whole player view
+ * fullscreen at once while the click still counts. Origins are validated https origins.
+ */
+export function frameFullscreenBridgeScript(origins: readonly string[]): string {
+  return `(() => {
+  if (window === window.top) return;
+  // The main process refuses every new window, but a refused window.open still uses up the click's
+  // user activation, so the player's next step (its fullscreen request) failed on the first click.
+  // In every embedded frame it now returns no window without touching the click.
+  try { Object.defineProperty(window, "open", { configurable: true, writable: true, value: function open() { return null; } }); } catch {}
+  if (!${JSON.stringify(origins)}.includes(location.origin)) return;
+  let active = false;
+  let element = null;
+  const send = (action) => { try { window.parent.postMessage({ anistreamFullscreen: action }, "*"); } catch {} };
+  const define = (proto, name, descriptor) => {
+    if (proto && name in proto) Object.defineProperty(proto, name, { configurable: true, ...descriptor });
+  };
+  const request = function () { element = this; send("request"); return Promise.resolve(); };
+  for (const name of ["requestFullscreen", "webkitRequestFullscreen", "webkitRequestFullScreen"]) define(Element.prototype, name, { writable: true, value: request });
+  define(window.HTMLVideoElement && HTMLVideoElement.prototype, "webkitEnterFullscreen", { writable: true, value: request });
+  const exit = function () { send("exit"); return Promise.resolve(); };
+  for (const name of ["exitFullscreen", "webkitExitFullscreen", "webkitCancelFullScreen"]) define(Document.prototype, name, { writable: true, value: exit });
+  // The player sees AniStream's fullscreen as its own, so its button and icon stay in step.
+  const current = () => (active ? element || document.documentElement : null);
+  for (const name of ["fullscreenElement", "webkitFullscreenElement", "webkitCurrentFullScreenElement"]) define(Document.prototype, name, { get: current });
+  define(Document.prototype, "webkitIsFullScreen", { get: () => active });
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent || !event.data || typeof event.data.anistreamFullscreenState !== "boolean") return;
+    const next = event.data.anistreamFullscreenState;
+    if (next === active) return;
+    const target = current() || document;
+    active = next;
+    if (!active) element = null;
+    for (const type of ["fullscreenchange", "webkitfullscreenchange"]) target.dispatchEvent(new Event(type, { bubbles: true }));
+  });
+})();`;
+}
+
 interface TargetInfo {
   targetId: string;
   type: string;
@@ -41,6 +105,9 @@ interface TargetInfo {
 export class MorePlayerFrameUserAgent {
   private armed = false;
   private playerOrigin = "";
+  private stripUserAgent = false;
+  private stubScript: string | undefined;
+  private readonly bridgeScript: string | undefined;
   /** Per iframe target: its flattened session and the UA last applied to it. */
   private readonly sessions = new Map<string, { sessionId: string; userAgent: string }>();
   private readonly truthful: string;
@@ -56,17 +123,51 @@ export class MorePlayerFrameUserAgent {
       this.sessions.delete(params.targetId);
   };
 
-  constructor(private readonly contents: WebContents) {
+  /**
+   * `bridgeOrigins`: every configured player frame origin. With any, the hook stays attached for
+   * the window's life (`start`) so each player frame gets the fullscreen bridge; the per-player
+   * UA override and stubs still apply only while armed.
+   */
+  constructor(
+    private readonly contents: WebContents,
+    bridgeOrigins: readonly string[] = [],
+  ) {
     this.truthful = contents.getUserAgent();
     this.stripped = stripElectronToken(this.truthful);
+    this.bridgeScript =
+      bridgeOrigins.length > 0 ? frameFullscreenBridgeScript(bridgeOrigins) : undefined;
   }
 
-  /** Idempotent. Call before the More player iframe is created, with that player's origin. */
-  async arm(playerOrigin: string): Promise<void> {
-    this.playerOrigin = playerOrigin;
-    if (this.armed || this.contents.isDestroyed()) return;
+  /** Idempotent. Attaches for the fullscreen bridge; also after a reload or renderer crash. */
+  async start(): Promise<void> {
+    if (!this.bridgeScript) return;
+    await this.attach();
+  }
+
+  /**
+   * Idempotent. Call before the More player iframe is created, with the origin its document runs
+   * on, whether its frame gets the stripped UA, and the globals to stub there (may be empty).
+   */
+  async arm(options: {
+    playerOrigin: string;
+    stripUserAgent: boolean;
+    stubGlobals: readonly string[];
+  }): Promise<void> {
+    this.playerOrigin = options.playerOrigin;
+    this.stripUserAgent = options.stripUserAgent;
+    this.stubScript =
+      options.stubGlobals.length > 0
+        ? frameStubScript(options.playerOrigin, options.stubGlobals)
+        : undefined;
+    await this.attach();
+  }
+
+  private async attach(): Promise<void> {
+    if (this.contents.isDestroyed()) return;
     const debug = this.contents.debugger;
+    if (this.armed && debug.isAttached()) return;
     if (!debug.isAttached()) debug.attach("1.3");
+    debug.removeListener("message", this.onMessage);
     debug.on("message", this.onMessage);
     this.armed = true;
     await debug.sendCommand("Target.setDiscoverTargets", { discover: true });
@@ -77,8 +178,27 @@ export class MorePlayerFrameUserAgent {
     });
   }
 
-  /** Idempotent. The current player frame keeps its UA until it is removed. */
+  /**
+   * Idempotent. Ends the per-player UA override and stubs; the current player frame keeps its UA
+   * until it is removed. With the fullscreen bridge the hook stays attached (see `dispose`).
+   */
   disarm(): void {
+    const hadPlayer = this.playerOrigin !== "";
+    this.playerOrigin = "";
+    this.stripUserAgent = false;
+    this.stubScript = undefined;
+    if (!this.bridgeScript) return this.dispose();
+    // Staying attached while a frame with the UA override is torn down crashed Electron's main
+    // process natively (reproduced 2026-10-30 switching players every 2 s), so a player's session
+    // ends with a full detach, as before the bridge; the bridge re-attaches at once.
+    if (hadPlayer) {
+      this.dispose();
+      void this.start().catch(() => undefined);
+    }
+  }
+
+  /** Detaches completely (window closing). */
+  dispose(): void {
     if (!this.armed) return;
     this.armed = false;
     this.sessions.clear();
@@ -97,7 +217,18 @@ export class MorePlayerFrameUserAgent {
       if (info.type === "iframe") {
         const userAgent = this.userAgentFor(info.url);
         this.sessions.set(info.targetId, { sessionId, userAgent });
-        await debug.sendCommand("Emulation.setUserAgentOverride", { userAgent }, sessionId);
+        const source = [this.bridgeScript, this.stubScript].filter(Boolean).join("\n");
+        if (source) {
+          // Without the Page domain enabled the script is accepted but never runs (seen live).
+          await debug.sendCommand("Page.enable", {}, sessionId);
+          await debug.sendCommand(
+            "Page.addScriptToEvaluateOnNewDocument",
+            { source, runImmediately: true },
+            sessionId,
+          );
+        }
+        if (this.stripUserAgent)
+          await debug.sendCommand("Emulation.setUserAgentOverride", { userAgent }, sessionId);
       }
     } catch {
       // A target that closed before configuration needs no override.
@@ -115,7 +246,7 @@ export class MorePlayerFrameUserAgent {
     // targetInfoChanged fires repeatedly while a frame navigates. Re-sending an unchanged override
     // mid-navigation crashed Electron's main process natively (reproduced 2026-10-03 on Windows),
     // so only send when the frame actually needs a different UA.
-    if (userAgent === session.userAgent) return;
+    if (!this.stripUserAgent || userAgent === session.userAgent) return;
     session.userAgent = userAgent;
     await this.contents.debugger
       .sendCommand("Emulation.setUserAgentOverride", { userAgent }, session.sessionId)

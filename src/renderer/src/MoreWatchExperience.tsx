@@ -19,12 +19,16 @@ import { useMediaFullscreen } from "./useMediaFullscreen";
 import { AutoplayNext, useNextUp, type NextUp } from "./AutoplayNext";
 import { playStarted } from "./play-timer";
 import { isWrongMoreVideo } from "../../shared/more-player-runtime";
+import { createSourcedEventReader } from "../../shared/more-player-messages";
+import { morePlayerAllow } from "./more-player-allow";
 
 /**
  * How long one server gets to start playing before the next is tried. The slowest successful start
  * in the 2026-10-05 benchmark (14 titles x 4 servers) was 13 s.
  */
 const PLAYER_START_TIMEOUT_MS = 20_000;
+/** A saved position closer than this to the start (or to where the player already is) is skipped. */
+const RESUME_SEEK_MIN_SECONDS = 5;
 const LOAD_FAILED_MESSAGE = "This server could not play the title.";
 const WRONG_VIDEO_MESSAGE = "This server played a different video.";
 const NOT_AVAILABLE_TITLE = "Oops! Media not available to play";
@@ -145,7 +149,17 @@ export function MoreWatchExperience({
     (snapshot.season ?? season) === season && (snapshot.episode ?? episode) === episode;
   const wrongVideo = onOpenedEpisode && isWrongMoreVideo(snapshot.durationSeconds, expectedMinutes);
   const failed = Boolean(error) || snapshot.hasError || wrongVideo;
-  const playerOrigin = useMemo(() => (src ? new URL(src).origin : undefined), [src]);
+  // A player whose embed URL redirects posts from (and is addressed at) its frame origin.
+  const playerOrigin = useMemo(
+    () => source?.frameOrigin ?? (src ? new URL(src).origin : undefined),
+    [source?.frameOrigin, src],
+  );
+  const eventPrefix = source?.eventPrefix;
+  const eventSource = source?.eventSource;
+  const commandSource = source?.commandSource;
+  const startTimeoutMs = source?.startTimeoutMs;
+  // The saved position, for players without a start-time parameter (resumed by a seek command).
+  const resumeAtRef = useRef<number | undefined>(undefined);
   const showFrame = Boolean(src && playerOrigin && !failed);
   // Windowed, the controls live in their own strip above the video and stay visible; only
   // display fullscreen hides them while idle.
@@ -166,13 +180,14 @@ export function MoreWatchExperience({
           void window.anistream.clearMorePlaybackResume(playbackInput).catch(() => undefined);
         return wrong ? undefined : saved;
       })
-      .then((resume) =>
-        window.anistream.prepareMorePlayer({
+      .then((resume) => {
+        resumeAtRef.current = resume?.positionSeconds;
+        return window.anistream.prepareMorePlayer({
           ...playbackInput,
           startAtSeconds: resume?.positionSeconds,
           providerIndex: attempt.providerIndex,
-        }),
-      )
+        });
+      })
       .then((prepared) => {
         if (active) setSource(prepared);
       })
@@ -227,7 +242,7 @@ export function MoreWatchExperience({
     if (!src || failed) return;
     const guard = createMorePlayerLoadGuard(
       () => setError(LOAD_FAILED_MESSAGE),
-      PLAYER_START_TIMEOUT_MS,
+      startTimeoutMs ?? PLAYER_START_TIMEOUT_MS,
     );
     loadGuardRef.current = guard;
     guard.start();
@@ -235,7 +250,7 @@ export function MoreWatchExperience({
       guard.dispose();
       if (loadGuardRef.current === guard) loadGuardRef.current = null;
     };
-  }, [failed, src]);
+  }, [failed, src, startTimeoutMs]);
 
   useEffect(() => {
     if (snapshot.started) loadGuardRef.current?.markLoaded();
@@ -243,6 +258,14 @@ export function MoreWatchExperience({
 
   useEffect(() => {
     if (!playerOrigin) return;
+    const read = eventSource
+      ? createSourcedEventReader({
+          eventSource,
+          id: String(item.id),
+          mediaType: item.type === "MOVIE" ? "movie" : "tv",
+        })
+      : undefined;
+    let seekPending = Boolean(commandSource);
     const handler = (event: MessageEvent<unknown>): void => {
       const message = readMorePlayerMessage({
         data: event.data,
@@ -250,12 +273,32 @@ export function MoreWatchExperience({
         source: event.source,
         playerOrigin,
         frameWindow: iframeRef.current?.contentWindow ?? null,
+        prefixed: eventPrefix
+          ? { eventPrefix, id: String(item.id), mediaType: item.type === "MOVIE" ? "movie" : "tv" }
+          : undefined,
+        read,
       });
-      if (message) session.handleEvent(message);
+      if (!message) return;
+      session.handleEvent(message);
+      // Once the player plays, resume it with one seek command (it has no start-time parameter).
+      if (seekPending && commandSource && message.kind === "progress") {
+        seekPending = false;
+        const resumeAt = resumeAtRef.current;
+        if (
+          resumeAt !== undefined &&
+          resumeAt > RESUME_SEEK_MIN_SECONDS &&
+          resumeAt < message.duration * 0.95 &&
+          Math.abs(message.currentTime - resumeAt) > RESUME_SEEK_MIN_SECONDS
+        )
+          iframeRef.current?.contentWindow?.postMessage(
+            { source: commandSource, command: "seek", value: Math.floor(resumeAt) },
+            playerOrigin,
+          );
+      }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [playerOrigin, session]);
+  }, [commandSource, eventPrefix, eventSource, item.id, item.type, playerOrigin, session]);
 
   const close = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
@@ -434,7 +477,7 @@ export function MoreWatchExperience({
               // For players that accept it: scripts and their own storage only, on top of the
               // window-level pop-up and navigation denials (audit finding 6, 2026-10-28).
               sandbox={source?.sandboxed ? MORE_PLAYER_SANDBOX : undefined}
-              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allow={morePlayerAllow(source?.frameOrigin)}
               allowFullScreen
               referrerPolicy="strict-origin-when-cross-origin"
               onLoad={() => {

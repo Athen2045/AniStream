@@ -163,13 +163,20 @@ function createWindow(rendererUrl: string): void {
       void shell.openExternal(url);
   });
 
-  morePlayerFrameUa = providerConfig.more.media.some((player) => player.stripElectronUserAgent)
-    ? new MorePlayerFrameUserAgent(mainWindow.webContents)
-    : undefined;
+  // Player frames get the fullscreen bridge for the window's life; More players that opt in also
+  // get the stripped UA or ad stubs while they play.
+  const playerOrigins = embeddedPlayerOrigins(providerConfig);
+  morePlayerFrameUa =
+    playerOrigins.length > 0 ||
+    providerConfig.more.media.some((player) => player.stripElectronUserAgent)
+      ? new MorePlayerFrameUserAgent(mainWindow.webContents, playerOrigins)
+      : undefined;
+  void morePlayerFrameUa?.start().catch(() => undefined);
   // Never leave the per-frame override armed, or the window controls hidden, across a reload
   // or renderer crash.
   const resetRendererWindowState = (): void => {
     morePlayerFrameUa?.disarm();
+    void morePlayerFrameUa?.start().catch(() => undefined);
     if (mainWindow && !mainWindow.isDestroyed())
       setCaptionControlsVisible(mainWindow, process.platform, true);
   };
@@ -180,7 +187,7 @@ function createWindow(rendererUrl: string): void {
 
   mainWindow.on("close", (event) => background.handleClose(event));
   mainWindow.on("closed", () => {
-    morePlayerFrameUa?.disarm();
+    morePlayerFrameUa?.dispose();
     morePlayerFrameUa = undefined;
     mainWindow = undefined;
   });

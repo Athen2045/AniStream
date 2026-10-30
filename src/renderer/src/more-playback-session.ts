@@ -1,5 +1,9 @@
 import type { MoreMediaType, SaveMorePlaybackResumeInput } from "../../shared/contracts";
-import { parseMorePlayerMessage, type MorePlayerMessage } from "../../shared/more-player-messages";
+import {
+  parseMorePlayerMessage,
+  type MorePlayerMessage,
+  type PrefixedPlayerEvents,
+} from "../../shared/more-player-messages";
 import { friendlyMorePlayerError, friendlyMorePlayerStatus } from "./remote-error";
 
 const SAVE_INTERVAL_MS = 10_000;
@@ -14,6 +18,10 @@ export function readMorePlayerMessage(input: {
   source: MessageEventSource | null;
   playerOrigin: string;
   frameWindow: MessageEventSource | null;
+  /** For players whose events carry no TMDB id: their prefix and the title opened in the frame. */
+  prefixed?: PrefixedPlayerEvents;
+  /** A per-frame reader for another event format (replaces the shared parser). */
+  read?: (value: unknown) => MorePlayerMessage | undefined;
 }): MorePlayerMessage | undefined {
   if (
     input.origin !== input.playerOrigin ||
@@ -21,7 +29,7 @@ export function readMorePlayerMessage(input: {
     input.source !== input.frameWindow
   )
     return undefined;
-  return parseMorePlayerMessage(input.data);
+  return input.read ? input.read(input.data) : parseMorePlayerMessage(input.data, input.prefixed);
 }
 const COMPLETE_PERCENT = 90;
 /** Within this many seconds of the end, the episode has played out (players stop just short). */
@@ -202,6 +210,11 @@ export function createMorePlaybackSession(options: {
       } else if (event.kind === "status") {
         const errorMessage = friendlyMorePlayerStatus(event.httpStatus);
         if (errorMessage) publish({ hasError: true, errorMessage });
+      } else if (event.kind === "playing") {
+        if (snapshot.playing !== event.playing) publish({ playing: event.playing });
+      } else if (event.kind === "episode") {
+        if (event.season !== snapshot.season || event.episode !== snapshot.episode)
+          follow(event.season, event.episode);
       } else if (
         event.id !== String(options.tmdbId) ||
         event.mediaType !== (options.type === "MOVIE" ? "movie" : "tv")

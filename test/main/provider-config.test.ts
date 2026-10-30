@@ -118,6 +118,7 @@ describe("local provider configuration", () => {
             id: "third",
             movieUrl: "https://c.example/m/{tmdbId}",
             tvUrl: "https://c.example/t/{tmdbId}/{season}/{episode}",
+            frameOrigin: "https://c-frame.example",
           },
         ],
       },
@@ -129,6 +130,7 @@ describe("local provider configuration", () => {
       "https://player.example",
       "https://b.example",
       "https://c.example",
+      "https://c-frame.example",
     ]);
   });
 
@@ -168,6 +170,30 @@ describe("local provider configuration", () => {
       more({ tvUrl: "https://elsewhere.example/t/{tmdbId}/{season}/{episode}" }),
     ).toBeUndefined();
     expect(more({ startAtParam: "start at" })).toBeUndefined();
+    expect(more({ eventPrefix: "player:" })?.eventPrefix).toBe("player:");
+    expect(more({ eventPrefix: "player" })).toBeUndefined();
+    expect(more({ startTimeoutSeconds: 45 })?.startTimeoutSeconds).toBe(45);
+    expect(more({ eventSource: "player", commandSource: "player_command" })).toMatchObject({
+      eventSource: "player",
+      commandSource: "player_command",
+    });
+    expect(more({ commandSource: "player_command" })).toBeUndefined();
+    expect(more({ eventSource: "player", eventPrefix: "player:" })).toBeUndefined();
+    expect(more({ eventSource: "bad source" })).toBeUndefined();
+    expect(more({ frameOrigin: "https://frame.example" })?.frameOrigin).toBe(
+      "https://frame.example",
+    );
+    expect(more({ frameOrigin: "https://frame.example/path" })).toBeUndefined();
+    expect(more({ frameOrigin: "http://frame.example" })).toBeUndefined();
+    expect(more({ stubGlobals: ["adlib", "$ad_2"] })?.stubGlobals).toEqual(["adlib", "$ad_2"]);
+    expect(more({ stubGlobals: ["window.open"] })).toBeUndefined();
+    expect(more({ stubGlobals: [] })).toBeUndefined();
+    expect(more({ startTimeoutSeconds: 5 })).toBeUndefined();
+    expect(more({ startTimeoutSeconds: 90 })).toBeUndefined();
+    expect(more({ startTimeoutSeconds: 30.5 })).toBeUndefined();
+    expect(more({ eventPrefix: "Player Events:" })).toBeUndefined();
+    expect(more({ scriptHosts: [] })?.scriptHosts).toEqual([]);
+    expect(more({ blockedRequestHosts: [] })).toBeUndefined();
     expect(more({ stripElectronUserAgent: "yes" })).toBeUndefined();
     expect(more({ stripElectronUserAgent: true })?.stripElectronUserAgent).toBe(true);
     expect(

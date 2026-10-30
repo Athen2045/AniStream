@@ -483,6 +483,16 @@ export interface MorePlayerSource {
   providerCount: number;
   /** Frame it with the HTML sandbox (only players whose entry opts in; see provider-config). */
   sandboxed: boolean;
+  /** Set for players whose events are `{ type: "<prefix><event>" }` without a TMDB id. */
+  eventPrefix?: string;
+  /** How long this player may take to start before the next one is tried (default 20 s). */
+  startTimeoutMs?: number;
+  /** Set for players whose events are `{ source: "<eventSource>", event, info }` (PlayerJS). */
+  eventSource?: string;
+  /** Source tag for commands sent to such a player (e.g. `seek` to resume). */
+  commandSource?: string;
+  /** Origin the player document runs on when the embed URL redirects; messages come from it. */
+  frameOrigin?: string;
 }
 
 export interface MorePlaybackResume extends MorePlaybackInput {

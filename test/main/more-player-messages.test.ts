@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseMorePlayerMessage } from "../../src/shared/more-player-messages";
+import {
+  createSourcedEventReader,
+  parseMorePlayerMessage,
+} from "../../src/shared/more-player-messages";
 
 describe("More player message validation", () => {
   it("accepts documented movie progress and player-status events", () => {
@@ -209,5 +212,96 @@ describe("More player message validation", () => {
     expect(parseMorePlayerMessage({ event: "status", data: 99 })).toBeUndefined();
     expect(parseMorePlayerMessage({ event: "status", data: 600 })).toBeUndefined();
     expect(parseMorePlayerMessage({ type: "MEDIA_DATA", data: {} })).toBeUndefined();
+  });
+
+  it("attributes prefixed events without a TMDB id to the title opened in the frame", () => {
+    const opened = { eventPrefix: "player:", id: "111110", mediaType: "tv" as const };
+    expect(
+      parseMorePlayerMessage(
+        { type: "player:timeupdate", currentTime: 30, duration: 3936 },
+        opened,
+      ),
+    ).toEqual({ kind: "progress", currentTime: 30, duration: 3936, id: "111110", mediaType: "tv" });
+    expect(parseMorePlayerMessage({ type: "player:pause" }, opened)).toEqual({
+      kind: "playing",
+      playing: false,
+    });
+    expect(parseMorePlayerMessage({ type: "player:ended" }, opened)).toEqual({
+      kind: "ended",
+      id: "111110",
+      mediaType: "tv",
+    });
+    expect(
+      parseMorePlayerMessage({ type: "player:error", error: "  No  sources " }, opened),
+    ).toEqual({ kind: "error", message: "No sources" });
+    expect(
+      parseMorePlayerMessage(
+        { type: "player:nextepisode", season: 1, episode: 2, internalNavigation: true },
+        opened,
+      ),
+    ).toEqual({ kind: "episode", season: 1, episode: 2 });
+    // A movie has no next episode.
+    expect(
+      parseMorePlayerMessage(
+        { type: "player:nextepisode", season: 1, episode: 2 },
+        { ...opened, mediaType: "movie" },
+      ),
+    ).toBeUndefined();
+  });
+
+  it("rejects malformed prefixed events and other formats for a prefixed player", () => {
+    const opened = { eventPrefix: "player:", id: "550", mediaType: "movie" as const };
+    expect(
+      parseMorePlayerMessage({ type: "player:timeupdate", currentTime: -1, duration: 60 }, opened),
+    ).toBeUndefined();
+    expect(
+      parseMorePlayerMessage({ type: "player:timeupdate", currentTime: 1, duration: 0 }, opened),
+    ).toBeUndefined();
+    expect(
+      parseMorePlayerMessage({ type: "other:timeupdate", currentTime: 1, duration: 60 }, opened),
+    ).toBeUndefined();
+    expect(
+      parseMorePlayerMessage({ type: "player:volumechange", volume: 1 }, opened),
+    ).toBeUndefined();
+    expect(
+      parseMorePlayerMessage(
+        { type: "PLAYER_EVENT", data: { event: "ended", tmdbId: 550, mediaType: "movie" } },
+        opened,
+      ),
+    ).toBeUndefined();
+    expect(parseMorePlayerMessage("player:ended", opened)).toBeUndefined();
+  });
+
+  it("reads source-tagged events, pairing positions with the last reported duration", () => {
+    const read = createSourcedEventReader({ eventSource: "player", id: "111110", mediaType: "tv" });
+    const event = (name: string, info: unknown) => ({ source: "player", event: name, info });
+    // No duration yet: a position alone is not progress.
+    expect(read(event("time", 3))).toBeUndefined();
+    expect(read(event("duration", 3864.6))).toBeUndefined();
+    expect(read(event("time", 15.5))).toEqual({
+      kind: "progress",
+      currentTime: 15.5,
+      duration: 3864.6,
+      id: "111110",
+      mediaType: "tv",
+    });
+    expect(read(event("seek", 60))).toMatchObject({ kind: "progress", currentTime: 60 });
+    expect(read(event("pause", null))).toEqual({ kind: "playing", playing: false });
+    expect(read(event("ended", null))).toEqual({ kind: "ended", id: "111110", mediaType: "tv" });
+    // One of its own servers failing is not a player failure; it tries the next server itself.
+    expect(read(event("error", "Server 1 failed (embed)"))).toBeUndefined();
+    expect(read(event("serverchange", "Server 2"))).toBeUndefined();
+  });
+
+  it("ignores other sources and malformed source-tagged events", () => {
+    const read = createSourcedEventReader({ eventSource: "player", id: "550", mediaType: "movie" });
+    read({ source: "player", event: "duration", info: 6000 });
+    expect(read({ source: "other", event: "time", info: 5 })).toBeUndefined();
+    expect(read({ source: "player", event: "time", info: -1 })).toBeUndefined();
+    expect(read({ source: "player", event: "time", info: "5" })).toBeUndefined();
+    expect(read({ source: "player", event: "duration", info: 0 })).toBeUndefined();
+    expect(read({ source: "player", event: "time", info: 5 })).toMatchObject({ duration: 6000 });
+    expect(read("player:time")).toBeUndefined();
+    expect(read(null)).toBeUndefined();
   });
 });

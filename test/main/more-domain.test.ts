@@ -45,7 +45,11 @@ describe("More player selection", () => {
       providerCount: 2,
       sandboxed: true,
     });
-    expect(frameUa.arm).toHaveBeenCalledWith("https://a.example");
+    expect(frameUa.arm).toHaveBeenCalledWith({
+      playerOrigin: "https://a.example",
+      stripUserAgent: true,
+      stubGlobals: [],
+    });
   });
 
   it("serves a fallback player by index with the truthful UA", async () => {
