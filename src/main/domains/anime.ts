@@ -16,9 +16,12 @@ import type { AnimeEpisodeArt, AnimeEpisodeRanges, AnimeSkipSegment } from "../.
 import { skipTimesCopyKey } from "../downloads/download-extras";
 import type { MalClient } from "../mal";
 import { registerTrustedIpcHandler } from "../ipc";
+import { animePlaybackFromPlayers, type AnimePlayers } from "../anime-embed-players";
 
 export interface AnimeDomainDeps {
   animeSource: AnimeSourceClient | undefined;
+  /** Embedded anime players in configured order (empty when playback is off or unconfigured). */
+  animePlayers?: AnimePlayers;
   mal: MalClient | undefined;
   /**
    * Episode thumbnail sources, tried in this order (user decision 2026-10-13); each is optional.
@@ -38,7 +41,7 @@ export interface AnimeDomainDeps {
 /** Configured anime source episode discovery/playback, plus MAL score and trending fallback. */
 export function registerAnimeDomain(
   trustedRendererOrigin: string,
-  { animeSource, mal, episodeArt, copies, skipTimes }: AnimeDomainDeps,
+  { animeSource, animePlayers = [], mal, episodeArt, copies, skipTimes }: AnimeDomainDeps,
 ): void {
   // Saved with the title (and for each download, `download-extras.ts`), so a downloaded episode
   // can still skip its opening offline. The player's length can differ from the length the times
@@ -202,8 +205,8 @@ export function registerAnimeDomain(
     },
   );
   registerTrustedIpcHandler(trustedRendererOrigin, "anime:playback", async (_event, input) => {
-    if (!animeSource) throw new Error("Anime playback is not configured.");
-    return animeSource.getPlayback(input);
+    if (animePlayers.length === 0) throw new Error("Anime playback is not configured.");
+    return animePlaybackFromPlayers(animePlayers, input);
   });
   registerTrustedIpcHandler(trustedRendererOrigin, "mal:score", async (_event, type, malId) => {
     if (!mal) throw new Error("MyAnimeList is not ready.");

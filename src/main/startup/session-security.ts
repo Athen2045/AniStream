@@ -26,7 +26,9 @@ export function secureSession(config: ProviderConfig, trustedRendererOrigin: str
     session.defaultSession,
     [
       ...config.anime.media
-        .flatMap((player) => (player.kind === "indexed-embed" ? [player] : []))
+        .flatMap((player) =>
+          player.kind === "indexed-embed" || player.kind === "anilist-embed" ? [player] : [],
+        )
         .map((player) => ({
           origin: player.playerOrigin,
           scriptHosts: player.scriptHosts,

@@ -838,6 +838,33 @@ html[data-platform="darwin"] {
 .anime-embed-notice p {
   margin: 6px 0 10px;
 }
+/* "No dub for this episode": shown while the episode starts, then out of the picture's way. */
+.anime-embed-language {
+  position: absolute;
+  z-index: 24;
+  top: 52px;
+  left: 16px;
+  max-width: min(440px, calc(100% - 32px));
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-panel);
+  font-size: 12px;
+  pointer-events: none;
+  animation: anime-embed-language-out 400ms ease 8s forwards;
+}
+@keyframes anime-embed-language-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anime-embed-language {
+    animation-duration: 1ms;
+  }
+}
 .anime-embed-notice button {
   padding: 8px 12px;
   color: var(--text);

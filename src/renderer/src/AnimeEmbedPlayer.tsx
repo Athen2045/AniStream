@@ -23,6 +23,7 @@ export function AnimeEmbedPlayer({
   onWatched,
   onRetry,
   onUseBackup,
+  onSwitchPlayer,
 }: {
   mediaId: number;
   media: AniListCatalogMedia;
@@ -35,6 +36,8 @@ export function AnimeEmbedPlayer({
   onRetry: () => void;
   /** Hands the episode to the backup (own) player. */
   onUseBackup: () => void;
+  /** The next player in order, when there is more than one ("Switch player"). */
+  onSwitchPlayer?: () => void;
 }): React.JSX.Element {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const session = useMemo(
@@ -43,22 +46,28 @@ export function AnimeEmbedPlayer({
         mediaId,
         playerOrigin: new URL(source.url).origin,
         episode: episode.number,
+        eventSource: source.eventSource,
         saveResume: (input) => saveAnimeActivity(media, input),
         // Completion clears only this episode's checkpoint atomically in the main journal.
         clearResume: () => undefined,
         onWatched,
       }),
-    [episode.number, media, mediaId, onWatched, source.url],
+    [episode.number, media, mediaId, onWatched, source.eventSource, source.url],
   );
   const sessionState = useSyncExternalStore(
     session.subscribe,
     session.getSnapshot,
     session.getSnapshot,
   );
-  // A main-player error hands the episode to the backup player by itself (no switch in the UI).
+  // The indexed player's error hands the episode to the backup player by itself. A player that
+  // reports its own events tries its own servers first, so its errors only show the notice, from
+  // which the viewer can switch (user decision 2026-10-31: switching is manual).
+  const autoBackup = source.eventSource === undefined;
   useEffect(() => {
-    if (sessionState.hasError) onUseBackup();
-  }, [onUseBackup, sessionState.hasError]);
+    if (autoBackup && sessionState.hasError) onUseBackup();
+  }, [autoBackup, onUseBackup, sessionState.hasError]);
+  // Asked for the dub, the player said it plays the sub (it has no dub for this episode).
+  const dubMissing = source.language === "dub" && sessionState.language === "sub";
   // The next episode wins; at the end of what is available, the next Up Next title plays.
   const nextUp = useNextUp(
     nextEpisode
@@ -139,17 +148,25 @@ export function AnimeEmbedPlayer({
         <div className="anime-embed-notice" role={sessionState.hasError ? "alert" : "status"}>
           <strong>{sessionState.errorMessage ?? "No playback progress received yet."}</strong>
           <p>
-            {sessionState.hasError
+            {sessionState.hasError && autoBackup
               ? "The main player reported an error. Switching to the backup player."
-              : "Use Play inside the video. If it still does not start, retry or use the backup player."}
+              : onSwitchPlayer
+                ? "Use Play inside the video. If it still does not start, retry or switch to another player."
+                : "Use Play inside the video. If it still does not start, retry or use the backup player."}
           </p>
           <span className="anime-embed-notice-actions">
             <button type="button" onClick={onRetry}>
               Retry player
             </button>
-            <button type="button" onClick={onUseBackup}>
-              Use backup player
-            </button>
+            {onSwitchPlayer ? (
+              <button type="button" onClick={onSwitchPlayer}>
+                Switch player
+              </button>
+            ) : (
+              <button type="button" onClick={onUseBackup}>
+                Use backup player
+              </button>
+            )}
           </span>
         </div>
       ) : !sessionState.hasError && !sessionState.ended && !sessionState.loaded ? (
@@ -159,6 +176,13 @@ export function AnimeEmbedPlayer({
             detail={`Loading the player · ${source.label}`}
             backdropUrl={media.bannerUrl ?? media.coverUrl}
           />
+        </div>
+      ) : null}
+
+      {dubMissing ? (
+        <div className="anime-embed-language" role="status">
+          No English dub for this episode on this player, so it plays with subtitles.
+          {onSwitchPlayer ? " Switch player to look for a dub elsewhere." : ""}
         </div>
       ) : null}
 

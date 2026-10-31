@@ -147,7 +147,29 @@ export interface AnimeDirectHlsProvider extends MediaProviderBase {
   referer?: string;
 }
 
-export type AnimeMediaProvider = AnimeIndexedEmbedProvider | AnimeDirectHlsProvider;
+/**
+ * `anilist-embed`: an embedded anime player addressed directly by AniList id and episode (user
+ * decision 2026-10-31: first in the anime order, ahead of the indexed player). No episode index.
+ */
+export interface AnimeAniListEmbedProvider extends MediaProviderBase {
+  kind: "anilist-embed";
+  /** Episode URL template: `{aniListId}`, `{episode}`, `{audio}` (`sub` | `dub`). */
+  episodeUrl: string;
+  playerOrigin: string;
+  /** Query parameter the player reads as a start position in seconds. */
+  startAtParam?: string;
+  /** Its postMessage events are `{ source: "<eventSource>", type: "event", name, data }`. */
+  eventSource?: string;
+  /** Script rules; see `MorePlayerConfig`. */
+  scriptHosts?: string[];
+  blockedScriptPaths?: string[];
+  blockedRequestHosts?: string[];
+  /** Globals stubbed in its frame before its scripts run; see `MorePlayerConfig.stubGlobals`. */
+  stubGlobals?: string[];
+}
+
+export type AnimeMediaProvider =
+  AnimeIndexedEmbedProvider | AnimeDirectHlsProvider | AnimeAniListEmbedProvider;
 
 /**
  * Built-in manga chapter sources (no endpoints to configure):
@@ -239,7 +261,9 @@ export function embeddedPlayerOrigins(config: ProviderConfig): string[] {
   return [
     ...new Set([
       ...config.anime.media.flatMap((provider) =>
-        provider.kind === "indexed-embed" ? [provider.playerOrigin] : [],
+        provider.kind === "indexed-embed" || provider.kind === "anilist-embed"
+          ? [provider.playerOrigin]
+          : [],
       ),
       ...config.more.media.flatMap((provider) =>
         provider.frameOrigin ? [provider.origin, provider.frameOrigin] : [provider.origin],
@@ -358,8 +382,9 @@ function parseMediaList<Media extends MediaProviderBase>(
 
 function parseAnimeMedia(value: Record<string, unknown>, id: string): AnimeMediaProvider {
   if (value.kind === "direct-hls") return parseDirectHls(value, id);
+  if (value.kind === "anilist-embed") return parseAniListEmbed(value, id);
   if (value.kind !== "indexed-embed")
-    throw new Error('kind must be "indexed-embed" or "direct-hls"');
+    throw new Error('kind must be "indexed-embed", "anilist-embed" or "direct-hls"');
   const recentIndexUrl = template(value.recentIndexUrl, "recentIndexUrl", []);
   const seriesUrl = template(value.seriesUrl, "seriesUrl", ["seriesId"]);
   sameOrigin([recentIndexUrl, seriesUrl]);
@@ -378,6 +403,31 @@ function parseAnimeMedia(value: Record<string, unknown>, id: string): AnimeMedia
     episodeEmbedUrl,
     aniListEmbedUrl,
     playerOrigin,
+    ...scriptRules(value),
+  };
+}
+
+function parseAniListEmbed(value: Record<string, unknown>, id: string): AnimeAniListEmbedProvider {
+  const episodeUrl = template(value.episodeUrl, "episodeUrl", ["aniListId", "episode", "audio"]);
+  let startAtParam: string | undefined;
+  if (value.startAtParam !== undefined) {
+    if (
+      typeof value.startAtParam !== "string" ||
+      !/^[A-Za-z][A-Za-z0-9_]{0,31}$/.test(value.startAtParam)
+    )
+      throw new Error("startAtParam must be a short query parameter name");
+    startAtParam = value.startAtParam;
+  }
+  const eventSource = messageSource(value.eventSource, "eventSource");
+  const stubGlobals = globalNames(value.stubGlobals);
+  return {
+    id,
+    kind: "anilist-embed",
+    episodeUrl,
+    playerOrigin: sameOrigin([episodeUrl]),
+    ...(startAtParam ? { startAtParam } : {}),
+    ...(eventSource ? { eventSource } : {}),
+    ...(stubGlobals ? { stubGlobals } : {}),
     ...scriptRules(value),
   };
 }
@@ -469,19 +519,7 @@ function parseMoreMedia(value: Record<string, unknown>, id: string): MoreTmdbEmb
   if (eventSource && eventPrefix) throw new Error("use eventPrefix or eventSource, not both");
   const frameOrigin =
     value.frameOrigin === undefined ? undefined : exactOrigin(value.frameOrigin, "frameOrigin");
-  let stubGlobals: string[] | undefined;
-  if (value.stubGlobals !== undefined) {
-    if (
-      !Array.isArray(value.stubGlobals) ||
-      value.stubGlobals.length === 0 ||
-      value.stubGlobals.length > 10 ||
-      !value.stubGlobals.every(
-        (name) => typeof name === "string" && /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(name),
-      )
-    )
-      throw new Error("stubGlobals must be a list of JavaScript global names");
-    stubGlobals = value.stubGlobals as string[];
-  }
+  const stubGlobals = globalNames(value.stubGlobals);
   if (
     value.stripElectronUserAgent !== undefined &&
     typeof value.stripElectronUserAgent !== "boolean"
@@ -581,6 +619,18 @@ function httpsUrl(value: unknown, name: string): URL {
   if (url.protocol !== "https:" || url.username || url.password)
     throw new Error(`${name} must be a credential-free https:// URL`);
   return url;
+}
+
+function globalNames(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > 10 ||
+    !value.every((name) => typeof name === "string" && /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(name))
+  )
+    throw new Error("stubGlobals must be a list of JavaScript global names");
+  return value as string[];
 }
 
 function messageSource(value: unknown, name: string): string | undefined {

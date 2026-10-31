@@ -1,11 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { OwnAnimePlayer } from "./player/OwnAnimePlayer";
-import { ArrowLeft, Play } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Play } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useMediaFullscreen } from "./useMediaFullscreen";
 import { getAppPreferences, preferredAudioSource } from "./app-preferences";
 import { useAppReducedMotion } from "./useAppReducedMotion";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AniListCatalogMedia,
   AniListMediaDetail,
@@ -26,6 +26,7 @@ import { EpisodeBrowser } from "./EpisodeBrowser";
 import { episodePlaceholder, seasonContainingEpisode } from "./anime-episode-list";
 import { useEpisodeList } from "./useEpisodeList";
 import { AnimeEmbedPlayer } from "./AnimeEmbedPlayer";
+import { ANIME_BACKUP_PLAYER, animePlayerChoice, animePlayerOrder } from "./anime-player-choice";
 
 type WatchView = "episodes" | "player";
 
@@ -68,8 +69,30 @@ export function AnimeWatchExperience({
   );
   const [selectedSeasonId, setSelectedSeasonId] = useState("");
   const [view, setView] = useState<WatchView>("episodes");
-  const [source, setSource] = useState<AnimePlaybackCandidate>();
+  // Every embedded player's candidates for the episode, in player order (user decision
+  // 2026-10-31: AniList-addressed player → indexed player → backup, switched by hand).
+  const [candidates, setCandidates] = useState<AnimePlaybackCandidate[]>([]);
+  const [chosenPlayer, setChosenPlayer] = useState<string | undefined>(() =>
+    animePlayerChoice.get(media.id),
+  );
+  const players = useMemo(() => animePlayerOrder(candidates), [candidates]);
+  const activePlayer = chosenPlayer && players.includes(chosenPlayer) ? chosenPlayer : players[0];
+  const source = useMemo(
+    () =>
+      activePlayer === ANIME_BACKUP_PLAYER
+        ? undefined
+        : preferredAudioSource(
+            candidates.filter((candidate) => (candidate.player ?? "main") === activePlayer),
+            getAppPreferences().audio,
+          ),
+    [activePlayer, candidates],
+  );
   const [resume, setResume] = useState<PlaybackResume>();
+  // Read when the player is prepared, so a resume arriving later does not reload it.
+  const resumeRef = useRef<PlaybackResume | undefined>(undefined);
+  useEffect(() => {
+    resumeRef.current = resume;
+  }, [resume]);
   const [loadingPlayback, setLoadingPlayback] = useState(false);
   const [error, setError] = useState<string>();
   const [transitionTarget, setTransitionTarget] = useState<WatchView>();
@@ -110,7 +133,9 @@ export function AnimeWatchExperience({
   // no source or reports an error; there is no manual switch in the player (user decision
   // 2026-10-20: audio comes from Settings, the backup is automatic).
   const [backupEpisode, setBackupEpisode] = useState<number>();
-  const usingBackup = backupEpisode === activeEpisode.number;
+  const usingBackup =
+    backupEpisode === activeEpisode.number ||
+    (activePlayer === ANIME_BACKUP_PLAYER && !loadingPlayback);
   // A downloaded episode plays from the downloads folder in the own player (works offline).
   const downloads = useOptionalDownloads();
   const downloadedEpisode =
@@ -124,6 +149,7 @@ export function AnimeWatchExperience({
     // A downloaded episode plays from disk; the main player is not asked at all.
     if (downloadedEpisode) return;
     let active = true;
+    const saved = resumeRef.current;
 
     void window.anistream
       .getAnimePlayback({
@@ -131,16 +157,15 @@ export function AnimeWatchExperience({
         title: media.title,
         episode: activeEpisode.number,
         providerEpisodeId: activeEpisode.id || undefined,
+        audio: getAppPreferences().audio,
+        ...(saved?.episode === activeEpisode.number && saved.positionSeconds > 0
+          ? { startAtSeconds: saved.positionSeconds }
+          : {}),
       })
       .then((result) => {
         if (!active) return;
-        // Start on the audio chosen in Settings when the episode offers it.
-        setSource(
-          preferredAudioSource(
-            result.candidates.filter((candidate) => candidate.kind === "embed"),
-            getAppPreferences().audio,
-          ),
-        );
+        // Each player starts on the audio chosen in Settings when the episode offers it.
+        setCandidates(result.candidates.filter((candidate) => candidate.kind === "embed"));
         setError(
           result.candidates.some((candidate) => candidate.kind === "embed")
             ? undefined
@@ -204,7 +229,7 @@ export function AnimeWatchExperience({
       setResume((current) => (current?.episode === episode.number ? current : undefined));
       chosenEpisodeRef.current = episode.number;
       setLoadingPlayback(true);
-      setSource(undefined);
+      setCandidates([]);
       setError(undefined);
       setSelectedSeasonId(seasonContainingEpisode(seasons, episode)?.id ?? selectedSeasonId);
       // Defer setActiveEpisode (which triggers the getAnimePlayback IPC/data-fetch effect)
@@ -288,6 +313,21 @@ export function AnimeWatchExperience({
     if (view === "player") revealPlayerControls();
   }, [revealPlayerControls, source?.id, view]);
 
+  // "Switch player" (top right, as in More): the next player in order, wrapping round; the choice
+  // holds for this title until the app restarts.
+  const switchPlayer = useCallback((): void => {
+    const index = players.indexOf(activePlayer ?? "");
+    const next = players[(index + 1) % players.length];
+    if (!next) return;
+    animePlayerChoice.set(media.id, next);
+    setChosenPlayer(next);
+    setBackupEpisode(undefined);
+    setError(undefined);
+    setRetryCount((count) => count + 1);
+  }, [activePlayer, media.id, players]);
+  const playerPosition = Math.max(0, players.indexOf(activePlayer ?? "")) + 1;
+  const canSwitchPlayer = players.length > 1 && !downloadedEpisode && !loadingPlayback;
+
   const content = (
     <section
       ref={rootRef}
@@ -367,6 +407,17 @@ export function AnimeWatchExperience({
             >
               <ArrowLeft size={18} aria-hidden="true" />
             </button>
+            {canSwitchPlayer ? (
+              <button
+                type="button"
+                className="watch-caption-tool"
+                aria-label="Switch player"
+                title={`Switch player (${playerPosition} of ${players.length})`}
+                onClick={switchPlayer}
+              >
+                <ArrowLeftRight size={16} />
+              </button>
+            ) : null}
           </div>
 
           {usingBackup || downloadedEpisode || (!source && !loadingPlayback) ? (
@@ -387,7 +438,15 @@ export function AnimeWatchExperience({
               onNext={playEpisode}
               onPrevious={playEpisode}
               onWatched={onEpisodeWatched}
-              onUseMainPlayer={source ? () => setBackupEpisode(undefined) : undefined}
+              onUseMainPlayer={
+                players.length > 1
+                  ? () => {
+                      animePlayerChoice.delete(media.id);
+                      setChosenPlayer(undefined);
+                      setBackupEpisode(undefined);
+                    }
+                  : undefined
+              }
             />
           ) : source ? (
             <AnimeEmbedPlayer
@@ -405,6 +464,7 @@ export function AnimeWatchExperience({
                 setRetryCount((count) => count + 1);
               }}
               onUseBackup={() => setBackupEpisode(activeEpisode.number)}
+              onSwitchPlayer={players.length > 1 ? switchPlayer : undefined}
             />
           ) : (
             <div className="player-unavailable" role="status">
@@ -422,7 +482,7 @@ export function AnimeWatchExperience({
                   onClick={() => {
                     setError(undefined);
                     setLoadingPlayback(true);
-                    setSource(undefined);
+                    setCandidates([]);
                     setPlaybackAttempt((attempt) => attempt + 1);
                   }}
                 >

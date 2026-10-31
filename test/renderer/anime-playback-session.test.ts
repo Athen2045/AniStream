@@ -300,4 +300,34 @@ describe("explicit episode choice", () => {
     // Without an explicit choice, progress still moves a generic Watch forward.
     expect(chooseInitialAnimeEpisode({ requestedEpisode: 1, completedProgress: 2 })).toBe(3);
   });
+
+  it("takes a sourced player's events only for this title and episode, and records its audio", () => {
+    const saveResume = vi.fn();
+    const session = createAnimePlaybackSession({
+      mediaId: 154587,
+      playerOrigin: ORIGIN,
+      episode: 2,
+      eventSource: "player",
+      saveResume,
+      clearResume: vi.fn(),
+      onWatched: vi.fn(),
+    });
+    const frame = {} as Window;
+    const send = (data: Record<string, unknown>) =>
+      session.handleMessage(
+        { source: "player", type: "event", name: "progress", data },
+        ORIGIN,
+        frame,
+        frame,
+      );
+    send({ animeId: "21", episode: 2, language: "dub", currentTime: 40, duration: 1400 });
+    send({ animeId: "154587", episode: 3, language: "dub", currentTime: 40, duration: 1400 });
+    expect(session.getSnapshot().hasProgressed).toBe(false);
+    send({ animeId: "154587", episode: 2, language: "sub", currentTime: 40, duration: 1400 });
+    expect(session.getSnapshot()).toMatchObject({ hasProgressed: true, language: "sub" });
+    session.dispose();
+    expect(saveResume).toHaveBeenCalledWith(
+      expect.objectContaining({ aniListId: 154587, episode: 2 }),
+    );
+  });
 });

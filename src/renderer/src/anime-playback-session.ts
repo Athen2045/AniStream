@@ -16,6 +16,8 @@ export interface AnimePlaybackSessionSnapshot {
   persistenceError?: string;
   /** Where the player is, in whole seconds (updates once a second while it plays). */
   position?: { seconds: number; duration: number };
+  /** The audio the player says it plays (players that report it), e.g. sub when no dub exists. */
+  language?: "sub" | "dub";
 }
 
 export interface AnimePlaybackSessionOptions {
@@ -23,6 +25,8 @@ export interface AnimePlaybackSessionOptions {
   /** Origin of the embed URL main returned; messages from any other origin are ignored. */
   playerOrigin: string;
   episode: number;
+  /** Event format of players that report `{ source, type: "event", name, data }`. */
+  eventSource?: string;
   saveResume: (input: SavePlaybackResumeInput) => Promise<void> | void;
   clearResume: (aniListId: number) => Promise<void> | void;
   onWatched: (episode: number) => Promise<void> | void;
@@ -187,8 +191,17 @@ export function createAnimePlaybackSession(
         return;
       }
 
-      const message = parseAnimePlayerMessage(data);
+      const message = parseAnimePlayerMessage(data, options.eventSource);
       if (!message) return;
+      // A player that names what it plays must be playing this title and episode.
+      if (
+        message.kind !== "error" &&
+        ((message.aniListId !== undefined && message.aniListId !== options.mediaId) ||
+          (message.episode !== undefined && message.episode !== options.episode))
+      )
+        return;
+      if (message.kind !== "error" && message.language)
+        updateSnapshot({ language: message.language });
 
       if (message.kind === "progress") {
         const seconds = Math.floor(message.currentTime);

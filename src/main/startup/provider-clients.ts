@@ -85,7 +85,7 @@ export function createProviderClients(
 }
 
 /** The `ANISTREAM_ANIME_SOURCE_ENABLED` kill switch: "0", "false" or "off" turns playback off. */
-function isAnimeSourceEnabled(): boolean {
+export function isAnimeSourceEnabled(): boolean {
   const configured = process.env.ANISTREAM_ANIME_SOURCE_ENABLED?.trim().toLocaleLowerCase();
   return configured !== "0" && configured !== "false" && configured !== "off";
 }

@@ -259,6 +259,9 @@ function animePlaybackInput(value: unknown): AnimePlaybackInput {
     episode: asNonNegativeNumber(input.episode),
     providerEpisodeId: asOptionalString(input.providerEpisodeId),
     audio: asPlaybackAudio(input.audio),
+    ...(input.startAtSeconds === undefined
+      ? {}
+      : { startAtSeconds: asNonNegativeNumber(input.startAtSeconds) }),
   };
 }
 

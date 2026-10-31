@@ -744,6 +744,8 @@ export interface AnimePlaybackInput {
   episode: number;
   providerEpisodeId?: string;
   audio?: "sub" | "dub";
+  /** Saved position, for players that accept a start time in their URL. */
+  startAtSeconds?: number;
 }
 
 export interface AnimePlaybackCandidate {
@@ -753,6 +755,10 @@ export interface AnimePlaybackCandidate {
   url: string;
   language?: string;
   provider?: string;
+  /** Which configured player this is (local config id); candidates come in player order. */
+  player?: string;
+  /** Set for players whose events are `{ source: "<eventSource>", type: "event", name, data }`. */
+  eventSource?: string;
 }
 
 export interface AnimePlaybackResult {

@@ -51,7 +51,9 @@ import { installTestMode } from "./test-mode";
 import { FieldSnapshots } from "./field-snapshots";
 import { prefersEnglishTitles, setPreferEnglishTitles } from "./anilist/title-preference";
 import { ARTWORK_SCHEME } from "../shared/artwork";
-import { createProviderClients } from "./startup/provider-clients";
+import { createProviderClients, isAnimeSourceEnabled } from "./startup/provider-clients";
+import type { AnimePlayers } from "./anime-embed-players";
+import type { AnimeSourceClient } from "./anime-source";
 import { installArtwork } from "./startup/artwork";
 import { safeOrigin, secureSession } from "./startup/session-security";
 import { setupUpdates } from "./startup/updates";
@@ -169,7 +171,15 @@ function createWindow(rendererUrl: string): void {
   morePlayerFrameUa =
     playerOrigins.length > 0 ||
     providerConfig.more.media.some((player) => player.stripElectronUserAgent)
-      ? new MorePlayerFrameUserAgent(mainWindow.webContents, playerOrigins)
+      ? new MorePlayerFrameUserAgent(
+          mainWindow.webContents,
+          playerOrigins,
+          providerConfig.anime.media.flatMap((player) =>
+            player.kind === "anilist-embed" && player.stubGlobals
+              ? [{ origin: player.playerOrigin, names: player.stubGlobals }]
+              : [],
+          ),
+        )
       : undefined;
   void morePlayerFrameUa?.start().catch(() => undefined);
   // Never leave the per-frame override armed, or the window controls hidden, across a reload
@@ -348,6 +358,7 @@ void app
     const skipTimes = new SkipTimesClient();
     registerAnimeDomain(trustedRendererOrigin, {
       animeSource,
+      animePlayers: animePlayersFrom(providerConfig, animeSource),
       copies: openedDatabase.titleCopies,
       skipTimes,
       mal: isDatabaseEnabled(providerConfig, "anime", "mal") ? mal : undefined,
@@ -471,3 +482,19 @@ app.on("before-quit", () => {
   database?.close();
   void rendererServer?.close();
 });
+
+/** The embedded anime players in configured order; none while the anime-source kill switch is on. */
+function animePlayersFrom(
+  config: ProviderConfig,
+  indexed: AnimeSourceClient | undefined,
+): AnimePlayers {
+  if (!isAnimeSourceEnabled()) return [];
+  return config.anime.media.flatMap((player): AnimePlayers[number][] => {
+    if (player.kind === "anilist-embed") return [{ kind: "anilist-embed", config: player }];
+    if (player.kind === "indexed-embed" && indexed)
+      return [
+        { kind: "indexed", id: player.id, getPlayback: (input) => indexed.getPlayback(input) },
+      ];
+    return [];
+  });
+}

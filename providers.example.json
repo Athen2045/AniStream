@@ -17,6 +17,16 @@
     ],
     "media": [
       {
+        "id": "anilist-player",
+        "kind": "anilist-embed",
+        "episodeUrl": "https://anilist-player.example/e/{aniListId}/{episode}?lang={audio}&autoplay=1",
+        "startAtParam": "t",
+        "eventSource": "example_player",
+        "scriptHosts": [],
+        "blockedRequestHosts": ["ads.example"],
+        "stubGlobals": ["adlib"]
+      },
+      {
         "id": "anime-player",
         "kind": "indexed-embed",
         "recentIndexUrl": "https://episode-index.example/recent?limit=100",

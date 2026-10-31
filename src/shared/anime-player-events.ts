@@ -1,16 +1,31 @@
+/** What a player that reports it says is playing: AniList id, episode and audio. */
+export interface AnimePlayerIdentity {
+  aniListId?: number;
+  episode?: number;
+  language?: "sub" | "dub";
+}
+
 export type AnimePlayerMessage =
-  | {
+  | ({
       kind: "progress";
       currentTime: number;
       duration: number;
       percent?: number;
-    }
-  | { kind: "complete" }
+    } & AnimePlayerIdentity)
+  | ({ kind: "complete" } & AnimePlayerIdentity)
   | { kind: "error"; message?: string };
 
-export function parseAnimePlayerMessage(value: unknown): AnimePlayerMessage | undefined {
+/**
+ * `eventSource`: for players whose events are `{ source, type: "event", name, data }` with the
+ * AniList id, episode and language in `data` (only their own format is accepted then).
+ */
+export function parseAnimePlayerMessage(
+  value: unknown,
+  eventSource?: string,
+): AnimePlayerMessage | undefined {
   const payload = parsePayload(value);
   if (!payload) return undefined;
+  if (eventSource) return parseSourcedEvent(payload, eventSource);
 
   if (payload.event === "complete") return { kind: "complete" };
   if (payload.event === "error") {
@@ -36,6 +51,45 @@ export function parseAnimePlayerMessage(value: unknown): AnimePlayerMessage | un
   }
 
   return undefined;
+}
+
+function parseSourcedEvent(
+  payload: Record<string, unknown>,
+  eventSource: string,
+): AnimePlayerMessage | undefined {
+  if (payload.source !== eventSource || payload.type !== "event" || !isRecord(payload.data))
+    return undefined;
+  const data = payload.data;
+  const aniListId =
+    typeof data.animeId === "string" && /^[1-9]\d{0,9}$/.test(data.animeId)
+      ? Number(data.animeId)
+      : positiveInteger(data.animeId);
+  const identity: AnimePlayerIdentity = {
+    ...(aniListId === undefined ? {} : { aniListId }),
+    ...(positiveInteger(data.episode) === undefined ? {} : { episode: data.episode as number }),
+    ...(data.language === "sub" || data.language === "dub" ? { language: data.language } : {}),
+  };
+  const name = payload.name;
+  if (name === "ended") return { kind: "complete", ...identity };
+  if (name === "error")
+    return { kind: "error", message: cleanMessage(data.message) ?? cleanMessage(data.error) };
+  if (name === "progress" || name === "play" || name === "pause" || name === "seeked") {
+    const currentTime = finiteNonNegative(data.currentTime);
+    const duration = finitePositive(data.duration);
+    if (currentTime === undefined || duration === undefined) return undefined;
+    return {
+      kind: "progress",
+      currentTime,
+      duration,
+      percent: finitePercent(data.percentage),
+      ...identity,
+    };
+  }
+  return undefined;
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
 function parsePayload(value: unknown): Record<string, unknown> | undefined {

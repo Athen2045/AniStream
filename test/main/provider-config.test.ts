@@ -173,6 +173,36 @@ describe("local provider configuration", () => {
     expect(more({ eventPrefix: "player:" })?.eventPrefix).toBe("player:");
     expect(more({ eventPrefix: "player" })).toBeUndefined();
     expect(more({ startTimeoutSeconds: 45 })?.startTimeoutSeconds).toBe(45);
+    const aniListPlayer = {
+      id: "first",
+      kind: "anilist-embed",
+      episodeUrl: "https://first.example/e/{aniListId}/{episode}?lang={audio}",
+    };
+    const parsedAnime = (patch: Record<string, unknown>) =>
+      primaryMedia(
+        parseProviderConfig({ anime: { media: [{ ...aniListPlayer, ...patch }] } }).anime,
+      );
+    expect(
+      parsedAnime({ startAtParam: "t", eventSource: "player", stubGlobals: ["adlib"] }),
+    ).toMatchObject({
+      kind: "anilist-embed",
+      playerOrigin: "https://first.example",
+      startAtParam: "t",
+      eventSource: "player",
+      stubGlobals: ["adlib"],
+    });
+    expect(
+      parsedAnime({ episodeUrl: "https://first.example/e/{aniListId}/{episode}" }),
+    ).toBeUndefined();
+    expect(
+      parsedAnime({ episodeUrl: "http://first.example/e/{aniListId}/{episode}/{audio}" }),
+    ).toBeUndefined();
+    expect(parsedAnime({ stubGlobals: ["a.b"] })).toBeUndefined();
+    expect(
+      embeddedPlayerOrigins(
+        parseProviderConfig({ anime: { media: [aniListPlayer, animePlayer] } }),
+      ),
+    ).toEqual(["https://first.example", "https://player.example"]);
     expect(more({ eventSource: "player", commandSource: "player_command" })).toMatchObject({
       eventSource: "player",
       commandSource: "player_command",

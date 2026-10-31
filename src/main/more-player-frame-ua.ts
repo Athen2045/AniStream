@@ -76,6 +76,24 @@ export function frameFullscreenBridgeScript(origins: readonly string[]): string 
   const current = () => (active ? element || document.documentElement : null);
   for (const name of ["fullscreenElement", "webkitFullscreenElement", "webkitCurrentFullScreenElement"]) define(Document.prototype, name, { get: current });
   define(Document.prototype, "webkitIsFullScreen", { get: () => active });
+  // AniStream focuses the player frame when it starts (Space and arrows go to the player), but
+  // some players (JW Player) only listen on their own box, not the page: with nothing focused
+  // inside, keys did nothing. The outermost focusable box around the video takes focus then.
+  const playerBox = () => {
+    let box = null;
+    for (let node = document.querySelector("video"); node && node !== document.body; node = node.parentElement)
+      if (node.tabIndex >= 0) box = node;
+    return box;
+  };
+  const focusPlayer = () => {
+    if (!document.hasFocus() || (document.activeElement && document.activeElement !== document.body)) return true;
+    const box = playerBox();
+    if (box) box.focus({ preventScroll: true });
+    return Boolean(box);
+  };
+  let tries = 0;
+  const keepTrying = () => { if (!focusPlayer() && ++tries < 20) setTimeout(keepTrying, 500); };
+  window.addEventListener("focus", () => { tries = 0; keepTrying(); });
   window.addEventListener("message", (event) => {
     if (event.source !== window.parent || !event.data || typeof event.data.anistreamFullscreenState !== "boolean") return;
     const next = event.data.anistreamFullscreenState;
@@ -131,11 +149,18 @@ export class MorePlayerFrameUserAgent {
   constructor(
     private readonly contents: WebContents,
     bridgeOrigins: readonly string[] = [],
+    /** Ad globals stubbed in these players' frames for the window's life (anime players). */
+    permanentStubs: readonly { origin: string; names: readonly string[] }[] = [],
   ) {
     this.truthful = contents.getUserAgent();
     this.stripped = stripElectronToken(this.truthful);
     this.bridgeScript =
-      bridgeOrigins.length > 0 ? frameFullscreenBridgeScript(bridgeOrigins) : undefined;
+      bridgeOrigins.length > 0
+        ? [
+            frameFullscreenBridgeScript(bridgeOrigins),
+            ...permanentStubs.map((stub) => frameStubScript(stub.origin, stub.names)),
+          ].join("\n")
+        : undefined;
   }
 
   /** Idempotent. Attaches for the fullscreen bridge; also after a reload or renderer crash. */

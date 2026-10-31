@@ -289,3 +289,27 @@ describe("fullscreen bridge attachment", () => {
     expect((sent[1]!.params as { source: string }).source).toContain("anistreamFullscreen");
   });
 });
+
+describe("permanent player stubs", () => {
+  it("adds an anime player's ad stubs to the bridge for every new frame", async () => {
+    const { contents, emit, commands } = fakeContents();
+    const hook = new MorePlayerFrameUserAgent(
+      contents,
+      ["https://anime.example"],
+      [{ origin: "https://anime.example", names: ["adlib"] }],
+    );
+    await hook.start();
+    emit("Target.attachedToTarget", {
+      sessionId: "s-10",
+      targetInfo: { targetId: "f-10", type: "iframe", url: "" },
+    });
+    await flush();
+    const added = commands.find(
+      (command) =>
+        command.sessionId === "s-10" && command.method === "Page.addScriptToEvaluateOnNewDocument",
+    );
+    const source = (added?.params as { source: string }).source;
+    expect(source).toContain("anistreamFullscreen");
+    expect(source).toContain('["adlib"]');
+  });
+});
