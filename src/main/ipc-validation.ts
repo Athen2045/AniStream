@@ -116,6 +116,11 @@ function asOptionalNonNegativeInt(value: unknown): number | undefined {
   return value === undefined ? undefined : asNonNegativeInt(value);
 }
 
+function asStrictBoolean(value: unknown): boolean {
+  if (typeof value !== "boolean") fail();
+  return value;
+}
+
 function asNonNegativeNumber(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) fail();
   return value;
@@ -262,6 +267,8 @@ function animePlaybackInput(value: unknown): AnimePlaybackInput {
     ...(input.startAtSeconds === undefined
       ? {}
       : { startAtSeconds: asNonNegativeNumber(input.startAtSeconds) }),
+    ...(input.hasPrevious === undefined ? {} : { hasPrevious: asStrictBoolean(input.hasPrevious) }),
+    ...(input.hasNext === undefined ? {} : { hasNext: asStrictBoolean(input.hasNext) }),
   };
 }
 

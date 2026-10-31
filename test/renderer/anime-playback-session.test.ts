@@ -330,4 +330,40 @@ describe("explicit episode choice", () => {
       expect.objectContaining({ aniListId: 154587, episode: 2 }),
     );
   });
+
+  it("passes the player's episode buttons on and reports an audio change made during playback", () => {
+    const onNavigate = vi.fn();
+    const onAudioChosen = vi.fn();
+    const session = createAnimePlaybackSession({
+      mediaId: 21,
+      playerOrigin: ORIGIN,
+      episode: 1,
+      eventSource: "player",
+      saveResume: vi.fn(),
+      clearResume: vi.fn(),
+      onWatched: vi.fn(),
+    });
+    session.setPlayerCallbacks({ onNavigate, onAudioChosen });
+    const frame = {} as Window;
+    const send = (name: string, data: Record<string, unknown>) =>
+      session.handleMessage({ source: "player", type: "event", name, data }, ORIGIN, frame, frame);
+    // Settling on sub before playback (no dub) is not the viewer's choice.
+    send("providerchange", { animeId: "21", episode: 1, language: "sub" });
+    send("progress", {
+      animeId: "21",
+      episode: 1,
+      language: "sub",
+      currentTime: 5,
+      duration: 1400,
+    });
+    expect(onAudioChosen).not.toHaveBeenCalled();
+    send("providerchange", { animeId: "21", episode: 1, language: "dub" });
+    expect(onAudioChosen).toHaveBeenCalledWith("dub");
+    expect(session.getSnapshot().language).toBe("dub");
+    send("next", { animeId: "21", episode: 1 });
+    send("previous", { animeId: "99", episode: 1 });
+    expect(onNavigate.mock.calls).toEqual([["next"]]);
+    expect(session.getSnapshot().hasError).toBe(false);
+    session.dispose();
+  });
 });

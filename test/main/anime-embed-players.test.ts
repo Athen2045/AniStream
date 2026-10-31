@@ -29,6 +29,14 @@ describe("AniList-addressed anime player", () => {
     expect(candidates[0]).toMatchObject({ player: "first", eventSource: "player", kind: "embed" });
   });
 
+  it("shows the player's own episode buttons only where AniStream has those episodes", () => {
+    const withButtons = { ...config, episodeButtonParams: { previous: "prev", next: "next" } };
+    expect(
+      aniListEmbedCandidates(withButtons, { ...input, hasPrevious: false, hasNext: true })[0]!.url,
+    ).toBe("https://first.example/e/154587/2?lang=sub&autoplay=1&prev=0&next=1");
+    expect(aniListEmbedCandidates(withButtons, input)[0]!.url).toContain("prev=0&next=0");
+  });
+
   it("leaves out the start time when there is none and rejects bad input", () => {
     expect(aniListEmbedCandidates(config, input)[0]!.url).toBe(
       "https://first.example/e/154587/2?lang=sub&autoplay=1",

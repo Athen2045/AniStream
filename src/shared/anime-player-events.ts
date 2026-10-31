@@ -13,7 +13,11 @@ export type AnimePlayerMessage =
       percent?: number;
     } & AnimePlayerIdentity)
   | ({ kind: "complete" } & AnimePlayerIdentity)
-  | { kind: "error"; message?: string };
+  | { kind: "error"; message?: string }
+  /** The viewer pressed the player's own previous / next episode button. */
+  | ({ kind: "navigate"; direction: "previous" | "next" } & AnimePlayerIdentity)
+  /** The player changed its audio or server (its own menu, or no dub found). */
+  | ({ kind: "audio" } & AnimePlayerIdentity);
 
 /**
  * `eventSource`: for players whose events are `{ source, type: "event", name, data }` with the
@@ -71,6 +75,9 @@ function parseSourcedEvent(
   };
   const name = payload.name;
   if (name === "ended") return { kind: "complete", ...identity };
+  if (name === "previous" || name === "next")
+    return { kind: "navigate", direction: name, ...identity };
+  if (name === "providerchange") return { kind: "audio", ...identity };
   if (name === "error")
     return { kind: "error", message: cleanMessage(data.message) ?? cleanMessage(data.error) };
   if (name === "progress" || name === "play" || name === "pause" || name === "seeked") {

@@ -12,8 +12,8 @@ function audioOrder(input: AnimePlaybackInput): readonly ("sub" | "dub")[] {
 
 /**
  * Candidates for a player addressed by AniList id (no episode index): one per audio. Its own
- * episode buttons stay off (`hasPrev`/`hasNext` are part of the configured template if wanted);
- * AniStream drives the episode list. The saved position goes in `startAtParam` when set.
+ * previous/next buttons show only where AniStream's episode list has those episodes
+ * (`episodeButtonParams`); AniStream plays them. The saved position goes in `startAtParam`.
  */
 export function aniListEmbedCandidates(
   config: AnimeAniListEmbedProvider,
@@ -32,6 +32,10 @@ export function aniListEmbedCandidates(
       }),
     );
     if (url.origin !== config.playerOrigin) throw new Error("Player URL left its origin.");
+    if (config.episodeButtonParams) {
+      url.searchParams.set(config.episodeButtonParams.previous, input.hasPrevious ? "1" : "0");
+      url.searchParams.set(config.episodeButtonParams.next, input.hasNext ? "1" : "0");
+    }
     const startAt = Math.floor(input.startAtSeconds ?? 0);
     if (config.startAtParam && Number.isFinite(startAt) && startAt > 0)
       url.searchParams.set(config.startAtParam, String(startAt));

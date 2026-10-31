@@ -12,7 +12,6 @@ import {
 import { useAppReducedMotion } from "./useAppReducedMotion";
 import type { AniListCatalogMedia, MangaDexReaderChapter } from "../../shared/contracts";
 import { SimilarTitles } from "./SimilarTitles";
-import { titleAccentStyle, titleTintStyle } from "./title-accent";
 import { formatMediaLabel } from "./format-label";
 import { hasPersonalizedAccess, type ViewerAccess } from "./viewer-access";
 import { createMediaDetailSession } from "./media-detail-session";
@@ -246,10 +245,6 @@ export function MediaDetailModal({
   const isAnime = resolved.type === "ANIME";
   const animeLayout: "series" | "movie" = resolved.format === "MOVIE" ? "movie" : "series";
   const libraryEntry = personalized ? access.libraryEntries.get(media.id) : undefined;
-  const accentStyle = {
-    ...(isAnime ? undefined : titleAccentStyle(resolved.coverColor)),
-    ...titleTintStyle(resolved.coverColor),
-  };
   const mangaProgress = Math.max(detail?.listEntry?.progress ?? 0, libraryProgress);
   // Nothing readable here (not on MangaDex, no chapters, or the feed failed) and no official-site
   // fallback: Continue would open nothing, so it is hidden (user decision 2026-10-06).
@@ -345,7 +340,7 @@ export function MediaDetailModal({
   return (
     <motion.div
       className={`title-page ${isAnime ? `title-page--anime title-page--${animeLayout}` : "title-page--manga"}`}
-      style={accentStyle}
+      data-world={isAnime ? "anime" : "manga"}
       ref={pageRef}
       role="dialog"
       aria-modal="false"

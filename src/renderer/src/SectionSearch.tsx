@@ -47,6 +47,7 @@ import {
   type SearchScope,
 } from "./search-queries";
 import type { ViewerAccess } from "./viewer-access";
+import { cleanDescription } from "./title-facts";
 
 export type { SearchScope } from "./search-queries";
 
@@ -405,15 +406,9 @@ export function SectionSearch({
         : [];
 
   const otherLabel = extras?.otherType === "MANGA" ? "Manga" : "Anime";
-  const glow = topAniList?.coverColor;
 
   return (
-    <section
-      className="section-search"
-      aria-label={`Search ${copy.noun}`}
-      style={glow ? ({ "--search-glow": glow } as React.CSSProperties) : undefined}
-    >
-      <div className="section-search-glow" aria-hidden="true" />
+    <section className="section-search" aria-label={`Search ${copy.noun}`}>
       <div className="section-search-bar">
         <form
           ref={fieldRef}
@@ -485,6 +480,10 @@ export function SectionSearch({
               className={entry.id === scope ? "is-on" : undefined}
               onClick={() => switchScope(entry.id)}
             >
+              <span
+                className={`world-dot world-dot--${entry.id.toLowerCase()}`}
+                aria-hidden="true"
+              />
               {entry.label}
             </button>
           ))}
@@ -561,7 +560,6 @@ export function SectionSearch({
               <SearchTopResult
                 image={topAniList.bannerUrl ?? topAniList.coverUrl}
                 cover={topAniList.coverUrl}
-                tint={topAniList.coverColor}
                 kicker={`Top result · ${scope === "ANIME" ? "Anime" : "Manga"}`}
                 title={topAniList.title}
                 meta={[
@@ -578,7 +576,8 @@ export function SectionSearch({
                     ? `In your list · ${scope === "ANIME" ? "Ep" : "Ch"} ${entry.progress}`
                     : undefined;
                 })()}
-                description={topAniList.description}
+                // AniList descriptions carry HTML (<br>, <i>) and spoiler marks.
+                description={cleanDescription(topAniList.description)}
                 primaryLabel={scope === "MANGA" ? "Read" : "Watch"}
                 onPrimary={() => {
                   remember();
@@ -594,7 +593,6 @@ export function SectionSearch({
               <SearchTopResult
                 image={topMore.backdropUrl ?? topMore.posterUrl}
                 cover={topMore.posterUrl}
-                tint={undefined}
                 kicker={`Top result · ${topMore.type === "MOVIE" ? "Movie" : "Series"}`}
                 title={topMore.title}
                 meta={[

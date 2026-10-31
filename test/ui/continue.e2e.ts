@@ -40,7 +40,7 @@ test.describe("Anime Continue Watching", () => {
 
   test("shows the X on hover; it removes the title, and Undo brings it back", async () => {
     const { window } = session;
-    const row = window.getByRole("region", { name: "Continue Watching" }).first();
+    const row = window.getByRole("region", { name: "Continue watching" }).first();
     const card = row.locator(".anime-continue-card", { hasText: "Fixture Continue Show" });
     const remove = card.getByRole("button", {
       name: "Remove Fixture Continue Show from Continue",
@@ -51,7 +51,7 @@ test.describe("Anime Continue Watching", () => {
 
     await remove.click();
     await expect(card).toHaveCount(0);
-    const toast = window.getByRole("status").filter({ hasText: "removed from Continue Watching" });
+    const toast = window.getByRole("status").filter({ hasText: "removed from Continue watching" });
     await expect(toast).toBeVisible();
     await toast.getByRole("button", { name: "Undo" }).click();
     await expect(

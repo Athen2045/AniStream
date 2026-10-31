@@ -227,7 +227,7 @@ export function ProfileConnectView({
               </>
             ) : (
               <button
-                className="signin-small signin-small--primary"
+                className="signin-small"
                 type="button"
                 disabled={!simkl}
                 onClick={() =>

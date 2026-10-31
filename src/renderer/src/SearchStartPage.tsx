@@ -18,7 +18,8 @@ export function SearchStartPage({
   recent: readonly string[];
   /** Recent searches are kept on the device (else for this session only). */
   rememberSearches: boolean;
-  genreArt: ReadonlyMap<string, string>;
+  /** Up to three trending posters per genre, fanned on its tile. */
+  genreArt: ReadonlyMap<string, readonly string[]>;
   onSearch: (query: string) => void;
   onPickGenre: (genre: string) => void;
   children: React.ReactNode;
@@ -60,26 +61,23 @@ export function SearchStartPage({
       <section className="section-search-block">
         <div className="section-search-head">
           <h2>Browse by genre</h2>
-          <small>One click shows every title in it</small>
         </div>
         <div className="section-search-genres">
-          {GENRE_TILES[scope].map((tile) => {
-            const art = genreArt.get(tile.genre);
-            return (
-              <button
-                key={tile.genre}
-                type="button"
-                className="section-search-genre"
-                style={{ "--genre": tile.color } as React.CSSProperties}
-                onClick={() => onPickGenre(tile.genre)}
-              >
-                {art ? (
-                  <img src={cachedArtworkUrl(art)} alt="" aria-hidden="true" loading="lazy" />
-                ) : null}
-                <span>{tile.genre}</span>
-              </button>
-            );
-          })}
+          {GENRE_TILES[scope].map((tile) => (
+            <button
+              key={tile.genre}
+              type="button"
+              className="section-search-genre"
+              onClick={() => onPickGenre(tile.genre)}
+            >
+              <span>{tile.genre}</span>
+              <span className="section-search-genre-fan" aria-hidden="true">
+                {(genreArt.get(tile.genre) ?? []).map((poster) => (
+                  <img key={poster} src={cachedArtworkUrl(poster)} alt="" loading="lazy" />
+                ))}
+              </span>
+            </button>
+          ))}
         </div>
       </section>
       <section className="section-search-block">

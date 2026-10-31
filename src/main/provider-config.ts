@@ -160,6 +160,11 @@ export interface AnimeAniListEmbedProvider extends MediaProviderBase {
   startAtParam?: string;
   /** Its postMessage events are `{ source: "<eventSource>", type: "event", name, data }`. */
   eventSource?: string;
+  /**
+   * Query parameters that show the player's own previous / next episode buttons (`1` | `0`), set
+   * from AniStream's episode list; pressing one plays that episode in AniStream.
+   */
+  episodeButtonParams?: { previous: string; next: string };
   /** Script rules; see `MorePlayerConfig`. */
   scriptHosts?: string[];
   blockedScriptPaths?: string[];
@@ -420,9 +425,25 @@ function parseAniListEmbed(value: Record<string, unknown>, id: string): AnimeAni
   }
   const eventSource = messageSource(value.eventSource, "eventSource");
   const stubGlobals = globalNames(value.stubGlobals);
+  let episodeButtonParams: { previous: string; next: string } | undefined;
+  if (value.episodeButtonParams !== undefined) {
+    const params = value.episodeButtonParams as Record<string, unknown> | null;
+    const name = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
+    if (
+      typeof params !== "object" ||
+      params === null ||
+      typeof params.previous !== "string" ||
+      typeof params.next !== "string" ||
+      !name.test(params.previous) ||
+      !name.test(params.next)
+    )
+      throw new Error("episodeButtonParams needs short previous and next parameter names");
+    episodeButtonParams = { previous: params.previous, next: params.next };
+  }
   return {
     id,
     kind: "anilist-embed",
+    ...(episodeButtonParams ? { episodeButtonParams } : {}),
     episodeUrl,
     playerOrigin: sameOrigin([episodeUrl]),
     ...(startAtParam ? { startAtParam } : {}),

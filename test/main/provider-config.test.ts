@@ -199,6 +199,15 @@ describe("local provider configuration", () => {
     ).toBeUndefined();
     expect(parsedAnime({ stubGlobals: ["a.b"] })).toBeUndefined();
     expect(
+      parsedAnime({ episodeButtonParams: { previous: "hasPrev", next: "hasNext" } })?.kind ===
+        "anilist-embed" &&
+        parsedAnime({ episodeButtonParams: { previous: "hasPrev", next: "hasNext" } }),
+    ).toMatchObject({ episodeButtonParams: { previous: "hasPrev", next: "hasNext" } });
+    expect(
+      parsedAnime({ episodeButtonParams: { previous: "has prev", next: "x" } }),
+    ).toBeUndefined();
+    expect(parsedAnime({ episodeButtonParams: "hasPrev" })).toBeUndefined();
+    expect(
       embeddedPlayerOrigins(
         parseProviderConfig({ anime: { media: [aniListPlayer, animePlayer] } }),
       ),

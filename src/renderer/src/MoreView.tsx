@@ -411,11 +411,11 @@ export function MoreView({
             ) : (
               <>
                 {filter === "ALL" && continueWatching.length ? (
-                  <section className="more-section more-rail" aria-label="Continue Watching">
+                  <section className="more-section more-rail" aria-label="Continue watching">
                     <div className="more-section-head rail-heading">
-                      <h2>Continue Watching</h2>
+                      <h2>Continue watching</h2>
                     </div>
-                    <ContentCarousel label="Continue Watching">
+                    <ContentCarousel label="Continue watching">
                       {continueWatching.map((entry) => (
                         <MoreContinueCard
                           key={moreKey(entry.item)}

@@ -1,6 +1,4 @@
 import { ArrowDownUp, ArrowLeft, Check, Play } from "lucide-react";
-import { useArtworkTint } from "./artwork-tint";
-import { titleTintStyle } from "./title-accent";
 import { RatingChips, compactVotes } from "./RatingChips";
 import { useSimklStatus } from "./profile-look";
 import { MoreRating } from "./MoreRating";
@@ -247,7 +245,6 @@ export function MoreTitlePage({
   const view = detail ?? item;
   const simklRatings = useSimklTitleRatings(item.id, item.type);
   const backdrop = detail?.heroBackdropUrl ?? item.backdropUrl ?? item.posterUrl;
-  const tint = useArtworkTint(item.posterUrl);
   const score = formatScore(view.score);
   const regularSeasons = detail?.seasons.filter((candidate) => candidate.number > 0) ?? [];
   const episodes = useMemo(() => {
@@ -327,11 +324,7 @@ export function MoreTitlePage({
     facts.push(["Episodes", String(detail.numberOfEpisodes)]);
 
   return (
-    <section
-      className="more-title-page"
-      style={titleTintStyle(tint)}
-      aria-label={`${view.title} details`}
-    >
+    <section className="more-title-page" data-world="more" aria-label={`${view.title} details`}>
       {playing ? (
         <MoreWatchExperience
           key={playing.kind === "episode" ? `${playing.season}:${playing.episode}` : "movie"}

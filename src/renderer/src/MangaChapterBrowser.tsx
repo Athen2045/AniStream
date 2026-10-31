@@ -25,6 +25,8 @@ import { MangaDexSourceIcon } from "./MangaDexSourceIcon";
 import { MANGA_LANGUAGES, type MangaLanguage } from "../../shared/manga-languages";
 import { formatNumber } from "./title-facts";
 
+/** A chapter counts as new (the sky dot) for a week after it comes out. */
+const NEW_CHAPTER_MS = 7 * 24 * 60 * 60_000;
 const MANGA_LANGUAGE_LABELS: Record<MangaLanguage, string> = { en: "English", ja: "Japanese" };
 
 type ChapterRow =
@@ -118,6 +120,8 @@ export function MangaChapterBrowser({
   onRead: (chapter: MangaDexReaderChapter) => void;
 }): React.JSX.Element {
   const [query, setQuery] = useState("");
+  // "New this week" is judged against when the list opened, not re-read on every render.
+  const [openedAt] = useState(() => Date.now());
   const [descending, setDescending] = useState(true);
   const listRef = useRef<HTMLDivElement>(null);
   const [listScrolled, setListScrolled] = useState(false);
@@ -451,15 +455,20 @@ export function MangaChapterBrowser({
                 chapter.number !== undefined && Math.floor(chapter.number) <= currentProgress;
               const isNext =
                 !completed && chapter.number !== undefined && chapter.number === nextNumber;
+              // Out this week and not read yet: the sky "new" dot.
+              const isNew =
+                !completed &&
+                chapter.publishedAt !== undefined &&
+                openedAt - Date.parse(chapter.publishedAt) < NEW_CHAPTER_MS;
               const readingProgress = resume?.chapterId === chapter.id ? resume.progress : 0;
               return [
                 heading,
                 <div className="chapter-row-wrap" key={chapter.id}>
                   <button
                     type="button"
-                    className={`chapter-row${completed ? " is-read" : ""}${isNext ? " is-next" : ""}`}
+                    className={`chapter-row${completed ? " is-read" : ""}${isNext ? " is-next" : ""}${isNew ? " is-new" : ""}`}
                     onClick={() => onRead(chapter)}
-                    aria-label={`Read chapter ${chapter.number ?? "?"}${chapter.title ? `: ${chapter.title}` : ""}${completed ? " (read)" : ""}`}
+                    aria-label={`Read chapter ${chapter.number ?? "?"}${chapter.title ? `: ${chapter.title}` : ""}${completed ? " (read)" : isNew ? " (new)" : ""}`}
                   >
                     <span className="chapter-dot" aria-hidden="true">
                       {completed ? <Check size={11} /> : null}

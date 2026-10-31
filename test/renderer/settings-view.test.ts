@@ -32,7 +32,7 @@ describe("SettingsView", () => {
       "For You",
       "Playback",
       "Reading",
-      "Backup &amp; updates",
+      "Backup and updates",
     ])
       expect(markup).toContain(`${tab}</button>`);
     expect(markup).toContain('role="tablist"');

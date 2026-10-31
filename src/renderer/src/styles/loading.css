@@ -1,36 +1,12 @@
 /* Loading (approved 2026-10-07): one motion language for every wait.
-   Launch: breathing app mark + stream line, details only after 600 ms. Pages: what is known shows at
+   Launch: the website's Ani intro, then a thin bar and one line after 600 ms. Pages: what is known shows at
    once, the rest is shaped placeholders sharing one shimmer. Players: a green ring with fallback steps.
    Reduce motion (Settings, or the system on macOS) stops every animation here. */
 
 :root {
-  --load-green: #2fd889;
   --load-shimmer: 1.6s;
 }
 
-@keyframes load-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    box-shadow:
-      0 0 0 0 rgb(47 216 137 / 0),
-      0 18px 50px rgb(47 216 137 / 0.1);
-  }
-  50% {
-    transform: scale(1.035);
-    box-shadow:
-      0 0 0 10px rgb(47 216 137 / 0.06),
-      0 18px 60px rgb(47 216 137 / 0.22);
-  }
-}
-@keyframes load-stream {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(260%);
-  }
-}
 @keyframes load-shimmer {
   to {
     background-position-x: -240%;
@@ -56,7 +32,6 @@
 .latest-update-skeleton,
 .rail-card-skeleton,
 .chapter-row-skeleton,
-.schedule-card-skeleton,
 .schedule-month-skeleton,
 .home-hero-skeleton .title-band,
 .more-hero--skeleton,
@@ -78,137 +53,261 @@
 .sk-pill {
   display: inline-block;
   height: 30px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
 }
 .sk-block {
   display: block;
-  border-radius: 12px;
+  border-radius: var(--r-card);
 }
 
-/* ---------- Launch / first Profile ---------- */
+/* ---------- Launch / first Profile (redesign 2026-10-31, mockup 01) ---------- */
+/* The website's intro on the app's ink: a light blade wipes the "Ani" mark in, a sheen crosses
+   it and the sparkle lands on the i (about 1 s). The mark keeps the brand mint in every section.
+   Then, only if checks are still running, a thin bar and one line. */
+.readiness-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: grid;
+  place-items: center;
+  min-width: 960px;
+  min-height: 640px;
+  padding: 64px 32px;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--text);
+  -webkit-app-region: no-drag;
+}
 .readiness-content {
-  gap: 0;
+  display: grid;
+  justify-items: center;
+  width: min(480px, calc(100vw - 64px));
+  text-align: center;
 }
 .readiness-mark {
-  display: block;
-  width: 84px;
-  height: 84px;
-  border-radius: 22px;
-  user-select: none;
-  -webkit-user-drag: none;
-  animation: load-breathe 2.4s ease-in-out infinite;
+  position: relative;
+  width: 240px;
+  aspect-ratio: 685 / 341;
 }
-.readiness-screen.is-failed .readiness-mark {
-  animation: none;
+.readiness-mark-body,
+.readiness-mark-sheen {
+  position: absolute;
+  inset: 0;
+  -webkit-mask: url("../assets/ani-mark.png") center / 100% 100% no-repeat;
+  mask: url("../assets/ani-mark.png") center / 100% 100% no-repeat;
 }
-.readiness-wordmark {
-  margin: 18px 0 0;
-  color: var(--text-soft);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
+.readiness-mark-body {
+  background: linear-gradient(115deg, #e9fff4 0%, #7af5bd 30%, var(--mint) 62%, #12a86a 100%);
+  animation: mark-wipe 1500ms both;
+}
+@keyframes mark-wipe {
+  0%,
+  20% {
+    clip-path: polygon(-40% 0, -40% 0, -60% 100%, -60% 100%);
+    animation-timing-function: var(--ease);
+  }
+  53%,
+  100% {
+    clip-path: polygon(-40% 0, 160% 0, 140% 100%, -60% 100%);
+  }
+}
+.readiness-mark-blade {
+  position: absolute;
+  top: -8%;
+  bottom: -8%;
+  left: -10%;
+  width: 2px;
+  background: linear-gradient(transparent, #eafff5, transparent);
+  box-shadow: 0 0 16px 4px rgb(122 245 189 / 0.6);
+  transform: skewX(-11deg);
+  opacity: 0;
+  animation: mark-blade 1500ms both;
+}
+@keyframes mark-blade {
+  0%,
+  20% {
+    left: -10%;
+    opacity: 0;
+    animation-timing-function: var(--ease);
+  }
+  22% {
+    opacity: 1;
+  }
+  50% {
+    left: 104%;
+    opacity: 0.9;
+  }
+  53%,
+  100% {
+    left: 110%;
+    opacity: 0;
+  }
+}
+.readiness-mark-sheen {
+  background: linear-gradient(
+      105deg,
+      transparent 38%,
+      rgb(255 255 255 / 0.95) 48%,
+      rgb(255 255 255 / 0.2) 53%,
+      transparent 60%
+    )
+    120% 0 / 300% 100% no-repeat;
+  mix-blend-mode: screen;
+  animation: mark-sheen 1500ms ease-in-out both;
+}
+@keyframes mark-sheen {
+  0%,
+  53% {
+    background-position: 120% 0;
+  }
+  68%,
+  100% {
+    background-position: -20% 0;
+  }
+}
+/* The sparkle starts in the middle of the mark and lands on the i. */
+.readiness-mark-star {
+  position: absolute;
+  top: 0;
+  left: 79.7%;
+  width: 17.5%;
+  height: 35.5%;
+  overflow: visible;
+  fill: var(--mint);
+  animation: mark-star 1500ms both;
+}
+@keyframes mark-star {
+  0% {
+    transform: translate(-220%, 91%) scale(0) rotate(-180deg);
+    fill: #fff;
+    animation-timing-function: var(--ease);
+  }
+  20% {
+    transform: translate(-220%, 91%) scale(1.4) rotate(0deg);
+    fill: #fff;
+    animation-timing-function: cubic-bezier(0.7, 0, 0.2, 1);
+  }
+  50%,
+  100% {
+    transform: none;
+    fill: var(--mint);
+  }
 }
 .readiness-stream {
   position: relative;
-  width: 168px;
-  height: 3px;
-  margin-top: 22px;
+  width: 200px;
+  height: 4px;
+  margin-top: 32px;
   overflow: hidden;
-  border-radius: 3px;
-  background: rgb(255 255 255 / 0.08);
-  animation: load-rise 300ms ease both;
+  border-radius: 999px;
+  background: var(--s4);
+  animation: load-rise var(--dur) var(--ease) both;
 }
 .readiness-stream-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--primary-deep), var(--load-green));
-}
-.readiness-stream-flow {
-  position: absolute;
-  inset: 0;
-  width: 40%;
-  background: linear-gradient(90deg, transparent, rgb(47 216 137 / 0.55), transparent);
-  animation: load-stream 1.3s ease-in-out infinite;
+  border-radius: inherit;
+  background: var(--mint);
 }
 .readiness-status {
   min-height: 20px;
-  margin: 18px 0 0;
-  color: var(--muted);
-  font-size: 13.5px;
-  animation: load-rise 300ms ease both;
+  margin: 12px 0 0;
+  color: var(--text-3);
+  font-size: 14px;
+  animation: load-rise var(--dur) var(--ease) both;
+}
+.readiness-credit {
+  position: absolute;
+  bottom: 32px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13px;
+  text-align: center;
 }
 .readiness-steps {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px 14px;
-  margin: 14px 0 0;
+  gap: 8px 16px;
+  margin: 24px 0 0;
   padding: 0;
-  color: var(--muted);
+  color: var(--text-3);
   font-size: 12px;
   list-style: none;
-  animation: load-rise 300ms ease both;
 }
 .readiness-steps li {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .readiness-steps i {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: rgb(255 255 255 / 0.16);
+  background: var(--s4);
 }
 .readiness-steps .is-complete,
 .readiness-steps .is-disabled {
-  color: var(--text-soft);
+  color: var(--text-2);
 }
 .readiness-steps .is-complete i {
-  background: var(--load-green);
-}
-.readiness-steps .is-active i {
-  width: 9px;
-  height: 9px;
-  border: 1.5px solid var(--load-green);
-  border-right-color: transparent;
-  background: transparent;
-  animation: load-spin 0.8s linear infinite;
+  background: var(--text-2);
 }
 .readiness-steps .is-failed i {
-  background: #f0b54a;
+  background: var(--warning);
 }
 .readiness-error {
   width: min(460px, 100%);
-  margin-top: 22px;
-  padding: 22px 24px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface-panel);
+  margin-top: 24px;
+  padding: 24px;
+  border-radius: var(--r-panel);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-1);
   text-align: left;
-  animation: load-rise 300ms ease both;
+  animation: load-rise var(--dur) var(--ease) both;
 }
 .readiness-error h2 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: 17px;
+  font-weight: 600;
 }
 .readiness-error p {
   margin: 0;
-  color: var(--muted);
-  font-size: 13.5px;
+  color: var(--text-2);
+  font-size: 14px;
   line-height: 1.5;
 }
-.readiness-error .readiness-actions {
-  justify-content: flex-start;
+.readiness-actions {
+  display: flex;
+  gap: 8px;
   margin-top: 16px;
 }
-.readiness-error .readiness-actions button {
-  min-height: 40px;
-  padding: 0 18px;
-  border-radius: 999px;
-  font-weight: 650;
+.readiness-actions button {
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--r-btn);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.readiness-primary-action {
+  background: var(--mint);
+  color: var(--on-accent);
+}
+.readiness-primary-action:hover {
+  background: color-mix(in oklab, var(--mint), white 14%);
+}
+.readiness-secondary-action {
+  border-color: var(--line-2) !important;
+  background: var(--s1);
+  color: var(--text);
+}
+.readiness-secondary-action:hover {
+  background: var(--s3);
 }
 
 /* ---------- Title page ---------- */
@@ -281,7 +380,7 @@
 .title-fallback-cover {
   aspect-ratio: 2 / 3;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: var(--surface-raised);
 }
 .title-fallback-cover img {
@@ -369,7 +468,7 @@
 .player-starting-title {
   max-width: 720px;
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .player-starting-detail {
   max-width: 560px;
@@ -408,7 +507,7 @@
   margin: 0;
   padding: 0 16px 0 14px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   background: var(--ink);
   box-shadow: 0 14px 40px rgb(0 0 0 / 0.5);
   color: var(--text);
@@ -450,14 +549,14 @@
   font-style: normal;
 }
 .profile-sync-ok {
-  background: rgb(47 216 137 / 0.18);
+  background: color-mix(in oklab, var(--success) 18%, transparent);
   color: var(--load-green);
 }
 .profile-sync-warn {
   background: rgb(240 181 74 / 0.18);
   color: #f0c574;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
 }
 .profile-sync-retry {
   padding: 0;
@@ -475,18 +574,15 @@
 }
 .profile-poster-placeholder {
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: var(--r-card);
 }
 
 /* ---------- Reduce motion ---------- */
 html[data-motion="reduce"]
   :is(
-    .readiness-mark,
+    .readiness-mark *,
     .readiness-stream,
-    .readiness-stream-flow,
     .readiness-status,
-    .readiness-steps,
-    .readiness-steps .is-active i,
     .readiness-error,
     .profile-sync-spin,
     .sk-line,
@@ -496,13 +592,12 @@ html[data-motion="reduce"]
     .latest-update-skeleton,
     .rail-card-skeleton,
     .chapter-row-skeleton,
-    .schedule-card-skeleton,
     .schedule-month-skeleton,
     .home-hero-skeleton .title-band,
     .more-hero--skeleton,
     .more-episode--skeleton .more-episode-art
   ),
-.readiness-screen.is-reduced :is(.readiness-mark, .readiness-stream-flow, .readiness-steps i) {
+.readiness-screen.is-reduced :is(.readiness-mark *, .readiness-stream, .readiness-status) {
   animation: none;
 }
 html[data-motion="reduce"] .player-starting-ring::before {
@@ -513,21 +608,9 @@ html[data-motion="reduce"] .player-starting-ring::before {
     animation: none;
   }
 }
-html[data-motion="reduce"] .readiness-stream-flow,
-.readiness-screen.is-reduced .readiness-stream-flow {
-  display: none;
-}
 @media (prefers-reduced-motion: reduce) {
   html:not([data-platform="win32"])
-    :is(
-      .readiness-mark,
-      .readiness-stream-flow,
-      .readiness-steps .is-active i,
-      .profile-sync-spin,
-      .sk-line,
-      .sk-pill,
-      .sk-block
-    ) {
+    :is(.readiness-mark *, .profile-sync-spin, .sk-line, .sk-pill, .sk-block) {
     animation: none;
   }
 }

@@ -2,9 +2,9 @@
 .title-page .chapter-browser-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   padding: 0;
   border-radius: 0;
   background: none;
@@ -13,20 +13,19 @@
   display: flex;
   flex: 1 1 280px;
   align-items: center;
-  gap: 10px;
-  height: 42px;
+  gap: 8px;
+  height: 40px;
   padding: 0 16px;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.05);
-  color: var(--muted);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: var(--s1);
+  color: var(--text-3);
   transition:
     border-color var(--motion-standard) var(--motion-ease),
     background-color var(--motion-standard) var(--motion-ease);
 }
 .title-page .chapter-browser-toolbar .chapter-search:focus-within {
-  border-color: rgb(255 255 255 / 0.28);
-  background: rgb(255 255 255 / 0.08);
+  border-color: var(--line-3);
 }
 .title-page .chapter-browser-toolbar .chapter-search input {
   flex: 1;
@@ -41,38 +40,39 @@
   outline: none;
 }
 .title-page .chapter-browser-toolbar .chapter-search input::placeholder {
-  color: var(--muted);
+  color: var(--text-3);
 }
 .title-page .chapter-browser-toolbar .chapter-filter {
   position: relative;
   display: inline-flex;
   align-items: center;
-  height: 42px;
+  height: 40px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   background: none;
-  color: var(--muted);
+  color: var(--text-3);
   line-height: normal;
 }
 .title-page .chapter-browser-toolbar .chapter-filter > svg {
   position: absolute;
   z-index: 1;
-  left: 15px;
+  left: 12px;
   pointer-events: none;
 }
 .title-page .chapter-browser-toolbar .chapter-filter .ui-select {
-  height: 42px;
-  min-width: 150px;
-  padding: 0 14px 0 38px;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.05);
+  height: 40px;
+  min-width: 152px;
+  padding: 0 12px 0 36px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: var(--s1);
   color: var(--text);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .title-page .chapter-browser-toolbar .chapter-filter .ui-select:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.09);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 .title-page .chapter-browser-toolbar .chapter-filter .ui-select-value {
   color: inherit;
@@ -87,18 +87,19 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 42px;
-  padding: 0 18px;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.05);
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: var(--s1);
   color: var(--text);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: normal;
 }
 .title-page .chapter-browser-toolbar > .chapter-sort:hover {
-  background: rgb(255 255 255 / 0.1);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 .title-page .chapter-browser-toolbar > .chapter-sort:focus-visible,
 .title-page .chapter-browser-toolbar .chapter-filter .ui-select:focus-visible {
@@ -121,8 +122,8 @@
   position: sticky;
   z-index: 2;
   top: 0;
-  background: #121513;
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.06);
+  background: var(--s2);
+  box-shadow: 0 1px 0 var(--line-1);
 }
 .chapter-scroll-top {
   position: absolute;
@@ -131,17 +132,17 @@
   bottom: 18px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 38px;
+  gap: 8px;
+  height: 40px;
   padding: 0 16px;
   border: 0;
-  border-radius: 999px;
-  background: #fff;
-  color: #0b0d0c;
+  border-radius: var(--r-btn);
+  background: var(--text);
+  color: var(--ink);
   font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.45);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
   cursor: pointer;
 }
 .chapter-scroll-top:focus-visible {
@@ -158,11 +159,11 @@
 .chapter-empty {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 22px 24px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface-panel);
+  gap: 16px;
+  padding: 24px;
+  border-radius: var(--r-panel);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-1);
 }
 .chapter-empty-icon {
   display: grid;
@@ -170,13 +171,12 @@
   place-items: center;
   width: 48px;
   height: 48px;
-  border-radius: 14px;
-  background: rgb(255 255 255 / 0.06);
-  color: var(--text-soft);
+  border-radius: var(--r-btn);
+  background: var(--s3);
+  color: var(--text-2);
 }
 .chapter-empty--retry .chapter-empty-icon {
-  background: rgb(240 181 74 / 0.12);
-  color: #f0b54a;
+  color: var(--warning);
 }
 .chapter-empty > div {
   flex: 1;
@@ -185,11 +185,11 @@
 .chapter-empty strong {
   display: block;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .chapter-empty p {
   margin: 4px 0 0;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -199,25 +199,28 @@
   align-items: center;
   gap: 8px;
   height: 40px;
-  padding: 0 18px;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.06);
+  padding: 0 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: var(--s1);
   color: var(--text);
   font: inherit;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 .chapter-empty > button:hover {
-  background: rgb(255 255 255 / 0.12);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 .chapter-empty > button.is-primary {
   border-color: transparent;
-  background: var(--primary);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
 }
 .chapter-empty > button.is-primary:hover {
-  background: var(--primary-hover);
+  background: var(--accent-hover);
 }
 .chapter-empty > button:focus-visible,
 .provider-note-link:focus-visible {

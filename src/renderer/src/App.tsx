@@ -83,6 +83,12 @@ const MEDIA_DETAIL_PREFETCH_DELAY_MS = 1_500;
 
 const SIMKL_PROFILE_SYNC_AFTER_MS = 30 * 60_000;
 
+/** The section colour: Anime (and the tool pages) mint, Manga coral, Movies & TV gold. */
+function sectionWorld(view: AppView, searchScope: SearchScope): "anime" | "manga" | "more" {
+  const section = view === "SEARCH" ? searchScope : view;
+  return section === "MANGA" ? "manga" : section === "MORE" ? "more" : "anime";
+}
+
 export function App(): React.JSX.Element {
   return (
     <UpdateProvider>
@@ -295,6 +301,7 @@ function AppContent(): React.JSX.Element {
         <DownloadsProvider>
           <main
             className="app-shell"
+            data-world={sectionWorld(view, searchScope)}
             inert={activeReadiness ? true : undefined}
             aria-hidden={activeReadiness ? true : undefined}
           >
@@ -305,16 +312,18 @@ function AppContent(): React.JSX.Element {
                 viewerAccess.kind === "member"
                   ? {
                       label: viewerAccess.dashboard.profile.name,
+                      detail: "AniList",
                       imageUrl: accountPicture.url,
                       signedIn: true,
                     }
                   : simklAuth
                     ? {
                         label: simklAuth.userName ?? "Simkl",
+                        detail: "Simkl",
                         imageUrl: simklAuth.avatarUrl,
                         signedIn: true,
                       }
-                    : { label: "Sign in", signedIn: false }
+                    : { label: "Sign in", detail: "Sync your lists", signedIn: false }
               }
               libraryRefresh={
                 viewerAccess.kind === "member"

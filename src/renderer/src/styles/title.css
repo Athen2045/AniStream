@@ -1,12 +1,5 @@
-/* Anime/Manga redesign (approved 2026-10-04): More's structure with an AniList-native identity.
-   Anime keeps the brand green and pill controls; manga uses squarer editorial controls and its
-   cover color (`--title-accent`, set inline from AniList coverImage.color) as a per-title accent. */
-
-:root {
-  --title-accent: var(--primary-hover);
-  --title-accent-ink: #fff;
-  --title-accent-text: var(--primary-hover);
-}
+/* Anime/Manga title pages (approved 2026-10-04, recoloured 2026-10-31): More's structure with an
+   AniList-native identity. `--title-accent` is the world colour (tokens.css). */
 
 .route-stack {
   display: contents;
@@ -60,9 +53,7 @@
   margin: 0;
   color: var(--text-soft);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .title-kicker > span + span::before {
   content: "";
@@ -109,8 +100,8 @@
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  color: #4fd197;
-  font-weight: 700;
+  color: var(--text);
+  font-weight: 600;
 }
 .title-actions {
   display: flex;
@@ -129,7 +120,7 @@
   border: 1px solid transparent;
   color: var(--text);
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -138,40 +129,40 @@
     filter var(--motion-fast) var(--motion-ease);
 }
 .title-primary {
-  height: 46px;
-  padding: 0 22px 0 18px;
-  border-radius: 999px;
-  background: var(--primary);
+  height: 48px;
+  padding: 0 24px 0 20px;
+  border-radius: var(--r-btn);
+  background: var(--accent);
+  color: var(--on-accent);
   font-size: 15px;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
 }
 .title-primary:hover {
-  background: var(--primary-hover);
+  background: var(--accent-hover);
 }
 .title-library,
 .title-round,
 .title-back {
-  border-color: rgb(255 255 255 / 0.14);
-  background: rgb(18 22 19 / 0.62);
+  border-color: var(--line-2);
+  background: rgb(14 16 15 / 0.72);
   backdrop-filter: blur(16px);
-  font-weight: 600;
+  font-weight: 500;
 }
 .title-library {
-  height: 46px;
+  height: 48px;
   padding: 0 20px 0 16px;
-  border-radius: 999px;
-  font-size: 14.5px;
+  border-radius: var(--r-btn);
+  font-size: 15px;
 }
 .title-round {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-btn);
 }
 .title-library:hover,
 .title-round:hover,
 .title-back:hover {
-  border-color: rgb(255 255 255 / 0.3);
-  background: rgb(255 255 255 / 0.12);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 .title-library:disabled {
   opacity: 0.55;
@@ -192,10 +183,10 @@
   aspect-ratio: 230 / 328;
   overflow: hidden;
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: 14px;
-  background: var(--surface-raised);
-  box-shadow: 0 30px 60px -18px rgb(0 0 0 / 0.85);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-card);
+  background: var(--s2);
+  box-shadow: 0 32px 64px -16px rgb(0 0 0 / 0.85);
 }
 .title-cover img,
 .title-cover .cover-image-fallback {
@@ -206,7 +197,7 @@
 /* Manga covers read as books: a spine highlight and a stacked page edge. */
 .title-cover--book {
   overflow: visible;
-  border-radius: 4px 10px 10px 4px;
+  border-radius: 4px var(--r-card) var(--r-card) 4px;
   box-shadow:
     4px 4px 0 -1px #2a2d2b,
     8px 8px 0 -2px #1d201e,
@@ -227,25 +218,6 @@
   pointer-events: none;
 }
 
-/* Manga: squarer controls tinted by the title's cover color. */
-.title-page--manga .title-primary,
-.manga-catalog .title-primary {
-  border-radius: 10px;
-  background: var(--title-accent);
-  color: var(--title-accent-ink);
-}
-.title-page--manga .title-primary:hover,
-.manga-catalog .title-primary:hover {
-  background: var(--title-accent);
-  filter: brightness(1.08);
-}
-.title-page--manga .title-library,
-.title-page--manga .title-round,
-.title-page--manga .title-back,
-.manga-catalog .home-hero .title-library {
-  border-radius: 10px;
-}
-
 /* ---------- Title page ---------- */
 .title-page {
   position: fixed;
@@ -258,19 +230,14 @@
   background: var(--ink);
   color: var(--text);
 }
-.title-page--anime {
-  --title-accent: var(--primary-hover);
-  --title-accent-ink: #fff;
-  --title-accent-text: var(--primary-hover);
-}
 .title-back {
   position: absolute;
   z-index: 6;
   top: calc(var(--app-navbar-height) + 16px);
   left: var(--page-gutter);
-  height: 38px;
+  height: 40px;
   padding: 0 16px 0 12px;
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   font-size: 14px;
 }
 .title-main {
@@ -290,11 +257,8 @@
 }
 .title-info h1 {
   margin: 12px 0 6px;
-  font-size: clamp(32px, 3.2vw, 46px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-size: clamp(36px, 3.6vw, 52px);
   line-height: 1.06;
-  text-wrap: balance;
 }
 .title-alt {
   margin: 0 0 14px;
@@ -325,7 +289,7 @@
   align-items: center;
   padding: 0 12px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: rgb(255 255 255 / 0.04);
   color: var(--text-soft);
   font-size: 12.5px;
@@ -362,19 +326,19 @@
   color: var(--title-accent-text);
   font: inherit;
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 .title-facts {
   margin: 150px 0 0;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   background: rgb(18 22 19 / 0.62);
   backdrop-filter: blur(18px);
 }
 .title-page--manga .title-facts {
-  border-radius: 12px;
+  border-radius: var(--r-card);
 }
 .title-facts > div {
   display: flex;
@@ -404,7 +368,7 @@
   z-index: 5;
   top: var(--app-navbar-height);
   display: flex;
-  gap: 30px;
+  gap: 32px;
   margin: 48px var(--page-gutter) 0;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(
@@ -418,14 +382,15 @@
   padding: 14px 0;
   border: 0;
   background: none;
-  color: var(--muted);
+  color: var(--text-3);
   font: inherit;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
 }
 .title-tabs button:hover {
-  color: var(--text-soft);
+  color: var(--text-2);
 }
 .title-tabs button.is-active {
   color: var(--text);
@@ -437,7 +402,8 @@
   bottom: -1px;
   left: 0;
   height: 2px;
-  background: var(--title-accent);
+  border-radius: 2px;
+  background: var(--text);
 }
 .title-body {
   padding: 0 var(--page-gutter);
@@ -449,7 +415,7 @@
 .title-section > h2 {
   margin: 0 0 16px;
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 .title-section .watch-experience {
@@ -496,7 +462,7 @@
   place-items: center;
   margin-bottom: 8px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: var(--surface-raised);
 }
 .episode-tile-art,
@@ -518,39 +484,12 @@
   left: 16px;
   color: transparent;
   font-size: clamp(52px, 5vw, 76px);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.06em;
   line-height: 1;
   -webkit-text-stroke: 1.5px rgb(255 255 255 / 0.75);
 }
 .episode-tile-badge,
-.episode-tile-duration {
-  position: absolute;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: rgb(0 0 0 / 0.6);
-  font-size: 12px;
-  font-weight: 700;
-}
-.episode-tile-badge {
-  top: 10px;
-  left: 10px;
-}
-.episode-tile-duration {
-  right: 10px;
-  bottom: 10px;
-}
-.episode-tile-check {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  display: grid;
-  width: 26px;
-  height: 26px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--primary);
-}
 .episode-tile .episode-play {
   border-color: #fff;
   background: #fff;
@@ -581,7 +520,7 @@
 }
 .episode-tile.is-current .episode-tile-frame {
   border: 2px solid var(--primary-hover);
-  box-shadow: 0 0 0 4px rgb(54 157 115 / 0.16);
+  box-shadow: 0 0 0 2px var(--text);
 }
 .episode-tile.is-current .episode-tile-art {
   filter: brightness(0.6);
@@ -597,7 +536,7 @@
   overflow: hidden;
   padding: 0 2px;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -619,11 +558,9 @@
   line-clamp: 2;
 }
 .episode-tile.is-current .episode-tile-status {
-  color: #4fd197;
+  color: var(--text);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .title-page .episode-list-toggle {
   gap: 8px;
@@ -631,7 +568,7 @@
   padding: 0;
   height: 44px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   color: var(--text-soft);
   font: inherit;
   font-size: 14px;
@@ -677,26 +614,25 @@
 }
 .chapter-ledger {
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-1);
 }
 .chapter-volume {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: center;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-panel);
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line-1);
+  background: var(--s2);
   font-size: 13px;
 }
 .chapter-volume strong {
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .chapter-volume > span {
-  color: var(--muted);
-  font-weight: 600;
+  color: var(--text-3);
+  font-weight: 500;
 }
 .chapter-volume-meter {
   width: 120px;
@@ -704,20 +640,20 @@
   margin-left: auto;
   overflow: hidden;
   border-radius: 4px;
-  background: rgb(255 255 255 / 0.1);
+  background: var(--s4);
 }
 .chapter-ledger .chapter-row {
   position: relative;
   display: grid;
   grid-template-columns: 22px 84px minmax(0, 1fr) minmax(0, 200px) 34px 70px 18px 30px;
-  gap: 14px;
+  gap: 16px;
   width: 100%;
   align-items: center;
-  min-height: 54px;
+  min-height: 56px;
   margin: 0;
-  padding: 0 18px;
+  padding: 0 20px;
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-1);
   border-radius: 0;
   background: transparent;
   color: var(--text);
@@ -732,33 +668,42 @@
   border-bottom: 0;
 }
 .chapter-ledger .chapter-row:hover {
-  background: rgb(255 255 255 / 0.04);
+  background: var(--s2);
 }
 .chapter-dot {
   display: grid;
   width: 14px;
   height: 14px;
   place-items: center;
-  border: 1.5px solid rgb(255 255 255 / 0.3);
+  border: 1.5px solid var(--line-3);
   border-radius: 50%;
-  color: var(--title-accent-ink);
+  color: var(--ink);
 }
 .chapter-row.is-read {
-  color: var(--muted);
+  color: var(--text-3);
 }
 .chapter-row.is-read .chapter-dot {
-  border-color: var(--title-accent);
-  background: var(--title-accent);
+  border-color: transparent;
+  background: var(--text-3);
 }
+/* The next chapter to read: a faint wash of the world colour and its dot. */
 .chapter-row.is-next {
-  background: color-mix(in srgb, var(--title-accent) 9%, transparent);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
 }
 .chapter-row.is-next .chapter-dot {
-  border-color: var(--title-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--title-accent) 25%, transparent);
+  border-color: transparent;
+  background: var(--accent);
+}
+/* The signature: a sky dot on a chapter that came out this week. */
+.chapter-row.is-new:not(.is-next) .chapter-dot {
+  width: 8px;
+  height: 8px;
+  margin-left: 3px;
+  border: 0;
+  background: var(--live);
 }
 .chapter-number {
-  font-weight: 700;
+  font-weight: 500;
   white-space: nowrap;
 }
 .chapter-title,
@@ -768,25 +713,23 @@
   white-space: nowrap;
 }
 .chapter-next {
-  margin-left: 10px;
-  color: var(--title-accent-text);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  margin-left: 12px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
 }
 .chapter-group,
 .chapter-date {
-  color: var(--muted);
+  color: var(--text-3);
   font-size: 13px;
 }
 .chapter-date {
   text-align: right;
 }
 .chapter-ledger .chapter-language {
-  color: var(--text-soft);
-  font-size: 11.5px;
-  font-weight: 800;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
 }
 .chapter-ledger .chapter-reading-progress {
   position: absolute;
@@ -815,98 +758,8 @@
   width: 236px;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: var(--surface-panel);
-}
-.title-person img {
-  flex: none;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.title-person > span {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-.title-person strong,
-.title-person small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.title-person strong {
-  font-size: 14px;
-  font-weight: 650;
-}
-.title-person small {
-  color: var(--muted);
-  font-size: 12px;
-}
-.title-related {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
-}
-.title-related-card {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-panel);
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.title-related-card:hover {
-  border-color: rgb(255 255 255 / 0.2);
-}
-.title-related-card:disabled {
-  cursor: default;
-}
-.title-related-card > img,
-.title-related-card > .cover-image-fallback {
-  flex: none;
-  width: 72px;
-  height: 104px;
-  border-radius: 8px;
-  object-fit: cover;
-}
-.title-related-card > span {
-  display: grid;
-  min-width: 0;
-  gap: 5px;
-}
-.title-related-card small {
-  color: var(--title-accent-text);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.title-related-card strong {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 14.5px;
-  font-weight: 650;
-  line-height: 1.3;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-.title-related-card span span {
-  color: var(--muted);
-  font-size: 12.5px;
-}
-.title-similar {
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  padding: 6px 2px 10px;
-  scrollbar-width: thin;
 }
 
 /* ---------- Home hero: native-ratio banner band with the cover overlapping it ---------- */
@@ -934,7 +787,7 @@
   padding: 0 var(--page-gutter);
 }
 .home-hero-cover {
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   cursor: pointer;
 }
 .home-hero-copy {
@@ -946,28 +799,30 @@
    descenders (g, p, y) are not cut off; layout spacing is unchanged. */
 .home-hero-copy h1 {
   display: -webkit-box;
-  margin: 10px 0 calc(10px - 0.14em);
+  margin: 8px 0 calc(8px - 0.14em);
   padding-bottom: 0.14em;
   overflow: hidden;
-  font-size: clamp(28px, 2.8vw, 40px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+  font-size: clamp(32px, 3.2vw, 48px);
+  line-height: 1.08;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 .home-hero-rank {
-  color: #4fd197;
+  color: var(--text);
 }
-.manga-catalog .home-hero-rank {
-  color: var(--title-accent-text);
+/* The signature: a sky dot and "E1180 is out" while the title airs. */
+.home-hero-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--live);
 }
 .home-hero-synopsis {
   display: -webkit-box;
   max-width: 640px;
   margin: 12px 0 18px;
   overflow: hidden;
-  color: #d9dfdb;
+  color: var(--text-2);
   font-size: 15px;
   line-height: 1.6;
   -webkit-box-orient: vertical;
@@ -984,17 +839,6 @@
   padding-top: 32px;
 }
 
-/* ---------- Continue rails ---------- */
-.continue-strip {
-  --rail-card-width: clamp(260px, 24vw, 352px);
-  --rail-art-ratio: 2.4;
-}
-.continue-strip .rail-art img {
-  object-position: center 30%;
-}
-.continue-strip-cover img {
-  object-position: center 22%;
-}
 .continue-progress {
   position: absolute;
   z-index: 2;
@@ -1005,15 +849,12 @@
   overflow: hidden;
   background: rgb(255 255 255 / 0.2);
 }
-.continue-strip .continue-progress span {
-  background: var(--primary-hover);
-}
 .continue-book {
   --rail-card-width: clamp(140px, 11.5vw, 168px);
 }
 .continue-book .rail-art {
   overflow: visible;
-  border-radius: 4px 8px 8px 4px;
+  border-radius: 4px var(--r-card) var(--r-card) 4px;
   box-shadow:
     3px 3px 0 -1px #2a2d2b,
     6px 6px 0 -2px #1d201e,
@@ -1039,78 +880,6 @@
   margin-top: 6px;
   border-radius: 3px;
   background: rgb(255 255 255 / 0.12);
-}
-
-/* ---------- In-poster hover info (More-style) ---------- */
-.rail-hover-copy {
-  display: grid;
-  flex: 1 0 100%;
-  gap: 4px;
-  min-width: 0;
-  margin-bottom: 4px;
-}
-.rail-hover-copy strong {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.25;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-.rail-hover-copy small {
-  overflow: hidden;
-  color: var(--text-soft);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rail-card .rail-hover-actions:has(.rail-hover-copy) {
-  flex-wrap: wrap;
-  right: 10px;
-  bottom: 10px;
-  left: 10px;
-}
-.rail-card:has(.rail-hover-copy) .rail-art::after {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  background: linear-gradient(0deg, rgb(4 5 4 / 0.96) 6%, rgb(4 5 4 / 0.5) 46%, transparent 72%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--motion-fast) var(--motion-ease);
-}
-.rail-card:has(.rail-hover-copy):hover .rail-art::after,
-.rail-card:has(.rail-hover-copy):has(:focus-visible) .rail-art::after {
-  opacity: 1;
-}
-.rail-card:has(.rail-hover-copy):hover .rail-art img,
-.rail-card:has(.rail-hover-copy):has(:focus-visible) .rail-art img {
-  filter: none;
-}
-.continue-strip .rail-hover-copy {
-  display: none;
-}
-.catalog-result-card .rail-hover-play,
-.for-you-card .rail-hover-play,
-.continue-card .rail-hover-play {
-  border-color: #fff;
-  background: #fff;
-  color: #0a0b0a;
-}
-.manga-catalog .catalog-result-card .rail-hover-play,
-.manga-catalog .continue-card .rail-hover-play,
-.title-page--manga .catalog-result-card .rail-hover-play {
-  border-color: transparent;
-  border-radius: 8px;
-  background: var(--title-accent);
-  color: var(--title-accent-ink);
-}
-.manga-catalog .rail-hover-secondary,
-.title-page--manga .rail-hover-secondary {
-  border-radius: 8px;
 }
 
 @media (max-width: 1240px) {
@@ -1183,7 +952,7 @@
   height: 30px;
   place-items: center;
   border: 1px solid rgb(255 193 92 / 0.45);
-  border-radius: 50%;
+  border-radius: var(--r-chip);
   background: rgb(0 0 0 / 0.55);
   color: var(--secondary-amber);
 }

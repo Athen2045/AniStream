@@ -70,7 +70,7 @@
   margin: 0;
   color: var(--text);
   font-size: 1.3rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 .taste-map-heading p {
@@ -89,7 +89,7 @@
   display: flex;
   gap: 2px;
   padding: 4px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   transform: translateX(-50%);
 }
 .taste-map-filter button {
@@ -99,7 +99,7 @@
   height: 32px;
   padding: 0 14px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: none;
   color: var(--taste-soft);
   font: inherit;
@@ -179,7 +179,7 @@
   position: relative;
   flex: 1;
   min-width: 0;
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   overflow: hidden;
 }
 .taste-map-chip-strip {
@@ -212,7 +212,7 @@
   height: 34px;
   place-items: center;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: rgb(255 255 255 / 0.06);
   color: var(--taste-soft);
   transform: translateY(-50%);
@@ -230,7 +230,7 @@
   height: 38px;
   padding: 0 13px 0 12px;
   border: 0;
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   background: none;
   color: var(--text);
   font: inherit;
@@ -265,7 +265,7 @@
   display: flex;
   gap: 2px;
   padding: 6px;
-  border-radius: 16px;
+  border-radius: var(--r-panel);
 }
 .taste-map-zoom button {
   display: grid;
@@ -273,7 +273,7 @@
   height: 38px;
   place-items: center;
   border: 0;
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   background: none;
   color: var(--taste-soft);
   cursor: pointer;
@@ -298,7 +298,7 @@
   width: 352px;
   padding: 22px;
   overflow-y: auto;
-  border-radius: 20px;
+  border-radius: var(--r-panel);
   scrollbar-width: none;
 }
 .taste-map-panel-close {
@@ -310,7 +310,7 @@
   height: 32px;
   place-items: center;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--r-chip);
   background: rgb(255 255 255 / 0.05);
   color: var(--taste-muted);
   cursor: pointer;
@@ -325,9 +325,7 @@
   gap: 8px;
   color: var(--taste-muted);
   font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .taste-map-panel h3 {
   margin: 10px 36px 6px 0;
@@ -348,9 +346,7 @@
   margin: 22px 0 10px;
   color: var(--taste-muted);
   font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .taste-map-strongest {
   display: grid;
@@ -415,7 +411,7 @@
 .taste-map-popover {
   position: absolute;
   padding: 14px;
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   pointer-events: none;
 }
 .taste-map-popover-head {
@@ -427,7 +423,7 @@
   flex: none;
   width: 62px;
   height: 88px;
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   object-fit: cover;
 }
 .taste-map-popover-head strong {
@@ -510,8 +506,8 @@
   fill: var(--taste-more);
 }
 .taste-map-orbit-hub {
-  fill: rgb(79 209 154 / 0.15);
-  stroke: rgb(79 209 154 / 0.6);
+  fill: color-mix(in oklab, var(--accent) 15%, transparent);
+  stroke: color-mix(in oklab, var(--accent) 60%, transparent);
   stroke-width: 1.5;
 }
 .taste-map-orbit-core {

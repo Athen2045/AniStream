@@ -15,6 +15,7 @@ import { useState } from "react";
 import { useAppPreferences } from "./app-preferences";
 import { useBinge } from "./BingeProvider";
 import { useDownloads } from "./DownloadsProvider";
+import { usePersonalLibrary } from "./PersonalLibraryProvider";
 import { SideRail } from "./SideRail";
 
 /** Bug reports go to the project's GitHub issues for now (user request 2026-10-09). */
@@ -32,8 +33,8 @@ export type AppView =
   | "DOWNLOADS";
 
 /**
- * The app's side rail: the sections, the Schedule / Up Next / Downloads tools (with their badge
- * counts) and the account rows. Schedule and Up Next follow Settings → Customize.
+ * The app's side rail: the sections, the Schedule / Up Next / Downloads tools (with their counts)
+ * and the account rows. Schedule and Up Next follow Settings → Customize.
  */
 export function AppRail({
   view,
@@ -52,8 +53,8 @@ export function AppRail({
 }: {
   view: AppView;
   reducedMotion: boolean;
-  /** The profile row: the signed-in name and picture, or "Sign in". */
-  account: { label: string; imageUrl?: string; signedIn: boolean };
+  /** The profile row: the signed-in name, picture and tracker, or "Sign in". */
+  account: { label: string; detail?: string; imageUrl?: string; signedIn: boolean };
   /** An AniList member's Refresh library row; absent for guests. */
   libraryRefresh?: { busy: boolean; onRefresh: () => void };
   onHome: () => void;
@@ -69,7 +70,10 @@ export function AppRail({
   const preferences = useAppPreferences();
   const { state: binge } = useBinge();
   const { state: downloads } = useDownloads();
+  const { state: personal } = usePersonalLibrary();
   const upNextCount = binge.queue.length;
+  // New episodes and chapters since the user last caught up ("Ready for you" on Schedule).
+  const newReleases = personal.releases.length;
   const downloadsPending =
     downloads?.items.filter((item) => item.status === "downloading" || item.status === "queued")
       .length ?? 0;
@@ -119,6 +123,9 @@ export function AppRail({
                 icon: CalendarDays,
                 active: view === "SCHEDULE",
                 title: "Airing schedule",
+                live: newReleases > 0,
+                meta: newReleases ? `${newReleases} new` : undefined,
+                ariaLabel: newReleases ? `Schedule, ${newReleases} new` : "Schedule",
                 onSelect: onSchedule,
               },
             ]
@@ -130,7 +137,7 @@ export function AppRail({
                 label: "Up Next",
                 icon: ListVideo,
                 active: view === "UPNEXT",
-                badge: upNextCount,
+                meta: upNextCount ? String(upNextCount) : undefined,
                 ariaLabel: upNextCount ? `Up Next, ${upNextCount} queued` : "Up Next",
                 title: "Up Next and playlists",
                 onSelect: onUpNext,
@@ -142,7 +149,8 @@ export function AppRail({
           label: "Downloads",
           icon: Download,
           active: view === "DOWNLOADS",
-          badge: downloadsPending,
+          busy: downloadsPending > 0,
+          meta: downloadsPending ? `${downloadsPending} running` : undefined,
           ariaLabel: downloadsPending ? `Downloads, ${downloadsPending} in progress` : "Downloads",
           onSelect: onDownloads,
         },
@@ -172,20 +180,21 @@ export function AppRail({
           onSelect: () => void window.anistream.openLink(BUG_REPORT_URL),
         },
         {
-          key: "profile",
-          label: account.label,
-          icon: UserRound,
-          imageUrl: account.imageUrl,
-          active: view === "PROFILE",
-          ariaLabel: account.signedIn ? "Your profile" : "Sign in",
-          onSelect: onProfile,
-        },
-        {
           key: "settings",
           label: "Settings",
           icon: Settings,
           active: view === "SETTINGS",
           onSelect: onSettings,
+        },
+        {
+          key: "profile",
+          label: account.label,
+          sublabel: account.detail,
+          icon: UserRound,
+          imageUrl: account.imageUrl,
+          active: view === "PROFILE",
+          ariaLabel: account.signedIn ? "Your profile" : "Sign in",
+          onSelect: onProfile,
         },
       ]}
     />

@@ -5,6 +5,7 @@ import { App } from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { installExternalLinks } from "./external-links";
 import { appQueryClient, refetchFailedOnReconnect } from "./query-client";
+import "./styles/tokens.css";
 import "./styles.css";
 import "./styles/controls.css";
 import "./styles/redesign.css";
@@ -27,6 +28,8 @@ import "./styles/loading.css";
 import "./styles/anime-simplify.css";
 import "./styles/player.css";
 import "./styles/tv-ui.css";
+import "./styles/kit.css";
+import "./styles/cards.css";
 
 document.documentElement.dataset.platform = navigator.userAgent.includes("Windows")
   ? "win32"

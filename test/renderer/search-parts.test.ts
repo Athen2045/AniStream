@@ -38,28 +38,38 @@ describe("search filter chips", () => {
 });
 
 describe("genre tile artwork", () => {
-  const anime = (id: number, genres: string[], bannerUrl?: string): AniListCatalogMedia => ({
+  const anime = (id: number, genres: string[], coverUrl?: string): AniListCatalogMedia => ({
     id,
     type: "ANIME",
     title: `Title ${id}`,
     genres,
-    bannerUrl,
+    coverUrl,
     siteUrl: `https://anilist.co/anime/${id}`,
   });
 
-  it("gives each tile a different trending banner, or none rather than a repeat", () => {
+  it("fans up to three trending posters per tile, never repeating one across tiles", () => {
     const art = genreArtwork("ANIME", {
       kind: "anilist",
       page: 1,
       hasNext: false,
       items: [
         anime(1, ["Action", "Romance"], "https://example.test/1.jpg"),
-        anime(2, ["Romance"], "https://example.test/2.jpg"),
-        anime(3, ["Comedy"]),
+        anime(2, ["Action"], "https://example.test/2.jpg"),
+        anime(3, ["Action"], "https://example.test/3.jpg"),
+        anime(4, ["Action", "Romance"], "https://example.test/4.jpg"),
+        anime(5, ["Romance"], "https://example.test/5.jpg"),
+        anime(6, ["Comedy"]),
       ],
     });
-    expect(art.get("Action")).toBe("https://example.test/1.jpg");
-    expect(art.get("Romance")).toBe("https://example.test/2.jpg");
+    expect(art.get("Action")).toEqual([
+      "https://example.test/1.jpg",
+      "https://example.test/2.jpg",
+      "https://example.test/3.jpg",
+    ]);
+    expect(art.get("Romance")).toEqual([
+      "https://example.test/4.jpg",
+      "https://example.test/5.jpg",
+    ]);
     expect(art.has("Comedy")).toBe(false);
   });
 
@@ -69,9 +79,9 @@ describe("genre tile artwork", () => {
       type: "TV",
       title: "Show",
       genres: ["Science Fiction"],
-      backdropUrl: "https://example.test/b.jpg",
+      posterUrl: "https://example.test/p.jpg",
     } as unknown as MoreCatalogItem;
     const art = genreArtwork("MORE", { kind: "more", items: [show] } as never);
-    expect(art.get("Sci-Fi")).toBe("https://example.test/b.jpg");
+    expect(art.get("Sci-Fi")).toEqual(["https://example.test/p.jpg"]);
   });
 });

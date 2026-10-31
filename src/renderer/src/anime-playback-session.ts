@@ -30,6 +30,10 @@ export interface AnimePlaybackSessionOptions {
   saveResume: (input: SavePlaybackResumeInput) => Promise<void> | void;
   clearResume: (aniListId: number) => Promise<void> | void;
   onWatched: (episode: number) => Promise<void> | void;
+  /** The viewer pressed the player's own previous / next episode button. */
+  onNavigate?: (direction: "previous" | "next") => void;
+  /** The viewer changed the audio in the player's own menu after it started playing. */
+  onAudioChosen?: (language: "sub" | "dub") => void;
   now?: () => number;
   loadTimeoutMs?: number;
 }
@@ -49,6 +53,10 @@ export interface AnimePlaybackSession {
     expectedSource: MessageEventSource | null,
   ): void;
   dispose(): void;
+  /** Replaces the episode-button and audio callbacks (they follow the page's episode list). */
+  setPlayerCallbacks(
+    callbacks: Pick<AnimePlaybackSessionOptions, "onNavigate" | "onAudioChosen">,
+  ): void;
 }
 
 export function chooseInitialAnimeEpisode(input: {
@@ -92,6 +100,10 @@ export function createAnimePlaybackSession(
   let completionRequested = false;
   let completing = false;
   let disposed = false;
+  let callbacks: Pick<AnimePlaybackSessionOptions, "onNavigate" | "onAudioChosen"> = {
+    onNavigate: options.onNavigate,
+    onAudioChosen: options.onAudioChosen,
+  };
 
   const startLoadTimer = () =>
     setTimeout(() => {
@@ -176,6 +188,10 @@ export function createAnimePlaybackSession(
 
     markWatched,
 
+    setPlayerCallbacks(next) {
+      callbacks = next;
+    },
+
     retryPersistence() {
       if (completionRequested) markWatched();
       else persistLatest(true);
@@ -200,6 +216,23 @@ export function createAnimePlaybackSession(
           (message.episode !== undefined && message.episode !== options.episode))
       )
         return;
+      if (message.kind === "navigate") {
+        callbacks.onNavigate?.(message.direction);
+        return;
+      }
+      if (message.kind === "audio") {
+        // Before playback starts this is the player settling (e.g. no dub, so sub); after, the
+        // viewer picked it in the player's menu.
+        if (
+          message.language &&
+          snapshot.hasProgressed &&
+          snapshot.language &&
+          message.language !== snapshot.language
+        )
+          callbacks.onAudioChosen?.(message.language);
+        if (message.language) updateSnapshot({ language: message.language });
+        return;
+      }
       if (message.kind !== "error" && message.language)
         updateSnapshot({ language: message.language });
 

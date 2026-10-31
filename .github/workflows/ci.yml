@@ -16,7 +16,7 @@ concurrency:
 jobs:
   verify:
     name: Typecheck, build, and contract checks
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 20
     steps:
       - name: Check out repository

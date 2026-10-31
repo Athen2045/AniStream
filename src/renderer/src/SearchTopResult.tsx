@@ -1,13 +1,11 @@
 import { Info, Play, Plus } from "lucide-react";
 import { cachedArtworkUrl } from "../../shared/artwork";
 import { CoverImage } from "./CoverImage";
-import { titleTintStyle } from "./title-accent";
 
 /** The confident first match, shown large above the other results with Watch/Read and Details. */
 export function SearchTopResult({
   image,
   cover,
-  tint,
   kicker,
   title,
   meta,
@@ -20,7 +18,6 @@ export function SearchTopResult({
 }: {
   image?: string;
   cover?: string;
-  tint?: string;
   kicker: string;
   title: string;
   meta: ReadonlyArray<string | number | undefined>;
@@ -32,7 +29,7 @@ export function SearchTopResult({
   onAdd?: () => void;
 }): React.JSX.Element {
   return (
-    <article className="section-search-top" style={titleTintStyle(tint)}>
+    <article className="section-search-top">
       {image ? (
         <img
           className="section-search-top-art"

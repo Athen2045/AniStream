@@ -1,10 +1,9 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import appIcon from "./assets/app-icon.png";
 import { motionTransition } from "./motion";
 import type { ReadinessSnapshot } from "./startup-readiness";
 
-/** Status, steps and the stream line appear only if a check is still running after this. */
+/** The bar and its line appear only if a check is still running after this. */
 export const READINESS_DETAIL_DELAY_MS = 600;
 
 interface ReadinessScreenProps {
@@ -15,9 +14,10 @@ interface ReadinessScreenProps {
 }
 
 /**
- * Launch and first-Profile loading (approved 2026-10-07): the app mark breathing on the app black,
- * a thin stream line whose fill is real completed work, one status line and quiet step dots. A fast
- * start never shows more than the mark; a failure becomes a short card with the next action.
+ * Launch and first-Profile loading (redesign 2026-10-31, mockup 01): the website's "Ani" intro (a
+ * light blade wipes the mark in, a sheen crosses it, the sparkle lands on the i), then a thin bar
+ * whose fill is real completed work and one plain line. A fast start never shows more than the
+ * mark; a failure becomes a short card with the checks and the next action.
  */
 export function ReadinessScreen({
   snapshot,
@@ -46,8 +46,15 @@ export function ReadinessScreen({
       transition={motionTransition(reducedMotion, "emphasis")}
     >
       <div className="readiness-content">
-        <img className="readiness-mark" src={appIcon} alt="" draggable="false" />
-        <p className="readiness-wordmark">AniStream</p>
+        <div className="readiness-mark" aria-hidden="true">
+          <span className="readiness-mark-body" />
+          <span className="readiness-mark-sheen" />
+          <span className="readiness-mark-blade" />
+          <svg className="readiness-mark-star" viewBox="0 0 100 100">
+            <path d="M50 0C55 31 69 45 100 50 69 55 55 69 50 100 45 69 31 55 0 50 31 45 45 31 50 0Z" />
+          </svg>
+        </div>
+        <p className="sr-only">AniStream</p>
         <h1 className="sr-only">{headline(snapshot, failed)}</h1>
 
         {detailed && !failed ? (
@@ -67,16 +74,14 @@ export function ReadinessScreen({
                 animate={{ width: `${snapshot.progress}%` }}
                 transition={motionTransition(reducedMotion, "standard")}
               />
-              <span className="readiness-stream-flow" aria-hidden="true" />
             </div>
             <p className="readiness-status">
-              {snapshot.activeLabel}
-              {checking ? "…" : ""}
+              {snapshot.mode === "profile" ? "Loading your profile" : "Loading your library"}
             </p>
           </>
         ) : null}
 
-        {detailed && snapshot.steps.length ? (
+        {failed && snapshot.steps.length ? (
           <ul className="readiness-steps" aria-label="Checks">
             {snapshot.steps.map((step) => (
               <li key={step.id} className={`is-${step.state}`}>
@@ -105,6 +110,7 @@ export function ReadinessScreen({
           </div>
         ) : null}
       </div>
+      <p className="readiness-credit">Data from AniList, MangaDex and TMDB</p>
     </motion.section>
   );
 }

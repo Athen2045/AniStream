@@ -99,4 +99,24 @@ describe("Anime player message validation", () => {
     expect(odd).not.toHaveProperty("aniListId");
     expect(odd).not.toHaveProperty("language");
   });
+
+  it("reads a sourced player's episode buttons and audio changes", () => {
+    const event = (name: string, data: Record<string, unknown>) =>
+      parseAnimePlayerMessage({ source: "player", type: "event", name, data }, "player");
+    const here = { animeId: "21", episode: 1, language: "dub" };
+    expect(event("next", here)).toEqual({
+      kind: "navigate",
+      direction: "next",
+      aniListId: 21,
+      episode: 1,
+      language: "dub",
+    });
+    expect(event("previous", here)).toMatchObject({ kind: "navigate", direction: "previous" });
+    expect(event("providerchange", { ...here, language: "sub" })).toEqual({
+      kind: "audio",
+      aniListId: 21,
+      episode: 1,
+      language: "sub",
+    });
+  });
 });

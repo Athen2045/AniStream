@@ -6,6 +6,19 @@ All notable changes to AniStream are listed here. Each release has full notes in
 Legend: 🎉 new feature · 💄 design · ⚡️ improvement · 🦺 fix · 🔒 security · 🏗️ internal or
 compatibility · ⬆️ dependency update
 
+## v2.2.4 (2026-10-31)
+
+Bugs & improvements: more players that work on the first click, full screen that just works, and a
+calmer look. [Full notes](.github/releases/v2.2.4.md)
+
+- ⚡️ New main anime player, with Switch player on anime pages and a notice when a dub is missing
+- ⚡️ Two more Movies & TV players; a player showing the wrong title is skipped automatically
+- ⚡️ Full screen is instant from any player, and keyboard controls work in every player
+- ⚡️ Sharp full-size backdrops on anime title pages, and "Did you mean" catches one-word typos
+- 💄 Calmer look, new Schedule, Up Next, Settings, Search start page and launch screen
+- 🦺 Full screen dropping back to a window, pop-ups swallowing the first click, the wrong One Piece,
+  and stray HTML in Search
+
 ## v2.2.3 (2026-10-28)
 
 Full screen in the movie and show players works again, the Next episode prompt waits for the end,

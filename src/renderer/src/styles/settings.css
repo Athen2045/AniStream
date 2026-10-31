@@ -37,7 +37,7 @@
   width: 100%;
   aspect-ratio: 2 / 3;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: var(--r-card);
   background: var(--surface-panel);
 }
 .signin-page::before {
@@ -73,8 +73,7 @@
   margin: 0;
   width: 56px;
   height: 56px;
-  border-radius: 14px;
-  box-shadow: 0 18px 40px rgb(47 216 137 / 0.16);
+  border-radius: var(--r-card);
 }
 .signin-kicker {
   display: flex;
@@ -83,14 +82,12 @@
   margin: 26px 0 12px;
   color: var(--text-soft, #c9cfcb);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .signin-copy h1 {
   margin: 0;
   font-size: clamp(40px, 4.4vw, 56px);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.02;
   letter-spacing: -0.03em;
 }
@@ -104,34 +101,6 @@
   font-size: 17px;
   line-height: 1.55;
 }
-.signin-perks {
-  display: grid;
-  gap: 14px;
-  margin: 0 0 34px;
-  padding: 0;
-  list-style: none;
-}
-.signin-perks li {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  color: var(--muted);
-  font-size: 15px;
-}
-.signin-perks strong {
-  color: #fff;
-  font-weight: 600;
-}
-.signin-perks i {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgb(54 157 115 / 0.14);
-  color: #4fd39a;
-}
 .signin-actions {
   display: flex;
   flex-wrap: wrap;
@@ -142,34 +111,28 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 52px;
-  padding: 0 26px;
+  height: 48px;
+  padding: 0 24px;
   border: 1px solid transparent;
-  border-radius: 999px;
-  color: #fff;
+  border-radius: var(--r-btn);
+  color: var(--text);
   font: inherit;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition:
     background-color var(--motion-standard, 160ms) ease,
     transform var(--motion-standard, 160ms) ease;
 }
-.signin-button--primary {
-  background: var(--primary);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
-}
-.signin-button--primary:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
 .signin-button--glass {
-  border-color: rgb(255 255 255 / 0.14);
-  background: rgb(18 22 19 / 0.62);
+  border-color: var(--line-2);
+  background: rgb(14 16 15 / 0.72);
   backdrop-filter: blur(16px);
-  font-weight: 600;
+  font-weight: 500;
 }
 .signin-button--glass:hover {
-  background: rgb(40 46 42 / 0.75);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 .signin-button:active:not(:disabled) {
   transform: scale(0.985);
@@ -207,33 +170,12 @@
   color: var(--muted);
   font-size: 13px;
 }
-.signin-waiting {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  width: min(470px, 100%);
-  margin-bottom: 18px;
-  padding: 18px 20px;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 16px;
-  background: rgb(18 22 19 / 0.62);
-  backdrop-filter: blur(18px);
-}
-.signin-waiting strong {
-  display: block;
-  font-size: 15px;
-}
-.signin-waiting span {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
 .signin-spinner {
   flex: none;
   width: 26px;
   height: 26px;
   border: 3px solid rgb(255 255 255 / 0.14);
-  border-top-color: #4fd39a;
+  border-top-color: var(--text);
   border-radius: 50%;
   animation: signin-spin 900ms linear infinite;
 }
@@ -248,91 +190,85 @@
 }
 
 /* ---------------- Settings ---------------- */
+/* Redesign 2026-10-31 (mockup 17): tabs on the left, each pane is groups of rows in panels. */
 .set-page {
   position: relative;
-  isolation: isolate;
   min-height: 100vh;
-  padding: calc(var(--app-navbar-height) + 46px) var(--page-gutter) 80px;
+  padding: calc(var(--app-navbar-height) + 32px) var(--page-gutter) 80px;
   background: var(--ink);
-}
-.set-page::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: -1;
-  height: 360px;
-  background: radial-gradient(ellipse 55% 300px at 14% 0, rgb(42 131 95 / 0.16), transparent 70%);
 }
 .set-head,
 .set-body {
-  width: min(1044px, 100%);
-  margin-inline: auto;
+  width: min(1120px, 100%);
 }
 .set-head h1 {
   margin: 0;
-  font-size: 44px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 .set-head h1:focus {
   outline: none;
 }
 .set-head p {
-  margin: 8px 0 0;
-  color: var(--muted);
+  margin: 4px 0 0;
+  color: var(--text-2);
   font-size: 15px;
 }
 .set-body {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 64px;
-  margin-top: 38px;
+  grid-template-columns: 256px minmax(0, 1fr);
+  gap: 48px;
+  margin-top: 32px;
 }
 .set-side {
   position: sticky;
   top: calc(var(--app-navbar-height) + 24px);
   align-self: start;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 .set-side button {
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 42px;
-  padding: 0 14px;
+  height: 40px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: none;
-  color: var(--text-soft, #c9cfcb);
+  color: var(--text-2);
   font: inherit;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .set-side button:hover {
-  background: rgb(255 255 255 / 0.04);
-  color: #fff;
+  background: var(--s2);
+  color: var(--text);
 }
 .set-side button.active {
-  background: rgb(255 255 255 / 0.07);
-  box-shadow: inset 2px 0 0 var(--primary-hover);
-  color: #fff;
+  background: var(--s3);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  color: var(--text);
 }
-.set-side svg {
-  opacity: 0.8;
+.set-side button.active svg {
+  color: var(--accent);
 }
-/* One pane per tab (2026-10-12): a heading, a one-line lede, then labelled groups of cards. */
+/* One pane per tab (2026-10-12): a heading, a one-line lede, then labelled groups of panels. */
 .set-pane {
   min-width: 0;
 }
 .set-pane-head {
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
-/* As in the mockups: a little shorter than the old rows so General fits a 900px window. */
 .set-pane .set-row {
-  min-height: 64px;
+  min-height: 72px;
   padding-block: 12px;
 }
 .set-pane .set-account {
@@ -340,23 +276,21 @@
 }
 .set-pane-head h2 {
   margin: 0;
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 .set-pane-head p {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 14px;
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 15px;
   line-height: 1.5;
 }
 .set-label {
-  margin: 22px 0 10px 4px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  margin: 32px 0 8px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
 }
 .set-pane-head + .set-label {
   margin-top: 0;
@@ -365,35 +299,30 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 12px 4px 0;
-  color: var(--muted);
-  font-size: 12.5px;
-}
-.set-side button:focus-visible {
-  outline: 2px solid var(--primary-hover);
-  outline-offset: 1px;
+  margin: 12px 0 0;
+  color: var(--text-3);
+  font-size: 13px;
 }
 /* Learn from my activity: typical time to play as small labels. */
 .set-text .set-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
 }
 .set-text .set-stats li {
-  padding: 4px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.05);
-  color: var(--text-soft, #c9cfcb);
+  padding: 4px 8px;
+  border-radius: var(--r-chip);
+  background: var(--s3);
+  color: var(--text-2);
   font-size: 12px;
 }
 /* Your taste map: a small preview of the viewer's own map beside its summary. */
 .set-taste {
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-columns: 208px minmax(0, 1fr);
   gap: 20px;
   align-items: center;
   padding: 16px;
@@ -402,16 +331,12 @@
   margin-top: 12px;
 }
 .set-taste-preview {
-  width: 210px;
-  height: 105px;
+  width: 208px;
+  height: 104px;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: radial-gradient(
-    circle at 50% 45%,
-    color-mix(in srgb, var(--ink), white 3%),
-    var(--ink) 75%
-  );
+  border-radius: var(--r-card);
+  background: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-1);
 }
 .set-taste-preview svg {
   display: block;
@@ -428,29 +353,29 @@
   stroke-dasharray: 2 4;
 }
 .set-taste-ghost-core {
-  fill: rgb(79 209 154 / 0.5);
+  fill: color-mix(in oklab, var(--accent) 50%, transparent);
 }
 .update-app-icon {
   flex: none;
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
 }
 .set-card {
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface-panel);
+  border-radius: var(--r-panel);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-1);
 }
 .set-row {
   display: flex;
   align-items: center;
   gap: 16px;
   min-height: 72px;
-  padding: 16px 22px;
+  padding: 16px 20px;
 }
 .set-row + .set-row {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-1);
 }
 .set-text {
   flex: 1;
@@ -459,25 +384,25 @@
 .set-text strong {
   display: block;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .set-text span {
   display: block;
-  margin-top: 3px;
-  color: var(--muted);
+  margin-top: 4px;
+  color: var(--text-2);
   font-size: 13px;
   line-height: 1.45;
 }
 .set-text .set-ok {
-  color: #4fd39a;
-  font-weight: 600;
+  color: var(--success);
+  font-weight: 500;
 }
 .set-text .set-warn {
-  color: #f0b54a;
-  font-weight: 600;
+  color: var(--warning);
+  font-weight: 500;
 }
 .set-account {
-  gap: 18px;
+  gap: 16px;
   padding-block: 20px;
 }
 .set-account .set-text strong {
@@ -501,9 +426,10 @@
   width: 56px;
   height: 56px;
   overflow: hidden;
-  border: 2px solid rgb(255 255 255 / 0.14);
   border-radius: 50%;
-  color: var(--muted);
+  background: var(--s3);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--text-3);
 }
 .set-avatar img {
   width: 100%;
@@ -517,37 +443,45 @@
   flex: none;
   align-items: center;
   gap: 8px;
-  height: 38px;
+  height: 40px;
   padding: 0 16px;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.07);
-  color: #fff;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: var(--s1);
+  color: var(--text);
   font: inherit;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
 }
 .set-button:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.12);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 .set-button--primary {
   border-color: transparent;
-  background: var(--primary);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
 }
 .set-button--primary:hover:not(:disabled) {
-  background: var(--primary-hover);
+  border-color: transparent;
+  background: var(--accent-hover);
 }
 .set-button--quiet {
   border-color: transparent;
   background: none;
-  color: var(--muted);
+  color: var(--text-2);
 }
 .set-button--quiet:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.06);
-  color: #fff;
+  border-color: transparent;
+  background: var(--s2);
+  color: var(--text);
 }
 .set-button:disabled {
   cursor: default;
@@ -556,30 +490,35 @@
 .set-toggle {
   position: relative;
   flex: none;
-  width: 46px;
-  height: 26px;
+  width: 44px;
+  height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.16);
+  border-radius: var(--r-panel);
+  background: var(--s4);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   cursor: pointer;
-  transition: background-color var(--motion-standard, 160ms) ease;
+  transition: background-color var(--dur) var(--ease);
 }
 .set-toggle::after {
   content: "";
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
+  top: 4px;
+  left: 4px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: #fff;
-  transition: transform var(--motion-standard, 160ms) ease;
+  background: var(--text);
+  transition:
+    transform var(--dur) var(--ease),
+    background-color var(--dur) var(--ease);
 }
 .set-toggle[aria-checked="true"] {
-  background: var(--primary-hover);
+  background: var(--accent);
+  box-shadow: none;
 }
 .set-toggle[aria-checked="true"]::after {
+  background: var(--on-accent);
   transform: translateX(20px);
 }
 .set-toggle:disabled {
@@ -589,29 +528,34 @@
 .set-pills {
   display: inline-flex;
   flex: none;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.06);
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-btn);
+  background: var(--s2);
+  box-shadow: inset 0 0 0 1px var(--line-1);
 }
 .set-pills button {
   height: 32px;
-  padding: 0 14px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: none;
-  color: var(--text-soft, #c9cfcb);
+  color: var(--text-2);
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .set-pills button:hover:not([aria-checked="true"]):not(:disabled) {
-  color: #fff;
+  color: var(--text);
 }
 .set-pills button[aria-checked="true"] {
-  background: #fff;
-  color: #0b0d0c;
+  background: var(--s4);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  color: var(--text);
 }
 .set-pills button:disabled {
   cursor: default;
@@ -619,11 +563,11 @@
 .set-row .ui-select {
   flex: none;
   width: auto;
-  min-width: 190px;
-  height: 38px;
-  border-radius: 10px;
+  min-width: 192px;
+  height: 40px;
+  border-radius: var(--r-btn);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .set-button:focus-visible,
 .set-toggle:focus-visible,
@@ -635,71 +579,70 @@
 
 /* Backup review and results */
 .set-review {
-  margin: 0 22px 20px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-raised);
+  margin: 0 20px 20px;
+  padding: 16px;
+  border-radius: var(--r-card);
+  background: var(--s2);
+  box-shadow: inset 0 0 0 1px var(--line-1);
 }
 .set-review h3 {
   margin: 0;
   font-size: 15px;
+  font-weight: 600;
 }
 .set-review h3:focus {
   outline: none;
 }
 .set-hint {
-  margin: 6px 0 14px;
-  color: var(--muted);
+  margin: 4px 0 16px;
+  color: var(--text-2);
   font-size: 13px;
   line-height: 1.5;
 }
 .set-counts {
   display: flex;
-  gap: 10px;
-  margin: 14px 0 0;
+  gap: 8px;
+  margin: 16px 0 0;
   padding: 0;
   list-style: none;
 }
 .set-counts li {
   flex: 1;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgb(255 255 255 / 0.04);
-  color: var(--muted);
+  padding: 12px 16px;
+  border-radius: var(--r-chip);
+  background: var(--s3);
+  color: var(--text-3);
   font-size: 12px;
   line-height: 1.4;
 }
 .set-counts strong {
   display: block;
-  color: #fff;
+  color: var(--text);
   font-size: 20px;
+  font-weight: 500;
 }
 .set-review-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 .set-status:empty {
   display: none;
 }
 .set-status {
-  margin: 0 22px 16px;
-  color: var(--text-soft, #c9cfcb);
+  margin: 0 20px 16px;
+  color: var(--text-2);
   font-size: 13px;
 }
 .set-feedback {
-  margin: 0 22px 18px;
+  margin: 0 20px 16px;
 }
 .set-error {
-  margin: 0 22px 18px;
-}
-.app-updates .update-timing {
-  font-size: 12px;
+  margin: 0 20px 16px;
 }
 .app-updates .update-actions {
   display: flex;
   flex: none;
-  gap: 10px;
+  gap: 8px;
 }
 
 @media (max-width: 900px) {
@@ -727,76 +670,78 @@
 /* In-app update download (Windows). */
 .app-updates .update-progress {
   width: min(320px, 100%);
-  height: 6px;
-  margin: 6px 0 2px;
+  height: 4px;
+  margin: 8px 0 4px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-panel);
   overflow: hidden;
   appearance: none;
-  background: rgb(255 255 255 / 0.1);
+  background: var(--s4);
 }
 .app-updates .update-progress::-webkit-progress-bar {
-  background: rgb(255 255 255 / 0.1);
+  background: var(--s4);
 }
 .app-updates .update-progress::-webkit-progress-value {
-  border-radius: 999px;
-  background: var(--primary);
+  border-radius: var(--r-panel);
+  background: var(--accent);
   transition: width 0.25s ease-out;
 }
 .update-notice .update-notice-action {
-  gap: 6px;
+  gap: 8px;
   align-items: center;
-  padding: 8px 14px;
-  border-radius: 8px;
-  background: var(--primary);
+  padding: 8px 16px;
+  border-radius: var(--r-btn);
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 600;
 }
 .update-notice .update-notice-action:hover:not(:disabled) {
-  background: var(--primary-hover);
+  background: var(--accent-hover);
 }
 .update-notice .update-notice-action:disabled {
   opacity: 0.6;
   cursor: default;
 }
 
-/* Hidden genres & tags: chips under the hint, the Add menu on the right. */
+/* Hidden genres and tags: chips under the hint, the Add menu on the right. */
 .set-row--stack {
   align-items: flex-start;
 }
 .hidden-tag-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 12px;
 }
 .hidden-tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.06);
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px 0 12px;
+  border: 0;
+  border-radius: var(--r-chip);
+  background: var(--s3);
   color: var(--text);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 13px;
   cursor: pointer;
 }
 .hidden-tag-chip:hover,
 .hidden-tag-chip:focus-visible {
-  border-color: var(--line-strong);
+  background: var(--s4);
 }
 /* "+ Add" sits with the chips as a dashed chip that opens the genre and tag menu. */
 .hidden-tag-add.ui-select {
   min-width: 0;
-  height: auto;
-  padding: 5px 12px;
-  border: 1px dashed rgb(255 255 255 / 0.22);
-  border-radius: 999px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px dashed var(--line-3);
+  border-radius: var(--r-chip);
   background: none;
-  color: var(--text-soft, #c9cfcb);
-  font-size: 0.8rem;
-  font-weight: 600;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
 }
 .hidden-tag-add .ui-select-chevron {
   display: none;
@@ -806,9 +751,8 @@
 .set-path {
   overflow: hidden;
   max-width: 280px;
-  color: var(--muted);
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 12.5px;
+  color: var(--text-3);
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

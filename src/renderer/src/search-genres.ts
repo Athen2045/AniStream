@@ -1,71 +1,75 @@
 import type { AniListCatalogMedia, MoreCatalogItem } from "../../shared/contracts";
 import type { SearchResults, SearchScope } from "./search-queries";
 
-/** Genre tiles before typing: the tint behind each, and the AniList / TMDB genre it filters. */
-export const GENRE_TILES: Record<SearchScope, ReadonlyArray<{ genre: string; color: string }>> = {
+/** Genre tiles before typing: the AniList / TMDB genre each one filters. */
+export const GENRE_TILES: Record<SearchScope, ReadonlyArray<{ genre: string }>> = {
   ANIME: [
-    { genre: "Action", color: "#c2410c" },
-    { genre: "Romance", color: "#be185d" },
-    { genre: "Fantasy", color: "#6d28d9" },
-    { genre: "Comedy", color: "#ca8a04" },
-    { genre: "Sci-Fi", color: "#0369a1" },
-    { genre: "Slice of Life", color: "#15803d" },
-    { genre: "Horror", color: "#7f1d1d" },
-    { genre: "Sports", color: "#0f766e" },
+    { genre: "Action" },
+    { genre: "Romance" },
+    { genre: "Fantasy" },
+    { genre: "Comedy" },
+    { genre: "Sci-Fi" },
+    { genre: "Slice of Life" },
+    { genre: "Horror" },
+    { genre: "Sports" },
   ],
   MANGA: [
-    { genre: "Action", color: "#c2410c" },
-    { genre: "Romance", color: "#be185d" },
-    { genre: "Fantasy", color: "#6d28d9" },
-    { genre: "Comedy", color: "#ca8a04" },
-    { genre: "Drama", color: "#0369a1" },
-    { genre: "Slice of Life", color: "#15803d" },
-    { genre: "Mystery", color: "#4c1d95" },
-    { genre: "Horror", color: "#7f1d1d" },
+    { genre: "Action" },
+    { genre: "Romance" },
+    { genre: "Fantasy" },
+    { genre: "Comedy" },
+    { genre: "Drama" },
+    { genre: "Slice of Life" },
+    { genre: "Mystery" },
+    { genre: "Horror" },
   ],
   MORE: [
-    { genre: "Action", color: "#c2410c" },
-    { genre: "Comedy", color: "#ca8a04" },
-    { genre: "Drama", color: "#0369a1" },
-    { genre: "Sci-Fi", color: "#6d28d9" },
-    { genre: "Crime", color: "#7f1d1d" },
-    { genre: "Romance", color: "#be185d" },
-    { genre: "Documentary", color: "#15803d" },
-    { genre: "Family", color: "#0f766e" },
+    { genre: "Action" },
+    { genre: "Comedy" },
+    { genre: "Drama" },
+    { genre: "Sci-Fi" },
+    { genre: "Crime" },
+    { genre: "Romance" },
+    { genre: "Documentary" },
+    { genre: "Family" },
   ],
 };
 
+/** Posters fanned on each genre tile. */
+export const GENRE_POSTERS = 3;
+
 /**
- * Artwork for each genre tile: a different trending title's banner or backdrop per tile (none
- * rather than a repeat).
+ * Posters for each genre tile: up to three trending titles of that genre, never one already shown
+ * on an earlier tile (fewer rather than a repeat).
  */
 export function genreArtwork(
   scope: SearchScope,
   trending: SearchResults | undefined,
-): Map<string, string> {
-  const art = new Map<string, string>();
+): Map<string, string[]> {
+  const art = new Map<string, string[]>();
   const used = new Set<string>();
+  const items: Array<{ genres: readonly string[]; poster?: string }> =
+    trending?.kind === "anilist"
+      ? trending.items.map((item: AniListCatalogMedia) => ({
+          genres: item.genres,
+          poster: item.coverUrl,
+        }))
+      : trending?.kind === "more"
+        ? trending.items.map((item: MoreCatalogItem) => ({
+            // TMDB names the genre "Science Fiction"; the filter calls it "Sci-Fi".
+            genres: item.genres.map((genre) => (genre === "Science Fiction" ? "Sci-Fi" : genre)),
+            poster: item.posterUrl,
+          }))
+        : [];
   for (const tile of GENRE_TILES[scope]) {
-    const found =
-      trending?.kind === "anilist"
-        ? trending.items.find(
-            (item: AniListCatalogMedia) =>
-              item.genres.includes(tile.genre) && item.bannerUrl && !used.has(item.bannerUrl),
-          )?.bannerUrl
-        : trending?.kind === "more"
-          ? trending.items.find(
-              (item: MoreCatalogItem) =>
-                // TMDB names the genre "Science Fiction"; the filter calls it "Sci-Fi".
-                (item.genres.includes(tile.genre) ||
-                  (tile.genre === "Sci-Fi" && item.genres.includes("Science Fiction"))) &&
-                item.backdropUrl &&
-                !used.has(item.backdropUrl),
-            )?.backdropUrl
-          : undefined;
-    if (found) {
-      used.add(found);
-      art.set(tile.genre, found);
+    const posters: string[] = [];
+    for (const item of items) {
+      if (posters.length === GENRE_POSTERS) break;
+      if (!item.poster || used.has(item.poster) || !item.genres.includes(tile.genre)) continue;
+      used.add(item.poster);
+      posters.push(item.poster);
     }
+    if (posters.length) art.set(tile.genre, posters);
   }
   return art;
 }

@@ -18,8 +18,11 @@ export function AnimeEmbedPlayer({
   title,
   episode,
   source,
+  previousEpisode,
   nextEpisode,
   onNext,
+  onPrevious,
+  onAudioChosen,
   onWatched,
   onRetry,
   onUseBackup,
@@ -30,8 +33,13 @@ export function AnimeEmbedPlayer({
   title: string;
   episode: AnimeProviderEpisode;
   source: AnimePlaybackCandidate;
+  previousEpisode?: AnimeProviderEpisode;
   nextEpisode?: AnimeProviderEpisode;
   onNext: (episode: AnimeProviderEpisode) => void;
+  /** The player's own previous-episode button (players that have one). */
+  onPrevious?: (episode: AnimeProviderEpisode) => void;
+  /** Audio the viewer picked in the player's own menu. */
+  onAudioChosen?: (language: "sub" | "dub") => void;
   onWatched: (episode: number) => Promise<void>;
   onRetry: () => void;
   /** Hands the episode to the backup (own) player. */
@@ -53,6 +61,18 @@ export function AnimeEmbedPlayer({
         onWatched,
       }),
     [episode.number, media, mediaId, onWatched, source.eventSource, source.url],
+  );
+  // The player's own episode buttons play AniStream's previous / next episode.
+  useEffect(
+    () =>
+      session.setPlayerCallbacks({
+        onNavigate: (direction) => {
+          if (direction === "next" && nextEpisode) onNext(nextEpisode);
+          else if (direction === "previous" && previousEpisode) onPrevious?.(previousEpisode);
+        },
+        onAudioChosen,
+      }),
+    [nextEpisode, onAudioChosen, onNext, onPrevious, previousEpisode, session],
   );
   const sessionState = useSyncExternalStore(
     session.subscribe,

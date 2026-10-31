@@ -25,6 +25,12 @@ export const animePlayerChoice = {
   },
 };
 
+/**
+ * Audio picked in a player's own menu during playback, per AniList title for this app session:
+ * the title's next episodes open in it (Settings keeps the default for everything else).
+ */
+export const animeAudioChoice = new Map<number, "sub" | "dub">();
+
 /** Embedded players in the order main returned their candidates, then the backup player. */
 export function animePlayerOrder(candidates: readonly AnimePlaybackCandidate[]): string[] {
   const players: string[] = [];

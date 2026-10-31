@@ -746,6 +746,9 @@ export interface AnimePlaybackInput {
   audio?: "sub" | "dub";
   /** Saved position, for players that accept a start time in their URL. */
   startAtSeconds?: number;
+  /** Whether AniStream's episode list has an episode before / after this one (player buttons). */
+  hasPrevious?: boolean;
+  hasNext?: boolean;
 }
 
 export interface AnimePlaybackCandidate {

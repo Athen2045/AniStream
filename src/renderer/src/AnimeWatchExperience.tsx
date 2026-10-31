@@ -26,7 +26,12 @@ import { EpisodeBrowser } from "./EpisodeBrowser";
 import { episodePlaceholder, seasonContainingEpisode } from "./anime-episode-list";
 import { useEpisodeList } from "./useEpisodeList";
 import { AnimeEmbedPlayer } from "./AnimeEmbedPlayer";
-import { ANIME_BACKUP_PLAYER, animePlayerChoice, animePlayerOrder } from "./anime-player-choice";
+import {
+  ANIME_BACKUP_PLAYER,
+  animeAudioChoice,
+  animePlayerChoice,
+  animePlayerOrder,
+} from "./anime-player-choice";
 
 type WatchView = "episodes" | "player";
 
@@ -83,9 +88,9 @@ export function AnimeWatchExperience({
         ? undefined
         : preferredAudioSource(
             candidates.filter((candidate) => (candidate.player ?? "main") === activePlayer),
-            getAppPreferences().audio,
+            animeAudioChoice.get(media.id) ?? getAppPreferences().audio,
           ),
-    [activePlayer, candidates],
+    [activePlayer, candidates, media.id],
   );
   const [resume, setResume] = useState<PlaybackResume>();
   // Read when the player is prepared, so a resume arriving later does not reload it.
@@ -116,6 +121,11 @@ export function AnimeWatchExperience({
     },
   });
   const { catalogMedia, seasons, activeSeason, previousEpisode, nextEpisode } = episodeList;
+  // Whether the player should show its own previous / next buttons, read when it is prepared.
+  const episodeNeighbours = useRef({ previous: false, next: false });
+  useEffect(() => {
+    episodeNeighbours.current = { previous: Boolean(previousEpisode), next: Boolean(nextEpisode) };
+  }, [nextEpisode, previousEpisode]);
   const loadingCatalog = episodeList.loading;
   const [resolvedSeasonNumber, setResolvedSeasonNumber] = useState<number>();
   const displayedSeasonNumber = resolvedSeasonNumber ?? inferMediaDisplayedSeasonNumber(media) ?? 1;
@@ -157,7 +167,9 @@ export function AnimeWatchExperience({
         title: media.title,
         episode: activeEpisode.number,
         providerEpisodeId: activeEpisode.id || undefined,
-        audio: getAppPreferences().audio,
+        audio: animeAudioChoice.get(media.id) ?? getAppPreferences().audio,
+        hasPrevious: episodeNeighbours.current.previous,
+        hasNext: episodeNeighbours.current.next,
         ...(saved?.episode === activeEpisode.number && saved.positionSeconds > 0
           ? { startAtSeconds: saved.positionSeconds }
           : {}),
@@ -456,8 +468,11 @@ export function AnimeWatchExperience({
               title={media.title}
               episode={activeEpisode}
               source={source}
+              previousEpisode={previousEpisode}
               nextEpisode={nextEpisode}
               onNext={playEpisode}
+              onPrevious={playEpisode}
+              onAudioChosen={(language) => animeAudioChoice.set(media.id, language)}
               onWatched={onEpisodeWatched}
               onRetry={() => {
                 setError(undefined);
