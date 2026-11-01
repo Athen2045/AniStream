@@ -48,7 +48,7 @@ export function ContinueUndoToast(): React.JSX.Element {
     const timer = window.setTimeout(() => dismissContinueNotice(notice.id), TOAST_MS);
     return () => window.clearTimeout(timer);
   }, [notice]);
-  const list = notice?.section === "MANGA" ? "Continue Reading" : "Continue Watching";
+  const list = notice?.section === "MANGA" ? "Continue reading" : "Continue watching";
   return (
     <div className="continue-toast-region" role="status" aria-live="polite">
       <AnimatePresence>

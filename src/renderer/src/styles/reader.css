@@ -59,7 +59,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   width: 42px;
   height: 42px;
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--r-btn);
   color: #fff;
   cursor: pointer;
 }
@@ -73,7 +73,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   min-width: 0;
   height: 42px;
   padding: 0 18px 0 16px;
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   color: #a1aaa5;
   font-size: 13px;
   white-space: nowrap;
@@ -112,12 +112,12 @@ html[data-platform="win32"] .media-control-layer--reader {
   gap: 4px;
   height: 44px;
   padding: 0 4px;
-  border-radius: 999px;
+  border-radius: var(--r-btn);
 }
 .reader-chapter-pill span {
   padding: 0 10px;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
 }
 .reader-chapter-pill em {
@@ -132,7 +132,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   height: 36px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--r-chip);
   background: none;
   color: #fff;
   cursor: pointer;
@@ -151,7 +151,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   display: grid;
   gap: 4px;
   padding: 6px;
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   transform: translateY(-50%);
 }
 .reader-rail.is-beside-drawer {
@@ -165,7 +165,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   height: 44px;
   padding: 0;
   border: 0;
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   background: none;
   color: #e7ebe9;
   cursor: pointer;
@@ -182,11 +182,11 @@ html[data-platform="win32"] .media-control-layer--reader {
   top: 50%;
   right: 56px;
   padding: 7px 11px;
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: #fff;
   color: #0b0d0c;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -217,7 +217,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   gap: 10px;
   height: 34px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   color: #c9cfcb;
   font-size: 13px;
   font-weight: 600;
@@ -231,13 +231,13 @@ html[data-platform="win32"] .media-control-layer--reader {
   width: 120px;
   height: 4px;
   overflow: hidden;
-  border-radius: 9px;
+  border-radius: var(--r-chip);
   background: rgb(255 255 255 / 0.15);
 }
 .reader-page-bar > span {
   display: block;
   height: 100%;
-  background: #4fd39a;
+  background: var(--accent);
   transform-origin: left center;
   transition: transform 160ms ease;
 }
@@ -248,7 +248,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   right: 84px;
   width: 360px;
   padding: 8px 0;
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   transform: translateY(-50%);
 }
 .reader-popover h3 {
@@ -278,7 +278,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   width: auto;
   min-width: 170px;
   height: 36px;
-  border-radius: 9px;
+  border-radius: var(--r-chip);
   font-size: 13px;
 }
 .reader-popover-row .set-pills button {
@@ -297,7 +297,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   background: none;
   color: #fff;
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
 }
@@ -342,7 +342,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   height: 40px;
   margin: 0 20px 6px;
   padding: 0 12px;
-  border-radius: 10px;
+  border-radius: var(--r-card);
   background: rgb(255 255 255 / 0.06);
   color: #8a938e;
 }
@@ -370,9 +370,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   padding: 14px 12px 6px;
   color: #8a938e;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .reader-drawer-row {
   display: flex;
@@ -382,7 +380,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   height: 46px;
   padding: 0 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: none;
   color: #fff;
   font: inherit;
@@ -409,22 +407,20 @@ html[data-platform="win32"] .media-control-layer--reader {
   color: #6b736e;
 }
 .reader-drawer-row.is-read svg {
-  color: #4fd39a;
+  color: var(--text-2);
 }
 .reader-drawer-row.is-current {
-  background: rgb(54 157 115 / 0.16);
-  box-shadow: inset 3px 0 0 #4fd39a;
+  background: var(--s3);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
 .reader-drawer-row.is-current span {
   color: #fff;
 }
 .reader-drawer-row em {
-  color: #4fd39a;
+  color: var(--text-2);
   font-size: 11px;
   font-style: normal;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .reader-drawer-empty {
   padding: 18px 12px;
@@ -440,7 +436,7 @@ html[data-platform="win32"] .media-control-layer--reader {
   gap: 12px;
   max-width: 520px;
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: var(--r-card);
   font-size: 13px;
 }
 .reader-alert p {
@@ -451,12 +447,12 @@ html[data-platform="win32"] .media-control-layer--reader {
   height: 30px;
   padding: 0 12px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: #fff;
   color: #0b0d0c;
   font: inherit;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 

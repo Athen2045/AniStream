@@ -108,7 +108,7 @@
   gap: 16px;
   width: min(680px, calc(100% - 48px));
   padding: 12px 12px 12px 16px;
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: rgb(22 22 24 / 0.86);
   box-shadow:
     0 0 0 1px rgb(255 200 90 / 0.35),
@@ -134,7 +134,7 @@
 .vplayer-warning button {
   padding: 6px 12px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   background: rgb(255 255 255 / 0.16);
   color: #fff;
   font-size: 12px;
@@ -201,7 +201,7 @@
   overflow: hidden;
   margin-top: 2px;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -237,7 +237,7 @@
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--r-chip);
   background: transparent;
   color: rgb(255 255 255 / 0.92);
   cursor: pointer;
@@ -277,13 +277,6 @@
   height: 2px;
   border-radius: 2px;
   background: #fff;
-}
-.vbar-sep {
-  flex: none;
-  width: 1px;
-  height: 20px;
-  margin: 0 4px;
-  background: rgb(255 255 255 / 0.14);
 }
 .vbar-volume {
   display: flex;
@@ -385,7 +378,7 @@
   gap: 6px;
   color: #fff;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   opacity: 0;
   pointer-events: none;
@@ -401,7 +394,7 @@
   display: none;
   width: 192px;
   height: 108px;
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: #111;
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.14),
@@ -412,7 +405,7 @@
 }
 .vslider-preview-time {
   padding: 4px 9px;
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: rgb(20 20 20 / 0.86);
 }
 /* Small note above the bar ("Resumed at 12:34 · Start over", "Next episode in 5"). */
@@ -428,7 +421,7 @@
   align-items: center;
   gap: 10px;
   padding: 5px 5px 5px 12px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: rgb(18 18 20 / 0.5);
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
   color: rgb(255 255 255 / 0.85);
@@ -439,7 +432,7 @@
 .vbar-note button {
   padding: 3px 10px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   background: rgb(255 255 255 / 0.16);
   color: #fff;
   font-size: 12px;
@@ -457,7 +450,7 @@
   display: grid;
   width: 300px;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: rgb(22 22 22 / 0.92);
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.1),
@@ -472,7 +465,7 @@
   border-bottom: 1px solid rgb(255 255 255 / 0.08);
   color: #fff;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   text-align: center;
 }
 .vmenu-value.is-on {
@@ -496,7 +489,7 @@
   min-height: 38px;
   padding: 0 10px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--r-chip);
   background: transparent;
   color: #fff;
   font-size: 13px;
@@ -558,38 +551,6 @@
 .vmenu-row[aria-checked="true"] .vmenu-tick {
   visibility: visible;
 }
-.vmenu-sep {
-  height: 1px;
-  margin: 5px 8px;
-  background: rgb(255 255 255 / 0.09);
-}
-.vmenu-switch {
-  position: relative;
-  flex: none;
-  width: 34px;
-  height: 20px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.2);
-  transition: background 160ms var(--player-ease);
-}
-.vmenu-switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
-  transition: transform 160ms var(--player-ease);
-}
-.vmenu-switch.is-on {
-  background: var(--accent);
-}
-.vmenu-switch.is-on::after {
-  transform: translateX(14px);
-}
 .vmenu-empty {
   padding: 6px 10px 8px;
   color: rgb(255 255 255 / 0.55);
@@ -609,13 +570,13 @@
   padding: 0 16px 0 12px;
   overflow: hidden;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-btn);
   background: rgb(22 22 22 / 0.78);
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.16);
   color: #fff;
   font: inherit;
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   backdrop-filter: blur(20px) saturate(160%);
   animation: vplayer-skip-in 220ms var(--player-ease);

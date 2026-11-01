@@ -56,7 +56,7 @@
   height: 40px;
   padding: 0 14px 0 11px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: rgb(12 14 13 / 0.62);
   color: #fff;
   text-decoration: none;
@@ -68,7 +68,7 @@ a.rating-chip:hover {
 }
 .rating-chip b {
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
 }
 .rating-chip small {
   color: var(--muted);
@@ -108,7 +108,7 @@ a.rating-chip:hover {
   height: 36px;
   padding: 0 15px;
   border: 1px solid rgb(255 255 255 / 0.16);
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: rgb(7 8 7 / 0.55);
   color: #fff;
   font-size: 13.5px;
@@ -142,16 +142,12 @@ a.rating-chip:hover {
   gap: 8px;
   align-items: center;
 }
-.profile-page--simkl .title-tabs .is-active::after,
-.profile-page--simkl .library-chips .is-active {
-  --accent: var(--profile-accent, #369d73);
-}
 .profile-page--simkl .profile-connected {
-  color: var(--profile-accent, #4fd197);
+  color: var(--success);
 }
 .profile-page--simkl .profile-connected::before {
-  background: var(--profile-accent, #4fd197);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--profile-accent, #4fd197) 25%, transparent);
+  background: var(--success);
+  box-shadow: none;
 }
 .profile-simkl-link {
   margin-left: auto;
@@ -181,7 +177,7 @@ a.rating-chip:hover {
   display: block;
   overflow: hidden;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: var(--r-card);
   background: var(--surface-raised);
   transition: outline-color 160ms ease;
   outline: 2px solid transparent;
@@ -205,11 +201,11 @@ a.rating-chip:hover {
   align-items: center;
   height: 24px;
   padding: 0 8px;
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: rgb(7 8 7 / 0.78);
   color: #f5c451;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   backdrop-filter: blur(8px);
 }
 .simkl-card-progress {
@@ -223,13 +219,13 @@ a.rating-chip:hover {
 .simkl-card-progress span {
   display: block;
   height: 100%;
-  background: var(--profile-accent, var(--primary-hi, #369d73));
+  background: var(--accent);
 }
 .simkl-card strong {
   margin: 8px 1px 3px;
   overflow: hidden;
   font-size: 13.5px;
-  font-weight: 650;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -256,7 +252,7 @@ a.rating-chip:hover {
   width: min(760px, 100%);
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 20px;
+  border-radius: var(--r-panel);
   background: var(--ink);
   box-shadow: 0 40px 120px rgb(0 0 0 / 0.7);
   outline: none;
@@ -277,7 +273,7 @@ a.rating-chip:hover {
   width: 36px;
   height: 36px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 50%;
+  border-radius: var(--r-chip);
   background: none;
   color: #fff;
 }
@@ -288,9 +284,7 @@ a.rating-chip:hover {
   margin: 18px 24px 10px;
   color: var(--muted);
   font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .look-pictures {
   display: flex;
@@ -303,7 +297,7 @@ a.rating-chip:hover {
   align-items: center;
   padding: 10px 18px 10px 10px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: rgb(255 255 255 / 0.03);
   color: #fff;
   text-align: left;
@@ -338,7 +332,7 @@ a.rating-chip:hover {
   display: grid;
   padding: 8px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: rgb(255 255 255 / 0.03);
   color: #fff;
   text-align: left;
@@ -349,7 +343,7 @@ a.rating-chip:hover {
   place-items: center;
   height: 66px;
   overflow: hidden;
-  border-radius: 9px;
+  border-radius: var(--r-chip);
   background: #0b0c0b;
 }
 .look-hero-preview img,
@@ -366,7 +360,7 @@ a.rating-chip:hover {
   width: 100%;
   height: 100%;
   border: 1.5px dashed rgb(255 255 255 / 0.22);
-  border-radius: 9px;
+  border-radius: var(--r-chip);
   color: var(--muted);
 }
 .look-hero strong {
@@ -388,7 +382,7 @@ a.rating-chip:hover {
   margin: 14px 24px 0;
   padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: rgb(255 255 255 / 0.03);
   color: var(--muted);
   font-size: 12px;
@@ -405,7 +399,7 @@ a.rating-chip:hover {
   margin: 14px 24px 0;
   overflow: hidden;
   border: 2px solid #fff;
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background-color: #000;
   background-repeat: no-repeat;
   cursor: grab;
@@ -423,7 +417,7 @@ a.rating-chip:hover {
   align-items: center;
   height: 30px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: rgb(7 8 7 / 0.72);
   font-size: 12.5px;
   font-weight: 600;
@@ -454,12 +448,12 @@ a.rating-chip:hover {
 }
 .look-ok svg,
 .look-ok strong {
-  color: #4fd39a;
+  color: var(--success);
 }
 .look-problem {
   padding: 10px 14px;
   border: 1px solid rgb(240 181 74 / 0.25);
-  border-radius: 10px;
+  border-radius: var(--r-card);
   background: rgb(240 181 74 / 0.08);
   color: #f0c574;
 }
@@ -499,9 +493,7 @@ a.rating-chip:hover {
   margin: 0 0 4px;
   color: var(--text-soft);
   font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .set-text .set-meta {
   display: flex;
@@ -534,7 +526,7 @@ a.rating-chip:hover {
   height: 44px;
   padding: 0 16px 0 6px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   background: rgb(255 255 255 / 0.04);
   color: var(--text-soft);
   font-size: 13.5px;
@@ -556,7 +548,7 @@ a.rating-chip:hover {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #4fd39a;
+  background: var(--text);
 }
 .set-hero-thumb {
   position: relative;
@@ -565,7 +557,7 @@ a.rating-chip:hover {
   height: 34px;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: #0b0c0b;
 }
 .set-hero-thumb img {
@@ -593,7 +585,7 @@ a.rating-chip:hover {
   align-items: center;
   padding: 16px 18px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   background: rgb(15 18 16 / 0.82);
   backdrop-filter: blur(18px);
 }
@@ -606,7 +598,7 @@ a.rating-chip:hover {
   place-items: center;
   width: 46px;
   height: 46px;
-  border-radius: 12px;
+  border-radius: var(--r-card);
 }
 .signin-tracker-mark .source-logo {
   width: 24px;
@@ -645,12 +637,12 @@ a.rating-chip:hover {
 }
 .signin-tracker-tags em {
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: rgb(255 255 255 / 0.06);
   color: var(--text-soft);
   font-size: 11.5px;
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
 }
 .signin-tracker-actions {
@@ -663,23 +655,26 @@ a.rating-chip:hover {
   flex: none;
   height: 40px;
   padding: 0 18px;
-  border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.07);
-  color: #fff;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: var(--s1);
+  color: var(--text);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 500;
   white-space: nowrap;
 }
 .signin-small:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.12);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 .signin-small--primary {
   border-color: transparent;
-  background: var(--primary, #2a835f);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
 }
 .signin-small--primary:hover:not(:disabled) {
-  background: var(--primary-hi, #369d73);
+  background: var(--accent-hover);
 }
 .signin-small:disabled {
   cursor: default;
@@ -698,5 +693,5 @@ a.rating-chip:hover {
   font-size: 13px;
 }
 .signin-both svg {
-  color: #4fd39a;
+  color: var(--success);
 }

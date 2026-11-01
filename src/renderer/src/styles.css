@@ -15,75 +15,6 @@
   src: url("./assets/fonts/plus-jakarta-sans-italic-variable.ttf") format("truetype");
 }
 
-:root {
-  font-family:
-    "Plus Jakarta Sans",
-    "Avenir Next",
-    Avenir,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  color: #ffffff;
-  background: #0a0909;
-  font-synthesis: none;
-  font-weight: 400;
-  text-rendering: optimizeLegibility;
-  --ink: #0a0909;
-  --surface-base: #0f0e0e;
-  --surface-panel: #141313;
-  --surface-raised: #1b1b1a;
-  --surface-hover: #242523;
-  --surface-input: #080808;
-  --surface-overlay: rgb(10 9 9 / 0.95);
-  --surface-glass: rgb(15 14 14 / 0.86);
-  --line-subtle: rgb(255 255 255 / 0.08);
-  --line: rgb(255 255 255 / 0.16);
-  --line-strong: rgb(255 255 255 / 0.32);
-  --text: #ffffff;
-  --text-secondary: #dedede;
-  --text-soft: #b7b7b7;
-  --muted: #8e8e8e;
-  --muted-deep: #686868;
-  --primary: #2a835f;
-  --primary-hover: #369d73;
-  --primary-deep: #1d5f45;
-  --primary-soft: rgb(42 131 95 / 0.16);
-  --primary-glow: rgb(42 131 95 / 0.24);
-  --secondary-coral: #2a835f;
-  --secondary-coral-soft: rgb(42 131 95 / 0.15);
-  --secondary-amber: #ffc15c;
-  --secondary-amber-soft: rgb(255 193 92 / 0.12);
-  --highlight-lavender: #ffffff;
-  --highlight-soft: rgb(255 255 255 / 0.12);
-  --focus-ring: #ffffff;
-  --error: #ff7485;
-  --error-soft: rgb(255 72 96 / 0.14);
-  --error-line: rgb(255 116 133 / 0.38);
-  --error-surface: rgb(55 10 24 / 0.94);
-  --error-text: #ffb5c0;
-  --success: #5fd19a;
-  --warning: var(--secondary-amber);
-  --on-primary: #ffffff;
-  --on-secondary: #ffffff;
-  --shadow: rgb(0 0 0 / 0.34);
-  --shadow-deep: rgb(0 0 0 / 0.68);
-  --motion-fast: 160ms;
-  --motion-standard: 240ms;
-  --motion-emphasis: 360ms;
-  --motion-entrance: 480ms;
-  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --app-navbar-height: 48px;
-  --ease-out: var(--motion-ease);
-  --skeleton-base: #151414;
-  --skeleton-shine: #232322;
-  --accent: var(--primary);
-  --app-ambience:
-    radial-gradient(ellipse 78% 36% at 82% -8%, rgb(42 131 95 / 0.11), transparent 68%),
-    radial-gradient(ellipse 58% 34% at 8% 16%, rgb(255 255 255 / 0.025), transparent 70%),
-    radial-gradient(ellipse 46% 24% at 18% 8%, rgb(42 131 95 / 0.04), transparent 72%), var(--ink);
-}
-
 * {
   box-sizing: border-box;
 }
@@ -110,7 +41,7 @@ textarea,
 
 h1,
 h2 {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 h3,
@@ -202,7 +133,7 @@ button {
 .app-updates summary {
   cursor: pointer;
   padding: 16px 0;
-  font-weight: 700;
+  font-weight: 600;
 }
 .app-updates summary:focus-visible {
   outline: 2px solid var(--accent);
@@ -223,9 +154,7 @@ button {
 }
 
 html[data-platform="win32"] body {
-  background:
-    radial-gradient(ellipse 70% 42% at 82% 2%, rgb(42 131 95 / 0.1), transparent 68%),
-    radial-gradient(ellipse 46% 34% at 8% 22%, rgb(255 255 255 / 0.03), transparent 72%), var(--ink);
+  background: var(--ink);
   padding: 0;
 }
 
@@ -239,7 +168,7 @@ html[data-platform="win32"] .app-shell {
 }
 
 html[data-platform="win32"] .catalog-content {
-  background: linear-gradient(180deg, rgb(42 131 95 / 0.06), transparent 22rem);
+  background: transparent;
 }
 
 @keyframes catalog-surface-in {
@@ -269,37 +198,6 @@ html[data-platform="win32"] .catalog-content {
   object-fit: cover;
 }
 
-.search-result-art-fallback {
-  display: grid;
-  width: 38px;
-  height: 52px;
-  place-items: center;
-  border-radius: 3px;
-  background: var(--surface-raised);
-  color: var(--primary);
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.search-result-skeleton {
-  display: block;
-  height: 68px;
-  margin: 0 12px;
-  border-radius: 4px;
-  background: linear-gradient(
-    110deg,
-    var(--skeleton-base) 20%,
-    var(--skeleton-shine) 42%,
-    var(--skeleton-base) 64%
-  );
-  background-size: 240% 100%;
-  animation: latest-update-shimmer 1.25s linear infinite;
-}
-
-.search-result-skeleton + .search-result-skeleton {
-  margin-top: 8px;
-}
-
 .catalog-page {
   min-height: 100vh;
   background: transparent;
@@ -310,8 +208,6 @@ html[data-platform="win32"] .catalog-content {
   color: var(--highlight-lavender);
   font-size: 0.69rem;
   font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
 }
 
 .anilist-source-icon {
@@ -335,7 +231,7 @@ html[data-platform="win32"] .catalog-content {
 
 .match {
   color: var(--success);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .catalog-content {
@@ -431,7 +327,7 @@ html[data-platform="win32"] .catalog-content {
 .rail-heading h2 {
   margin: 0;
   font-size: 1.42rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.3;
 }
@@ -468,7 +364,7 @@ html[data-platform="win32"] .catalog-content {
 }
 
 .carousel-viewport:focus-visible {
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   box-shadow: inset 0 0 0 2px var(--focus-ring);
 }
 
@@ -522,7 +418,7 @@ html[data-platform="win32"] .catalog-content {
   height: 64px;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: var(--surface-glass);
   backdrop-filter: blur(8px);
   transition:
@@ -540,211 +436,6 @@ html[data-platform="win32"] .catalog-content {
   /* Keep discovery rails visually aligned with the portrait Latest Updates field. */
   --rail-card-width: clamp(150px, 12.5vw, 198px);
   --rail-art-ratio: 0.72;
-}
-
-.rail-card {
-  display: grid;
-  flex: 0 0 var(--rail-card-width);
-  gap: 8px;
-  min-width: 0;
-  padding: 0;
-  background: transparent;
-  cursor: pointer;
-  scroll-snap-align: start;
-  text-align: left;
-  transform-origin: center bottom;
-  transition:
-    transform var(--motion-standard) var(--motion-ease),
-    opacity var(--motion-standard) var(--motion-ease);
-}
-
-/* Latest-manga cards without an AniList mapping render as external links. */
-a.rail-card {
-  color: inherit;
-  text-decoration: none;
-}
-
-.rail-badge {
-  position: absolute;
-  z-index: 2;
-  top: 8px;
-  left: 8px;
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  padding: 3px 7px;
-  border-radius: 4px;
-  background: var(--secondary-coral);
-  color: var(--on-secondary);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.rail-badge--external {
-  background: rgb(10 9 9 / 0.82);
-  color: var(--text);
-}
-
-.rail-art-fallback {
-  display: grid;
-  height: 100%;
-  padding: 12px;
-  place-items: center;
-  background:
-    radial-gradient(circle at 18% 88%, var(--secondary-coral-soft), transparent 46%),
-    linear-gradient(135deg, var(--primary-soft), transparent 64%), var(--surface-raised);
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-align: center;
-}
-
-.rail-card:hover,
-.rail-card:focus-visible,
-.rail-card:has(:focus-visible) {
-  z-index: 3;
-  transform: translate3d(0, -4px, 0) scale(1.012);
-}
-
-.rail-art {
-  position: relative;
-  aspect-ratio: var(--rail-art-ratio, 0.72);
-  height: auto;
-  overflow: hidden;
-  border-radius: 6px;
-  background: var(--surface-raised);
-  box-shadow: 0 14px 35px rgb(3 3 11 / 0.32);
-}
-
-.rail-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition:
-    transform var(--motion-emphasis) var(--motion-ease),
-    filter var(--motion-emphasis) var(--motion-ease);
-}
-
-.rail-card:hover .rail-art img,
-.rail-card:focus-visible .rail-art img,
-.rail-card:has(:focus-visible) .rail-art img {
-  transform: scale(1.055);
-  filter: brightness(0.62);
-}
-
-/* Full-cover hit target for "open details" -- a sibling of the hover-action buttons
-   below rather than their parent, since buttons cannot legally nest. */
-.rail-art-hit {
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.rail-hover-actions {
-  position: absolute;
-  z-index: 2;
-  right: 8px;
-  bottom: 18px;
-  left: 8px;
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  opacity: 0;
-  transition: opacity var(--motion-fast) var(--motion-ease);
-}
-
-.rail-card:hover .rail-hover-actions,
-.rail-card:focus-visible .rail-hover-actions,
-.rail-card:has(:focus-visible) .rail-hover-actions {
-  opacity: 1;
-}
-
-.rail-hover-play,
-.rail-hover-secondary {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  cursor: pointer;
-  transition:
-    background-color var(--motion-fast) var(--motion-ease),
-    border-color var(--motion-fast) var(--motion-ease),
-    opacity var(--motion-fast) var(--motion-ease);
-}
-
-.rail-hover-play {
-  border-color: var(--primary);
-  background: linear-gradient(
-    145deg,
-    var(--primary),
-    var(--primary-deep) 64%,
-    var(--secondary-coral)
-  );
-  color: var(--on-primary);
-}
-
-.rail-hover-play:hover,
-.rail-hover-play:focus-visible {
-  background: var(--primary-hover);
-}
-
-.rail-hover-secondary {
-  background: var(--surface-glass);
-  color: var(--text);
-  backdrop-filter: blur(6px);
-}
-
-.rail-hover-secondary:hover,
-.rail-hover-secondary:focus-visible {
-  background: var(--surface-hover);
-  border-color: var(--highlight-lavender);
-}
-
-.rail-hover-secondary:disabled {
-  cursor: default;
-  opacity: 0.38;
-}
-
-.rail-hover-info {
-  margin-left: auto;
-}
-
-.rail-card strong {
-  overflow: hidden;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rail-card > span:last-child {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.68rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html:not([data-platform="win32"]) .rail-card,
-  html:not([data-platform="win32"]) .rail-card:hover,
-  html:not([data-platform="win32"]) .rail-card:focus-visible,
-  html:not([data-platform="win32"]) .rail-card:has(:focus-visible),
-  html:not([data-platform="win32"]) .rail-card .rail-art img,
-  html:not([data-platform="win32"]) .rail-hover-actions {
-    transform: none;
-    transition: none;
-    will-change: auto;
-  }
 }
 
 .latest-updates-section {
@@ -796,7 +487,7 @@ a.rail-card {
   overflow: hidden;
   width: 100%;
   aspect-ratio: 0.72;
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: var(--surface-raised);
   box-shadow: 0 14px 34px rgb(3 3 11 / 0.34);
 }
@@ -827,9 +518,8 @@ a.rail-card {
   box-shadow: 0 3px 10px rgb(3 3 11 / 0.42);
   color: var(--on-secondary);
   font-size: 0.58rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .latest-update-meta {
@@ -857,9 +547,7 @@ a.rail-card {
   height: 100%;
   padding: 12px;
   place-items: center;
-  background:
-    radial-gradient(circle at 12% 88%, var(--secondary-coral-soft), transparent 42%),
-    linear-gradient(145deg, var(--primary-soft), transparent 58%), var(--surface-raised);
+  background: var(--surface-raised);
   color: var(--text-secondary);
   font-size: 0.73rem;
   font-weight: 600;
@@ -869,7 +557,7 @@ a.rail-card {
 .latest-update-skeleton {
   display: block;
   aspect-ratio: 0.72;
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: linear-gradient(
     110deg,
     var(--skeleton-base) 20%,
@@ -906,21 +594,6 @@ a.rail-card {
   gap: 12px;
 }
 
-.rail-card-skeleton {
-  display: block;
-  flex: 0 0 var(--rail-card-width, 210px);
-  aspect-ratio: 0.72;
-  border-radius: 6px;
-  background: linear-gradient(
-    110deg,
-    var(--skeleton-base) 20%,
-    var(--skeleton-shine) 42%,
-    var(--skeleton-base) 64%
-  );
-  background-size: 240% 100%;
-  animation: latest-update-shimmer 1.25s linear infinite;
-}
-
 .catalog-toolbar {
   display: flex;
   align-items: end;
@@ -950,7 +623,7 @@ a.rail-card {
   top: 1px;
   color: rgb(10 9 9 / 0.34);
   font-size: 4.4rem;
-  font-weight: 700;
+  font-weight: 600;
   -webkit-text-stroke: 1px var(--text-soft);
 }
 
@@ -1040,7 +713,7 @@ a.rail-card {
   overflow: hidden;
   color: var(--text-secondary);
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 600;
   text-align: center;
   text-overflow: ellipsis;
 }
@@ -1050,43 +723,8 @@ a.rail-card {
   z-index: 2100;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(ellipse at 76% 118%, var(--primary-glow), transparent 45%),
-    radial-gradient(ellipse at 24% 118%, var(--secondary-coral-soft), transparent 34%), var(--ink);
+  background: var(--ink);
   will-change: transform;
-}
-
-.watch-header {
-  display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(0, 2fr) 38px;
-  gap: 18px;
-  align-items: center;
-  min-height: 64px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--line-subtle);
-  background: var(--surface-base);
-}
-
-.watch-header > div {
-  display: grid;
-  min-width: 0;
-  text-align: center;
-}
-
-.watch-header strong,
-.watch-header span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.watch-header strong {
-  font-size: 0.83rem;
-}
-
-.watch-header span {
-  color: var(--muted);
-  font-size: 0.68rem;
 }
 
 .player-unavailable {
@@ -1094,7 +732,7 @@ a.rail-card {
   overflow: hidden;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: var(--ink);
 }
 
@@ -1110,7 +748,7 @@ a.rail-card {
   display: grid;
   place-content: center;
   padding: 40px;
-  background: radial-gradient(circle at 62% 22%, var(--primary-soft), transparent 38%), var(--ink);
+  background: var(--ink);
   color: var(--muted);
   text-align: center;
 }
@@ -1144,7 +782,7 @@ a.rail-card {
   color: var(--on-primary);
   cursor: pointer;
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .provider-note--action {
@@ -1208,8 +846,9 @@ a.rail-card {
    season badge, opening a frosted menu where each season shows its art, year, episodes and the
    viewer's progress from this device. */
 .season-picker {
-  --season-tint: var(--tint, var(--primary-hover));
-  --season-tint-ink: var(--tint-ink, #06130d);
+  /* Neutral: the badge and outline are quiet; the artwork in the menu carries the colour. */
+  --season-tint: var(--text-3);
+  --season-tint-ink: var(--ink);
   position: relative;
   max-width: min(380px, 46vw);
 }
@@ -1222,7 +861,7 @@ a.rail-card {
   gap: 10px;
   padding: 0 14px 0 6px;
   border: 1px solid color-mix(in oklch, var(--season-tint), transparent 62%);
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   color: var(--text);
   background: color-mix(in oklch, var(--season-tint), transparent 88%);
   backdrop-filter: blur(16px);
@@ -1256,11 +895,11 @@ a.rail-card {
   height: 32px;
   padding: 0 6px;
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   color: var(--season-tint-ink);
   background: var(--season-tint);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1274,7 +913,7 @@ a.rail-card {
 .season-picker-trigger-copy strong {
   overflow: hidden;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
   text-overflow: ellipsis;
 }
 .season-picker-trigger-copy small {
@@ -1307,7 +946,7 @@ a.rail-card {
   overflow-y: auto;
   padding: 8px;
   border: 1px solid rgb(255 255 255 / 0.16);
-  border-radius: 20px;
+  border-radius: var(--r-panel);
   background: rgb(17 20 18 / 0.88);
   backdrop-filter: blur(28px) saturate(1.3);
   box-shadow:
@@ -1325,9 +964,7 @@ a.rail-card {
   padding: 8px 10px 6px;
   color: var(--muted);
   font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .season-picker-menu-heading small {
   color: var(--muted);
@@ -1350,7 +987,7 @@ a.rail-card {
   gap: 12px;
   padding: 8px;
   border: 0;
-  border-radius: 13px;
+  border-radius: var(--r-btn);
   color: var(--text);
   background: transparent;
   cursor: pointer;
@@ -1374,7 +1011,7 @@ a.rail-card {
   width: 88px;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: var(--surface-hover);
 }
 .season-picker-thumb img {
@@ -1393,7 +1030,7 @@ a.rail-card {
 .season-picker-option-copy strong {
   overflow: hidden;
   font-size: 14.5px;
-  font-weight: 700;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1422,11 +1059,11 @@ a.rail-card {
 .season-picker-tag {
   flex: none;
   padding: 4px 9px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   color: var(--season-tint-ink);
   background: var(--season-tint);
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .season-picker-tag--done {
   color: var(--text-soft);
@@ -1444,7 +1081,7 @@ a.rail-card {
   align-items: center;
   gap: 8px;
   font-size: 14.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .season-picker-arc small {
   flex: none;
@@ -1461,7 +1098,7 @@ a.rail-card {
 .season-picker-filler {
   padding: 2px 7px;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
@@ -1514,7 +1151,7 @@ a.rail-card {
   margin: 5px;
   padding: 10px 12px;
   border: 1px solid var(--error-line);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   color: var(--error-text);
   background: var(--error-soft);
   font-size: 13px;
@@ -1524,7 +1161,7 @@ a.rail-card {
   justify-self: start;
   padding: 6px 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   color: var(--text);
   background: transparent;
   cursor: pointer;
@@ -1549,7 +1186,7 @@ a.rail-card {
   height: 48px;
   place-items: center;
   border: 2px solid var(--highlight-lavender);
-  border-radius: 50%;
+  border-radius: var(--r-btn);
   background: rgb(10 9 9 / 0.68);
   opacity: 0;
   transform: scale(0.84);
@@ -1658,13 +1295,13 @@ a.rail-card {
   align-items: center;
   min-height: 44px;
   padding: 0 14px 0 8px;
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   background: var(--surface-glass);
   box-shadow: inset 0 0 0 1px var(--line-subtle);
   color: var(--text);
   cursor: pointer;
   font-size: 0.76rem;
-  font-weight: 700;
+  font-weight: 600;
   opacity: 0.76;
   transition:
     background-color 160ms ease,
@@ -1740,9 +1377,7 @@ a.rail-card {
   height: 100%;
   aspect-ratio: auto;
   border-radius: 0;
-  background:
-    radial-gradient(circle at 68% 34%, var(--primary-soft), transparent 34%),
-    radial-gradient(circle at 30% 42%, var(--secondary-coral-soft), transparent 26%), var(--ink);
+  background: var(--ink);
 }
 
 .watch-player-view .player-unavailable > p {
@@ -1769,38 +1404,8 @@ a.rail-card {
   margin: 0 0 36px;
   padding: 18px;
   border: 1px solid var(--line-subtle);
-  border-radius: 9px;
+  border-radius: var(--r-chip);
   background: var(--surface-base);
-}
-
-.chapter-browser-tabs {
-  display: inline-flex;
-  gap: 3px;
-  margin-bottom: 14px;
-  padding: 3px;
-  border-radius: 6px;
-  background: var(--surface-raised);
-}
-
-.chapter-browser-tabs button {
-  min-width: 82px;
-  height: 31px;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-.chapter-browser-tabs button.active {
-  background: var(--primary-soft);
-  color: var(--highlight-lavender);
-}
-
-.chapter-browser-tabs button:disabled {
-  cursor: default;
-  opacity: 0.48;
 }
 
 .chapter-browser-toolbar {
@@ -1858,7 +1463,7 @@ a.rail-card {
   background: var(--surface-hover);
   color: var(--text-soft);
   font-size: 0.64rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 34px;
   white-space: nowrap;
 }
@@ -1873,27 +1478,6 @@ a.rail-card {
   max-height: 420px;
   overflow-y: auto;
   border-radius: 0 0 6px 6px;
-}
-
-.chapter-browser-empty {
-  display: grid;
-  place-items: center;
-  min-height: 180px;
-  padding: 28px;
-  border-radius: 0 0 6px 6px;
-  background: var(--surface-panel);
-  color: var(--muted);
-  text-align: center;
-}
-
-.chapter-browser-empty strong {
-  color: var(--text);
-  font-size: 0.8rem;
-}
-
-.chapter-browser-empty span {
-  margin-top: 7px;
-  font-size: 0.7rem;
 }
 
 .chapter-browser-credit {
@@ -2020,7 +1604,7 @@ a.rail-card {
   gap: 4px;
   padding: 4px 9px;
   border: 1px solid var(--line-subtle);
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   color: var(--text-secondary);
   font-size: 0.64rem;
   font-weight: 600;
@@ -2042,7 +1626,7 @@ a.rail-card {
 .chapter-language {
   color: var(--highlight-lavender);
   font-size: 0.6rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
 }
 
@@ -2063,10 +1647,6 @@ a.rail-card {
   color: var(--muted-deep);
   font-size: 0.62rem;
   text-align: right;
-}
-
-.chapter-complete {
-  color: var(--success);
 }
 
 .chapter-row-skeleton {
@@ -2111,10 +1691,7 @@ a.rail-card {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  background:
-    radial-gradient(ellipse 72% 32% at 76% -12%, var(--primary-soft), transparent 66%),
-    radial-gradient(ellipse 48% 22% at 18% 0%, var(--secondary-coral-soft), transparent 68%),
-    var(--ink);
+  background: var(--ink);
 }
 
 .manga-scroll-progress {
@@ -2162,7 +1739,7 @@ a.rail-card {
   min-height: 42px;
   padding: 0 13px;
   border: 1px solid var(--line-subtle);
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   color: var(--text-secondary);
   background: var(--surface-glass);
   cursor: pointer;
@@ -2186,7 +1763,7 @@ a.rail-card {
   display: grid;
   min-width: 0;
   padding: 7px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-card);
   text-align: center;
   background: var(--surface-glass);
   backdrop-filter: blur(16px);
@@ -2219,10 +1796,10 @@ a.rail-card {
   gap: 10px;
   min-height: 42px;
   padding: 0 16px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   color: var(--text-secondary);
   font-size: 0.84rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.01em;
 }
 
@@ -2289,7 +1866,7 @@ a.rail-card {
 .reader-settings summary {
   cursor: pointer;
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: var(--surface-raised);
   color: var(--text);
   font-size: 0.8rem;
@@ -2305,40 +1882,13 @@ a.rail-card {
   width: min(300px, calc(100vw - 44px));
   padding: 16px;
   border: 1px solid var(--line-subtle);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: var(--surface-raised);
   box-shadow: 0 12px 36px rgb(0 0 0 / 0.4);
   display: grid;
   gap: 12px;
   max-height: 70vh;
   overflow-y: auto;
-}
-.reader-settings-panel label {
-  display: grid;
-  gap: 6px;
-  font-size: 0.8rem;
-}
-.reader-settings-panel .reader-settings-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-.reader-settings-check input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--accent);
-}
-.reader-settings-panel .ui-select {
-  width: 100%;
-  min-width: 0;
-}
-.reader-settings-panel p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  line-height: 1.5;
 }
 
 .manga-strip-page img {
@@ -2392,15 +1942,13 @@ a.rail-card {
 
 .manga-page-retry small {
   color: var(--accent);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .manga-reader-loading {
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at 62% 42%, var(--primary-soft), transparent 32%),
-    radial-gradient(circle at 38% 48%, var(--secondary-amber-soft), transparent 24%), var(--ink);
+  background: var(--ink);
 }
 
 .reader-loading-spinner {
@@ -2457,7 +2005,7 @@ a.rail-card {
   min-height: 92px;
   padding: 18px 20px;
   border: 1px solid var(--line-subtle);
-  border-radius: 14px;
+  border-radius: var(--r-btn);
   color: var(--text);
   background: var(--surface-panel);
   cursor: pointer;
@@ -2493,9 +2041,7 @@ a.rail-card {
   margin-bottom: 5px;
   color: var(--muted);
   font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .manga-end-navigation strong {
@@ -2565,7 +2111,7 @@ a.rail-card {
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 600;
   backdrop-filter: blur(10px);
 }
 
@@ -2592,18 +2138,14 @@ a.rail-card {
   min-height: 100vh;
   place-items: center;
   padding: 48px;
-  background:
-    radial-gradient(ellipse 72% 52% at 78% -8%, var(--primary-glow), transparent 68%),
-    radial-gradient(ellipse 56% 44% at 8% 102%, var(--secondary-coral-soft), transparent 68%),
-    radial-gradient(ellipse 38% 24% at 22% 94%, var(--secondary-amber-soft), transparent 72%),
-    var(--ink);
+  background: var(--ink);
 }
 
 .login-card {
   width: min(560px, 100%);
   padding: 52px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: var(--surface-overlay);
   box-shadow: 0 42px 120px var(--shadow);
 }
@@ -2624,9 +2166,7 @@ a.rail-card {
   margin: 0 0 9px;
   color: var(--highlight-lavender);
   font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .login-card h1 {
   margin: 0;
@@ -2648,7 +2188,7 @@ a.rail-card {
   background: var(--primary);
   color: var(--on-primary);
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .primary-button {
@@ -2666,138 +2206,12 @@ a.rail-card {
   opacity: 0.6;
 }
 
-.profile-connect-page {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  place-items: center;
-  min-height: calc(100vh - var(--app-navbar-height));
-  padding: 40px 48px;
-  overflow: hidden;
-}
-
-.profile-connect-page::before,
-.profile-connect-page::after {
-  position: absolute;
-  z-index: -1;
-  border-radius: 50%;
-  content: "";
-  filter: blur(10px);
-  pointer-events: none;
-}
-
-.profile-connect-page::before {
-  top: -38vw;
-  left: 50%;
-  width: 76vw;
-  height: 76vw;
-  background: radial-gradient(circle, rgb(42 131 95 / 0.24), transparent 67%);
-  transform: translateX(-50%);
-}
-
-.profile-connect-page::after {
-  right: -18vw;
-  bottom: -36vw;
-  width: 62vw;
-  height: 62vw;
-  background: radial-gradient(circle, rgb(255 255 255 / 0.07), transparent 69%);
-}
-
-.profile-connect-panel {
-  position: relative;
-  overflow: hidden;
-  width: 100%;
-  max-width: 500px;
-  padding: 46px 48px 38px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface-overlay);
-  box-shadow: 0 34px 100px var(--shadow-deep);
-  text-align: center;
-  backdrop-filter: blur(24px);
-}
-
-.profile-connect-panel::before {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 148px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--highlight-lavender), transparent);
-  content: "";
-  opacity: 0.74;
-  transform: translateX(-50%);
-}
-
 .profile-connect-app-icon {
   display: block;
   width: 64px;
   height: 64px;
   margin: 0 auto 22px;
-  border-radius: 15px;
-}
-
-.profile-connect-label {
-  display: flex;
-  justify-content: center;
-  gap: 7px;
-  align-items: center;
-  margin: 0 0 8px;
-  color: var(--highlight-lavender);
-  font-size: 0.67rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.profile-connect-panel h1 {
-  margin: 0;
-  font-size: clamp(2rem, 3vw, 2.45rem);
-  letter-spacing: -0.055em;
-  line-height: 1.05;
-}
-
-.profile-connect-message {
-  display: grid;
-  min-height: 52px;
-  margin: 17px 0 23px;
-  place-items: center;
-  color: var(--text-soft);
-  font-size: 0.9rem;
-  line-height: 1.55;
-}
-
-.profile-connect-panel .primary-button {
-  min-height: 48px;
-  border-radius: 7px;
-}
-
-.profile-connect-button-label {
-  display: inline-block;
-}
-
-.profile-connect-panel .secondary-button {
-  width: 100%;
-  margin-top: 9px;
-  padding: 12px 18px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.profile-connect-panel .secondary-button:hover,
-.profile-connect-panel .secondary-button:focus-visible {
-  border-color: var(--line-strong);
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.profile-connect-panel .error-banner {
-  margin: 16px 0 0;
-  text-align: left;
+  border-radius: var(--r-panel);
 }
 
 .profile-route-transition {
@@ -2839,7 +2253,7 @@ a.rail-card {
   margin-bottom: 30px;
   padding: 12px 14px;
   border: 1px solid var(--line-subtle);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: linear-gradient(
     180deg,
     var(--ink) 74%,
@@ -2850,7 +2264,7 @@ a.rail-card {
 .library-sort {
   padding: 9px 30px 9px 10px;
   border: 1px solid var(--line-subtle);
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   outline: none;
   background: var(--surface-panel);
   color: var(--text-secondary);
@@ -2864,7 +2278,7 @@ a.rail-card {
   width: min(280px, 28vw);
   padding: 0 11px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: var(--surface-panel);
   color: var(--text);
 }
@@ -2891,11 +2305,11 @@ a.rail-card {
 
 .add-title-button,
 .catalog-search button {
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: var(--primary);
   color: var(--on-primary);
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .add-title-button {
@@ -2914,7 +2328,7 @@ a.rail-card {
   margin: -12px 0 28px;
   padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: var(--surface-panel);
 }
 
@@ -2969,8 +2383,7 @@ a.rail-card {
 .catalog-results span {
   color: var(--highlight-lavender);
   font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .catalog-results strong {
@@ -3039,7 +2452,7 @@ a.rail-card {
   padding: 20px;
   overflow-y: auto;
   border: 1px solid var(--line-strong);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: var(--surface-overlay);
   box-shadow: 0 30px 90px var(--shadow-deep);
 }
@@ -3061,7 +2474,7 @@ a.rail-card {
 .entry-editor-header span {
   color: var(--highlight-lavender);
   font-size: 0.64rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 
@@ -3076,7 +2489,7 @@ a.rail-card {
   width: 34px;
   height: 34px;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -3122,7 +2535,7 @@ a.rail-card {
 .save-button,
 .delete-button {
   padding: 10px;
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   font-size: 0.72rem;
   cursor: pointer;
 }
@@ -3130,7 +2543,7 @@ a.rail-card {
 .save-button {
   background: var(--primary);
   color: var(--on-primary);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .save-button:hover {
@@ -3145,7 +2558,7 @@ a.rail-card {
 .empty-state {
   padding: 68px;
   border: 1px dashed var(--line);
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   color: var(--muted);
   text-align: center;
 }
@@ -3176,11 +2589,6 @@ a.rail-card {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
-  .profile-connect-page {
-    padding-right: 40px;
-    padding-left: 40px;
-  }
-
   .library-shell {
     width: calc(100% - 80px);
   }
@@ -3209,7 +2617,7 @@ a.rail-card {
   cursor: pointer;
   font: inherit;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 .for-you-refresh:hover:not(:disabled),
 .for-you-refresh:focus-visible {
@@ -3234,7 +2642,7 @@ a.rail-card {
   height: 25px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 50%;
+  border-radius: var(--r-chip);
   background: rgba(5, 7, 15, 0.6);
   color: rgba(255, 255, 255, 0.68);
   cursor: pointer;
@@ -3254,7 +2662,7 @@ a.rail-card {
   margin: 56px auto 18px;
   padding: 44px 32px;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: var(--r-chip);
   background: linear-gradient(
     145deg,
     var(--surface-panel),
@@ -3305,7 +2713,7 @@ a.rail-card {
   color: var(--on-primary);
   cursor: pointer;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .more-attribution {
@@ -3329,7 +2737,7 @@ a.rail-card {
 .local-data-settings > summary {
   cursor: pointer;
   padding: 16px 0;
-  font-weight: 700;
+  font-weight: 600;
 }
 .local-data-settings > summary:focus-visible {
   outline: 2px solid var(--accent);
@@ -3358,14 +2766,14 @@ a.rail-card {
   align-items: center;
   padding: 6px 12px 6px 14px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   background: rgb(255 255 255 / 0.08);
   box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.7);
   color: var(--text);
   cursor: pointer;
   font: inherit;
   font-size: 0.86rem;
-  font-weight: 700;
+  font-weight: 600;
   backdrop-filter: blur(12px);
   transition:
     border-color 160ms ease,
@@ -3399,7 +2807,7 @@ a.rail-card {
   overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--line-subtle);
-  border-radius: 16px;
+  border-radius: var(--r-panel);
   background: var(--surface-overlay);
   box-shadow: 0 18px 40px -12px rgb(0 0 0 / 0.85);
   backdrop-filter: blur(20px);
@@ -3413,7 +2821,7 @@ a.rail-card {
   justify-content: space-between;
   padding: 8px 10px;
   border: 0;
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   background: transparent;
   color: var(--text-soft);
   cursor: pointer;
@@ -3432,7 +2840,7 @@ a.rail-card {
 .genre-picker-menu button[aria-selected="true"] {
   background: var(--primary-soft);
   color: var(--text);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .genre-picker-menu button[aria-selected="true"] svg {

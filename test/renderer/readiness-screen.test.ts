@@ -47,8 +47,9 @@ describe("ReadinessScreen", () => {
     expect(markup).toContain("AniStream");
     expect(markup).toContain('role="status"');
     expect(markup).not.toContain("chromevt");
-    // Status, steps and the stream line appear only after READINESS_DETAIL_DELAY_MS.
+    // The bar and its line appear only after READINESS_DETAIL_DELAY_MS; the steps only on failure.
     expect(markup).not.toContain('role="progressbar"');
+    expect(markup).not.toContain("Loading your library");
     expect(markup).not.toContain("readiness-steps");
   });
 

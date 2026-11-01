@@ -1,0 +1,160 @@
+/* Design tokens (redesign approved 2026-10-31, prototypes/mockups/redesign-2026/final/).
+   Ink-black room, the artwork carries the light. One colour per world (mint anime, coral manga,
+   gold movies & TV), used only on the primary action, the selected rail item and progress. The
+   sky dot means airing or new. Every other sheet reads these; none defines its own colours. */
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../assets/fonts/fraunces-variable.ttf") format("truetype");
+}
+
+:root {
+  /* Neutral ramp: the user's ink, barely green. Depth comes from these steps, not shadows. */
+  --ink: #070807;
+  --s1: #0e100f;
+  --s2: #141715;
+  --s3: #1b1f1d;
+  --s4: #242926;
+  --line-1: rgb(238 241 239 / 0.08);
+  --line-2: rgb(238 241 239 / 0.14);
+  --line-3: rgb(238 241 239 / 0.28);
+  /* Three text roles. */
+  --text: #eef1ef;
+  --text-2: #a8b0ab;
+  --text-3: #858d88;
+
+  /* Worlds. Text on any of them is ink. */
+  --mint: #3ddc97;
+  --coral: #ff6a4d;
+  --gold: #ffc23d;
+  --live: #4cc9ff;
+  --danger: #ff7485;
+  --accent: var(--mint);
+  --on-accent: var(--ink);
+
+  /* Shape. Round is kept for avatars, dots, switches and progress tracks. */
+  --r-chip: 8px;
+  --r-btn: 12px;
+  --r-card: 12px;
+  --r-panel: 16px;
+
+  /* Type. Fraunces is only for a title on a hero or a title page. */
+  --font-ui: "Plus Jakarta Sans", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+
+  /* Motion: one easing, short travel. */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 160ms;
+  --dur: 240ms;
+  --dur-slow: 320ms;
+
+  /* Older names, kept as aliases so no rule holds an old value. New rules use the names above. */
+  --surface-base: var(--s1);
+  --surface-panel: var(--s1);
+  --surface-raised: var(--s2);
+  --surface-hover: var(--s3);
+  --surface-input: var(--ink);
+  --surface-overlay: rgb(7 8 7 / 0.96);
+  --surface-glass: rgb(14 16 15 / 0.9);
+  --line-subtle: var(--line-1);
+  --line: var(--line-2);
+  --line-strong: var(--line-3);
+  --text-secondary: var(--text-2);
+  --text-soft: var(--text-2);
+  --muted: var(--text-3);
+  --muted-deep: var(--text-3);
+  --on-primary: var(--on-accent);
+  /* The old washes and glows: nothing glows any more. */
+  --primary-soft: transparent;
+  --primary-glow: transparent;
+  --secondary-coral-soft: transparent;
+  --secondary-amber: var(--gold);
+  --secondary-amber-soft: rgb(255 194 61 / 0.12);
+  --highlight-lavender: var(--text);
+  --highlight-soft: var(--line-2);
+  --focus-ring: var(--text);
+  --error: var(--danger);
+  --error-soft: rgb(255 116 133 / 0.14);
+  --error-line: rgb(255 116 133 / 0.38);
+  --error-surface: rgb(55 10 24 / 0.94);
+  --error-text: #ffb5c0;
+  --success: var(--mint);
+  --warning: var(--gold);
+  --on-secondary: var(--on-accent);
+  --shadow: rgb(0 0 0 / 0.34);
+  --shadow-deep: rgb(0 0 0 / 0.68);
+  --motion-fast: var(--dur-fast);
+  --motion-standard: var(--dur);
+  --motion-emphasis: 360ms;
+  --motion-entrance: 480ms;
+  --motion-ease: var(--ease);
+  --ease-out: var(--ease);
+  --skeleton-base: var(--s1);
+  --skeleton-shine: var(--s3);
+  --control-height: 44px;
+  --control-radius: var(--r-btn);
+  --control-radius-small: var(--r-chip);
+  --control-shadow: none;
+  --control-shadow-primary: none;
+  --title-accent-ink: var(--on-accent);
+  --title-accent-text: var(--text);
+  --app-ambience: var(--ink);
+
+  color: var(--text);
+  background: var(--ink);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-synthesis: none;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+}
+
+/* Tokens made from the accent are declared again wherever a world sets it: a custom property
+   is resolved where it is declared, so a value made at :root would keep mint. */
+:root,
+[data-world] {
+  --accent-hover: color-mix(in oklab, var(--accent), white 14%);
+  --primary: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --primary-deep: var(--accent);
+  --secondary-coral: var(--accent);
+  --load-green: var(--accent);
+  --title-accent: var(--accent);
+}
+
+/* The world follows the section, its title pages and the search scope. */
+[data-world="anime"] {
+  --accent: var(--mint);
+}
+[data-world="manga"] {
+  --accent: var(--coral);
+}
+[data-world="more"] {
+  --accent: var(--gold);
+}
+
+/* The one display face, only for the title on a hero or a title page. */
+.home-hero-copy h1,
+.anime-head h1,
+.title-info h1,
+.more-title-text {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings:
+    "SOFT" 100,
+    "WONK" 0;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* The signature: airing or new. */
+.live-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--live);
+}

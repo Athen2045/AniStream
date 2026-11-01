@@ -1,5 +1,5 @@
 /**
- * Offline artwork: AniList (and Kitsu episode) images shown for Continue titles, the catalog hero,
+ * Offline artwork: AniList, TMDB backdrop (and Kitsu episode) images shown for Continue titles, the catalog hero,
  * and title pages load through this scheme, so the main process keeps a bounded local copy that
  * still renders when AniList or the network is down. Only these image hosts are ever fetched.
  */
@@ -7,6 +7,8 @@ export const ARTWORK_SCHEME = "anistream-art";
 
 const ARTWORK_HOSTS = new Set([
   "s4.anilist.co",
+  // TMDB backdrops behind anime title pages (and More genre tiles in Search).
+  "image.tmdb.org",
   "img.anili.st",
   "media.kitsu.app",
   "media.kitsu.io",

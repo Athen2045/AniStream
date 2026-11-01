@@ -34,4 +34,89 @@ describe("Anime player message validation", () => {
     });
     expect(parseAnimePlayerMessage("x".repeat(4_097))).toBeUndefined();
   });
+
+  it("reads a sourced player's events with the AniList id, episode and audio it reports", () => {
+    const event = (name: string, data: Record<string, unknown>) => ({
+      source: "player",
+      version: 1,
+      type: "event",
+      name,
+      data,
+    });
+    const playing = {
+      animeId: "154587",
+      episode: 2,
+      language: "sub",
+      currentTime: 30.5,
+      duration: 1561,
+      percentage: 1.95,
+    };
+    expect(parseAnimePlayerMessage(event("progress", playing), "player")).toEqual({
+      kind: "progress",
+      currentTime: 30.5,
+      duration: 1561,
+      percent: 1.95,
+      aniListId: 154587,
+      episode: 2,
+      language: "sub",
+    });
+    expect(parseAnimePlayerMessage(event("pause", playing), "player")).toMatchObject({
+      kind: "progress",
+    });
+    expect(parseAnimePlayerMessage(event("ended", playing), "player")).toEqual({
+      kind: "complete",
+      aniListId: 154587,
+      episode: 2,
+      language: "sub",
+    });
+    expect(parseAnimePlayerMessage(event("error", { message: "  No  source " }), "player")).toEqual(
+      {
+        kind: "error",
+        message: "No source",
+      },
+    );
+  });
+
+  it("ignores other formats, sources and malformed data for a sourced player", () => {
+    const ok = { animeId: "1", episode: 1, currentTime: 1, duration: 100 };
+    const sent = (message: Record<string, unknown>) => parseAnimePlayerMessage(message, "player");
+    expect(sent({ source: "other", type: "event", name: "progress", data: ok })).toBeUndefined();
+    expect(sent({ source: "player", type: "command", name: "progress", data: ok })).toBeUndefined();
+    expect(
+      sent({ source: "player", type: "event", name: "settingschange", data: ok }),
+    ).toBeUndefined();
+    expect(
+      sent({ source: "player", type: "event", name: "progress", data: { ...ok, duration: 0 } }),
+    ).toBeUndefined();
+    expect(sent({ event: "time", time: 1, duration: 100 })).toBeUndefined();
+    const odd = sent({
+      source: "player",
+      type: "event",
+      name: "progress",
+      data: { ...ok, animeId: "x1", language: "fr" },
+    });
+    expect(odd).toMatchObject({ kind: "progress" });
+    expect(odd).not.toHaveProperty("aniListId");
+    expect(odd).not.toHaveProperty("language");
+  });
+
+  it("reads a sourced player's episode buttons and audio changes", () => {
+    const event = (name: string, data: Record<string, unknown>) =>
+      parseAnimePlayerMessage({ source: "player", type: "event", name, data }, "player");
+    const here = { animeId: "21", episode: 1, language: "dub" };
+    expect(event("next", here)).toEqual({
+      kind: "navigate",
+      direction: "next",
+      aniListId: 21,
+      episode: 1,
+      language: "dub",
+    });
+    expect(event("previous", here)).toMatchObject({ kind: "navigate", direction: "previous" });
+    expect(event("providerchange", { ...here, language: "sub" })).toEqual({
+      kind: "audio",
+      aniListId: 21,
+      episode: 1,
+      language: "sub",
+    });
+  });
 });

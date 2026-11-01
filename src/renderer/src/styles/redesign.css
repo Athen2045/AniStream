@@ -1,38 +1,9 @@
-/* Approved Home/Profile composition, shared by Windows and macOS. */
+/* Approved Home/Profile composition, shared by Windows and macOS. Colours live in tokens.css. */
 :root {
   --page-gutter: 40px;
-  --surface-base: #101211;
-  --surface-panel: #151817;
-  --surface-raised: #1d211f;
-  --surface-hover: #262d29;
-  --muted: #a1aaa5;
-  --app-ambience: var(--ink);
-  --control-radius: 7px;
-  --control-shadow-primary: none;
 }
 
 html[data-platform="win32"] {
-  --ink: #070807;
-  --surface-base: #0a0c0b;
-  --surface-panel: #0f1210;
-  --surface-raised: #161a17;
-  --surface-hover: #1e241f;
-  --surface-input: #050605;
-  --surface-overlay: rgb(7 8 7 / 0.96);
-  --surface-glass: rgb(10 12 11 / 0.9);
-  --primary: #247252;
-  --primary-hover: #309066;
-  --primary-deep: #184b36;
-  --primary-soft: rgb(36 114 82 / 0.14);
-  --primary-glow: rgb(36 114 82 / 0.2);
-  --secondary-coral: #247252;
-  --secondary-coral-soft: rgb(36 114 82 / 0.13);
-  --skeleton-base: #101310;
-  --skeleton-shine: #1b211d;
-  --app-ambience:
-    radial-gradient(ellipse 72% 32% at 82% -8%, rgb(36 114 82 / 0.08), transparent 70%),
-    radial-gradient(ellipse 50% 30% at 8% 16%, rgb(255 255 255 / 0.018), transparent 72%),
-    var(--ink);
   scrollbar-width: none;
 }
 
@@ -82,7 +53,7 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   order: -1;
   margin: 0;
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.025em;
 }
 .rail-heading .catalog-kicker {
@@ -147,29 +118,6 @@ html[data-platform="win32"] body::-webkit-scrollbar {
 .content-carousel:not(:has(.carousel-edge:not(:disabled))) .carousel-edge {
   display: none;
 }
-.rail-card {
-  align-content: start;
-  gap: 8px;
-  cursor: default;
-}
-.rail-art {
-  border-radius: 6px;
-  background: var(--surface-panel);
-}
-.rail-art img {
-  object-fit: cover;
-}
-.rail-card:hover,
-.rail-card:has(:focus-visible) {
-  transform: translateY(-2px);
-}
-.rail-card .rail-hover-actions {
-  bottom: 10px;
-}
-.rail-hover-actions button {
-  min-height: 34px;
-  min-width: 34px;
-}
 .card-title-button,
 .continue-card > .card-title-button,
 .for-you-card > .card-title-button {
@@ -188,7 +136,8 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   cursor: pointer;
 }
 .card-title-button:hover {
-  color: var(--success);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .card-metadata,
 .continue-card > span,
@@ -201,21 +150,6 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   color: var(--error-text);
   font-size: 12px;
   line-height: 1.5;
-}
-.rail-card .rank {
-  top: 8px;
-  left: 8px;
-  bottom: auto;
-  font-size: 12px;
-  font-weight: 600;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border-radius: 5px;
-  background: rgb(10 9 9 / 0.8);
-  color: white;
-  -webkit-text-stroke: 0;
 }
 .latest-updates-grid {
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -274,15 +208,6 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   margin-top: 32px;
   border-top: 1px solid var(--line);
 }
-.profile-utilities > details {
-  margin: 0;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  padding: 16px 0;
-  background: transparent;
-  box-shadow: none;
-}
 .entry-editor-backdrop {
   z-index: 600;
   padding: 24px;
@@ -292,7 +217,7 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   max-height: calc(100vh - 48px);
   overflow-y: auto;
   background: var(--surface-panel);
-  border-radius: 12px;
+  border-radius: var(--r-card);
 }
 .entry-editor-fields {
   margin: 0;
@@ -339,7 +264,7 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   gap: 10px;
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: var(--surface-panel);
   padding: 0 12px;
 }
@@ -383,7 +308,7 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   background: var(--surface-panel);
   border: 1px solid var(--line);
   padding: 0 12px;
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   font-size: 13px;
 }
 .search-type-tabs {
@@ -458,31 +383,18 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   font-weight: 600;
 }
 .manga-reader-chapter-chip {
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: var(--surface-panel);
   border-color: var(--line);
   box-shadow: none;
-}
-.reader-settings-panel {
-  border-radius: 8px;
-  background: var(--surface-panel);
-  border-color: var(--line);
 }
 .manga-reader-end {
   background: var(--surface-base);
 }
-.profile-connect-page {
-  padding-top: 48px;
-}
 .profile-connect-panel {
-  border-radius: 12px;
+  border-radius: var(--r-card);
   box-shadow: none;
   background: var(--surface-panel);
-}
-.profile-connect-panel::before,
-.profile-connect-page::before,
-.profile-connect-page::after {
-  display: none;
 }
 @media (max-width: 1200px) {
   :root {
@@ -511,158 +423,10 @@ html[data-platform="win32"] body::-webkit-scrollbar {
   }
 }
 
-/* Functional launch/Profile readiness surface. Its bar advances only when a real check settles. */
-.readiness-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 5000;
-  display: grid;
-  place-items: center;
-  min-width: 960px;
-  min-height: 640px;
-  padding: clamp(28px, 6vh, 64px) 32px;
-  overflow: hidden;
-  color: var(--text);
-  background:
-    radial-gradient(circle at 50% 42%, rgb(42 131 95 / 0.08), transparent 34rem), var(--ink);
-  -webkit-app-region: no-drag;
-}
-
-.readiness-content {
-  display: grid;
-  justify-items: center;
-  width: min(480px, calc(100vw - 64px));
-  text-align: center;
-}
-
-.readiness-artwork {
-  display: block;
-  width: min(360px, 42vh);
-  max-height: 420px;
-  object-fit: contain;
-  user-select: none;
-  -webkit-user-drag: none;
-  filter: drop-shadow(0 22px 44px rgb(0 0 0 / 0.3));
-}
-
-.readiness-copy {
-  margin-top: 8px;
-}
-
-.readiness-copy h1 {
-  margin: 5px 0 7px;
-  font-size: clamp(22px, 2vw, 28px);
-  line-height: 1.2;
-  letter-spacing: -0.025em;
-}
-
-.readiness-copy > p:last-child {
-  min-height: 20px;
-  max-width: 440px;
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.readiness-eyebrow {
-  margin: 0;
-  color: var(--primary-hover);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-}
-
-.readiness-progress-row {
-  display: grid;
-  grid-template-columns: minmax(0, 320px) 42px;
-  align-items: center;
-  gap: 12px;
-  width: min(374px, 100%);
-  margin-top: 22px;
-}
-
-.readiness-progress {
-  height: 6px;
-  overflow: hidden;
-  border: 1px solid var(--line-subtle);
-  border-radius: 999px;
-  background: var(--surface-raised);
-  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.42);
-}
-
-.readiness-progress > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--primary-deep), var(--primary-hover));
-  box-shadow: 0 0 14px var(--primary-glow);
-  will-change: width;
-}
-
-.readiness-progress-row strong {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.readiness-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.readiness-actions button {
-  min-height: 38px;
-  padding: 9px 16px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  cursor: pointer;
-}
-
-.readiness-primary-action {
-  color: var(--on-primary);
-  background: var(--primary-deep);
-}
-
-.readiness-primary-action:hover {
-  background: var(--primary);
-}
-
-.readiness-secondary-action {
-  color: var(--text-secondary);
-  border-color: var(--line) !important;
-  background: var(--surface-panel);
-}
-
-.readiness-secondary-action:hover {
-  color: var(--text);
-  background: var(--surface-hover);
-}
-
-@media (max-height: 700px) {
-  .readiness-artwork {
-    width: 270px;
-    max-height: 300px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html:not([data-platform="win32"]) .readiness-progress > span {
-    transition: none;
-  }
-}
-
 html[data-platform="win32"] .catalog-content {
   background: transparent;
 }
 
-.chapter-browser-title {
-  font-size: 21px;
-  margin: 0 0 16px;
-}
 .reader-settings summary {
   display: flex;
   align-items: center;
@@ -782,7 +546,7 @@ html[data-platform="darwin"] {
   padding: 0;
   place-items: center;
   border: 1px solid rgb(255 255 255 / 0.16);
-  border-radius: 50%;
+  border-radius: var(--r-chip);
   background: rgb(10 12 11 / 0.6);
   box-shadow: none;
   color: var(--text);
@@ -830,13 +594,40 @@ html[data-platform="darwin"] {
   max-width: min(440px, calc(100% - 32px));
   padding: 12px 16px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   color: var(--text);
   background: var(--surface-panel);
   font-size: 12px;
 }
 .anime-embed-notice p {
   margin: 6px 0 10px;
+}
+/* "No dub for this episode": shown while the episode starts, then out of the picture's way. */
+.anime-embed-language {
+  position: absolute;
+  z-index: 24;
+  top: 52px;
+  left: 16px;
+  max-width: min(440px, calc(100% - 32px));
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-chip);
+  color: var(--text);
+  background: var(--surface-panel);
+  font-size: 12px;
+  pointer-events: none;
+  animation: anime-embed-language-out 400ms ease 8s forwards;
+}
+@keyframes anime-embed-language-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anime-embed-language {
+    animation-duration: 1ms;
+  }
 }
 .anime-embed-notice button {
   padding: 8px 12px;
@@ -859,15 +650,6 @@ html[data-platform="darwin"] {
 }
 .manga-reader-header > div:not([role="alert"]) {
   justify-items: center;
-}
-.reader-fullscreen-error {
-  position: absolute;
-  top: 68px;
-  left: 16px;
-  z-index: 5;
-  padding: 12px;
-  background: var(--error-surface);
-  color: var(--error-text);
 }
 
 /* Refresh feedback is one local compositor animation; loading state keeps its existing spin. */
@@ -982,7 +764,7 @@ html[data-platform="darwin"] {
   max-height: min(80vh, 820px);
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: var(--surface-panel);
   color: var(--text-secondary);
 }
@@ -1027,7 +809,7 @@ html[data-platform="darwin"] {
   width: 32px;
   height: 32px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: transparent;
   color: var(--text);
   cursor: pointer;

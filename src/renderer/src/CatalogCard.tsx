@@ -4,7 +4,6 @@ import { CoverImage } from "./CoverImage";
 import { RailHoverActions } from "./RailHoverActions";
 import { formatMediaLabel } from "./format-label";
 import { friendlyRemoteError } from "./remote-error";
-import { titleAccentStyle } from "./title-accent";
 
 export function CatalogCard({
   media,
@@ -24,10 +23,7 @@ export function CatalogCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   return (
-    <article
-      className="rail-card catalog-result-card"
-      style={media.type === "MANGA" ? titleAccentStyle(media.coverColor) : undefined}
-    >
+    <article className="rail-card catalog-result-card">
       <span className="rail-art">
         <button
           className="rail-art-hit"

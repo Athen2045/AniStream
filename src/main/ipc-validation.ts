@@ -116,6 +116,11 @@ function asOptionalNonNegativeInt(value: unknown): number | undefined {
   return value === undefined ? undefined : asNonNegativeInt(value);
 }
 
+function asStrictBoolean(value: unknown): boolean {
+  if (typeof value !== "boolean") fail();
+  return value;
+}
+
 function asNonNegativeNumber(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) fail();
   return value;
@@ -259,6 +264,11 @@ function animePlaybackInput(value: unknown): AnimePlaybackInput {
     episode: asNonNegativeNumber(input.episode),
     providerEpisodeId: asOptionalString(input.providerEpisodeId),
     audio: asPlaybackAudio(input.audio),
+    ...(input.startAtSeconds === undefined
+      ? {}
+      : { startAtSeconds: asNonNegativeNumber(input.startAtSeconds) }),
+    ...(input.hasPrevious === undefined ? {} : { hasPrevious: asStrictBoolean(input.hasPrevious) }),
+    ...(input.hasNext === undefined ? {} : { hasNext: asStrictBoolean(input.hasNext) }),
   };
 }
 
@@ -582,6 +592,19 @@ export const ipcArgValidators: IpcArgValidatorMap = {
     const episodes = asPositiveInt(record.episodes);
     if (aniListId > 2147483647 || episodes > 5_000) fail();
     return [{ aniListId, episodes }];
+  },
+  "search:title-suggestions": (value) => {
+    const [type, query] = argsOfLength(value, 2);
+    const text = asString(query).trim();
+    if (text.length < 2 || text.length > 100) fail();
+    return [asMediaType(type), text];
+  },
+  "anime:hero-backdrop": (value) => {
+    const [input] = argsOfLength(value, 1);
+    const record = asRecord(input);
+    const aniListId = asPositiveInt(record.aniListId);
+    if (aniListId > 2147483647 || typeof record.movie !== "boolean") fail();
+    return [{ aniListId, movie: record.movie }];
   },
   "anime:playback": (value) => {
     const [input] = argsOfLength(value, 1);

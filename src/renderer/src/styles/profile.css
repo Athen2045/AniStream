@@ -42,7 +42,7 @@
 .profile-identity h1 {
   margin: 10px 0 4px;
   font-size: clamp(32px, 3vw, 44px);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.03em;
   outline: none;
 }
@@ -55,14 +55,14 @@
   display: inline-flex;
   gap: 7px;
   align-items: center;
-  color: #4fd197;
+  color: var(--success);
 }
 .profile-connected::before {
   content: "";
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #4fd197;
+  background: var(--success);
   box-shadow: 0 0 0 3px rgb(79 209 151 / 0.2);
 }
 .profile-stat-pair {
@@ -80,7 +80,7 @@
 }
 .profile-stat-pair strong {
   font-size: 26px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 .profile-stat-pair small {
@@ -98,7 +98,7 @@
   margin-top: 128px;
 }
 .profile-sync .is-synced {
-  color: #4fd197;
+  color: var(--success);
 }
 .profile-sync .is-pending {
   color: #f5c451;
@@ -115,7 +115,7 @@
   margin-left: auto;
   padding: 0 14px;
   border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
@@ -143,7 +143,7 @@
   height: 36px;
   padding: 0 14px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: rgb(255 255 255 / 0.03);
   color: var(--text-soft);
   font: inherit;
@@ -155,7 +155,7 @@
   color: var(--muted);
   font-size: 12px;
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
 }
 .library-chips button:hover {
   border-color: rgb(255 255 255 / 0.24);
@@ -187,7 +187,7 @@
   display: inline-flex;
   padding: 3px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 10px;
+  border-radius: var(--r-card);
   background: rgb(255 255 255 / 0.03);
 }
 .library-view-toggle button {
@@ -196,7 +196,7 @@
   height: 32px;
   place-items: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: none;
   color: var(--muted);
   cursor: pointer;
@@ -219,7 +219,7 @@
 .profile-page .library-heading h2 {
   margin: 0;
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .profile-page .library-heading > span {
   color: var(--muted);
@@ -247,7 +247,7 @@
   position: relative;
   aspect-ratio: 2 / 3;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--r-card);
   background: var(--surface-raised);
 }
 .library-card--manga .library-card-art {
@@ -287,7 +287,7 @@
   align-items: center;
   height: 24px;
   padding: 0 8px;
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: rgb(7 8 7 / 0.78);
   color: #f5c451;
   font-size: 12px;
@@ -308,12 +308,12 @@
   justify-content: center;
   height: 34px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: #fff;
   color: #0a0b0a;
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   opacity: 0;
   cursor: pointer;
   transform: translateY(4px);
@@ -322,7 +322,7 @@
     transform var(--motion-fast) var(--motion-ease);
 }
 .library-card--manga .library-card-edit {
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: var(--title-accent);
   color: var(--title-accent-ink);
 }
@@ -363,14 +363,14 @@
   color: var(--text);
   font: inherit;
   font-size: 13.5px;
-  font-weight: 650;
+  font-weight: 600;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
 }
 .library-card-title:hover {
-  color: #4fd197;
+  color: var(--success);
 }
 .library-card-meta {
   display: flex;
@@ -385,7 +385,7 @@
 .library-table {
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-card);
 }
 .library-row {
   display: grid;
@@ -403,9 +403,7 @@
   background: var(--surface-panel);
   color: var(--muted);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .library-row-thumb {
   width: 52px;
@@ -441,7 +439,7 @@
   background: none;
   color: var(--text);
   font: inherit;
-  font-weight: 650;
+  font-weight: 600;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -456,7 +454,7 @@
 .library-row-title em {
   color: var(--text-soft);
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
 }
 .library-row-progress {
   display: grid;
@@ -490,12 +488,12 @@
   background: rgb(255 255 255 / 0.06);
   color: var(--text-soft);
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .library-status--current,
 .library-status--repeating {
-  background: color-mix(in srgb, var(--title-accent, #369d73) 18%, transparent);
-  color: var(--title-accent-text, #4fd197);
+  background: var(--s3);
+  color: var(--text);
 }
 .library-row-edit {
   display: grid;
@@ -503,7 +501,7 @@
   height: 34px;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-chip);
   background: none;
   color: var(--text-soft);
   cursor: pointer;
@@ -520,7 +518,7 @@
   gap: 0;
   padding: 0;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 18px;
+  border-radius: var(--r-panel);
   background: #0d100e;
 }
 .entry-editor-band {
@@ -554,7 +552,7 @@
   height: 34px;
   place-items: center;
   border: 1px solid rgb(255 255 255 / 0.2);
-  border-radius: 50%;
+  border-radius: var(--r-chip);
   background: rgb(0 0 0 / 0.5);
   color: #fff;
   cursor: pointer;
@@ -574,7 +572,7 @@
   height: auto;
   aspect-ratio: 2 / 3;
   border: 1px solid rgb(255 255 255 / 0.15);
-  border-radius: 9px;
+  border-radius: var(--r-chip);
   box-shadow: 0 16px 30px -10px #000;
 }
 .entry-editor .entry-editor-header span {
@@ -586,7 +584,7 @@
 .entry-editor .entry-editor-header h2 {
   margin: 2px 0 0;
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 .entry-editor form {
@@ -607,9 +605,7 @@
 .entry-editor .entry-editor-field > span:first-child {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .entry-status-chips {
   display: flex;
@@ -620,7 +616,7 @@
   height: 32px;
   padding: 0 12px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: none;
   color: var(--text-soft);
   font: inherit;
@@ -641,7 +637,7 @@
   align-items: center;
   height: 44px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: rgb(255 255 255 / 0.03);
 }
 .entry-stepper button {
@@ -666,7 +662,7 @@
   border: 0;
   background: none;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   text-align: center;
   appearance: textfield;
 }
@@ -682,7 +678,7 @@
 .entry-editor textarea {
   min-height: 64px;
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: var(--r-card);
 }
 .entry-editor-offline {
   display: flex;
@@ -691,7 +687,7 @@
   margin: 0;
   padding: 12px 14px;
   border: 1px solid rgb(245 196 81 / 0.3);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: rgb(245 196 81 / 0.08);
   color: var(--text-soft);
   font-size: 13px;
@@ -718,7 +714,7 @@
   height: 42px;
   padding: 0 18px;
   border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: 999px;
+  border-radius: var(--r-btn);
   background: none;
   color: var(--text);
   font-weight: 600;

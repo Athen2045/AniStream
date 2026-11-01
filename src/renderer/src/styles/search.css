@@ -1,25 +1,10 @@
-/* Search (SectionSearch.tsx; redesign 2026-10-20, mockups prototypes/mockups/search-v2/): the
-   field, the section switch and Filters at the top; recent searches, genres and trending before
-   typing; a top result, labelled posters, people and studios after. */
+/* Search (SectionSearch.tsx; redesign 2026-10-31, mockup 12): the field, the section switch and
+   Filters at the top; recent searches, genres and trending before typing; a top result, labelled
+   posters, people and studios after. Colours and shapes come from tokens.css. */
 .section-search {
   position: relative;
-  isolation: isolate;
   min-height: 100vh;
-  padding: 58px var(--page-gutter) 56px;
-}
-/* A faint glow of the top result's colour (emerald otherwise) behind the field. */
-.section-search-glow {
-  position: absolute;
-  z-index: -1;
-  inset: 0 0 auto;
-  height: 440px;
-  background: radial-gradient(
-    ellipse 60% 100% at 28% 0,
-    color-mix(in oklch, var(--search-glow, #36a678) 18%, transparent),
-    transparent 70%
-  );
-  pointer-events: none;
-  transition: background var(--motion-standard) var(--motion-ease);
+  padding: 56px var(--page-gutter) 56px;
 }
 
 /* ---------- Top bar ---------- */
@@ -29,54 +14,50 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: 1120px;
+  max-width: 1280px;
 }
 .section-search-field {
   position: relative;
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
-  height: 58px;
+  height: 56px;
   padding: 0 12px 0 20px;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 18px;
-  background: rgb(255 255 255 / 0.06);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
-  color: rgb(255 255 255 / 0.7);
-  transition:
-    border-color var(--motion-fast) var(--motion-ease),
-    box-shadow var(--motion-fast) var(--motion-ease);
+  border-radius: var(--r-btn);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--text-2);
+  transition: box-shadow var(--dur-fast) var(--ease);
 }
 .section-search-field:focus-within {
-  border-color: rgb(255 255 255 / 0.3);
-  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.05);
+  box-shadow: inset 0 0 0 1px var(--line-3);
 }
 .section-search-field input {
   flex: 1;
   min-width: 0;
   border: 0;
   background: none;
-  color: #fff;
+  color: var(--text);
   font: inherit;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 500;
   outline: none;
 }
 .section-search-field input::placeholder {
-  color: rgb(255 255 255 / 0.42);
-  font-weight: 500;
+  color: var(--text-3);
+  font-weight: 400;
 }
 .section-search-field input::-webkit-search-cancel-button {
   display: none;
 }
 .section-search-kbd {
   flex: none;
-  padding: 3px 7px;
-  border: 1px solid rgb(255 255 255 / 0.14);
+  padding: 2px 8px;
   border-radius: 6px;
-  color: rgb(255 255 255 / 0.45);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--text-3);
   font-family: inherit;
   font-size: 12px;
 }
@@ -84,90 +65,113 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border: 0;
-  border-radius: 10px;
-  background: rgb(255 255 255 / 0.07);
-  color: rgb(255 255 255 / 0.75);
+  border-radius: var(--r-chip);
+  background: var(--s3);
+  color: var(--text-2);
   cursor: pointer;
 }
 .section-search-clear:hover {
-  background: rgb(255 255 255 / 0.14);
-  color: #fff;
+  background: var(--s4);
+  color: var(--text);
 }
 .section-search-scopes {
   display: flex;
   flex: none;
-  gap: 2px;
+  gap: 4px;
   padding: 4px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 18px;
-  background: rgb(255 255 255 / 0.06);
+  border-radius: var(--r-btn);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-1);
 }
 .section-search-scopes button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   height: 48px;
   padding: 0 16px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--r-chip);
   background: none;
-  color: rgb(255 255 255 / 0.62);
+  color: var(--text-2);
   font: inherit;
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color var(--motion-fast) var(--motion-ease),
-    color var(--motion-fast) var(--motion-ease);
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .section-search-scopes button:hover {
-  color: #fff;
+  background: var(--s2);
+  color: var(--text);
 }
 .section-search-scopes button.is-on {
-  background: #fff;
-  color: #0b0d0c;
+  background: var(--s3);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  color: var(--text);
+}
+/* Each section keeps its colour as a small dot, the only colour in the bar. */
+.world-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+}
+.world-dot--anime {
+  background: var(--mint);
+}
+.world-dot--manga {
+  background: var(--coral);
+}
+.world-dot--more {
+  background: var(--gold);
 }
 .section-search-filters-button {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 9px;
-  height: 58px;
+  gap: 8px;
+  height: 56px;
   padding: 0 20px;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 18px;
-  background: rgb(255 255 255 / 0.06);
-  color: #fff;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--text);
   font: inherit;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease);
 }
-.section-search-filters-button:hover {
-  background: rgb(255 255 255 / 0.12);
-}
+.section-search-filters-button:hover,
 .section-search-filters-button.is-on {
-  border-color: rgb(95 211 160 / 0.5);
-  background: rgb(54 166 120 / 0.14);
+  background: var(--s3);
 }
 .section-search-filters-button b {
   display: grid;
   place-items: center;
   min-width: 20px;
   height: 20px;
-  border-radius: 10px;
-  background: #36a678;
-  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--text);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
 }
 .section-search-scopes button:focus-visible,
 .section-search-filters-button:focus-visible,
 .section-search-clear:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-/* ---------- Filter chips ---------- */
+/* ---------- Filter and recent chips ---------- */
 .section-search-chips {
   display: flex;
   flex-wrap: wrap;
@@ -180,27 +184,30 @@
   align-items: center;
   gap: 8px;
   height: 36px;
-  padding: 0 12px 0 14px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 12px;
-  background: rgb(255 255 255 / 0.06);
-  color: #dedede;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-chip);
+  background: var(--s2);
+  box-shadow: inset 0 0 0 1px var(--line-1);
+  color: var(--text-2);
   font: inherit;
   font-size: 14px;
   cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease);
 }
 .section-search-chips > button.is-filter {
-  border-color: rgb(95 211 160 / 0.35);
-  background: rgb(54 166 120 / 0.14);
-  color: #fff;
+  background: var(--s3);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--text);
 }
 .section-search-chips > button.is-clear {
-  border-color: transparent;
   background: none;
-  color: #a1aaa5;
+  box-shadow: none;
+  color: var(--text-3);
 }
 .section-search-chips > button:hover {
-  background: rgb(255 255 255 / 0.12);
+  background: var(--s3);
+  color: var(--text);
 }
 .section-search-chips.is-recent {
   margin-top: 0;
@@ -214,7 +221,7 @@
   align-items: center;
   gap: 8px;
   height: 100%;
-  padding: 0 6px 0 14px;
+  padding: 0 4px 0 12px;
   border: 0;
   background: none;
   color: inherit;
@@ -222,128 +229,145 @@
   cursor: pointer;
 }
 .section-search-recent button + button {
-  padding: 0 11px 0 4px;
-  color: rgb(255 255 255 / 0.4);
+  padding: 0 12px 0 4px;
+  color: var(--text-3);
 }
 .section-search-recent button:hover {
-  color: #fff;
+  color: var(--text);
 }
 
 /* ---------- Blocks ---------- */
 .section-search-results {
   position: relative;
-  transition: opacity var(--motion-fast) var(--motion-ease);
+  transition: opacity var(--dur-fast) var(--ease);
 }
 .section-search-results.is-pending {
   opacity: 0.55;
 }
 .section-search-block {
-  margin-top: 34px;
+  margin-top: 40px;
 }
 .section-search-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .section-search-head h2 {
   margin: 0;
-  font-size: 20px;
-  letter-spacing: -0.3px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .section-search-head small {
-  color: #a1aaa5;
-  font-size: 13.5px;
+  color: var(--text-3);
+  font-size: 14px;
 }
 .section-search-link,
 .section-search-also {
   padding: 0;
   border: 0;
   background: none;
-  color: #5fd3a0;
+  color: var(--text-2);
   font: inherit;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
+}
+.section-search-link {
+  margin-left: auto;
 }
 .section-search-also {
   margin-left: auto;
-  padding: 7px 14px;
-  border: 1px solid rgb(95 211 160 / 0.3);
-  border-radius: 12px;
-  background: rgb(54 166 120 / 0.1);
+  padding: 8px 12px;
+  border-radius: var(--r-btn);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 .section-search-link:hover,
 .section-search-also:hover {
-  color: #8ff0c4;
+  color: var(--text);
 }
 .section-search-person-head {
-  margin-top: 30px;
+  margin-top: 32px;
 }
 
-/* ---------- Genres ---------- */
+/* ---------- Genres: quiet tiles, each with a fan of its trending posters ---------- */
 .section-search-genres {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 .section-search-genre {
   position: relative;
-  isolation: isolate;
   display: flex;
-  align-items: flex-end;
-  height: 88px;
-  padding: 14px 16px;
+  align-items: flex-start;
+  height: 112px;
+  padding: 20px;
   overflow: hidden;
   border: 0;
-  border-radius: 16px;
-  background: var(--genre);
-  color: #fff;
+  border-radius: var(--r-card);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-1);
+  color: var(--text);
   font: inherit;
   font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.2px;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
-  transition: transform var(--motion-fast) var(--motion-ease);
-}
-.section-search-genre img {
-  position: absolute;
-  z-index: -2;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.section-search-genre::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    var(--genre) 0,
-    color-mix(in oklch, var(--genre) 70%, transparent) 45%,
-    transparent
-  );
-}
-.section-search-genre span {
-  text-shadow: 0 2px 10px rgb(0 0 0 / 0.4);
+  transition: background-color var(--dur-fast) var(--ease);
 }
 .section-search-genre:hover {
-  transform: translateY(-2px);
+  background: var(--s2);
+}
+.section-search-genre-fan {
+  position: absolute;
+  right: 16px;
+  bottom: -20px;
+  display: flex;
+}
+.section-search-genre-fan img {
+  width: 56px;
+  aspect-ratio: 2 / 3;
+  border-radius: 6px;
+  object-fit: cover;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.5);
+  transition: transform var(--dur) var(--ease);
+}
+.section-search-genre-fan img + img {
+  margin-left: -20px;
+}
+.section-search-genre-fan img:nth-child(1) {
+  transform: rotate(-8deg) translateY(4px);
+}
+.section-search-genre-fan img:nth-child(2) {
+  position: relative;
+  z-index: 1;
+}
+.section-search-genre-fan img:nth-child(3) {
+  transform: rotate(8deg) translateY(4px);
+}
+/* The fan opens a little on hover. */
+.section-search-genre:hover .section-search-genre-fan img:nth-child(1) {
+  transform: rotate(-12deg) translate(-6px, -2px);
+}
+.section-search-genre:hover .section-search-genre-fan img:nth-child(2) {
+  transform: translateY(-6px);
+}
+.section-search-genre:hover .section-search-genre-fan img:nth-child(3) {
+  transform: rotate(12deg) translate(6px, -2px);
 }
 .section-search-genre:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 3px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* ---------- Results ---------- */
 .section-search-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 22px 16px;
+  gap: 24px 16px;
 }
 .search-card {
   min-width: 0;
@@ -355,27 +379,26 @@
 .search-card > b {
   display: block;
   overflow: hidden;
-  margin-top: 9px;
-  font-size: 13.5px;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .search-card > small {
   display: block;
-  margin-top: 3px;
-  color: #a1aaa5;
-  font-size: 12.5px;
+  margin-top: 4px;
+  color: var(--text-3);
+  font-size: 13px;
 }
 .section-search-top {
   position: relative;
   isolation: isolate;
-  margin-top: 26px;
+  margin-top: 24px;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 20px;
-  --tint: oklch(from var(--title-tint, #36a678) clamp(0.74, l, 0.82) clamp(0.07, c, 0.14) h);
-  --tint-ink: oklch(from var(--title-tint, #36a678) 0.22 0.04 h);
+  border-radius: var(--r-panel);
+  box-shadow: inset 0 0 0 1px var(--line-1);
 }
 .section-search-top-art {
   position: absolute;
@@ -401,42 +424,41 @@
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 22px 28px;
+  padding: 24px 28px;
 }
 .section-search-top-cover {
   flex: none;
   width: 124px;
   aspect-ratio: 2 / 3;
-  border-radius: 12px;
+  border-radius: var(--r-card);
   object-fit: cover;
-  box-shadow: 0 14px 34px rgb(0 0 0 / 0.5);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
 }
 .section-search-kicker {
-  color: #5fd3a0;
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
 }
 .section-search-top h2 {
-  margin: 6px 0;
+  margin: 4px 0 8px;
   font-size: 28px;
-  letter-spacing: -0.6px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 .section-search-top-meta {
   margin: 0;
-  color: #b7b7b7;
+  color: var(--text-2);
   font-size: 14px;
 }
 .section-search-top-meta .is-progress {
-  color: #5fd3a0;
+  color: var(--text);
 }
 .section-search-top-desc {
   display: -webkit-box;
   max-width: 600px;
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   overflow: hidden;
-  color: #b7b7b7;
+  color: var(--text-2);
   font-size: 14px;
   line-height: 1.5;
   -webkit-box-orient: vertical;
@@ -444,43 +466,40 @@
 }
 .section-search-top-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   margin-top: 16px;
 }
 .section-search-top .title-primary {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   height: 48px;
   padding: 0 24px 0 20px;
   border: 0;
-  border-radius: 16px;
-  background: linear-gradient(180deg, color-mix(in oklch, var(--tint), white 14%), var(--tint));
-  box-shadow:
-    0 10px 28px -8px color-mix(in oklch, var(--tint) 70%, transparent),
-    inset 0 1px 0 rgb(255 255 255 / 0.45);
-  color: var(--tint-ink);
+  border-radius: var(--r-btn);
+  background: var(--accent);
+  color: var(--on-accent);
   font: inherit;
-  font-size: 15.5px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
 }
 .section-search-top .title-primary:hover {
-  transform: translateY(-1px);
+  background: var(--accent-hover);
 }
 .section-search-top .title-library {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   height: 48px;
-  padding: 0 18px;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 16px;
-  background: rgb(255 255 255 / 0.08);
-  color: #fff;
+  padding: 0 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: rgb(14 16 15 / 0.72);
+  color: var(--text);
   font: inherit;
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   cursor: pointer;
 }
 .section-search-top .title-round {
@@ -489,10 +508,11 @@
   padding: 0;
 }
 .section-search-top .title-library:hover {
-  background: rgb(255 255 255 / 0.14);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 
-/* ---------- People & studios ---------- */
+/* ---------- People and studios ---------- */
 .section-search-people {
   display: flex;
   flex-wrap: wrap;
@@ -503,17 +523,18 @@
   align-items: center;
   gap: 12px;
   height: 64px;
-  padding: 0 18px 0 8px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 16px;
-  background: rgb(255 255 255 / 0.06);
-  color: #fff;
+  padding: 0 20px 0 8px;
+  border: 0;
+  border-radius: var(--r-card);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-1);
+  color: var(--text);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 .section-search-people > button:hover {
-  background: rgb(255 255 255 / 0.12);
+  background: var(--s2);
 }
 .section-search-people img,
 .section-search-initials {
@@ -523,81 +544,89 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #1d211f;
-  color: #5fd3a0;
-  font-weight: 800;
+  background: var(--s3);
+  color: var(--text-2);
+  font-weight: 600;
   object-fit: cover;
 }
 .section-search-people b {
   display: block;
-  font-size: 14.5px;
+  font-size: 15px;
+  font-weight: 500;
 }
 .section-search-people small {
-  color: #a1aaa5;
-  font-size: 12.5px;
+  color: var(--text-3);
+  font-size: 13px;
 }
 
 /* ---------- No results ---------- */
 .section-search-none {
   max-width: 1120px;
-  margin-top: 34px;
-  padding: 26px 30px;
-  border: 1px solid rgb(255 255 255 / 0.07);
-  border-radius: 20px;
-  background: rgb(255 255 255 / 0.04);
+  margin-top: 32px;
+  padding: 24px 28px;
+  border-radius: var(--r-panel);
+  background: var(--s1);
+  box-shadow: inset 0 0 0 1px var(--line-1);
 }
 .section-search-none h2 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: 22px;
+  font-weight: 600;
 }
 .section-search-none p {
-  margin: 0 0 18px;
-  color: #a1aaa5;
-  font-size: 14.5px;
+  margin: 0 0 16px;
+  color: var(--text-2);
+  font-size: 15px;
 }
 .section-search-none-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 .section-search-none-actions button {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  height: 46px;
-  padding: 0 18px;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 16px;
-  background: rgb(255 255 255 / 0.08);
-  color: #fff;
+  gap: 8px;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: var(--s1);
+  color: var(--text);
   font: inherit;
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   cursor: pointer;
 }
 .section-search-none-actions button.is-primary {
-  border-color: #fff;
-  background: #fff;
-  color: #0b0d0c;
-  font-weight: 800;
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
 }
 .section-search-none-actions button:hover:not(.is-primary) {
-  background: rgb(255 255 255 / 0.14);
+  border-color: var(--line-3);
+  background: var(--s3);
+}
+.section-search-none-actions button.is-primary:hover {
+  background: var(--accent-hover);
 }
 .section-search-more {
   display: block;
   margin: 32px auto 0;
-  padding: 12px 24px;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 16px;
-  background: rgb(255 255 255 / 0.08);
+  height: 44px;
+  padding: 0 24px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: var(--s1);
   color: var(--text);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 .section-search-more:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.14);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 
 /* ---------- Filters panel ---------- */
@@ -606,7 +635,7 @@
   z-index: 290;
   inset: 0;
   background: rgb(0 0 0 / 0.5);
-  animation: search-scrim-in 180ms ease both;
+  animation: search-scrim-in var(--dur-fast) var(--ease) both;
 }
 @keyframes search-scrim-in {
   from {
@@ -623,11 +652,11 @@
   flex-direction: column;
   align-items: stretch;
   width: min(440px, 100vw);
-  padding: 58px 28px 0;
-  border-left: 1px solid rgb(255 255 255 / 0.08);
-  background: rgb(12 14 13 / 0.98);
-  box-shadow: -30px 0 60px rgb(0 0 0 / 0.5);
-  animation: search-filters-in 260ms cubic-bezier(0.2, 0, 0, 1) both;
+  padding: 56px 28px 0;
+  border-left: 1px solid var(--line-1);
+  background: var(--s1);
+  box-shadow: -32px 0 64px rgb(0 0 0 / 0.5);
+  animation: search-filters-in var(--dur) var(--ease) both;
 }
 @keyframes search-filters-in {
   from {
@@ -643,22 +672,23 @@
 .search-filters-head h2 {
   margin: 0;
   font-size: 22px;
+  font-weight: 600;
 }
 .search-filters-close {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: 0;
-  border-radius: 11px;
-  background: rgb(255 255 255 / 0.08);
-  color: #fff;
+  border-radius: var(--r-btn);
+  background: var(--s3);
+  color: var(--text);
   cursor: pointer;
 }
 .search-filters-body {
   flex: 1;
   margin: 20px -28px 0;
-  padding: 0 28px 10px;
+  padding: 0 28px 12px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -666,79 +696,82 @@
   margin-bottom: 20px;
 }
 .search-filter-group h3 {
-  margin: 0 0 10px;
-  color: #a1aaa5;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  margin: 0 0 8px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
 }
 .search-filter-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
 }
 .search-filter-chips button {
-  height: 34px;
-  padding: 0 13px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 11px;
-  background: rgb(255 255 255 / 0.06);
-  color: #dedede;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-chip);
+  background: var(--s2);
+  box-shadow: inset 0 0 0 1px var(--line-1);
+  color: var(--text-2);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
   cursor: pointer;
 }
 .search-filter-chips button:hover {
-  background: rgb(255 255 255 / 0.12);
+  background: var(--s3);
+  color: var(--text);
 }
 .search-filter-chips button.is-on {
-  border-color: #fff;
-  background: #fff;
-  color: #0b0d0c;
-  font-weight: 700;
+  background: var(--text);
+  box-shadow: none;
+  color: var(--ink);
+  font-weight: 500;
 }
 .search-filter-chips button:focus-visible,
 .search-filters-foot button:focus-visible,
 .search-filters-close:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 .search-filter-select {
   width: 100%;
   height: 40px;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 11px;
-  background: rgb(255 255 255 / 0.06);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-btn);
+  background: var(--s2);
 }
 .search-filters-foot {
   display: flex;
-  gap: 10px;
-  padding: 16px 0 22px;
-  border-top: 1px solid rgb(255 255 255 / 0.07);
+  gap: 8px;
+  padding: 16px 0 24px;
+  border-top: 1px solid var(--line-1);
 }
 .search-filters-clear {
-  height: 50px;
+  height: 48px;
   padding: 0 20px;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 16px;
-  background: rgb(255 255 255 / 0.08);
-  color: #fff;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: var(--s1);
+  color: var(--text);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 .search-filters-apply {
   flex: 1;
-  height: 50px;
+  height: 48px;
   border: 0;
-  border-radius: 16px;
-  background: #fff;
-  color: #0b0d0c;
+  border-radius: var(--r-btn);
+  background: var(--accent);
+  color: var(--on-accent);
   font: inherit;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
   cursor: pointer;
+}
+.search-filters-apply:hover {
+  background: var(--accent-hover);
 }
 
 /* ---------- Narrow windows ---------- */
@@ -758,13 +791,19 @@
   html:not([data-platform="win32"]) :is(.search-filters, .search-filters-scrim) {
     animation: none;
   }
+  html:not([data-platform="win32"]) .section-search-genre-fan img {
+    transition: none;
+  }
 }
 html[data-motion="reduce"] :is(.search-filters, .search-filters-scrim) {
   animation: none;
 }
+html[data-motion="reduce"] .section-search-genre-fan img {
+  transition: none;
+}
 
 .section-search-keep-typing {
-  margin: 30px 0 0;
-  color: #a1aaa5;
-  font-size: 14.5px;
+  margin: 32px 0 0;
+  color: var(--text-3);
+  font-size: 15px;
 }

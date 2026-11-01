@@ -58,10 +58,11 @@ export function motionTransition(
   return reducedMotion ? { duration: 0 } : { duration: motionTiming[duration], ease: motionEase };
 }
 
+// Pages cross-fade; their own blocks rise in with `.page-rise` (styles/kit.css).
 export const routeVariants: Variants = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -6 },
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
 };
 
 export const profileRouteVariants: Variants = {

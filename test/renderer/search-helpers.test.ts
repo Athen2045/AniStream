@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  closeTitles,
   closestTitle,
   editDistance,
   isConfidentMatch,
@@ -25,6 +26,10 @@ describe("search helpers", () => {
     expect(closestTitle("one peice", ["ONE PIECE", "One Punch Man"])).toBe("ONE PIECE");
     expect(closestTitle("one peice", ["Cheating Craft", "001"])).toBeUndefined();
     expect(closestTitle("frirn", ["Sousou no Frieren"])).toBeUndefined();
+    expect(closeTitles("narto", ["Naruto: Shippuden", "Naruto", "Boruto"])).toEqual([
+      "Naruto",
+      "Naruto: Shippuden",
+    ]);
   });
 });
 

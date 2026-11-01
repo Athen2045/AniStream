@@ -11,7 +11,6 @@ import { Select } from "./Select";
 import { SourceLogo } from "./SourceLogo";
 import { ProfileHeroBand } from "./ProfileHeroBand";
 import { ProfileLookDialog } from "./ProfileLookDialog";
-import { usePicturePalette } from "./profile-look";
 import { ProfileSyncChip, type ProfileSyncSource } from "./ProfileSyncChip";
 
 export type SimklTab = "MOVIE" | "TV";
@@ -60,15 +59,11 @@ export function SimklProfileView({
   const [editing, setEditing] = useState(false);
   const auth = status.auth.status === "connected" ? status.auth : undefined;
   const picture = profile?.avatarUrl ?? auth?.avatarUrl;
-  const palette = usePicturePalette(picture);
   const items = useMemo(() => profile?.items ?? [], [profile]);
   const counts = useMemo(() => simklCounts(items), [items]);
 
   return (
-    <div
-      className="profile-page profile-page--simkl"
-      style={palette ? ({ "--profile-accent": palette[0] } as React.CSSProperties) : undefined}
-    >
+    <div className="profile-page profile-page--simkl">
       <header className="profile-header">
         <ProfileHeroBand pictureUrl={picture} />
         <ProfileSyncChip sources={syncSources} />

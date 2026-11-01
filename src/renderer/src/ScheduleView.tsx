@@ -1,5 +1,5 @@
 import { Check, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AiringSchedule, AniListCatalogMedia } from "../../shared/contracts";
 import type { PersonalRelease } from "../../shared/personal-library";
 import { formatClockTime, formatCountdown } from "./airing";
@@ -187,25 +187,21 @@ export function ScheduleView({
           : weekLabel(week, now);
   const subtitle = [
     monthly ? undefined : weekOffset >= -1 && weekOffset <= 1 ? weekLabel(week, now) : undefined,
-    listOnly
-      ? member
-        ? "Continue Watching and your list"
-        : "Continue Watching"
-      : "Everything airing",
+    listOnly ? (member ? "From your list" : "From what you're watching") : "Everything airing",
   ]
     .filter(Boolean)
     .join(" · ");
 
   return (
-    <section className="schedule-page" aria-labelledby="schedule-heading">
-      <header className="schedule-header">
-        <div className="schedule-title">
+    <section className="schedule-page page-rise" aria-labelledby="schedule-heading">
+      <header className="page-head">
+        <div className="page-head-title">
           <h1 id="schedule-heading">{heading}</h1>
-          <p className="schedule-range">{subtitle}</p>
+          <p className="page-head-sub">{subtitle}</p>
         </div>
-        <div className="schedule-controls">
+        <div className="page-head-actions">
           {personalSchedule ? (
-            <div className="schedule-tabs" role="group" aria-label="Schedule view">
+            <div className="segmented" role="group" aria-label="Schedule view">
               {(
                 [
                   ["week", "Week"],
@@ -224,25 +220,22 @@ export function ScheduleView({
               ))}
             </div>
           ) : null}
-          <div className="schedule-nav" role="group" aria-label={`Change ${unit}`}>
+          <div className="segmented" role="group" aria-label={`Change ${unit}`}>
             <button
               type="button"
+              className="is-icon"
               aria-label={`Previous ${unit}`}
               title={`Previous ${unit}`}
               onClick={() => setOffset((value) => value - 1)}
             >
               <ChevronLeft size={18} aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              className="schedule-today"
-              disabled={offset === 0}
-              onClick={() => setOffset(0)}
-            >
+            <button type="button" disabled={offset === 0} onClick={() => setOffset(0)}>
               Today
             </button>
             <button
               type="button"
+              className="is-icon"
               aria-label={`Next ${unit}`}
               title={`Next ${unit}`}
               onClick={() => setOffset((value) => value + 1)}
@@ -287,25 +280,20 @@ export function ScheduleView({
           onOpenWeek={openWeekOf}
         />
       ) : (
-        <ol className="schedule-agenda" aria-busy={loading}>
-          {days.map((day) => (
-            <AgendaDay
-              key={day.date.toISOString()}
-              day={day}
-              loading={loading}
-              now={now}
-              progressById={progressById}
-              showListMark={!listOnly}
-              onOpen={onOpenMedia}
-            />
-          ))}
-        </ol>
+        <WeekDays
+          days={days}
+          loading={loading}
+          now={now}
+          progressById={progressById}
+          showListMark={!listOnly}
+          onOpen={onOpenMedia}
+        />
       )}
 
       {catchUp.length ? (
         <section className="schedule-catchup" aria-labelledby="schedule-catchup-heading">
           <h2 id="schedule-catchup-heading">
-            Ready for you <span>{catchUp.length}</span>
+            Ready for you <span>{catchUp.length} new</span>
           </h2>
           <div className="schedule-catchup-row">
             {catchUp.map((release) => (
@@ -318,58 +306,111 @@ export function ScheduleView({
   );
 }
 
-function AgendaDay({
-  day,
+/** The week as day tabs (with their episode counts) above the chosen day's list. */
+function WeekDays({
+  days,
   loading,
   now,
   progressById,
   showListMark,
   onOpen,
 }: {
-  day: ScheduleDay;
+  days: ScheduleDay[];
   loading: boolean;
   now: number;
   progressById: ReadonlyMap<number, number>;
   showListMark: boolean;
   onOpen: (media: AniListCatalogMedia) => void;
 }): React.JSX.Element {
-  const groups = groupScheduleEntries(day.entries);
-  const label = day.date.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
+  const keys = days.map((day) => day.date.toDateString());
+  const fallback =
+    days.find((day) => day.isToday) ?? days.find((day) => day.entries.length) ?? days[0];
+  // A day chosen in another week falls back to today (or the first day with airings).
+  const [chosen, setChosen] = useState<string>();
+  const selected = days.find((day) => day.date.toDateString() === chosen) ?? fallback;
+  const selectedIndex = selected ? days.indexOf(selected) : 0;
+  const tabs = useRef<Array<HTMLButtonElement | null>>([]);
+  const groups = selected ? groupScheduleEntries(selected.entries) : [];
+  const dayName = selected?.date.toLocaleDateString(undefined, { weekday: "long" });
+
+  // Arrow keys, Home and End move between the days (the tab pattern).
+  const moveFocus = (event: React.KeyboardEvent, index: number): void => {
+    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    const next = event.key === "Home" ? 0 : event.key === "End" ? days.length - 1 : index + step;
+    if (next === index || next < 0 || next >= days.length) return;
+    event.preventDefault();
+    setChosen(keys[next]);
+    tabs.current[next]?.focus();
+  };
+
   return (
-    <li
-      className={`schedule-agenda-day${day.isToday ? " is-today" : ""}${groups.length || loading ? "" : " is-empty"}`}
-      aria-label={label}
-    >
-      <div className="schedule-agenda-date">
-        <span>{day.date.toLocaleDateString(undefined, { weekday: "short" })}</span>
-        <strong>{day.date.getDate()}</strong>
-        {day.isToday ? <em>Today</em> : null}
+    <div className="schedule-week">
+      <div className="schedule-days" role="tablist" aria-label="Days">
+        {days.map((day, index) => {
+          const count = day.entries.length;
+          return (
+            <button
+              key={keys[index]}
+              ref={(element) => {
+                tabs.current[index] = element;
+              }}
+              type="button"
+              role="tab"
+              id={`schedule-day-${index}`}
+              aria-selected={index === selectedIndex}
+              aria-controls="schedule-day-panel"
+              tabIndex={index === selectedIndex ? 0 : -1}
+              className={`schedule-day${day.isToday ? " is-today" : ""}`}
+              onClick={() => setChosen(keys[index])}
+              onKeyDown={(event) => moveFocus(event, index)}
+            >
+              <strong>
+                {day.isToday
+                  ? "Today"
+                  : day.date.toLocaleDateString(undefined, { weekday: "short" })}
+              </strong>
+              <span>
+                {day.date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                {loading
+                  ? null
+                  : ` · ${count ? `${count} episode${count === 1 ? "" : "s"}` : "none"}`}
+              </span>
+            </button>
+          );
+        })}
       </div>
-      {loading ? (
-        <div className="schedule-agenda-items">
-          <span className="schedule-card-skeleton" />
-        </div>
-      ) : groups.length ? (
-        <div className="schedule-agenda-items">
-          {groups.map((group) => (
-            <ScheduleCard
-              key={`${group.media.id}:${group.airingAt}`}
-              group={group}
-              now={now}
-              progress={progressById.get(group.media.id)}
-              showListMark={showListMark}
-              onOpen={onOpen}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="schedule-agenda-empty">Nothing airing</p>
-      )}
-    </li>
+      <div
+        className="schedule-day-panel"
+        id="schedule-day-panel"
+        role="tabpanel"
+        aria-labelledby={`schedule-day-${selectedIndex}`}
+        aria-busy={loading}
+      >
+        {loading ? (
+          <ul className="ledger" aria-hidden="true">
+            {[0, 1, 2].map((row) => (
+              <li key={row} className="schedule-row-skeleton" />
+            ))}
+          </ul>
+        ) : groups.length ? (
+          <ul className="ledger">
+            {groups.map((group) => (
+              <li key={`${group.media.id}:${group.airingAt}`}>
+                <ScheduleRow
+                  group={group}
+                  now={now}
+                  progress={progressById.get(group.media.id)}
+                  showListMark={showListMark}
+                  onOpen={onOpen}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="schedule-empty">Nothing airs on {dayName}</p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -379,7 +420,15 @@ function episodeLabel(group: ScheduleGroup): string {
     : `Ep ${group.firstEpisode}–${group.lastEpisode}`;
 }
 
-function ScheduleCard({
+/** "Episode 7 of 11", "Episodes 7–8", or "Episode 1180" when the total is unknown. */
+function episodeLine(group: ScheduleGroup): string {
+  if (group.firstEpisode !== group.lastEpisode)
+    return `Episodes ${group.firstEpisode}–${group.lastEpisode}`;
+  const total = group.media.totalProgress;
+  return `Episode ${group.firstEpisode}${total ? ` of ${total}` : ""}`;
+}
+
+function ScheduleRow({
   group,
   now,
   progress,
@@ -394,44 +443,51 @@ function ScheduleCard({
 }): React.JSX.Element {
   const airsInMs = group.airingAt * 1000 - now;
   const aired = airsInMs <= 0;
-  const watched = progress !== undefined && progress >= group.lastEpisode;
+  const onList = progress !== undefined;
+  const watched = onList && progress >= group.lastEpisode;
+  const when = aired
+    ? "Aired"
+    : airsInMs <= COUNTDOWN_WINDOW_MS
+      ? formatCountdown(group.airingAt, now).replace(/^in /, "In ")
+      : undefined;
+  // "Out now" is the one live state, so it alone carries the sky dot.
   const status = watched
     ? "Watched"
-    : aired
-      ? "Aired"
-      : airsInMs <= COUNTDOWN_WINDOW_MS
-        ? formatCountdown(group.airingAt, now)
+    : aired && onList
+      ? "Out now"
+      : showListMark && onList
+        ? "On your list"
         : undefined;
   const time = formatClockTime(group.airingAt);
+  const genres = (group.media.genres ?? []).slice(0, 2).join(", ");
   return (
     <button
       type="button"
-      className={`schedule-card${aired ? " is-aired" : ""}${watched ? " is-watched" : ""}`}
+      className={`schedule-row${aired ? " is-aired" : ""}`}
       onClick={() => onOpen(group.media)}
-      aria-label={`${group.media.title}, ${episodeLabel(group).replace("Ep", "episode")}, ${time}${status ? `, ${status}` : ""}`}
+      aria-label={`${group.media.title}, ${episodeLine(group)}, ${time}${
+        status ? `, ${status}` : when ? `, ${when}` : ""
+      }`}
     >
+      <span className="schedule-row-time">
+        <time>{time}</time>
+        {when ? <small>{when}</small> : null}
+      </span>
       <CoverImage
         src={group.media.coverUrl}
         title={group.media.title}
-        className="schedule-card-cover"
+        className="schedule-row-cover"
       />
-      <span className="schedule-card-copy">
-        <strong>
-          {showListMark && progress !== undefined ? (
-            <span className="schedule-card-mark" title="On your list" aria-hidden="true" />
-          ) : null}
-          <span className="schedule-card-title">{group.media.title}</span>
-        </strong>
-        <span className="schedule-card-meta">
-          {episodeLabel(group)} · <time>{time}</time>
-        </span>
+      <span className="schedule-row-title">
+        <strong>{group.media.title}</strong>
+        {genres ? <small>{genres}</small> : null}
       </span>
-      {status ? (
-        <span className="schedule-card-status">
-          {watched ? <Check size={12} strokeWidth={3} aria-hidden="true" /> : null}
-          {status}
-        </span>
-      ) : null}
+      <span className="schedule-row-episode">{episodeLine(group)}</span>
+      <span className={`schedule-row-status${status === "Out now" ? " is-new" : ""}`}>
+        {status === "Out now" ? <span className="live-dot" aria-hidden="true" /> : null}
+        {status === "Watched" ? <Check size={16} aria-hidden="true" /> : null}
+        {status}
+      </span>
     </button>
   );
 }

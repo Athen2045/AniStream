@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/Athen2045/AniStream/releases/latest">Download</a> |
-  <a href=".github/releases/v2.2.2.md">Release notes</a> |
+  <a href=".github/releases/v2.2.4.md">Release notes</a> |
   <a href="CHANGELOG.md">Changelog</a> |
   <a href="LEGAL.md">Copyright</a>
 </p>
@@ -108,8 +108,8 @@ Download the installer for your platform from the
 
 | Platform | File                        | Requires                           |
 | -------- | --------------------------- | ---------------------------------- |
-| Windows  | `AniStream.Setup.2.2.2.exe` | Windows 10 or 11, x64              |
-| macOS    | `AniStream-2.2.2-arm64.dmg` | macOS 12 or newer on Apple Silicon |
+| Windows  | `AniStream.Setup.2.2.4.exe` | Windows 10 or 11, x64              |
+| macOS    | `AniStream-2.2.4-arm64.dmg` | macOS 12 or newer on Apple Silicon |
 
 Both installers are unsigned. On Windows, select **More info → Run anyway** if SmartScreen warns
 you. On macOS, open **System Settings → Privacy & Security** and choose **Open Anyway** after the

@@ -22,7 +22,7 @@
   display: block;
   overflow: hidden;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: var(--r-card);
   background: var(--surface-panel);
   transition:
     transform var(--motion-standard) var(--motion-ease),
@@ -51,11 +51,11 @@
   gap: 4px;
   height: 24px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--r-chip);
   background: rgb(10 12 11 / 0.72);
-  color: #4fd39a;
+  color: var(--text);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   backdrop-filter: blur(8px);
 }
 .similar-score--star {
@@ -100,7 +100,7 @@
   place-items: center;
   color: var(--muted);
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .more-cast-card strong {
   display: block;

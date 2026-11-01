@@ -16,7 +16,7 @@ permissions:
 jobs:
   audit:
     name: npm audit (runtime blocking, full advisory report)
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - name: Check out repository

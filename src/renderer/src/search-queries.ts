@@ -16,7 +16,7 @@ import { catalogTrendingQuery } from "./catalog-queries";
 import { browseInput, filterKey, type CatalogFilterState } from "./catalog-filters";
 import { moreKey } from "./more-format";
 import { moreTrendingQuery } from "./more-queries";
-import { closestTitle } from "./search-helpers";
+import { closeTitles, closestTitle } from "./search-helpers";
 
 export type SearchScope = "ANIME" | "MANGA" | "MORE";
 
@@ -42,6 +42,7 @@ export type SearchResults =
 type SearchApi = Pick<
   AniStreamBridge,
   | "browseAniList"
+  | "getTitleSuggestions"
   | "browseMore"
   | "searchMore"
   | "getMoreTrending"
@@ -190,7 +191,9 @@ export function mergeSearchPages(data: InfiniteData<SearchResults, unknown>): Se
 
 /**
  * "Did you mean": for an Anime/Manga search that found nothing, one AniList lookup on the first
- * word by popularity; a title within two typos, or null.
+ * word by popularity; a title within two typos, or null. AniList matches whole words, so a typo
+ * in the first word ("Frierne") finds nothing there: then Kitsu's typo-tolerant search supplies
+ * the candidate names, held to the same two-typo rule.
  */
 export function didYouMeanQuery(
   type: AniListMediaType,
@@ -208,12 +211,21 @@ export function didYouMeanQuery(
         sort: "POPULARITY_DESC",
         query: first,
       });
-      return (
-        closestTitle(
-          query,
-          page.items.map((item) => item.title),
-        ) ?? null
+      const fromAniList = closestTitle(
+        query,
+        page.items.map((item) => item.title),
       );
+      if (fromAniList) return fromAniList;
+      // Kitsu spells some titles differently from AniList ("Shippuuden"), and AniList matches whole
+      // words, so a name is offered only once AniList finds something for it (at most two tries).
+      const names = await api.getTitleSuggestions(type, query).catch(() => []);
+      for (const name of closeTitles(query, names).slice(0, 2)) {
+        const found = await api
+          .browseAniList({ type, page: 1, perPage: 1, sort: "POPULARITY_DESC", query: name })
+          .catch(() => undefined);
+        if (found?.items.length) return name;
+      }
+      return null;
     },
     staleTime: RESULTS_STALE_MS,
   });

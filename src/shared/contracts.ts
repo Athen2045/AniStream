@@ -255,6 +255,12 @@ export interface AnimeEpisodeRanges {
   ranges: AnimeEpisodeRange[];
 }
 
+/** An anime title page's wide artwork: a film's backdrop for a movie, else its show's. */
+export interface AnimeHeroBackdropInput {
+  aniListId: number;
+  movie: boolean;
+}
+
 export interface AnimeEpisodeRangesInput {
   aniListId: number;
   /** Episodes in the AniList entry (or aired so far). */
@@ -477,6 +483,16 @@ export interface MorePlayerSource {
   providerCount: number;
   /** Frame it with the HTML sandbox (only players whose entry opts in; see provider-config). */
   sandboxed: boolean;
+  /** Set for players whose events are `{ type: "<prefix><event>" }` without a TMDB id. */
+  eventPrefix?: string;
+  /** How long this player may take to start before the next one is tried (default 20 s). */
+  startTimeoutMs?: number;
+  /** Set for players whose events are `{ source: "<eventSource>", event, info }` (PlayerJS). */
+  eventSource?: string;
+  /** Source tag for commands sent to such a player (e.g. `seek` to resume). */
+  commandSource?: string;
+  /** Origin the player document runs on when the embed URL redirects; messages come from it. */
+  frameOrigin?: string;
 }
 
 export interface MorePlaybackResume extends MorePlaybackInput {
@@ -728,6 +744,11 @@ export interface AnimePlaybackInput {
   episode: number;
   providerEpisodeId?: string;
   audio?: "sub" | "dub";
+  /** Saved position, for players that accept a start time in their URL. */
+  startAtSeconds?: number;
+  /** Whether AniStream's episode list has an episode before / after this one (player buttons). */
+  hasPrevious?: boolean;
+  hasNext?: boolean;
 }
 
 export interface AnimePlaybackCandidate {
@@ -737,6 +758,10 @@ export interface AnimePlaybackCandidate {
   url: string;
   language?: string;
   provider?: string;
+  /** Which configured player this is (local config id); candidates come in player order. */
+  player?: string;
+  /** Set for players whose events are `{ source: "<eventSource>", type: "event", name, data }`. */
+  eventSource?: string;
 }
 
 export interface AnimePlaybackResult {
@@ -1088,6 +1113,8 @@ export interface AniStreamBridge {
   getCachedAniListDashboard(): Promise<AniListDashboard | undefined>;
   getAniListDashboard(): Promise<AniListDashboard>;
   browseAniList(input: BrowseAniListInput): Promise<AniListCatalogPage>;
+  /** Typo-tolerant title names for Search's "did you mean" (empty when unavailable). */
+  getTitleSuggestions(type: AniListMediaType, query: string): Promise<string[]>;
   /** Titles of one type a search's character appears in, or its studio made. */
   getAniListPersonTitles(
     kind: "character" | "studio",
@@ -1111,6 +1138,7 @@ export interface AniStreamBridge {
   getAnimeEpisodeArt(input: AnimeEpisodeArtInput): Promise<AnimeEpisodeArt[]>;
   getAnimeSkipTimes(input: AnimeSkipTimesInput): Promise<AnimeSkipSegment[]>;
   getAnimeEpisodeRanges(input: AnimeEpisodeRangesInput): Promise<AnimeEpisodeRanges | undefined>;
+  getAnimeHeroBackdrop(input: AnimeHeroBackdropInput): Promise<string | undefined>;
   getAnimeDirectPlayback(input: AnimeDirectPlaybackInput): Promise<AnimeDirectPlayback>;
   /** One subtitle track as WebVTT. */
   getAnimeDirectSubtitle(id: string): Promise<AnimeDirectSubtitle>;

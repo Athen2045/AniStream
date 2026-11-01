@@ -3,6 +3,7 @@ import type { AnimeSourceClient } from "../anime-source";
 import type { AniListClient } from "../anilist";
 import type { AnimeTmdbLinks } from "../anime-tmdb-links";
 import { animeEpisodeArt } from "../anime-episode-art";
+import { animeHeroBackdrop } from "../anime-hero-backdrop";
 import { animeEpisodeRanges } from "../anime-episode-ranges";
 import type { AniZipClient } from "../anizip";
 import { createBoundedCache } from "../anilist/cache";
@@ -15,9 +16,12 @@ import type { AnimeEpisodeArt, AnimeEpisodeRanges, AnimeSkipSegment } from "../.
 import { skipTimesCopyKey } from "../downloads/download-extras";
 import type { MalClient } from "../mal";
 import { registerTrustedIpcHandler } from "../ipc";
+import { animePlaybackFromPlayers, type AnimePlayers } from "../anime-embed-players";
 
 export interface AnimeDomainDeps {
   animeSource: AnimeSourceClient | undefined;
+  /** Embedded anime players in configured order (empty when playback is off or unconfigured). */
+  animePlayers?: AnimePlayers;
   mal: MalClient | undefined;
   /**
    * Episode thumbnail sources, tried in this order (user decision 2026-10-13); each is optional.
@@ -37,7 +41,7 @@ export interface AnimeDomainDeps {
 /** Configured anime source episode discovery/playback, plus MAL score and trending fallback. */
 export function registerAnimeDomain(
   trustedRendererOrigin: string,
-  { animeSource, mal, episodeArt, copies, skipTimes }: AnimeDomainDeps,
+  { animeSource, animePlayers = [], mal, episodeArt, copies, skipTimes }: AnimeDomainDeps,
 ): void {
   // Saved with the title (and for each download, `download-extras.ts`), so a downloaded episode
   // can still skip its opening offline. The player's length can differ from the length the times
@@ -135,6 +139,36 @@ export function registerAnimeDomain(
       );
     },
   );
+  // A sharp 16:9 backdrop for the title page from the exactly linked TMDB title, saved with the
+  // title so it shows offline too. Without a link (or TMDB) the page keeps AniList's banner.
+  registerTrustedIpcHandler(trustedRendererOrigin, "anime:hero-backdrop", async (_event, input) => {
+    const tmdb = episodeArt?.tmdb;
+    if (!tmdb) return undefined;
+    return withTitleCopy(
+      copies,
+      `backdrop:${input.aniListId}`,
+      input.aniListId,
+      () =>
+        animeHeroBackdrop(
+          {
+            tmdbKeysFor: (id) => tmdb.links.index().tmdbKeysFor(id),
+            backdrop: async (id, type) => (await tmdb.tmdb.getDetail(id, type)).heroBackdropUrl,
+          },
+          input,
+        ),
+      (url) => url !== undefined,
+    ).catch(() => undefined);
+  });
+  // Search's "did you mean" for a word AniList cannot match (it matches whole words only): Kitsu's
+  // typo-tolerant search supplies title names, sent only after an Anime/Manga search found nothing.
+  registerTrustedIpcHandler(
+    trustedRendererOrigin,
+    "search:title-suggestions",
+    async (_event, type, query) => {
+      const kitsu = episodeArt?.kitsu;
+      return kitsu ? kitsu.searchTitles(type, query).catch(() => []) : [];
+    },
+  );
   registerTrustedIpcHandler(trustedRendererOrigin, "anime:provider-readiness", async () => {
     if (!animeSource) {
       return {
@@ -171,8 +205,8 @@ export function registerAnimeDomain(
     },
   );
   registerTrustedIpcHandler(trustedRendererOrigin, "anime:playback", async (_event, input) => {
-    if (!animeSource) throw new Error("Anime playback is not configured.");
-    return animeSource.getPlayback(input);
+    if (animePlayers.length === 0) throw new Error("Anime playback is not configured.");
+    return animePlaybackFromPlayers(animePlayers, input);
   });
   registerTrustedIpcHandler(trustedRendererOrigin, "mal:score", async (_event, type, malId) => {
     if (!mal) throw new Error("MyAnimeList is not ready.");

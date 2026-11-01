@@ -22,6 +22,7 @@ import type {
   AnimeSeriesNode,
   TitlePreferences,
   AnimeEpisodeRangesInput,
+  AnimeHeroBackdropInput,
   AnimeEpisodeCatalogInput,
   AnimePlaybackInput,
   AnimePlaybackResult,
@@ -160,6 +161,7 @@ export interface IpcInvokeChannelMap {
   "anilist:cached-dashboard": { args: []; result: AniListDashboard | undefined };
   "anilist:dashboard": { args: []; result: AniListDashboard };
   "anilist:browse": { args: [input: BrowseAniListInput]; result: AniListCatalogPage };
+  "search:title-suggestions": { args: [type: AniListMediaType, query: string]; result: string[] };
   "anilist:person-titles": {
     args: [kind: "character" | "studio", id: number, type: AniListMediaType];
     result: AniListCatalogMedia[];
@@ -206,6 +208,7 @@ export interface IpcInvokeChannelMap {
     args: [input: AnimeEpisodeRangesInput];
     result: AnimeEpisodeRanges | undefined;
   };
+  "anime:hero-backdrop": { args: [input: AnimeHeroBackdropInput]; result: string | undefined };
   "anime:playback": { args: [input: AnimePlaybackInput]; result: AnimePlaybackResult };
   "mal:score": {
     args: [type: AniListMediaType, malId: number];

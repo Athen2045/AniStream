@@ -17,8 +17,14 @@ export interface SideRailItem {
   label: string;
   icon: LucideIcon;
   active?: boolean;
-  /** Small count on the icon (Up Next queue, downloads in progress). */
-  badge?: number;
+  /** Quiet text at the end of the open row: "4", "1 running", "2 new". */
+  meta?: string;
+  /** The signature sky dot: something new or airing (Schedule). Colours the meta too. */
+  live?: boolean;
+  /** A neutral dot on the closed icon: something in progress (downloads). */
+  busy?: boolean;
+  /** A second line under the label (the profile's tracker). */
+  sublabel?: string;
   /** Accessible name when it says more than the label (e.g. "Downloads, 2 in progress"). */
   ariaLabel?: string;
   title?: string;
@@ -32,10 +38,10 @@ export interface SideRailItem {
 }
 
 /**
- * TV-style left rail (user decision 2026-10-20; mockups prototypes/mockups/tv-ui/): 64 px of icons
- * at rest, opening to 264 px with labels only when the pointer rests on it for 3 s or keyboard focus
- * enters it. It opens over the page (no reflow): one edge moves (clip-path) while the labels fade
- * in place, after the user's reference video.
+ * TV-style left rail (user decision 2026-10-20; redesign 2026-10-31, mockup 03): 72 px of icons at
+ * rest, opening to 264 px with labels and counts only when the pointer rests on it for 3 s or
+ * keyboard focus enters it. It opens over a dimmed page (no reflow): one edge moves (clip-path)
+ * while the labels fade in place, after the user's reference video.
  */
 export function SideRail({
   sections,
@@ -45,6 +51,7 @@ export function SideRail({
   onHome,
 }: {
   sections: SideRailItem[];
+  /** Schedule, Up Next and Downloads, under a "Library" label. */
   tools: SideRailItem[];
   /** Bottom rows: library refresh, Report a bug, profile, Settings. */
   footer: SideRailItem[];
@@ -77,7 +84,7 @@ export function SideRail({
       <button
         key={item.key}
         type="button"
-        className={`side-rail-item${item.active ? " is-active" : ""}`}
+        className={`side-rail-item${item.active ? " is-active" : ""}${item.sublabel ? " has-sublabel" : ""}`}
         aria-label={item.ariaLabel ?? item.label}
         aria-current={item.active ? "page" : undefined}
         title={open ? undefined : (item.title ?? item.label)}
@@ -109,11 +116,27 @@ export function SideRail({
               onAnimationEnd={item.onIconAnimationEnd}
             />
           )}
-          {item.badge ? (
-            <span className="side-rail-badge">{item.badge > 99 ? "99+" : item.badge}</span>
+          {item.live ? (
+            <span className="side-rail-dot is-live" aria-hidden="true" />
+          ) : item.busy ? (
+            <span className="side-rail-dot" aria-hidden="true" />
           ) : null}
         </span>
-        <span className="side-rail-label">{item.label}</span>
+        <span className="side-rail-label">
+          {item.sublabel ? (
+            <>
+              <b>{item.label}</b>
+              <small>{item.sublabel}</small>
+            </>
+          ) : (
+            item.label
+          )}
+        </span>
+        {item.meta ? (
+          <span className={`side-rail-meta${item.live ? " is-live" : ""}`} aria-hidden="true">
+            {item.meta}
+          </span>
+        ) : null}
       </button>
     );
   };
@@ -173,13 +196,17 @@ export function SideRail({
         <div className="side-rail-group">{sections.map(row)}</div>
         {tools.length ? (
           <>
-            <span className="side-rail-sep" aria-hidden="true" />
+            <span className="side-rail-heading" aria-hidden="true">
+              <span className="side-rail-label">Library</span>
+            </span>
             <div className="side-rail-group">{tools.map(row)}</div>
           </>
         ) : null}
         <span className="side-rail-grow" aria-hidden="true" />
         <div className="side-rail-group">{footer.map(row)}</div>
       </nav>
+      {/* Dims the page while the rail is open; the rail itself stays clear. */}
+      <div className={`side-rail-dim${open ? " is-open" : ""}`} aria-hidden="true" />
     </>
   );
 }

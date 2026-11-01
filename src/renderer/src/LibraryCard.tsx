@@ -2,7 +2,6 @@ import { Pencil, Star } from "lucide-react";
 import type { AniListEntry, AniListMedia } from "../../shared/contracts";
 import { formatMediaLabel } from "./format-label";
 import { CoverImage } from "./CoverImage";
-import { titleAccentStyle } from "./title-accent";
 import { statusLabel } from "./profile-library";
 
 type OpenMedia = (media: AniListMedia, action: "details" | "play" | "read") => void;
@@ -13,8 +12,6 @@ function progressParts(entry: AniListEntry) {
     total,
     ratio: total ? Math.min(1, entry.progress / total) : undefined,
     unit: entry.media.type === "ANIME" ? "ep" : "ch",
-    // Manga progress takes the title's cover color; anime keeps the brand green.
-    style: entry.media.type === "MANGA" ? titleAccentStyle(entry.media.coverColor) : undefined,
   };
 }
 
@@ -28,11 +25,11 @@ export function LibraryCard({
   onEdit: (entry: AniListEntry) => void;
   onOpenMedia: OpenMedia;
 }) {
-  const { total, ratio, unit, style } = progressParts(entry);
+  const { total, ratio, unit } = progressParts(entry);
   return (
     <article
       className={`library-card${entry.media.type === "MANGA" ? " library-card--manga" : ""}`}
-      style={style}
+      data-world={entry.media.type === "MANGA" ? "manga" : "anime"}
     >
       <div className="library-card-art">
         <button
@@ -91,10 +88,14 @@ export function LibraryRow({
   onEdit: (entry: AniListEntry) => void;
   onOpenMedia: OpenMedia;
 }) {
-  const { total, ratio, style } = progressParts(entry);
+  const { total, ratio } = progressParts(entry);
   const anime = entry.media.type === "ANIME";
   return (
-    <div className={`library-row${anime ? "" : " library-row--manga"}`} role="row" style={style}>
+    <div
+      className={`library-row${anime ? "" : " library-row--manga"}`}
+      role="row"
+      data-world={anime ? "anime" : "manga"}
+    >
       <button
         className="library-row-thumb"
         type="button"

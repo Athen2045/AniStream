@@ -65,13 +65,13 @@ const TABS = [
     id: "account",
     label: "Account",
     icon: UserRound,
-    lede: "Your trackers and how your profile looks.",
+    lede: "Your trackers and how your profile looks",
   },
   {
     id: "general",
     label: "General",
     icon: Settings2,
-    lede: "What AniStream shows and where it starts.",
+    lede: "What AniStream shows and where it starts",
   },
   {
     id: "for-you",
@@ -83,14 +83,14 @@ const TABS = [
     id: "playback",
     label: "Playback",
     icon: MonitorPlay,
-    lede: "How episodes and movies play, and where downloads go.",
+    lede: "How episodes and movies play, and where downloads go",
   },
-  { id: "reading", label: "Reading", icon: BookOpen, lede: "How manga pages look in the reader." },
+  { id: "reading", label: "Reading", icon: BookOpen, lede: "How manga pages look in the reader" },
   {
     id: "data",
-    label: "Backup & updates",
+    label: "Backup and updates",
     icon: Database,
-    lede: "Your data on this device, and new versions.",
+    lede: "Your data on this device, and new versions",
   },
 ] as const;
 export type SettingsTab = (typeof TABS)[number]["id"];
@@ -249,7 +249,7 @@ function GeneralPane(): React.JSX.Element {
     <>
       <Label>Start</Label>
       <div className="set-card">
-        <Row title="Open on" hint="The section AniStream shows when it starts.">
+        <Row title="Open on" hint="The section AniStream shows when it starts">
           <Pills
             label="Open on"
             value={preferences.startSection}
@@ -274,7 +274,7 @@ function GeneralPane(): React.JSX.Element {
             onChange={(on) => setAppPreference("upNext", on)}
           />
         </Row>
-        <Row title="Airing schedule" hint="A calendar of upcoming episodes in the navbar.">
+        <Row title="Airing schedule" hint="A calendar of upcoming episodes in the side rail">
           <Toggle
             label="Airing schedule"
             checked={preferences.schedule}
@@ -283,7 +283,7 @@ function GeneralPane(): React.JSX.Element {
         </Row>
         <Row
           title="Latest Updates"
-          hint="Newest episodes and chapters at the bottom of Anime and Manga."
+          hint="Newest episodes and chapters at the bottom of Anime and Manga"
         >
           <Toggle
             label="Latest Updates"
@@ -291,7 +291,7 @@ function GeneralPane(): React.JSX.Element {
             onChange={(on) => setAppPreference("latestUpdates", on)}
           />
         </Row>
-        <Row title="Rotating highlights" hint="The featured title at the top changes on its own.">
+        <Row title="Rotating highlights" hint="The featured title at the top changes on its own">
           <Toggle
             label="Rotating highlights"
             checked={preferences.heroRotate}
@@ -321,7 +321,7 @@ function GeneralPane(): React.JSX.Element {
       </div>
       <Label>Motion</Label>
       <div className="set-card">
-        <Row title="Reduce motion" hint="Fewer animations and transitions.">
+        <Row title="Reduce motion" hint="Fewer animations and transitions">
           <Toggle
             label="Reduce motion"
             checked={preferences.reduceMotion}
@@ -388,7 +388,7 @@ function BackgroundCard(): React.JSX.Element | null {
         {preferences && !preferences.keepRunning ? (
           <Row
             title="If downloads are still running"
-            hint="Downloads that do not finish continue the next time you open AniStream."
+            hint="Downloads that do not finish continue the next time you open AniStream"
           >
             <Select
               ariaLabel="If downloads are still running"
@@ -414,7 +414,7 @@ function ForYouPane(): React.JSX.Element {
   return (
     <>
       <div className="set-card">
-        <Row title="For You" hint="Suggestions on Anime, Manga and More.">
+        <Row title="For You" hint="Suggestions on Anime, Manga and More">
           <Toggle
             label="For You"
             checked={preferences.forYou}
@@ -449,7 +449,7 @@ function PlaybackPane(): React.JSX.Element {
             <Toggle label="Autoplay next" checked={binge.autoplay} onChange={binge.setAutoplay} />
           </Row>
         ) : null}
-        <Row title="Audio" hint="Used first when an anime episode offers both.">
+        <Row title="Audio" hint="Used first when an anime episode offers both">
           <Pills
             label="Audio"
             value={preferences.audio}
@@ -476,7 +476,7 @@ function DownloadSettingsCard(): React.JSX.Element | null {
     <>
       <Label>Downloads</Label>
       <div className="set-card">
-        <Row title="Storage limit" hint="New downloads stop here; nothing is deleted for you.">
+        <Row title="Storage limit" hint="New downloads stop here; nothing is deleted for you">
           <Select
             ariaLabel="Storage limit"
             value={String(settings.limitBytes)}
@@ -488,7 +488,7 @@ function DownloadSettingsCard(): React.JSX.Element | null {
         </Row>
         <Row
           title="Quality"
-          hint={`Up to ${formatBytes(estimateDownloadBytes(24, settings.quality))} for a 24-minute episode.`}
+          hint={`Up to ${formatBytes(estimateDownloadBytes(24, settings.quality))} for a 24-minute episode`}
         >
           <Select
             ariaLabel="Download quality"
@@ -497,7 +497,7 @@ function DownloadSettingsCard(): React.JSX.Element | null {
             options={DOWNLOAD_QUALITIES.map((quality) => ({ value: quality, label: quality }))}
           />
         </Row>
-        <Row title="Folder" hint="Applies to new downloads; existing ones stay put.">
+        <Row title="Folder" hint="Applies to new downloads; existing ones stay put">
           <code className="set-path" title={settings.folder}>
             {shortFolder(settings.folder)}
           </code>
@@ -742,7 +742,7 @@ function SimklRow(): React.JSX.Element {
       ) : (
         <button
           type="button"
-          className="set-button set-button--primary"
+          className="set-button"
           disabled={!status}
           onClick={() =>
             run(() => window.anistream.connectSimkl(), "Simkl sign-in could not be started.")
@@ -1094,7 +1094,7 @@ function ReadingCard(): React.JSX.Element {
     <>
       <Label>Pages</Label>
       <div className="set-card">
-        <Row title="Page width" hint="How wide pages appear.">
+        <Row title="Page width" hint="How wide pages appear">
           <Select
             ariaLabel="Page width"
             value={String(settings.width)}
@@ -1108,7 +1108,7 @@ function ReadingCard(): React.JSX.Element {
             ]}
           />
         </Row>
-        <Row title="Image fit" hint="Original size never enlarges small pages.">
+        <Row title="Image fit" hint="Original size never enlarges small pages">
           <Pills
             label="Image fit"
             value={settings.fit}
@@ -1120,7 +1120,7 @@ function ReadingCard(): React.JSX.Element {
             ]}
           />
         </Row>
-        <Row title="Image quality" hint="Data saver loads smaller images.">
+        <Row title="Image quality" hint="Data saver loads smaller images">
           <Pills
             label="Image quality"
             value={settings.quality}
@@ -1137,7 +1137,7 @@ function ReadingCard(): React.JSX.Element {
       <div className="set-card">
         <Row
           title="Standard image port only"
-          hint="Turn on if pages never load on a school or office network."
+          hint="Turn on if pages never load on a school or office network"
         >
           <Toggle
             label="Standard image port only"

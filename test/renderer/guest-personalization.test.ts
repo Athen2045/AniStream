@@ -161,17 +161,23 @@ describe("guest personalization boundary", () => {
 
   it("keeps public Watch available while hiding detail mutations for guests", () => {
     const guestMarkup = renderToStaticMarkup(
-      React.createElement(MediaDetailModal, {
-        media: trending,
-        access: guestAccess,
-        onClose: vi.fn(),
+      React.createElement(QueryClientProvider, {
+        client: createAppQueryClient(),
+        children: React.createElement(MediaDetailModal, {
+          media: trending,
+          access: guestAccess,
+          onClose: vi.fn(),
+        }),
       }),
     );
     const memberMarkup = renderToStaticMarkup(
-      React.createElement(MediaDetailModal, {
-        media: trending,
-        access: memberAccess,
-        onClose: vi.fn(),
+      React.createElement(QueryClientProvider, {
+        client: createAppQueryClient(),
+        children: React.createElement(MediaDetailModal, {
+          media: trending,
+          access: memberAccess,
+          onClose: vi.fn(),
+        }),
       }),
     );
 

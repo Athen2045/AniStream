@@ -38,20 +38,31 @@ export function editDistance(a: string, b: string): number {
 }
 
 /**
- * "Did you mean": the candidate title closest to what was typed, offered only within two typos
- * (whole title, or the same number of leading words when the title is longer).
+ * "Did you mean": the candidate titles within two typos of what was typed (whole title, or the
+ * same number of leading words when the title is longer), closest first. Equally close titles
+ * prefer the one nearest as a whole ("narto" → "Naruto" before "Naruto: Shippuden"), then keep
+ * their given order (popularity).
  */
-export function closestTitle(query: string, titles: readonly string[]): string | undefined {
+export function closeTitles(query: string, titles: readonly string[]): string[] {
   const q = searchNormalize(query);
-  if (q.length < 3) return undefined;
+  if (q.length < 3) return [];
   const words = q.split(" ").length;
-  let best: { title: string; distance: number } | undefined;
-  for (const title of titles) {
+  const close: Array<{ title: string; distance: number; whole: number; index: number }> = [];
+  titles.forEach((title, index) => {
     const t = searchNormalize(title);
-    if (!t || t === q) continue;
+    if (!t || t === q) return;
     const head = t.split(" ").slice(0, words).join(" ");
-    const distance = Math.min(editDistance(q, t), editDistance(q, head));
-    if (distance <= 2 && (!best || distance < best.distance)) best = { title, distance };
-  }
-  return best?.title;
+    const whole = editDistance(q, t);
+    const distance = Math.min(whole, editDistance(q, head));
+    if (distance <= 2) close.push({ title, distance, whole, index });
+  });
+  return close
+    .sort((a, b) => a.distance - b.distance || a.whole - b.whole || a.index - b.index)
+    .map((row) => row.title)
+    .filter((title, index, all) => all.indexOf(title) === index);
+}
+
+/** The closest of `closeTitles`, or undefined when none is within two typos. */
+export function closestTitle(query: string, titles: readonly string[]): string | undefined {
+  return closeTitles(query, titles)[0];
 }

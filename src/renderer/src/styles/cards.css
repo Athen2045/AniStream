@@ -1,0 +1,266 @@
+/* Poster and episode cards in every row and grid (redesign 2026-10-31, mockup 03). The one place
+   for card rules: the art has 12 px corners and no glow; hover lifts it 1.04, keyboard focus adds
+   a plain ring in the text colour; badges are quiet; the artwork carries the colour. */
+.rail-card {
+  display: grid;
+  flex: 0 0 var(--rail-card-width);
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+  scroll-snap-align: start;
+  text-align: left;
+}
+/* Latest-manga cards without an AniList mapping render as external links. */
+a.rail-card {
+  color: inherit;
+  text-decoration: none;
+}
+.rail-card:hover,
+.rail-card:has(:focus-visible) {
+  z-index: 3;
+}
+
+.rail-art {
+  position: relative;
+  aspect-ratio: var(--rail-art-ratio, 0.72);
+  height: auto;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: var(--s2);
+  transition:
+    transform 180ms var(--ease),
+    box-shadow 180ms var(--ease);
+}
+.rail-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: filter 180ms var(--ease);
+}
+.rail-card:hover .rail-art,
+.rail-card:has(:focus-visible) .rail-art {
+  transform: scale(1.04);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+}
+.rail-card:has(:focus-visible) .rail-art {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 4px var(--focus-ring),
+    0 12px 32px rgb(0 0 0 / 0.45);
+}
+.rail-card:hover .rail-art img,
+.rail-card:has(:focus-visible) .rail-art img {
+  filter: brightness(0.7);
+}
+.rail-art-fallback {
+  display: grid;
+  height: 100%;
+  padding: 12px;
+  place-items: center;
+  background: var(--s2);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+}
+/* Full-cover hit target for "open details": a sibling of the hover-action buttons below rather
+   than their parent, since buttons cannot legally nest. */
+.rail-art-hit {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.rail-art-hit:focus-visible {
+  outline: none;
+}
+
+/* Quiet badges: format, "New", ranks. */
+.rail-badge {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  left: 8px;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgb(7 8 7 / 0.8);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.rail-card .rank {
+  top: 8px;
+  left: 8px;
+  bottom: auto;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 6px;
+  background: rgb(7 8 7 / 0.8);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  -webkit-text-stroke: 0;
+}
+
+/* ---------- Hover actions, and the More-style title and facts on the poster ---------- */
+.rail-hover-actions {
+  position: absolute;
+  z-index: 2;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.rail-card:hover .rail-hover-actions,
+.rail-card:has(:focus-visible) .rail-hover-actions {
+  opacity: 1;
+}
+.rail-hover-actions:has(.rail-hover-copy) {
+  flex-wrap: wrap;
+}
+.rail-hover-play,
+.rail-hover-secondary {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-chip);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.rail-hover-play {
+  background: var(--text);
+  color: var(--ink);
+}
+.rail-hover-play:hover,
+.rail-hover-play:focus-visible {
+  background: #fff;
+}
+.rail-hover-secondary {
+  background: rgb(7 8 7 / 0.72);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--text);
+  backdrop-filter: blur(8px);
+}
+.rail-hover-secondary:hover,
+.rail-hover-secondary:focus-visible {
+  background: var(--s4);
+}
+.rail-hover-secondary:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+.rail-hover-play:focus-visible,
+.rail-hover-secondary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.rail-hover-info {
+  margin-left: auto;
+}
+.rail-hover-copy {
+  display: grid;
+  flex: 1 0 100%;
+  gap: 4px;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+.rail-hover-copy strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.rail-hover-copy small {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-card:has(.rail-hover-copy) .rail-art::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: linear-gradient(0deg, rgb(7 8 7 / 0.96) 6%, rgb(7 8 7 / 0.5) 46%, transparent 72%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.rail-card:has(.rail-hover-copy):hover .rail-art::after,
+.rail-card:has(.rail-hover-copy):has(:focus-visible) .rail-art::after {
+  opacity: 1;
+}
+.rail-card:has(.rail-hover-copy):hover .rail-art img,
+.rail-card:has(.rail-hover-copy):has(:focus-visible) .rail-art img {
+  filter: none;
+}
+.continue-strip .rail-hover-copy {
+  display: none;
+}
+
+/* ---------- Text under the art ---------- */
+.rail-card strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-card > span:last-child {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-card-skeleton {
+  display: block;
+  flex: 0 0 var(--rail-card-width, 210px);
+  aspect-ratio: 0.72;
+  border-radius: var(--r-card);
+  background: linear-gradient(
+    110deg,
+    var(--skeleton-base) 20%,
+    var(--skeleton-shine) 42%,
+    var(--skeleton-base) 64%
+  );
+  background-size: 240% 100%;
+  animation: latest-update-shimmer 1.25s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-platform="win32"]) :is(.rail-art, .rail-art img, .rail-hover-actions) {
+    transform: none !important;
+    transition: none;
+  }
+}
+html[data-motion="reduce"] :is(.rail-art, .rail-art img, .rail-hover-actions) {
+  transform: none !important;
+  transition: none;
+}

@@ -4,10 +4,9 @@ import { useEffect, useState } from "react";
 import type { AniListCatalogMedia, AniListMediaType } from "../../shared/contracts";
 import { CoverImage } from "./CoverImage";
 import { formatMediaLabel } from "./format-label";
-import { decodeHtmlEntities } from "../../shared/text";
+import { cleanDescription } from "./title-facts";
 import { motionTransition } from "./motion";
 import { useAppPreferences } from "./app-preferences";
-import { titleAccentStyle, titleTintStyle } from "./title-accent";
 import { cachedArtworkUrl } from "../../shared/artwork";
 import { useDocumentVisible } from "./useDocumentVisible";
 import type { ContinueTitle } from "../../shared/personal-library";
@@ -63,16 +62,20 @@ export function CatalogHero({
   const [heroImageState, setHeroImageState] = useState<{ id: number; source?: string }>({ id: 0 });
   const mediaName = type === "ANIME" ? "anime" : "manga";
   if (!hero) return null;
+  // "E1180 is out" while a show airs (the episode before AniList's next one), else "Airing".
+  const nextEpisode = hero.nextAiringEpisode?.episode;
+  const airingLabel =
+    type === "ANIME" && hero.status === "RELEASING"
+      ? nextEpisode && nextEpisode > 1
+        ? `E${nextEpisode - 1} is out`
+        : "Airing"
+      : undefined;
   const heroImageSource =
     heroImageState.id === hero.id ? heroImageState.source : (hero.bannerUrl ?? hero.coverUrl);
 
   return (
     <motion.header
       className="home-hero"
-      style={{
-        ...(type === "MANGA" ? titleAccentStyle(hero.coverColor) : undefined),
-        ...titleTintStyle(hero.coverColor),
-      }}
       aria-roledescription="carousel"
       aria-label={`Trending ${mediaName}`}
       initial={reducedMotion ? false : { opacity: 0 }}
@@ -149,6 +152,12 @@ export function CatalogHero({
                   : `#${trending.indexOf(hero) + 1} Trending`}
               </span>
             )}
+            {airingLabel ? (
+              <span className="home-hero-live">
+                <span className="live-dot" aria-hidden="true" />
+                {airingLabel}
+              </span>
+            ) : null}
             {type === "ANIME" && hero.season && hero.seasonYear ? (
               <span>
                 {formatMediaLabel(hero.season)} {hero.seasonYear}
@@ -218,17 +227,5 @@ export function CatalogHero({
         </div>
       ) : null}
     </motion.header>
-  );
-}
-
-function cleanDescription(value?: string): string {
-  if (!value) return "";
-  return decodeHtmlEntities(
-    value
-      .replace(/<[^>]+>/g, " ")
-      .replace(/~!/g, "")
-      .replace(/!~/g, "")
-      .replace(/\s+/g, " ")
-      .trim(),
   );
 }

@@ -4,11 +4,10 @@
    last so it settles the older navbar-era rules. */
 
 :root {
-  --rail-width: 64px;
+  --rail-width: 72px;
   --rail-open-width: 264px;
   /* No top bar any more: pages only clear the thin window-drag strip. */
   --app-navbar-height: 32px;
-  --title-tint: #36a678;
 }
 html[data-platform="darwin"] {
   /* The native traffic lights sit over the top of the rail. */
@@ -59,8 +58,9 @@ html[data-platform="win32"] {
 /* ---------------------------------------------------------------- side rail */
 /* One moving edge, as in the user's reference video (2026-10-20): the rail is always its open
    width, and a clip-path reveals or hides everything right of the icons. Icons never move; the
-   edge cuts through the labels while they fade in place. No scrim, no reflow; clip-path also
-   limits hit testing, so the hidden part never catches the pointer. */
+   edge cuts through the labels while they fade in place. No reflow; clip-path also limits hit
+   testing, so the hidden part never catches the pointer. Redesign 2026-10-31 (mockup 03): ink at
+   rest, the active item a surface step with its icon in the world colour, counts as quiet text. */
 .side-rail {
   --rail-hidden: calc(var(--rail-open-width) - var(--rail-width));
   position: fixed;
@@ -68,25 +68,41 @@ html[data-platform="win32"] {
   inset: 0 auto 0 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
   width: var(--rail-open-width);
-  padding: var(--rail-top, 44px) 10px 14px;
-  border-right: 1px solid rgb(255 255 255 / 0.06);
-  background: rgb(9 11 10 / 0.94);
-  backdrop-filter: blur(24px) saturate(1.2);
+  padding: var(--rail-top, 40px) 12px 16px;
+  background: var(--ink);
   clip-path: inset(0 var(--rail-hidden) 0 0);
   /* Closing: the labels go first, the edge follows. */
-  transition: clip-path 210ms cubic-bezier(0.4, 0, 0.2, 1) 40ms;
+  transition:
+    clip-path 200ms cubic-bezier(0.4, 0, 0.2, 1) 40ms,
+    background-color 200ms var(--ease) 40ms;
   will-change: clip-path;
 }
 .side-rail.is-open {
   clip-path: inset(0 0 0 0);
-  box-shadow: 18px 0 48px rgb(0 0 0 / 0.38);
+  background: var(--s1);
+  box-shadow: 24px 0 64px rgb(0 0 0 / 0.5);
   /* Opening: the edge leads, the labels follow. */
-  transition: clip-path 240ms cubic-bezier(0.2, 0, 0, 1);
+  transition:
+    clip-path 240ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 240ms var(--ease);
+}
+.side-rail-dim {
+  position: fixed;
+  z-index: 199;
+  inset: 0;
+  background: rgb(7 8 7 / 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease) 40ms;
+}
+.side-rail-dim.is-open {
+  opacity: 1;
+  transition: opacity 240ms var(--ease);
 }
 .side-rail-label {
   overflow: hidden;
+  flex: 1;
   min-width: 0;
   opacity: 0;
   text-overflow: clip;
@@ -94,42 +110,48 @@ html[data-platform="win32"] {
   transition: opacity 90ms ease;
   pointer-events: none;
 }
-.side-rail.is-open .side-rail-label {
+.side-rail.is-open .side-rail-label,
+.side-rail.is-open .side-rail-meta {
   opacity: 1;
   transition: opacity 160ms ease 90ms;
 }
 .side-rail-logo {
   display: flex;
   align-items: center;
-  gap: 14px;
-  height: 38px;
-  margin: 0 0 12px;
-  padding: 0 0 0 10px;
+  gap: 12px;
+  height: 48px;
+  margin: 0 0 16px;
+  padding: 0 0 0 8px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: none;
-  color: #fff;
+  color: var(--text);
   font: inherit;
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.4px;
+  font-size: 18px;
+  font-weight: 500;
+  text-align: left;
   cursor: pointer;
 }
 .side-rail-logo img {
   flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-chip);
 }
 .side-rail-group {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 2px;
+  gap: 4px;
 }
-.side-rail-sep {
-  height: 1px;
-  margin: 8px 10px;
-  background: rgb(255 255 255 / 0.07);
+/* "Library" over Schedule, Up Next and Downloads; only a gap while closed. */
+.side-rail-heading {
+  display: flex;
+  align-items: flex-end;
+  height: 40px;
+  padding: 0 12px 8px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
 }
 .side-rail-grow {
   flex: 1;
@@ -139,54 +161,72 @@ html[data-platform="win32"] {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
-  height: 42px;
-  padding: 0 12px;
+  height: 48px;
+  padding: 0 14px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   background: none;
-  color: rgb(255 255 255 / 0.6);
+  color: var(--text-3);
   font: inherit;
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   isolation: isolate;
+  transition: color var(--dur-fast) var(--ease);
 }
-/* Hover/active pill: a 44 px rounded square while closed, the full row while open (uncovered by a
-   rounded clip, so its corners never stretch). */
-.side-rail-item::after {
+/* Hover and active surfaces: a 48 px square while closed, the full row while open (uncovered by a
+   rounded clip, so their corners never stretch). */
+.side-rail-item::after,
+.side-rail-indicator {
   content: "";
   position: absolute;
   z-index: -1;
   inset: 0;
-  border-radius: 12px;
-  background: rgb(255 255 255 / 0.09);
+  border-radius: var(--r-btn);
+  clip-path: inset(0 calc(100% - 48px) 0 0 round var(--r-btn));
+  transition: clip-path 200ms cubic-bezier(0.4, 0, 0.2, 1) 40ms;
+}
+.side-rail-item::after {
+  background: var(--s2);
   opacity: 0;
-  clip-path: inset(0 calc(100% - 44px) 0 0 round 12px);
   transition:
-    clip-path 210ms cubic-bezier(0.4, 0, 0.2, 1) 40ms,
+    clip-path 200ms cubic-bezier(0.4, 0, 0.2, 1) 40ms,
     opacity 120ms ease;
 }
+.side-rail-indicator {
+  background: var(--s3);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+.side-rail.is-open .side-rail-item::after,
+.side-rail.is-open .side-rail-indicator {
+  clip-path: inset(0 0 0 0 round var(--r-btn));
+  transition: clip-path 240ms cubic-bezier(0.2, 0, 0, 1);
+}
 .side-rail.is-open .side-rail-item::after {
-  clip-path: inset(0 0 0 0 round 12px);
   transition:
     clip-path 240ms cubic-bezier(0.2, 0, 0, 1),
     opacity 120ms ease;
 }
-.side-rail-item:hover,
-.side-rail-item.is-active {
-  color: #fff;
+.side-rail-item:hover {
+  color: var(--text);
 }
-.side-rail-item:hover::after {
+.side-rail-item:hover:not(.is-active)::after {
   opacity: 1;
 }
-.side-rail-item.is-active::after {
-  opacity: 0.75;
+.side-rail-item.is-active {
+  color: var(--text);
 }
 .side-rail-item.is-active .side-rail-icon {
-  color: #5fd3a0;
+  color: var(--accent);
+}
+.side-rail.is-open .side-rail-item:not(.is-active) {
+  color: var(--text-2);
+}
+.side-rail.is-open .side-rail-item:not(.is-active):hover {
+  color: var(--text);
 }
 .side-rail-item:disabled {
   opacity: 0.5;
@@ -195,18 +235,8 @@ html[data-platform="win32"] {
 .side-rail-item:focus-visible,
 .side-rail-logo:focus-visible {
   outline: none;
-  color: #fff;
-  box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.55);
-}
-.side-rail-indicator {
-  position: absolute;
-  left: -10px;
-  top: 11px;
-  bottom: 11px;
-  width: 3px;
-  border-radius: 3px;
-  background: #36a678;
-  box-shadow: 0 0 10px #36a678;
+  color: var(--text);
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
 }
 .side-rail-icon {
   position: relative;
@@ -220,46 +250,85 @@ html[data-platform="win32"] {
   width: 20px;
   height: 20px;
 }
-.side-rail-badge {
+/* A dot on the icon's corner: sky for new or airing (the signature), neutral for in progress. */
+.side-rail-dot {
   position: absolute;
-  top: -7px;
-  right: -9px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border: 2px solid #070807;
-  border-radius: 999px;
-  background: var(--primary-hover);
-  color: #fff;
-  font-size: 9.5px;
-  font-weight: 800;
-  line-height: 12px;
-  text-align: center;
+  top: -3px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-2);
+  box-shadow: 0 0 0 3px var(--ink);
+  transition: box-shadow 200ms var(--ease);
 }
-/* Profile row: the account picture in place of the icon. */
+.side-rail-dot.is-live {
+  background: var(--live);
+}
+.side-rail.is-open .side-rail-dot {
+  box-shadow: 0 0 0 3px var(--s1);
+}
+.side-rail-meta {
+  flex: none;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0;
+  transition: opacity 90ms ease;
+}
+.side-rail-meta.is-live {
+  color: var(--live);
+}
+/* Profile row: the account picture in place of the icon; open, it reads as a small card. */
 .side-rail-avatar {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
-  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.16);
+}
+.side-rail-item.has-sublabel .side-rail-icon {
+  width: 28px;
+  height: 28px;
+  margin-left: -4px;
+}
+.side-rail-item.has-sublabel {
+  height: 56px;
+}
+.side-rail-item.has-sublabel .side-rail-label b {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+.side-rail-item.has-sublabel .side-rail-label small {
+  display: block;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.side-rail.is-open .side-rail-item.has-sublabel:not(:hover)::after {
+  opacity: 1;
 }
 .side-rail-item.is-active .side-rail-avatar {
-  box-shadow: 0 0 0 2px #36a678;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 4px var(--accent);
 }
 /* Short windows: tighter rows so the bottom group never runs off the screen. */
 @media (max-height: 760px) {
   .side-rail {
-    padding-top: var(--rail-top, 40px);
+    padding-top: var(--rail-top, 36px);
   }
   .side-rail-logo {
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }
   .side-rail-item {
-    height: 38px;
+    height: 40px;
   }
-  .side-rail-sep {
-    margin: 4px 10px;
+  .side-rail-heading {
+    height: 24px;
+    padding-bottom: 4px;
   }
 }
 
@@ -294,7 +363,7 @@ textarea,
   gap: 2px;
   padding: 3px;
   border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: rgb(7 8 7 / 0.42);
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
   backdrop-filter: blur(16px) saturate(1.3);
@@ -310,7 +379,7 @@ textarea,
   width: 38px;
   height: 30px;
   border: 0;
-  border-radius: 11px;
+  border-radius: var(--r-btn);
   background: transparent;
   color: rgb(255 255 255 / 0.82);
   cursor: pointer;
@@ -342,15 +411,15 @@ textarea,
   left: calc(var(--rail-width) + var(--page-gutter));
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 50%;
-  background: rgb(7 8 7 / 0.42);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
-  color: #fff;
-  backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-btn);
+  background: rgb(7 8 7 / 0.56);
+  box-shadow: none;
+  color: var(--text);
+  backdrop-filter: blur(16px);
 }
 .more-title-page .more-hero-top:has(.more-back--arrow) {
   top: 0;
@@ -379,7 +448,7 @@ textarea,
   right: calc(var(--caption-controls-width) + 4px);
   width: 38px;
   height: 38px;
-  border-radius: 50%;
+  border-radius: var(--r-btn);
 }
 .title-page .title-back svg,
 .more-title-page .more-back--arrow svg,
@@ -389,8 +458,8 @@ textarea,
 .title-page .title-back:hover,
 .more-title-page .more-back--arrow:hover,
 .more-plain-top .more-back--arrow:hover {
-  border-color: rgb(255 255 255 / 0.22);
-  background: rgb(255 255 255 / 0.16);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 .title-page .title-back:hover svg,
 .more-title-page .more-back--arrow:hover svg,
@@ -400,7 +469,7 @@ textarea,
 .title-page .title-back:focus-visible,
 .more-title-page .more-back--arrow:focus-visible,
 .more-plain-top .more-back--arrow:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -430,46 +499,30 @@ textarea,
   }
 }
 
-/* ---------------------------------------------------------------- the title's colour */
-.home-hero,
-.title-page,
-.more-hero,
-.more-title-page {
-  /* Softened to a pastel band so every title reads (label: a deep shade of the same hue). */
-  --tint: oklch(from var(--title-tint) clamp(0.74, l, 0.82) clamp(0.07, c, 0.14) h);
-  --tint-ink: oklch(from var(--title-tint) 0.22 0.04 h);
-}
-.title-page--anime {
-  --title-accent: var(--tint);
-  --title-accent-text: var(--tint);
-  --title-accent-ink: var(--tint-ink);
-}
-
-/* ---------------------------------------------------------------- softer buttons */
+/* ---------------------------------------------------------------- hero and title actions */
+/* One filled button per screen, in the world colour with ink text; the rest are quiet. */
 .home-hero .title-primary,
 .title-page .title-primary,
 .title-page .anime-head-primary,
 .more-hero .more-btn-play,
 .more-title-page .more-btn-play {
-  height: 50px;
-  padding: 0 26px 0 22px;
+  height: 48px;
+  padding: 0 24px 0 20px;
   border: 0;
-  border-radius: 16px;
-  background: linear-gradient(180deg, color-mix(in oklch, var(--tint), white 14%), var(--tint));
-  box-shadow:
-    0 10px 28px -8px color-mix(in oklch, var(--tint) 70%, transparent),
-    inset 0 1px 0 rgb(255 255 255 / 0.45);
-  color: var(--tint-ink);
+  border-radius: var(--r-btn);
+  background: var(--accent);
+  box-shadow: none;
+  color: var(--on-accent);
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   transition:
-    transform 140ms ease,
-    box-shadow 160ms ease,
-    background 160ms ease;
+    background-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
-.home-hero .title-primary svg,
-.title-page .title-primary svg,
-.title-page .anime-head-primary svg {
+/* Play is a solid triangle; other icons (Read's book) stay outlined. */
+.home-hero .title-primary svg.lucide-play,
+.title-page .title-primary svg.lucide-play,
+.title-page .anime-head-primary svg.lucide-play {
   fill: currentColor;
 }
 .home-hero .title-primary:hover:not(:disabled),
@@ -477,24 +530,17 @@ textarea,
 .title-page .anime-head-primary:hover:not(:disabled),
 .more-hero .more-btn-play:hover:not(:disabled),
 .more-title-page .more-btn-play:hover:not(:disabled) {
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklch, var(--tint), white 22%),
-    color-mix(in oklch, var(--tint), white 8%)
-  );
-  box-shadow:
-    0 14px 34px -8px color-mix(in oklch, var(--tint) 85%, transparent),
-    inset 0 1px 0 rgb(255 255 255 / 0.5);
+  background: var(--accent-hover);
+  box-shadow: none;
   filter: none;
-  transform: translateY(-1px);
+  transform: none;
 }
 .home-hero .title-primary:active:not(:disabled),
 .title-page .title-primary:active:not(:disabled),
 .title-page .anime-head-primary:active:not(:disabled),
 .more-hero .more-btn-play:active:not(:disabled),
 .more-title-page .more-btn-play:active:not(:disabled) {
-  background: color-mix(in oklch, var(--tint), black 6%);
-  box-shadow: inset 0 2px 6px rgb(0 0 0 / 0.18);
+  box-shadow: none;
   transform: scale(0.98);
 }
 .home-hero .title-primary:focus-visible,
@@ -502,19 +548,18 @@ textarea,
 .title-page .anime-head-primary:focus-visible,
 .more-hero .more-btn-play:focus-visible,
 .more-title-page .more-btn-play:focus-visible {
-  outline: 2px solid var(--tint);
-  outline-offset: 4px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 .title-page .title-primary:disabled,
 .title-page .anime-head-primary:disabled,
 .more-title-page .more-btn-play:disabled,
 .title-page .title-primary.is-upcoming,
 .title-page .anime-head-primary.is-upcoming {
-  background: rgb(255 255 255 / 0.06);
+  background: var(--s3);
   box-shadow: none;
-  color: rgb(255 255 255 / 0.5);
+  color: var(--text-3);
 }
-/* Everything else on these screens is calm glass, so the one coloured button leads. */
 .home-hero .title-library,
 .title-page .title-library,
 .title-page .title-round,
@@ -524,31 +569,31 @@ textarea,
 .more-title-page .more-btn-round,
 .more-title-page .more-btn-upnext,
 .more-title-page .more-btn-pair {
-  border: 1px solid rgb(255 255 255 / 0.1);
-  background: rgb(255 255 255 / 0.08);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
-  color: #fff;
-  backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid var(--line-2);
+  background: rgb(14 16 15 / 0.72);
+  box-shadow: none;
+  color: var(--text);
+  backdrop-filter: blur(16px);
 }
 .home-hero .title-library,
 .title-page .title-library {
-  height: 50px;
-  border-radius: 16px;
-  font-weight: 600;
+  height: 48px;
+  border-radius: var(--r-btn);
+  font-weight: 500;
 }
 .title-page .title-round,
 .title-page .anime-head-actions > button:not(.anime-head-primary):not(.title-library),
 .title-page .anime-head-actions .title-feedback button,
 .more-title-page .more-btn-round {
-  width: 50px;
-  height: 50px;
-  border-radius: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-btn);
 }
 .more-hero .more-btn-pair,
 .more-title-page .more-btn-pair,
 .more-title-page .more-btn-upnext {
-  height: 50px;
-  border-radius: 16px;
+  height: 48px;
+  border-radius: var(--r-btn);
 }
 .home-hero .title-library:hover,
 .title-page .title-library:hover,
@@ -556,28 +601,29 @@ textarea,
 .title-page .anime-head-actions > button:not(.anime-head-primary):hover,
 .more-title-page .more-btn-round:hover,
 .more-title-page .more-btn-upnext:hover {
-  border-color: rgb(255 255 255 / 0.16);
-  background: rgb(255 255 255 / 0.14);
+  border-color: var(--line-3);
+  background: var(--s3);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html:not([data-platform="win32"]) .side-rail,
-  html:not([data-platform="win32"]) .side-rail-label,
+  html:not([data-platform="win32"])
+    :is(.side-rail, .side-rail-label, .side-rail-meta, .side-rail-indicator, .side-rail-dim),
   html:not([data-platform="win32"]) .side-rail-item::after {
     transition: none !important;
   }
 }
-html[data-motion="reduce"] :is(.side-rail, .side-rail-label),
+html[data-motion="reduce"]
+  :is(.side-rail, .side-rail-label, .side-rail-meta, .side-rail-indicator, .side-rail-dim),
 html[data-motion="reduce"] .side-rail-item::after {
   transition: none !important;
 }
 
-/* The current episode's outline and its progress line follow the title's colour too. */
+/* The current episode is outlined in the text colour; progress is the world colour. */
 .title-page--anime .episode-tile.is-current .episode-tile-frame {
-  box-shadow: 0 0 0 2px var(--tint);
+  box-shadow: 0 0 0 2px var(--text);
 }
 .title-page--anime .episode-watch-progress > span {
-  background: var(--tint);
+  background: var(--accent);
 }
 
 /* Main-player notice: Retry and the backup player side by side. */

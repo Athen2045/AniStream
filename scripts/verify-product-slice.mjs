@@ -13,6 +13,7 @@ const [
   mangaKind,
   animeSource,
   animeWatch,
+  animeEmbedPlayer,
   animePlaybackSession,
   mediaDetail,
   mangaReader,
@@ -22,6 +23,7 @@ const [
   catalogData,
   localActivity,
   activityRepository,
+  ipc,
 ] = await Promise.all([
   readFile("src/main/index.ts", "utf8"),
   readFile("src/main/anilist/client.ts", "utf8"),
@@ -35,6 +37,7 @@ const [
   readFile("src/main/manga-kind.ts", "utf8"),
   readFile("src/main/anime-source.ts", "utf8"),
   readFile("src/renderer/src/AnimeWatchExperience.tsx", "utf8"),
+  readFile("src/renderer/src/AnimeEmbedPlayer.tsx", "utf8"),
   readFile("src/renderer/src/anime-playback-session.ts", "utf8"),
   readFile("src/renderer/src/MediaDetailModal.tsx", "utf8"),
   readFile("src/renderer/src/MangaReaderFullscreen.tsx", "utf8"),
@@ -44,12 +47,14 @@ const [
   readFile("src/renderer/src/catalog-queries.ts", "utf8"),
   readFile("src/renderer/src/local-activity.ts", "utf8"),
   readFile("src/main/activity/repository.ts", "utf8"),
+  readFile("src/main/ipc.ts", "utf8"),
 ]);
 const aniList = aniListClient + aniListQueries;
 const catalogSurface = catalog + catalogData;
 
 for (const [name, source, fragments] of [
-  ["main process", main, ["const restorePromise = aniList.restore()", "registerTrustedIpcHandler"]],
+  ["main process", main, ["const restorePromise = aniList.restore()"]],
+  ["trusted IPC registration", ipc, ["registerTrustedIpcHandler"]],
   [
     "tracker IPC domain",
     trackerDomain,
@@ -102,7 +107,7 @@ for (const [name, source, fragments] of [
   ],
   [
     "anime player",
-    animeWatch + animePlaybackSession,
+    animeWatch + animeEmbedPlayer + animePlaybackSession,
     [
       "AnimeEmbedPlayer",
       "useMediaFullscreen",
