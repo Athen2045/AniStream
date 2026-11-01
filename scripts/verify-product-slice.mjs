@@ -22,6 +22,7 @@ const [
   catalogData,
   localActivity,
   activityRepository,
+  ipc,
 ] = await Promise.all([
   readFile("src/main/index.ts", "utf8"),
   readFile("src/main/anilist/client.ts", "utf8"),
@@ -44,12 +45,14 @@ const [
   readFile("src/renderer/src/catalog-queries.ts", "utf8"),
   readFile("src/renderer/src/local-activity.ts", "utf8"),
   readFile("src/main/activity/repository.ts", "utf8"),
+  readFile("src/main/ipc.ts", "utf8"),
 ]);
 const aniList = aniListClient + aniListQueries;
 const catalogSurface = catalog + catalogData;
 
 for (const [name, source, fragments] of [
-  ["main process", main, ["const restorePromise = aniList.restore()", "registerTrustedIpcHandler"]],
+  ["main process", main, ["const restorePromise = aniList.restore()"]],
+  ["trusted IPC registration", ipc, ["registerTrustedIpcHandler"]],
   [
     "tracker IPC domain",
     trackerDomain,
