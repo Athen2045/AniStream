@@ -13,6 +13,7 @@ const [
   mangaKind,
   animeSource,
   animeWatch,
+  animeEmbedPlayer,
   animePlaybackSession,
   mediaDetail,
   mangaReader,
@@ -36,6 +37,7 @@ const [
   readFile("src/main/manga-kind.ts", "utf8"),
   readFile("src/main/anime-source.ts", "utf8"),
   readFile("src/renderer/src/AnimeWatchExperience.tsx", "utf8"),
+  readFile("src/renderer/src/AnimeEmbedPlayer.tsx", "utf8"),
   readFile("src/renderer/src/anime-playback-session.ts", "utf8"),
   readFile("src/renderer/src/MediaDetailModal.tsx", "utf8"),
   readFile("src/renderer/src/MangaReaderFullscreen.tsx", "utf8"),
@@ -105,7 +107,7 @@ for (const [name, source, fragments] of [
   ],
   [
     "anime player",
-    animeWatch + animePlaybackSession,
+    animeWatch + animeEmbedPlayer + animePlaybackSession,
     [
       "AnimeEmbedPlayer",
       "useMediaFullscreen",
