@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   package:
-    name: Build and verify unsigned arm64 DMG
+    name: Build and verify ad-hoc signed arm64 DMG
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -59,7 +59,7 @@ jobs:
         with:
           providers-json: ${{ secrets.ANISTREAM_PROVIDERS_JSON }}
 
-      - name: Build unsigned Apple Silicon package
+      - name: Build ad-hoc signed Apple Silicon package
         # electron-builder is build-only here. Publishing is owned by the
         # Promote production release workflow (release.yml).
         run: npm run package:mac
@@ -68,14 +68,24 @@ jobs:
           ANISTREAM_TMDB_ACCESS_TOKEN: ${{ secrets.ANISTREAM_TMDB_ACCESS_TOKEN }}
           ANISTREAM_MAL_CLIENT_ID: ${{ secrets.ANISTREAM_MAL_CLIENT_ID }}
           # No Developer ID Application certificate is installed for this personal
-          # build; disable electron-builder's local keychain identity search so the
-          # packaging step stays deterministic and explicitly unsigned.
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # build. electron-builder.yml sets mac.identity "-", so the bundle is ad-hoc
+          # signed after the Electron fuses are applied. That keeps the bundle seal valid
+          # (an unsigned, fuse-flipped arm64 app is reported by macOS as "damaged"); it is
+          # not Apple-notarized, so Gatekeeper still asks users to approve the first launch.
+
+      - name: Verify ad-hoc signature
+        # A broken bundle seal is what macOS reports as "App is damaged". Fail the build here,
+        # with a clear message, before the slower DMG checks run.
+        run: |
+          APP="dist/mac-arm64/AniStream.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv "$APP" 2>&1 | tee "$RUNNER_TEMP/codesign.txt"
+          grep -q "Signature=adhoc" "$RUNNER_TEMP/codesign.txt"
 
       - name: Verify Mac bundle and mounted DMG against the fresh build
         run: npm run check:mac-package
 
-      - name: Upload unsigned DMG artifact
+      - name: Upload ad-hoc signed DMG artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: AniStream-mac-arm64-dmg
