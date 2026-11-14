@@ -34,8 +34,8 @@ protocols:
 mac:
   category: public.app-category.entertainment
   icon: assets/app-icon/AniStream.icns
-  identity: "-"             # ad-hoc sign after fuses are flipped
-  hardenedRuntime: false    # ad-hoc + hardened runtime can stop the app launching
+  identity: "-" # ad-hoc sign after fuses are flipped
+  hardenedRuntime: false # ad-hoc + hardened runtime can stop the app launching
   gatekeeperAssess: false
   target:
     - target: dmg
