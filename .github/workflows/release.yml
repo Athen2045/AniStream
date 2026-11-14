@@ -170,14 +170,25 @@ jobs:
           providers-json: ${{ secrets.ANISTREAM_PROVIDERS_JSON }}
           required: "true"
 
-      - name: Build unsigned Apple Silicon DMG
+      - name: Build ad-hoc signed Apple Silicon DMG
+        # electron-builder.yml sets mac.identity "-": the bundle is ad-hoc signed after the
+        # Electron fuses are applied, so macOS does not report it as "damaged". It is not
+        # Apple-notarized; Gatekeeper still asks users to approve the first launch.
         run: npm run package:mac
         env:
           # Read-only public-data keys bundled into the package (scripts/write-app-keys.mjs).
           ANISTREAM_TMDB_ACCESS_TOKEN: ${{ secrets.ANISTREAM_TMDB_ACCESS_TOKEN }}
           ANISTREAM_MAL_CLIENT_ID: ${{ secrets.ANISTREAM_MAL_CLIENT_ID }}
           ANISTREAM_APP_KEYS_REQUIRED: "true"
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify ad-hoc signature
+        # A broken bundle seal is what macOS reports as "App is damaged". Fail the build here,
+        # with a clear message, before the slower DMG checks run.
+        run: |
+          APP="dist/mac-arm64/AniStream.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv "$APP" 2>&1 | tee "$RUNNER_TEMP/codesign.txt"
+          grep -q "Signature=adhoc" "$RUNNER_TEMP/codesign.txt"
 
       - name: Verify macOS artifact
         run: npm run check:mac-package
@@ -222,7 +233,8 @@ jobs:
     environment: production
     permissions:
       contents: write
-      # Build provenance: the builds are unsigned, so anyone can check an installer came from this
+      # Build provenance: the Windows installer is unsigned and the macOS app is only ad-hoc signed
+      # (not Developer ID or notarized), so anyone can check an installer came from this
       # workflow with `gh attestation verify <file> --repo Athen2045/AniStream`.
       id-token: write
       attestations: write
@@ -259,7 +271,8 @@ jobs:
           test -f "AniStream.Setup.$VERSION.exe" || { echo "::error::The installer named in latest.yml is missing."; exit 1; }
 
       - name: Write SHA-256 checksums
-        # The installers are unsigned, so publish checksums that downloads can be verified against.
+        # The installers have no publisher-trusted signature (Windows unsigned, macOS ad-hoc), so
+        # publish checksums that downloads can be verified against.
         working-directory: dist
         shell: bash
         run: |

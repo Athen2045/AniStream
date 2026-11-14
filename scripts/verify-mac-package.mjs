@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   createReadStream,
@@ -20,12 +20,25 @@ function run(command, args) {
     maxBuffer: 2 * 1024 * 1024,
   }).trim();
 }
+function verifyAdhocSignature(appPath) {
+  // Throws if the bundle seal is broken, which is what macOS reports as "damaged".
+  run("/usr/bin/codesign", ["--verify", "--deep", "--strict", appPath]);
+  // `codesign -d` prints its details on stderr, so `run()` cannot capture it.
+  const info = spawnSync("/usr/bin/codesign", ["-dv", appPath], {
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  if (info.status !== 0 || !/Signature=adhoc/.test(info.stderr)) {
+    throw new Error('Mac bundle must carry an ad-hoc signature (mac.identity: "-").');
+  }
+}
 async function sha256(path) {
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
 }
 async function verifyApp(appPath, root) {
+  verifyAdhocSignature(appPath);
   const resources = join(appPath, "Contents/Resources");
   const asar = join(resources, "app.asar");
   const result = verifyPackagedBuild(asar, root);
@@ -115,7 +128,7 @@ export async function verifyMacPackage(args = process.argv.slice(2)) {
       dmg: basename(dmgPath),
       dmgSha256: await sha256(dmgPath),
       packageIntegrity: "passed",
-      signing: "not assessed",
+      signing: "ad-hoc, bundle seal verified (Gatekeeper not assessed)",
       nativeInteraction: "not assessed",
     };
   } finally {
