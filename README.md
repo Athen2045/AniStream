@@ -16,7 +16,8 @@
   <a href="https://github.com/Athen2045/AniStream/releases/latest">Download</a> |
   <a href=".github/releases/v2.2.4.md">Release notes</a> |
   <a href="CHANGELOG.md">Changelog</a> |
-  <a href="LEGAL.md">Copyright</a>
+  <a href="LEGAL.md">Copyright</a> |
+  <a href="LICENSE">Apache-2.0</a>
 </p>
 
 <div align="center">
