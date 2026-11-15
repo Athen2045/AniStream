@@ -6,8 +6,15 @@ respective owners.
 
 ## About AniStream
 
-AniStream is a free, open-source desktop application that runs on your device. It does not operate
-servers, user accounts or upload features.
+AniStream is a free, open-source desktop application licensed under the Apache License, Version
+2.0. It runs on your device and does not operate servers, user accounts or upload features.
+
+## Software license
+
+AniStream's original source code is available under the [Apache License, Version 2.0](LICENSE).
+Third-party libraries, services, artwork, titles and trademarks remain subject to their own
+licenses and terms. The AniStream license does not grant permission to use third-party names,
+marks or content.
 
 ## Content AniStream does not host
 
