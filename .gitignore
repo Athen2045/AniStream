@@ -52,3 +52,7 @@ test/ui/tmp/
 
 # Built landing page (scripts/build-website.mjs).
 dist-website/
+
+# Rust build output.
+/rust/**/target/
+/rust
